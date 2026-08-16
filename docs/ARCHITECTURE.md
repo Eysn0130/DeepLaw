@@ -1,17 +1,84 @@
 # DeepLaw Architecture
 
-Status: **v0.12.0 current architecture**, reviewed 2026-07-30. Historical v0.7 source-derived,
+Status: **v0.12.0 current architecture**, reviewed 2026-08-13. Historical v0.7 source-derived,
 proposal/review, parser, and Legal Pack details remain in
 [`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md), [`DOCUMENT_IR.md`](DOCUMENT_IR.md), and
 [`DEEPLAW_2.md`](DEEPLAW_2.md). They are compatibility components, not the activation policy for
 new Agent-derived knowledge.
 
+## Continuity Pass 2 boundary (source candidate; not released)
+
+Continuity Pass 2 is a narrow development correction after the retained **Pass 1** continuity
+remediation. Pass 1's reviewed implementation boundary, historical Gold/protocol inputs, and local
+verification evidence remain immutable evidence. The continuity correction is commit
+`2f31bff4069e6cf01edf017134e5a760becb5360`; the semantic release-evidence correction is commit
+`d7da1869287fd590d820f7dd60506abdcb826ad4`. This tracked note cannot bind its own final tree, and
+no qualification wheel/report hash exists. The correction is kernel evidence only. It does not
+lower any Core gate, qualify an end-to-end (E2E) workflow, or make a capability or competitive
+claim.
+
+The three reproduced defects and their minimum repairs are:
+
+1. **Route candidates were still vulnerable to the ordinary candidate cut.** An exact route hit is
+   an independent, bounded reservation before ordinary content selection. The no-route discovery
+   ceiling remains `512`; an exact route reserves one slot and leaves at most `511` ordinary
+   candidates, so the combined/global candidate and final Capsule budgets remain unchanged.
+2. **Goal text could change task-route identity.** Retrieval uses `task + goal` as its query when a
+   goal is supplied. The route digest is derived only from the canonical task text inside the
+   domain coordinator; adapters and callers do not manufacture a route digest. A goal therefore
+   enriches discovery without selecting a different checkpoint route.
+3. **A route could expose multiple current checkpoint heads.** The first write for a route creates
+   one Knowledge Object. A later write for that same object creates a new Knowledge Revision and
+   must supply the current `expected_revision` compare-and-swap (CAS). A stale or concurrent write
+   fails as `checkpoint_head_conflict`. A pre-fix multi-head projection is read as a sanitized
+   Gap, never as a best-effort or last-writer-wins (LWW) result. The Owner reconciles it through the
+   existing `forget`/withdraw lifecycle and projection rebuild; no historical revision is rewritten
+   and no LWW choice is made.
+
+The route projection is derived and rebuildable. The continuity correction adds no canonical
+Knowledge table or migration. The Pass 21 closure adds `knowledge-sink.input/v6` so every current `record_run`
+commit accepts only opaque, bounded, non-path, non-Secret-shaped Artifact IDs; the same validator
+is reused by task checkpoints and Timeline output. Published input v2-v5 bytes remain unchanged
+and readable. Rollback to a v5 runtime requires no data migration because v6 narrows accepted
+input without changing the stored Run shape; records created through v6 are a valid v5 subset.
+
+The active Gate v6 classification is explicit: **Core** gates, including Timeline, Codex, and
+OpenCode, remain required and are not lowered; **Capability** gates may remain `not_claimed` when
+not declared (semantic restore and Claude remain deferred); the **Competitive Claim**
+gate is independent and cannot be satisfied by local kernel or development evidence. Pass 2 records
+`kernel=Implemented`, `E2E=Target`, and `external qualification=not_executed` for the affected
+continuity/context rows only.
+
+## Pass 21 task routing and artifact boundary (source candidate; not released)
+
+Task recovery is an owner-local read projection over the existing governed stores. Project text,
+task text, and an explicit current worktree deterministically derive the route; an opaque task
+handle may narrow an exact lookup but is not required for ordinary resume. `locate`, `inspect`,
+and `timeline` do not copy transcript, hidden reasoning, raw logs, authentication, complete diffs,
+or local paths. Timeline emits only bounded Run, Checkpoint, related Ledger, and opaque Artifact
+identities with status and time. Ambiguity, snapshot divergence, Secret-looking workspace files,
+and content bounds return structured Gaps.
+
+This uses the existing Ledger, Run Record, checkpoint projection, Knowledge Store, and Sink
+coordinator. It adds no Timeline database, page family, Host runtime, or hidden mutation. A child
+fork may select another worktree only when it resolves to the same Git repository; parent and
+child task lines retain distinct worktree and lineage identities. Exact owner forget validates the
+stable repository/worktree route rather than requiring the old base/dirty snapshot, so later
+workspace changes do not make a known checkpoint undeletable.
+
+The tracked active qualification document remains a `0.12.0` construction template. After—and
+only after—a clean `0.13.0` commit has all external input hashes, Candidate Full produces one
+reproducible wheel/sdist pair and then creates an external frozen qualification binding to those
+bytes. That post-build binding avoids a circular source-tree/artifact hash. It is not a tag,
+release decision, or publication.
+
 ## Product boundary
 
-DeepLaw is a local-first Agent Knowledge OS that compiles source materials into a governed Living
-Wiki and returns verifiable, bounded knowledge context to Codex, Claude Code, OpenCode, and other
-Agent runtimes. It does not own the model, conversation loop, general tool execution, legal
-adjudication, or a remote control plane.
+DeepLaw is a local-first Agent Knowledge OS that preserves source materials in a source-native
+evidence plane, compiles governed knowledge, projects a governed Living Wiki, and returns
+verifiable, bounded knowledge context to Codex, Claude Code, OpenCode, and other Agent runtimes. It
+does not own the model, conversation loop, general tool execution, legal adjudication, or a remote
+control plane.
 
 DeepLaw is logically one governed knowledge system with multiple policy planes, not a collection of
 disconnected knowledge products or databases. A plane defines origin, Authority, scope,
@@ -31,6 +98,29 @@ Protected authoritative packs are Authority classes within the evidence domain. 
 interpretations derived from them remain governed knowledge with `legal_authority=false`; even a
 human-verified interpretation does not become the authoritative source itself. SQLite and derived
 indexes support these domains. They do not create another source of Authority.
+
+### Source-native Evidence Library and Wiki projection
+
+The **Evidence Library** is the human/product role of the existing Evidence Core. It is not a new
+store, policy plane, or retrieval engine. Laws, standards, policies, manuals, contracts, research
+papers, and other professional sources remain exact Source Revisions in their original format with
+Document/Version identity, source hierarchy, Fragments, Locators, parser provenance, and applicable
+time. Derived text, OCR, layout, FTS, vectors, thumbnails, and previews are replaceable accelerators
+bound to those exact bytes.
+
+```text
+source-native file / bytes
+  -> immutable Source Revision + Document/Version/Locator
+  -> rebuildable Document IR and search accelerators
+  -> governed Knowledge Revisions and bounded Wiki navigation
+  -> source-first drill-down when quotation, version, time, or completeness is required
+```
+
+The Living Wiki exposes readable identities, status, derived concepts, relationships, gaps, and
+bounded evidence links. It does not become the canonical container for a professional document and
+does not require full source transcription into editable Markdown. Protected source projections are
+read-only evidence views; any human or Agent interpretation remains a separately governed Knowledge
+Revision.
 
 Current v0.12 process and storage isolation, especially for `law_support`, enforces trust,
 capability, and privacy boundaries. It does not make the Legal Pack a second Knowledge OS or permit
@@ -214,6 +304,50 @@ must remain authoritative for schema validation, identity resolution, source and
 grant and operation checks, scope, sensitivity, Authority, conflict handling, idempotency, atomic
 commit, audit, and recovery.
 
+### Current compilation status semantics
+
+Compilation status is a reduction over immutable attempts and committed revisions, not a synonym
+for the newest attempt. The two public status seams (`source_knowledge_status` and compilation
+handoff) use one domain reducer and expose four independent facts:
+
+- whether any canonical successful Knowledge Revision has been committed;
+- whether that revision is admissible under the current Source lifecycle;
+- the latest compilation attempt status, including a later failure or projection-pending attempt;
+- whether the current Wiki projection is ready, pending, blocked or not started.
+
+A later failed attempt never deletes or rewrites an earlier canonical success. It also is not
+hidden behind a plain `compiled` label: the canonical revision can remain admissible while current
+compilation state is `stale_or_blocked`. A successful attempt with incomplete projection remains
+compiled and admissible while its Wiki status is pending. Withdrawal or another blocking Source
+lifecycle preserves history but makes the committed revision inadmissible.
+
+Golden synchronization, source add and reconciliation all enter through the existing auto-aware
+Vault/domain coordinator and obtain the same status receipt. Golden sync does not define a second
+mutation path or compilation state machine.
+
+The v0.13 source candidate adds four bound layers without changing those authorities:
+
+- Semantic Profile v3 computes dynamic applicability from the registered Source/IR, observations
+  and owner profile. `unknown` or unresolved applicable duties block completeness.
+- Statement Evidence core v1 persists stable statement ordinal/text/hash/type, exact evidence maps,
+  independent receipts and dependency staleness in the semantic commit transaction.
+- Statement/map/receipt logical artifacts retain one digest and Ledger reference per Statement, but
+  new commits store their physical bytes in deterministic, bounded CAS bundles (at most 768 members
+  and 8 MiB). The additive bundle-member table maps logical digest to bundle ordinal; old
+  one-digest/one-file candidate Vaults remain readable. Verification hashes the bundle and every
+  extracted logical member, snapshot/restore preserves the same CAS and Ledger identities, and
+  owner content GC treats every compilation-artifact digest as referenced evidence rather than an
+  orphan.
+- Living Wiki projection Profile `standard` (the default) produces no per-object Canvas and pairs
+  its file manifest with a v3 Page Registry, Link Index and Stable Resolver. All files are published
+  through one crash-recoverable ownership transaction.
+- The knowledge MCP lifespan owns one verified persistent read snapshot. A long-lived Python
+  `KnowledgeOS` handle lazily uses the same runtime for `context.compile`; it does not create a
+  second cache or duplicate Capsule assembly. Warm requests compare cheap
+  database/audit/manifest identities before reuse; a changed identity invalidates the old
+  snapshot before reopening and verification. Explicit `verify` always performs full verification,
+  and Python callers can close the handle directly or with a context manager.
+
 ### Compiled-first retrieval policy
 
 For ordinary reusable task context, the default is to prefer admitted compiled Knowledge
@@ -225,19 +359,72 @@ a universal hard-coded ranking by object kind:
 - exact citation, source verification, incomplete coverage, and authoritative or legal evidence
   duties may require evidence-first selection or direct source drill-down;
 - raw fragments remain bounded verification and fallback material;
-- Query Plan v5 projects a hash-bound `synthesis-query-evidence-receipt/v1` for each selected
-  Synthesis. The receipt binds its frozen input set to the exact provider-visible Source Revision,
-  fragment, locator, and quote hash set; incomplete cross-source coverage remains an explicit
-  `evidence_gap`;
+- Query Plan v6 selects admitted statement identities and projects independent Statement Evidence
+  receipts. Each receipt binds the statement hash and frozen input set to exact provider-visible
+  Source Revision, fragment, locator and quote hashes; incomplete cross-source coverage remains an
+  explicit Gap. Discovery first uses the governed current/historical Knowledge indexes with the
+  requested `retrieval_mode`, `graph_hops`, and integrity-selected canonical lexical fallback;
+  Statement matching is then restricted to at most 20 discovered revisions and a 512-item
+  candidate pool. It never selects a fixed global prefix of the Statement table. Discovery and
+  Statement truncation are plan/receipt-bound, and a resource-bound truncation is a provider-visible
+  Gap. Query Plan v5 retains its object-level Synthesis receipt as explicit compatibility;
+- Provider Capsule v2 and its nested projection type Source references and Source evidence instead
+  of admitting opaque objects. A Source evidence card must bind one exact Source Revision,
+  fragment, locator and quote hash; if the complete passage does not fit the evidence budget, the
+  passage is withheld and the applicable duty remains an explicit Gap rather than receiving a
+  truncated passage labelled exact.
+- working checkpoints use a separate bounded, indexed, rebuildable task-route projection before
+  ordinary content discovery. Route identity binds opaque project, repository, stable-worktree,
+  and task-line identifiers; checkpoint base/dirty state is a separate snapshot. An exact route
+  candidate is an independent bounded reservation: it is admitted before ordinary content
+  selection. With no route the ceiling remains `512`; reserving one route slot leaves at most
+  `511` ordinary candidates, so the combined/global budget is unchanged. Exact-route admission
+  cannot be displaced by the ordinary Top-20 and cannot widen
+  its public selected count. Same-route snapshot divergence produces a sanitized Gap; route
+  mismatch fails closed without an existence oracle. Every route row is revalidated against
+  canonical Run/Revision/Ledger state; the projection is derived, rebuildable, and capped.
 - bounded deterministic query-only aliases may improve cross-language discovery. They do not alter
-  stored source or Knowledge text, indexes, identity, admission, or Authority. Query Plan v5 binds
-  the expansion profile/count/digest and the autonomous retrieval plane validates the corresponding
-  `deeplaw.autonomous-query-plan/v1` receipt;
+  stored source or Knowledge text, indexes, identity, admission, or Authority. Query Plan v6 binds
+  the expansion profile/count/digest and validates it as part of the query/audit receipt; v5
+  continues to accept the additive v1/v2 expansion receipt shape. Natural-language capitalization
+  and inferred identity anchors are bounded discovery/rerank/selection hints, not identity or
+  Authority constraints; only caller-explicit stable identity targets remain strict;
+- canonical graph views keep the 500-admitted / 5,000-scanned hard bounds and report selection
+  truncation independently from candidate-scan truncation. A selection-truncated result requires
+  an actually observed additional admitted Relation; a rejected-only tail cannot manufacture that
+  signal. Both conditions carry bounded gaps, and Wiki local graph plus CLI/MCP reuse the same
+  domain response;
 - every fallback from compiled knowledge to source fragments must be observable in the plan,
   explanation, gap, or receipt;
-- CLI, MCP, and Python Knowledge Capsule compilation reuse Query Plan v5 admission. An exact
+- CLI, MCP, and Python use Query Plan v6 by default in the source candidate. The planner resolves
+  applicable duties, selects statements, performs only duty-targeted evidence fallback, suppresses
+  represented evidence and reports residual gaps. Query Plan v5 remains explicitly selectable. An exact
   policy/entity designator cannot be silently replaced by a different designator when the target
   revision is stale or withdrawn; the Capsule stays empty and preserves the explicit gap;
+- The autonomous Context entry points share one domain assembler: Python
+  `KnowledgeOS.context.compile`, `deeplaw knowledge context`,
+  `deeplaw knowledge autonomy context`, and MCP `operation=context` default to Query Plan v6.
+  The owner-local response is additive `deeplaw.knowledge-capsule/v3`, bounded to 262,144 bytes,
+  and retains the complete v6 plan/hash, selected Statements, evidence, contradiction/gap state,
+  receipt, budget, audit head, and `write_performed=false`. Its nested
+  `deeplaw.provider-knowledge-capsule/v2` projection is independently bounded to 65,536 bytes;
+  the provider receives only the bounded Statement/evidence projection and opaque `receipt_id`.
+  The v3 local audit summary has no candidate scores, rejected-candidate text, query debug data,
+  paths, or secrets. Explicit `query_plan_version=5` is compatibility-only: Python and CLI retain
+  local Capsule v2, while MCP retains its output/v3 plus Capsule v2 compatibility envelope. The
+  legacy `deeplaw recall` command remains the `retrieval_fabric` path and is not a Query Plan v6
+  Context alias. Ordinary query and Context operations never append the canonical Knowledge Ledger;
+  the bounded Query Trace is process-local and deletable by runtime-owner lifecycle actions;
+- ordinary queries do not append to the canonical Knowledge Ledger. MCP keeps only a 16-entry,
+  15-minute, 1 MiB aggregate ephemeral Query Trace after successful provider validation. The trace
+  stores query hashes and redacted receipt metadata, verifies its hash on read, rotates by TTL/LRU,
+  clears on identity change/close, and disappears on process exit. Candidate scores and audit
+  projection internals do not cross the provider boundary; the provider-visible receipt contains
+  only the opaque `receipt_id` join key;
+- Living Wiki object pages retain inline Statement Evidence for small revisions. Revisions with
+  more than 64 Statements project deterministic, registry-indexed Statement Evidence shards of at
+  most 64 Statements each. The canonical object page links every shard, each Statement keeps its
+  stable anchor and receipt metadata, and every generated page stays under the 256 KiB page bound;
 - no rank, confidence, link count, community weight, or feedback signal may upgrade Authority.
 
 The closed loop is:
@@ -293,15 +480,18 @@ The Capsule partitions official evidence, user-private evidence, source-derived 
 Agent-derived knowledge, Agent memory, contradictions, limitations, gaps, and receipts. The general
 Knowledge server leaves legal-evidence partitions empty; `law_support` owns them. Every plan binds
 filters, budgets, selected revisions, both audit heads, derived manifests, candidate-state digest,
-and selection digest. Provider-visible payloads have hard bounds, and restricted content never
-crosses MCP.
+and selection digest. Autonomous Context uses local Capsule v3 plus the nested Provider v2
+projection described above; Provider content is capped at 65,536 bytes and contains no full plan,
+candidate scores, rejected-candidate text, SQL, cache/parser diagnostics, paths, or secrets.
+Restricted content never crosses MCP. The local Query Trace remains bounded, redacted and
+non-persistent; it is not Canonical Knowledge or a Ledger mutation.
 
 ## Interface and process isolation
 
 | Surface | Boundary |
 | --- | --- |
-| `knowledge_support` | One read-only stdio leaf; v3 exposes twelve bounded read operations, including explain, identity, and gaps |
-| `knowledge_sink` | Separate stdio leaf; explicit owner token, writer, scope, sensitivity, operation allowlist, byte/rate/capacity limits, idempotency, and audit |
+| `knowledge_support` | One read-only stdio leaf; v3 exposes only its closed bounded read operations, including query, context, explain, identity, and gaps |
+| `knowledge_sink` | Separate stdio leaf; additive input v6 for bound writes, frozen v2-v5 compatibility, explicit owner token, writer, scope, sensitivity, operation allowlist, byte/rate/capacity limits, idempotency, and audit |
 | `law_support` | Separate read-only process and storage for signed official and owner-private legal evidence |
 | CLI | Owner administration, source ingestion, grants, migration, rollback, snapshot, rebuild, official/private Legal operations |
 | Watcher | Explicit foreground polling adapter over the same reconcile/coordinator service; no background daemon |
@@ -311,8 +501,36 @@ The default plugin registers only its read surface. No retrieval operation hides
 build/update/upload/delete/signing never enters a query MCP. An OS process with arbitrary same-owner
 shell access can bypass MCP and must be constrained by the host or a separate OS identity.
 
+Official static and generated Host configurations enter these leaves through the fixed-target
+closed launcher on the existing CLI commands. It creates an isolated HOME/USERPROFILE/XDG/temp
+root, copies only portable process values plus explicit DeepLaw data/task settings, and can dispatch
+only `knowledge_support`, `law_support`, or an owner-granted `knowledge_sink`. Host/provider auth,
+plugin/hook state and credential paths do not enter the child. One shared Host runtime resolver is
+the sole owner of ancestor link/reparse, ownership, permission, Vault identity and closed argv
+rules. Host Connect Plan v2 registers a private owner-local Vault-ID-to-path binding; generated
+configuration stays path-free. Both launcher parent and raw MCP child independently verify the
+opaque expected Vault ID.
+
+The host-neutral task driver binds a user-selected project/task and explicit current Git worktree.
+Ordinary operations locate the exact task-context route from those owner-visible inputs; an opaque
+task handle is an optional exact optimization, not a static Host-configuration requirement. It adds
+no table, Knowledge kind, relation, Host runtime or daemon. Start/resume/compaction are read-only;
+checkpoint/forget enter only through a separate owner-granted `knowledge_sink` and an explicit
+success/idempotency boundary. Fork is either continue-parent or child-task. Host session/thread IDs
+remain untrusted optional route hints, never Knowledge identity, and compaction reacquires a verified
+Capsule rather than copying transcripts. This guarantees deterministic data-plane recovery, not
+native Host lifecycle continuity; the latter remains qualification work.
+
 These isolated processes are deployment and trust boundaries within one governed Knowledge OS.
 They must not evolve into disconnected identity, graph, versioning, or retrieval implementations.
+
+Pass 14 Host qualification code shares one candidate/wheel/contract/report/bundle orchestrator.
+Codex and OpenCode adapters keep only their Host protocol, closed configuration and sanitized event
+interpretation. For the current Codex App Server protocol, `thread/compact/start` returns `{}` and
+completion is the paired `contextCompaction` item lifecycle. Deprecated `thread/compacted` is a
+compatibility input, never qualification evidence. This Host harness is development/qualification
+infrastructure; it does not add a runtime, session store, retrieval engine or mutation authority to
+DeepLaw.
 
 ## Legal Pack isolation
 
@@ -374,3 +592,22 @@ tasks, actual named third-party results, paired confidence intervals, and retain
 failures/resources remain governed by
 [`EXTERNAL_BENCHMARK_PROTOCOL.md`](EXTERNAL_BENCHMARK_PROTOCOL.md). Until those comparative facts
 exist, `competitive_claim_eligible=false` is mandatory.
+For the current v0.13 source candidate, `release_gate_passed=false`,
+`claim_eligible=false`, and `competitive_claim_eligible=false`; no release or superiority
+conclusion follows from the local Context parity work.
+
+## Pass 2 skip disposition
+
+Pass 2 keeps these lanes explicit so a development skip cannot be mistaken for qualification:
+
+| Lane | Disposition |
+| --- | --- |
+| Statement scale 10k | `required not_executed` |
+| Statement scale 100k | `required not_executed` |
+| Relation truncation 500/5000 | `required not_executed` |
+| Wiki wrong merge | `required not_executed` |
+| Wiki alias collision | `required not_executed` |
+| Wiki cycle | `required not_executed` |
+| Historical v0.6 wheel | `separate compatibility not_executed` |
+| Windows native ACL | `macOS not_applicable`; Windows evidence remains required |
+| Windows native junction | `macOS not_applicable`; Windows evidence remains required |

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/derived-manifest.v2.schema.json",
+  "title": "DeepLaw Derived Manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "input_audit_head", "legacy_audit_head", "generator",
+    "generator_version", "configuration", "fts_rows_sha256", "dense_manifest_sha256",
+    "knowledge_revision_count", "knowledge_revision_ids_sha256", "relation_revision_count",
+    "relation_revision_ids_sha256", "files", "components", "generated_at", "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.derived-manifest/v2"},
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "generator": {"const": "deeplaw.knowledge-autonomy/v1"},
+    "generator_version": {"const": "1"},
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fts_tokenizer", "community_algorithm", "dense_model", "reranker_model",
+        "canvas_node_limit", "canvas_edge_limit", "wiki_item_limit",
+        "community_view_limit", "community_member_limit", "semantic_lint_issue_limit"
+      ],
+      "properties": {
+        "fts_tokenizer": {"const": "unicode61 remove_diacritics 2"},
+        "community_algorithm": {
+          "const": "weighted-label-propagation+semantic-bridges/1"
+        },
+        "dense_model": {"type": "string", "minLength": 1, "maxLength": 200},
+        "reranker_model": {"type": "string", "minLength": 1, "maxLength": 200},
+        "canvas_node_limit": {"const": 500},
+        "canvas_edge_limit": {"const": 1000},
+        "wiki_item_limit": {"const": 250},
+        "community_view_limit": {"const": 1000},
+        "community_member_limit": {"const": 500},
+        "semantic_lint_issue_limit": {"const": 64}
+      }
+    },
+    "fts_rows_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "dense_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "knowledge_revision_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+    "knowledge_revision_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "relation_revision_count": {"type": "integer", "minimum": 0, "maximum": 2000000},
+    "relation_revision_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "files": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "byte_size", "sha256"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^\\.deeplaw/derived/vectors/(vectors\\.bin|records\\.json|manifest\\.json)$"
+          },
+          "byte_size": {"type": "integer", "minimum": 0, "maximum": 268435456},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "component", "manifest_path", "manifest_byte_size", "schema_version",
+          "manifest_sha256", "configuration_sha256", "profile_sha256", "file_count",
+          "file_inventory_sha256", "input_audit_head", "legacy_audit_head", "generator",
+          "generator_version"
+        ],
+        "properties": {
+          "component": {"const": "living_wiki"},
+          "manifest_path": {
+            "const": ".deeplaw/derived/tree/living-wiki-manifest.json"
+          },
+          "manifest_byte_size": {
+            "type": "integer", "minimum": 1, "maximum": 67108864
+          },
+          "schema_version": {"const": "deeplaw.living-wiki-manifest/v2"},
+          "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "configuration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "profile_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "file_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+          "file_inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "generator": {"const": "deeplaw.living-wiki-projector/2"},
+          "generator_version": {"const": "2"}
+        }
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

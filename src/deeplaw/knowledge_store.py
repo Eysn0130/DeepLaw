@@ -668,6 +668,26 @@ def knowledge_vault_permission_report(path: str | Path) -> dict[str, Any]:
     }
 
 
+def _harden_stored_source_if_windows(path: Path) -> None:
+    """Keep immutable Source bytes inside the Vault's native ACL boundary."""
+
+    if os.name != "nt":
+        return
+    from .windows_acl import harden_windows_private_file
+
+    harden_windows_private_file(path)
+
+
+def _harden_vault_after_write_if_windows(root: Path) -> None:
+    """Restore the native ACL boundary after a writable Vault session."""
+
+    if os.name != "nt":
+        return
+    from .windows_acl import harden_windows_vault
+
+    harden_windows_vault(root)
+
+
 def _validate_manifest(value: Any) -> dict[str, Any]:
     expected = {
         "schema_version",
@@ -1046,6 +1066,10 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     )
         self.database = database
         self.read_only = read_only
+        if read_only:
+            from .windows_acl import windows_sqlite_sidecar_identities
+
+            self._opened_sqlite_sidecars = windows_sqlite_sidecar_identities(database)
         self._opened_database_fingerprint = self._database_file_fingerprint()
         self._integrity_cache_key: tuple[Any, ...] | None = None
         self._integrity_cache_value: dict[str, Any] | None = None
@@ -1080,6 +1104,15 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
 
     def close(self) -> None:
         self.connection.close()
+        if self.read_only:
+            from .windows_acl import harden_windows_sqlite_sidecars
+
+            harden_windows_sqlite_sidecars(
+                self.database,
+                previous_identities=self._opened_sqlite_sidecars,
+            )
+        else:
+            _harden_vault_after_write_if_windows(self.root)
 
     @property
     def vault_id(self) -> str:
@@ -2451,6 +2484,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                 or sha256_file(existing_path) != existing["content_sha256"]
             ):
                 raise RuntimeError("existing knowledge source failed its content-integrity check")
+            _harden_stored_source_if_windows(existing_path)
             asset_rows = self.connection.execute(
                 """
                 SELECT DISTINCT assets.asset_id
@@ -2508,6 +2542,7 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             raise RuntimeError("existing knowledge source file does not match its content identity")
         else:
             os.chmod(destination, 0o600)
+        _harden_stored_source_if_windows(destination)
         imported_at = utc_now()
         previous_source = self.active_source_for_key(source_key)
         previous_source_id = previous_source["source_id"] if previous_source is not None else None
@@ -8232,6 +8267,13 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
                     "source_key": source["source_key"],
                     "removed_asset_count": 0,
                     "idempotent": True,
+                    "current_retrieval_eligible": False,
+                    "current_admission_eligible": False,
+                    "original_bytes_retained": True,
+                    "history_retained": True,
+                    "audit_history_retained": True,
+                    "bytes_deleted": False,
+                    "canonical_bytes_deleted": False,
                     "revision": self.revision,
                     "audit_head": self.audit_head,
                 }
@@ -8405,6 +8447,13 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             "source_key": source["source_key"],
             "removed_asset_count": len(removed_ids),
             "idempotent": False,
+            "current_retrieval_eligible": False,
+            "current_admission_eligible": False,
+            "original_bytes_retained": True,
+            "history_retained": True,
+            "audit_history_retained": True,
+            "bytes_deleted": False,
+            "canonical_bytes_deleted": False,
             "revision": revision,
             "audit_head": audit_head,
         }

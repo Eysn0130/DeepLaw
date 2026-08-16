@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/v013-runtime-stability-report.v1.schema.json",
+  "title": "DeepLaw v0.13 Runtime Stability Diagnostic Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "claim_eligible",
+    "claim_ineligibility_reason",
+    "profile",
+    "generated_at_utc",
+    "release_gate_passed",
+    "candidate",
+    "environment",
+    "configuration",
+    "fixture",
+    "rss_stability",
+    "concurrent_readers",
+    "canonical_ledger",
+    "limitations",
+    "rerun_commands",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-runtime-stability-report/v1"},
+    "claim_eligible": {"const": false},
+    "claim_ineligibility_reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "profile": {"const": "runtime_stability_diagnostic"},
+    "generated_at_utc": {"type": "string", "format": "date-time"},
+    "release_gate_passed": {"const": false},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "environment": {"$ref": "#/$defs/environment"},
+    "configuration": {"$ref": "#/$defs/configuration"},
+    "fixture": {"$ref": "#/$defs/fixture"},
+    "rss_stability": {"$ref": "#/$defs/rss"},
+    "concurrent_readers": {"$ref": "#/$defs/concurrent"},
+    "canonical_ledger": {"$ref": "#/$defs/canonicalLedger"},
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    },
+    "rerun_commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nonnegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nullableNonnegativeInteger": {
+      "anyOf": [
+        {"type": "integer", "minimum": 0},
+        {"type": "null"}
+      ]
+    },
+    "nullableNumber": {
+      "anyOf": [
+        {"type": "number"},
+        {"type": "null"}
+      ]
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legacy_events", "autonomous_events", "total"],
+      "properties": {
+        "legacy_events": {"$ref": "#/$defs/nonnegativeInteger"},
+        "autonomous_events": {"$ref": "#/$defs/nonnegativeInteger"},
+        "total": {"$ref": "#/$defs/nonnegativeInteger"}
+      }
+    },
+    "ledgerMeasurement": {
+      "type": "object",
+      "required": [
+        "canonical_ledger_event_count_before",
+        "canonical_ledger_event_count_after",
+        "canonical_ledger_unchanged",
+        "ledger_counts_before",
+        "ledger_counts_after"
+      ],
+      "properties": {
+        "canonical_ledger_event_count_before": {"$ref": "#/$defs/nonnegativeInteger"},
+        "canonical_ledger_event_count_after": {"$ref": "#/$defs/nonnegativeInteger"},
+        "canonical_ledger_unchanged": {"type": "boolean"},
+        "ledger_counts_before": {"$ref": "#/$defs/counts"},
+        "ledger_counts_after": {"$ref": "#/$defs/counts"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_version",
+        "git_commit",
+        "working_tree_dirty",
+        "runner",
+        "runner_sha256",
+        "schema",
+        "schema_sha256",
+        "source_hashes"
+      ],
+      "properties": {
+        "package_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "git_commit": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            {"type": "null"}
+          ]
+        },
+        "working_tree_dirty": {"type": "boolean"},
+        "runner": {"const": "benchmarks/v013/runtime_stability.py"},
+        "runner_sha256": {"$ref": "#/$defs/sha256"},
+        "schema": {"const": "contracts/v013-runtime-stability-report.v1.schema.json"},
+        "schema_sha256": {"$ref": "#/$defs/sha256"},
+        "source_hashes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "src/deeplaw/retrieval/query_v6.py",
+            "src/deeplaw/persistent_read_runtime.py",
+            "src/deeplaw/knowledge_mcp_server.py"
+          ],
+          "properties": {
+            "src/deeplaw/retrieval/query_v6.py": {"$ref": "#/$defs/sha256"},
+            "src/deeplaw/persistent_read_runtime.py": {"$ref": "#/$defs/sha256"},
+            "src/deeplaw/knowledge_mcp_server.py": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "python", "sqlite", "cpu", "ram_total_bytes"],
+      "properties": {
+        "os": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "release", "machine"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1, "maxLength": 100},
+            "release": {"type": "string", "minLength": 1, "maxLength": 200},
+            "machine": {"type": "string", "minLength": 1, "maxLength": 100}
+          }
+        },
+        "python": {"type": "string", "minLength": 1, "maxLength": 50},
+        "sqlite": {"type": "string", "minLength": 1, "maxLength": 50},
+        "cpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["logical_count", "model"],
+          "properties": {
+            "logical_count": {"type": "integer", "minimum": 1},
+            "model": {"type": "string", "minLength": 1, "maxLength": 200}
+          }
+        },
+        "ram_total_bytes": {"$ref": "#/$defs/nullableNonnegativeInteger"}
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_count",
+        "target_request_count",
+        "rss_growth_limit_percent",
+        "warmup_requests",
+        "execute_10k",
+        "reader_count",
+        "query_plan_version",
+        "projection",
+        "query_text_sha256"
+      ],
+      "properties": {
+        "request_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "target_request_count": {"const": 10000},
+        "rss_growth_limit_percent": {"const": 10.0},
+        "warmup_requests": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "execute_10k": {"type": "boolean"},
+        "reader_count": {"const": 8},
+        "query_plan_version": {"const": "6"},
+        "projection": {"const": "standard"},
+        "query_text_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "construction",
+        "statement_count",
+        "statement_id",
+        "statement_text_sha256",
+        "source_revision_id",
+        "canonical_ledger_event_count"
+      ],
+      "properties": {
+        "status": {"enum": ["executed", "fail", "not_executed"]},
+        "construction": {"const": "public_profile_v3_compilation"},
+        "statement_count": {"type": "integer", "minimum": 0},
+        "statement_id": {
+          "anyOf": [
+            {"type": "string", "pattern": "^statement_[0-9a-f]{24,64}$"},
+            {"type": "null"}
+          ]
+        },
+        "statement_text_sha256": {
+          "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        },
+        "source_revision_id": {
+          "anyOf": [
+            {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24,64}$"},
+            {"type": "null"}
+          ]
+        },
+        "canonical_ledger_event_count": {"$ref": "#/$defs/nonnegativeInteger"}
+      }
+    },
+    "rss": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/ledgerMeasurement"},
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "request_count",
+            "target_request_count",
+            "warmup_requests",
+            "attempted_requests",
+            "successful_requests",
+            "failed_requests",
+            "measurement_method",
+            "start_rss_bytes",
+            "end_rss_bytes",
+            "peak_rss_bytes",
+            "relative_growth_percent",
+            "growth_limit_percent",
+            "growth_limit_passed",
+            "errors",
+            "reason",
+            "target_10k_executed",
+            "limitations"
+          ],
+          "properties": {
+            "status": {"enum": ["executed", "degraded", "fail", "not_executed"]},
+            "request_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+            "target_request_count": {"const": 10000},
+            "warmup_requests": {"type": "integer", "minimum": 0, "maximum": 1000},
+            "attempted_requests": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "successful_requests": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "failed_requests": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "measurement_method": {"type": "string", "minLength": 1, "maxLength": 100},
+            "start_rss_bytes": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+            "end_rss_bytes": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+            "peak_rss_bytes": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+            "relative_growth_percent": {"$ref": "#/$defs/nullableNumber"},
+            "growth_limit_percent": {"const": 10.0},
+            "growth_limit_passed": {
+              "anyOf": [{"type": "boolean"}, {"type": "null"}]
+            },
+            "errors": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {"type": "string", "minLength": 1, "maxLength": 500}
+            },
+            "reason": {
+              "anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}]
+            },
+            "target_10k_executed": {"type": "boolean"},
+            "limitations": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+            }
+          }
+        }
+      ]
+    },
+    "concurrent": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/ledgerMeasurement"},
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "reader_count",
+            "successful_readers",
+            "failed_readers",
+            "barrier_synchronized",
+            "receipt_consistent",
+            "identity_consistent",
+            "read_only_consistent",
+            "receipt_ids",
+            "identity_digests",
+            "read_only_flags",
+            "errors",
+            "reason"
+          ],
+          "properties": {
+            "status": {"enum": ["executed", "fail", "not_executed"]},
+            "reader_count": {"const": 8},
+            "successful_readers": {"type": "integer", "minimum": 0, "maximum": 8},
+            "failed_readers": {"type": "integer", "minimum": 0, "maximum": 8},
+            "barrier_synchronized": {"type": "boolean"},
+            "receipt_consistent": {"type": "boolean"},
+            "identity_consistent": {"type": "boolean"},
+            "read_only_consistent": {"type": "boolean"},
+            "receipt_ids": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {"type": "string", "pattern": "^queryreceipt_[0-9a-f]{24,64}$"}
+            },
+            "identity_digests": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {"$ref": "#/$defs/sha256"}
+            },
+            "read_only_flags": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {"const": true}
+            },
+            "errors": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {"type": "string", "minLength": 1, "maxLength": 500}
+            },
+            "reason": {
+              "anyOf": [{"type": "string", "maxLength": 500}, {"type": "null"}]
+            }
+          }
+        }
+      ]
+    },
+    "canonicalLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_count_before",
+        "event_count_after",
+        "unchanged",
+        "counts_before",
+        "counts_after"
+      ],
+      "properties": {
+        "event_count_before": {"$ref": "#/$defs/nonnegativeInteger"},
+        "event_count_after": {"$ref": "#/$defs/nonnegativeInteger"},
+        "unchanged": {"type": "boolean"},
+        "counts_before": {"$ref": "#/$defs/counts"},
+        "counts_after": {"$ref": "#/$defs/counts"}
+      }
+    }
+  }
+}

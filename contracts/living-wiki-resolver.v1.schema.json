@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-resolver.v1.schema.json",
+  "title": "DeepLaw Living Wiki stable resolver response v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["status", "candidate_count", "candidates", "candidates_truncated", "truncation_reason", "ambiguity", "admission", "query_sha256", "receipt"],
+  "properties": {
+    "status": {"enum": ["resolved", "ambiguous", "not_found", "not_admitted", "stale", "invalid", "index_unavailable"]},
+    "candidate_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "candidates": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/candidate"}},
+    "candidates_truncated": {"type": "boolean"},
+    "truncation_reason": {"type": ["string", "null"], "enum": ["candidate_limit", null]},
+    "ambiguity": {"type": ["object", "null"], "additionalProperties": false, "properties": {"reason": {"type": "string", "maxLength": 128}, "candidate_count": {"type": "integer", "minimum": 0, "maximum": 200000}}},
+    "admission": {"type": "object", "additionalProperties": false, "required": ["admitted", "reason"], "properties": {"admitted": {"type": "boolean"}, "reason": {"type": "string", "minLength": 1, "maxLength": 256}}},
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt": {"$ref": "#/$defs/receipt"}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "resolved"}}}, "then": {"properties": {"candidate_count": {"const": 1}, "candidates": {"minItems": 1, "maxItems": 1}, "candidates_truncated": {"const": false}, "truncation_reason": {"const": null}}}},
+    {"if": {"properties": {"status": {"const": "not_found"}}}, "then": {"properties": {"candidate_count": {"const": 0}, "candidates": {"maxItems": 0}, "candidates_truncated": {"const": false}, "truncation_reason": {"const": null}}}},
+    {"if": {"properties": {"status": {"enum": ["not_admitted", "stale"]}}}, "then": {"properties": {"candidate_count": {"const": 0}, "candidates": {"maxItems": 0}, "candidates_truncated": {"const": false}, "truncation_reason": {"const": null}}}},
+    {"if": {"properties": {"status": {"const": "ambiguous"}}}, "then": {"properties": {"candidate_count": {"minimum": 2}, "candidates": {"minItems": 1}}}}
+  ],
+  "$defs": {
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["page_id", "canonical_page_path", "namespace", "kind", "title", "current_revision", "freshness", "sensitivity", "scope", "lifecycle", "audit_head", "reason", "authority"],
+      "properties": {
+        "page_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "canonical_page_path": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "namespace": {"enum": ["knowledge", "aggregate", "source", "system", "legal"]},
+        "kind": {"enum": ["aggregate", "concept", "claim", "comparison", "decision", "entity", "event", "experience", "memory", "preference", "procedure", "skill", "source", "synthesis", "system"]},
+        "title": {"type": ["string", "null"], "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+        "current_revision": {
+          "oneOf": [
+            {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+            {"type": "object", "additionalProperties": false, "required": ["source_revision_id"], "properties": {"source_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}, "fragment_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}, "fragment_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}}, "oneOf": [{"required": ["fragment_id"], "not": {"required": ["fragment_revision_id"]}}, {"required": ["fragment_revision_id"], "not": {"required": ["fragment_id"]}}]}
+          ]
+        },
+        "freshness": {"enum": ["fresh", "stale", "unknown", "invalidated"]},
+        "sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+        "scope": {"enum": ["personal", "project", "domain"]},
+        "lifecycle": {"enum": ["active", "superseded", "revoked", "expired", "forgotten", "archived", "quarantined"]},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "reason": {"enum": ["page_id", "knowledge_id", "revision_id", "semantic_key", "wiki_path", "wikilink", "source_fragment", "source_revision_id", "alias", "candidate"]},
+        "authority": {"const": "none"},
+        "anchor": {"$ref": "#/$defs/anchor"}
+      }
+    },
+    "anchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["anchor_id", "anchor", "kind"],
+      "properties": {
+        "anchor_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "anchor": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+        "kind": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+        "source_fragment": {"$ref": "#/$defs/source_fragment"},
+        "statement_target": {
+          "oneOf": [
+            {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+            {"type": "object", "additionalProperties": false, "minProperties": 1, "maxProperties": 1,
+              "properties": {
+                "statement_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+                "statement_key": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+                "semantic_key": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f\\x7f]*$"}
+              }
+            }
+          ]
+        }
+      },
+      "oneOf": [
+        {"required": ["source_fragment"], "not": {"required": ["statement_target"]}},
+        {"required": ["statement_target"], "not": {"required": ["source_fragment"]}}
+      ]
+    },
+    "source_fragment": {
+      "type": "object", "additionalProperties": false, "required": ["source_revision_id"],
+      "properties": {
+        "source_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "fragment_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "fragment_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}
+      },
+      "oneOf": [
+        {"required": ["fragment_id"], "not": {"required": ["fragment_revision_id"]}},
+        {"required": ["fragment_revision_id"], "not": {"required": ["fragment_id"]}}
+      ]
+    },
+    "receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["legal_authority"],
+      "properties": {
+        "resolver_schema": {"const": "deeplaw.living-wiki-resolver/v1"},
+        "registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "legal_authority": {"const": false},
+        "namespace": {"const": "authoritative_segment"},
+        "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "resolved_page_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "gap": {"type": "string", "minLength": 1, "maxLength": 256},
+        "suppressed_candidates": {"type": "object", "additionalProperties": false, "required": ["present", "digest_sha256"], "properties": {"present": {"const": true}, "digest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}
+      }
+    },
+    "component": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "registry_sha256", "v2_manifest_sha256", "input_audit_head", "legacy_audit_head", "generated_at", "candidate_count", "candidate_ids_sha256", "index_sha256"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.living-wiki-resolver/v1"},
+        "registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "v2_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "generated_at": {"type": "string", "format": "date-time"},
+        "candidate_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+        "candidate_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "index_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

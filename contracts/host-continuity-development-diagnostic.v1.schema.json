@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-continuity-development-diagnostic.v1.schema.json",
+  "title": "DeepLaw Source-free Host Development Diagnostic Fixture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "source_free", "qualification_labels_present",
+    "task_case", "scenario", "task_prompt", "checkpoint"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-continuity-development-diagnostic/v1"},
+    "status": {"const": "development_fixture"},
+    "source_free": {"const": true},
+    "qualification_labels_present": {"const": false},
+    "task_case": {"const": "native_host_receipt_development_v1"},
+    "scenario": {"const": "development_diagnostic"},
+    "task_prompt": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "next_action", "verified_fact", "open_gap", "marker"],
+      "properties": {
+        "decision": {"type": "string", "minLength": 1, "maxLength": 500},
+        "next_action": {"type": "string", "minLength": 1, "maxLength": 500},
+        "verified_fact": {"type": "string", "minLength": 1, "maxLength": 500},
+        "open_gap": {"type": "string", "minLength": 1, "maxLength": 500},
+        "marker": {"type": "string", "pattern": "^PASS17-[A-Z0-9-]{16,100}$"}
+      }
+    }
+  }
+}

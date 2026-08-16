@@ -1,0 +1,4 @@
+interface:
+  display_name: "DeepLaw Synthesis Refresh"
+  short_description: "Refresh stale governed source syntheses"
+  default_prompt: "Use $deeplaw-refresh-synthesis to inspect and refresh this stale synthesis with owner approval."

@@ -1,0 +1,104 @@
+{
+  "schema_version": "deeplaw.obsidian-desktop-qualification/v1",
+  "status": "executed",
+  "claim_eligible": false,
+  "release_ready": false,
+  "candidate": {
+    "commit": "b14c90e4cf3b2d4954461306dc8cc77f434891d9",
+    "tree": "9fa784c671f71c63a7c33730338b27858c3257cf",
+    "package_version": "0.12.0",
+    "worktree_dirty": false
+  },
+  "environment": {
+    "os": "macOS 26.5.2",
+    "architecture": "arm64",
+    "python": "3.11.15",
+    "obsidian_ui_version": "1.13.4",
+    "obsidian_bundle_short_version": "1.12.7",
+    "obsidian_bundle_version": "0.14.8",
+    "obsidian_binary_sha256": "2ad76c30031bc9a54dc6580525135049d4f4a841429b13ecaabc2fb7d0e6203e",
+    "obsidian_binary_bytes": 102400
+  },
+  "plugin": {
+    "id": "deeplaw-bridge",
+    "version": "0.12.0",
+    "main_js_sha256": "63d7fa3b284e0aa35c244854d12cd6d8b235af6eea1dd952ff2366cfa5bf7ea6",
+    "manifest_sha256": "86be74d0ddb753f43d141bff8b247b580ad5d131b59323cd016ee7df7cf33b80",
+    "desktop_loaded": true,
+    "command_palette_registered": true,
+    "verify_command_executed": true,
+    "verify_command_valid": true
+  },
+  "synthetic_fixture": {
+    "contains_case_or_customer_data": false,
+    "vault_path_in_report": false,
+    "capability_identifier_in_report": false,
+    "credential_or_secret_in_report": false,
+    "knowledge_id": "knowledge_f4fc4a5902564dcca610ee81",
+    "initial_revision_id": "knowledgerev_3184f9d873b842f3a92e06d4",
+    "current_revision_id": "knowledgerev_ee39231a723965eecc2fcca1",
+    "current_parent_revision_id": "knowledgerev_3184f9d873b842f3a92e06d4",
+    "initial_markdown_sha256": "482982ff06c63818feea7a5c7e75cbe475f78dbaf61794d8aee3e9a3f44c6d08",
+    "edited_unregistered_markdown_sha256": "fd747cde95b61ef2aaada0c74addc61acab5d13cfdc6ff79e56a5664c3b042fb",
+    "reconciled_markdown_sha256": "bb133c0202e55244beb0b56fefac16e8b11de6224436e950ed8f442dd47c6da4",
+    "renamed_relative_path": "knowledge/decisions/pass10-obsidian-renamed.md",
+    "edited_body": "Edited by the real Obsidian Desktop qualification; stable identity must survive rename and reconciliation."
+  },
+  "workflow": {
+    "started_at": "2026-08-11T08:11:40Z",
+    "completed_at": "2026-08-11T08:16:52Z",
+    "steps": [
+      "initialize isolated synthetic DeepLaw vault",
+      "seed one governed decision through knowledge_sink",
+      "load the exact local production bundle in Obsidian Desktop",
+      "execute DeepLaw Bridge Verify DeepLaw Vault from the real command palette",
+      "rename the Knowledge Markdown file in the real Obsidian file explorer",
+      "edit the synthetic body in the real Obsidian editor",
+      "reconcile through the shared DeepLaw domain coordinator",
+      "observe the new revision and preserved renamed path in Obsidian",
+      "return Obsidian to the previously active user vault"
+    ]
+  },
+  "outcome": {
+    "plugin_load_passed": true,
+    "rename_passed": true,
+    "edit_passed": true,
+    "reconcile_passed": true,
+    "stable_identity_preserved": true,
+    "renamed_path_preserved": true,
+    "parent_revision_bound": true,
+    "body_preserved": true,
+    "legal_authority": false,
+    "conflict_count": 0,
+    "ledger_sequence_before_reconcile": 3,
+    "ledger_sequence_after_reconcile": 6,
+    "post_reconcile_verification_valid": true
+  },
+  "captures": [
+    {
+      "path_hint": "plugin-loaded.jpeg",
+      "sha256": "720283a31a845fbb5e6bdedda6fc23a020e4fce6ed4357480760f7c80362de46",
+      "byte_size": 71550
+    },
+    {
+      "path_hint": "plugin-verify.jpeg",
+      "sha256": "7d03eb3b13977b456c6baec2fb1f942e328718a5bd438bbfde477cbbddf8927a",
+      "byte_size": 98788
+    },
+    {
+      "path_hint": "renamed-edited.jpeg",
+      "sha256": "ae6c58dfcb5818f3ef2ba2e3d45a9d0099d00a8d2ab0bdf9d977611322c5c990",
+      "byte_size": 75831
+    },
+    {
+      "path_hint": "reconciled.jpeg",
+      "sha256": "3d6982cf24035daa48cc53004d5f492ab23f49a6d3d17a0a697695212fafdd44",
+      "byte_size": 75766
+    }
+  ],
+  "limitations": [
+    "This is one real Desktop seam run on macOS, not Human Gold, qualification holdout, or final blind evidence.",
+    "The bundle and deterministic bridge checks passed, but this run does not promote Obsidian to Production or Stable.",
+    "Tolaria Desktop/UI remains not_executed."
+  ]
+}

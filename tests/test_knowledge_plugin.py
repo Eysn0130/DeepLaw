@@ -17,7 +17,13 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     claude = json.loads(
         (root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
     )
-    mcp = json.loads((root / ".mcp.json").read_text(encoding="utf-8"))
+    compatibility_mcp = json.loads(
+        (root / ".mcp.json").read_text(encoding="utf-8")
+    )
+    codex_mcp = compatibility_mcp
+    claude_mcp = json.loads(
+        (root / ".claude-plugin" / "mcp.json").read_text(encoding="utf-8")
+    )
     openai = yaml.safe_load(
         (
             root / "skills" / "use-knowledge-assets" / "agents" / "openai.yaml"
@@ -33,16 +39,24 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     assert codex["name"] == claude["name"] == "deeplaw-knowledge-os"
     assert openai["policy"]["allow_implicit_invocation"] is False
     assert compiler_openai["policy"]["allow_implicit_invocation"] is False
-    assert mcp == {
+    assert codex["mcpServers"] == "./.mcp.json"
+    assert claude["mcpServers"] == "./.claude-plugin/mcp.json"
+    assert codex_mcp == claude_mcp == compatibility_mcp == {
         "mcpServers": {
             "deeplaw-knowledge": {
                 "command": "deeplaw",
-                "args": ["knowledge", "mcp", "--stdio"],
+                "args": ["knowledge", "mcp", "--closed-environment", "--stdio"],
             }
         }
     }
     serialized = json.dumps(
-        {"codex": codex, "claude": claude, "mcp": mcp},
+        {
+            "codex": codex,
+            "claude": claude,
+            "codex_mcp": codex_mcp,
+            "claude_mcp": claude_mcp,
+            "compatibility_mcp": compatibility_mcp,
+        },
         sort_keys=True,
     ).lower()
     assert '"law_support"' not in serialized
@@ -72,6 +86,30 @@ def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:
     assert "Never use shell or\nfilesystem tools to run or bypass" in legal_skill
 
 
+def test_codex_plugins_use_only_plugin_json_and_root_mcp_configuration() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    expected = {
+        "deeplaw": ("deeplaw", ["mcp", "--closed-environment", "--stdio"]),
+        "deeplaw-knowledge-os": (
+            "deeplaw-knowledge",
+            ["knowledge", "mcp", "--closed-environment", "--stdio"],
+        ),
+    }
+    for plugin_name, (server_name, arguments) in expected.items():
+        root = repository / "plugins" / plugin_name
+        codex_dir = root / ".codex-plugin"
+        assert sorted(path.name for path in codex_dir.iterdir()) == ["plugin.json"]
+        manifest = json.loads((codex_dir / "plugin.json").read_text(encoding="utf-8"))
+        assert manifest["mcpServers"] == "./.mcp.json"
+        mcp = json.loads((root / ".mcp.json").read_text(encoding="utf-8"))
+        assert mcp == {
+            "mcpServers": {
+                server_name: {
+                    "command": "deeplaw",
+                    "args": arguments,
+                }
+            }
+        }
 def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
     repository = Path(__file__).resolve().parents[1]
     codex_marketplace = json.loads(
@@ -109,7 +147,8 @@ def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
     agent = (
         repository / "adapters" / "opencode" / "agents" / "deeplaw-knowledge.md"
     ).read_text(encoding="utf-8")
-    assert '"deeplaw_knowledge_*": "deny"' in config
+    assert '"*": "deny"' in config
+    assert '"deeplaw_knowledge_knowledge_support": "allow"' in config
     assert "deeplaw_knowledge_knowledge_support: allow" in agent
     assert "deeplaw_law_support" not in agent
     assert "mode: subagent" in agent
@@ -137,5 +176,7 @@ def test_marketplace_and_opencode_keep_both_products_isolated() -> None:
         "agents/deeplaw-compiler.md"
     )
     assert knowledge_product["optional_compile_skill"].endswith(
-        "/skills/compile-living-wiki"
+        "/skills/deeplaw-compile-source"
     )
+    assert knowledge_product["skill"].endswith("/skills/deeplaw-query")
+    assert "use-knowledge-assets" not in json.dumps(knowledge_product)

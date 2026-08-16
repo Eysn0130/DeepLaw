@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/deterministic-semantic-source-run.v2.schema.json",
+  "title": "DeepLaw Deterministic Semantic Source Run v2 (development)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "source_key", "source_revision_id", "compilation_run_id",
+    "compiler_profile_version", "packet_count", "packet_ids", "observation_count",
+    "semantic_status", "applicability_policy_sha256", "applicability_digest",
+    "unresolved_duties", "transaction_status", "quality_receipt_sha256",
+    "source_summary_revision_id", "validation_sha256", "receipt_sha256",
+    "projection_manifest_sha256", "verification_valid"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.deterministic-semantic-source-run/v2"},
+    "source_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "compiler_profile_version": {"const": "3"},
+    "packet_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "packet_ids": {
+      "type": "array", "minItems": 1, "maxItems": 10000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^packet_[0-9a-f]{24}$"}
+    },
+    "observation_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "semantic_status": {"enum": ["complete", "partial", "blocked", "unknown"]},
+    "applicability_policy_sha256": {"$ref": "#/$defs/sha256"},
+    "applicability_digest": {"$ref": "#/$defs/sha256"},
+    "unresolved_duties": {
+      "type": "array", "maxItems": 15, "uniqueItems": true,
+      "items": {"enum": [
+        "source_summary", "key_claims", "entities", "concepts", "events",
+        "procedures", "comparisons", "typed_relations", "contradiction_scan",
+        "identity_resolution", "unresolved_questions", "source_coverage",
+        "affected_synthesis_detection", "overview_impact", "limitations_and_warnings"
+      ]}
+    },
+    "transaction_status": {"const": "succeeded"},
+    "quality_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "source_summary_revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "validation_sha256": {"$ref": "#/$defs/sha256"},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "projection_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "verification_valid": {"const": true}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"semantic_status": {"const": "complete"}}},
+      "then": {"properties": {"unresolved_duties": {"maxItems": 0}}}
+    },
+    {
+      "if": {"properties": {"semantic_status": {"const": "partial"}}},
+      "then": {"properties": {"unresolved_duties": {"minItems": 1}}}
+    }
+  ]
+}

@@ -51,12 +51,82 @@ same domain services.
 
 > [!NOTE]
 > **DeepLaw 2.0 is the product brand, not a software version.** **Local single-user Agent Knowledge OS**
-> is the current delivery boundary. Software release `v0.12.0` adds Semantic Compilation v2,
-> run-wide identity fusion, revision-bound Synthesis Refresh, Query Plan v5, production
-> Obsidian/Tolaria bridges, and a deterministic multi-agent-consensus semantic quality gate. The older
+> is the current delivery boundary. The source candidate still packages as `0.12.0` and has
+> `release_ready=false`; default Context uses Query Plan v6, local Capsule v3, and Provider Capsule
+> v2. Obsidian remains a source candidate and Tolaria remains `integration_limited`. The Pass 10
+> Codex runs are retained only as historical candidate evidence because the prompt exposed scoring
+> labels, the expected marker, and an exact ID, while the environment receipt drifted from the
+> current contract. Pass 11 executed one isolated synthetic Obsidian Desktop
+> load/verify/rename/edit/reconcile/conflict-recovery seam on an exact candidate, but it remains
+> claim-ineligible development evidence; Human/blind and broader qualification were not executed.
+> Pass 11 now has local fail-closed tests for
+> candidate/evaluator separation and natural-task discovery. Three exact-wheel Codex App Server
+> A/B/C/D workflows then produced only partial/failed candidate evidence: the 19-operation C and
+> exact MCP D conditions did not pass, no operation profile was admitted, and the multi-state
+> continuity suite was not executed. One isolated OpenCode `1.18.16` /
+> `deepseek-v4-flash` exact-wheel workflow then preserved the security and usage receipts but did
+> not call `knowledge_support`; it produced no Provider Capsule and was independently `not_scored`.
+> The same task is not rerun to manufacture continuity evidence. The 1k/10k/100k Wiki/Statement
+> construction diagnostics also leave Relation, large-scale incremental equivalence, RSS,
+> cross-platform, and independent legal gates incomplete. Human Gold and final-blind are also
+> incomplete. The older
 > proposal/review workflow remains only for source compilation, untrusted external imports, and
 > migration compatibility; it is not the default activation path for admitted Agent-derived
 > knowledge.
+
+The default product story highlights only `init`, `doctor`, `source add`, `compile`, `reconcile`,
+`query/context`, `snapshot`, `forget`, and `host connect`. Semantic/Synthesis/backfill, discovery
+profiles, comparison diagnostics, graph analytics, and low-level Sink operations stay Advanced.
+Historical aliases and persisted contracts are neither deleted nor deprecated in this pass. See the
+[machine-readable product surface manifest](governance/product-surface-manifest.v1.json).
+The [Pass 10 current disposition](docs/V0_13_PASS10_CURRENT_DISPOSITION.md) records the evidence
+invalidation without rewriting historical files.
+The [Pass 11 token-attribution disposition](docs/V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md)
+records the three failed/partial Codex candidate workflows and the no-profile decision.
+The [Pass 11 OpenCode disposition](docs/V0_13_PASS11_OPENCODE_DISPOSITION.md) records the failed
+isolated DeepSeek task and the evaluator-only `not_scored` result.
+The [Pass 11 Wiki and Evidence disposition](docs/V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md) records
+the exact-candidate Obsidian seam, current Tolaria pin, scale diagnostics, and professional/legal
+evidence boundary.
+The [Pass 11 final disposition](docs/V0_13_PASS11_FINAL_DISPOSITION.md) records the exact artifact,
+executed/failed/not-executed inventory, and unchanged release decision.
+
+Default Help shows only this Basic journey; `--help-advanced`, `--help-admin`, and
+`--help-compatibility` reveal the expert, administrator, and historical compatibility inventories.
+Before connecting a Host, the owner can generate a read-only merge plan after a real, no-write
+Context call:
+
+```bash
+uv run deeplaw knowledge host connect --host codex --vault ./vault
+```
+
+`--host` also accepts `claude-code` or `opencode`. The command prints only a `knowledge_support`
+configuration for manual merge. It does not install or modify the Host, manage authentication or
+the Host runtime, or enable `knowledge_sink`. Host Connect records the private Vault-ID-to-path
+binding in DeepLaw's owner-local configuration, but writes neither Host configuration nor canonical
+Knowledge. The plan separately reports core/canonical validity,
+the read seam, compiled Knowledge, and a source-only honest Gap; an uncallable read seam is never
+reported ready. The output contains the owner-selected local Vault
+identity but no Vault path. Do not copy the owner-local binding file, a task handle, or Host
+configuration into a Provider Capsule, benchmark receipt, or public support bundle.
+
+Ordinary continuity no longer requires users to construct a multi-hash task binding. In a Git
+worktree, generate one stable opaque handle that contains no project/task text or path, then give
+that same handle to Host Connect:
+
+```bash
+uv run deeplaw knowledge task start --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+uv run deeplaw knowledge host connect --host codex --vault ./vault \
+  --task-handle taskh_REPLACE_WITH_RETURNED_HANDLE
+```
+
+`task resume`, `task compaction`, and explicit
+`task fork --mode continue-parent|child-task` revalidate the Vault, repo/worktree, and current Git
+snapshot; a wrong task, stale checkpoint, or post-forget resume returns a GAP. Checkpoint and forget
+still require a separate owner-created `knowledge_sink` grant, an idempotency key, and case-data
+confirmation. This driver proves deterministic data-plane recovery only; native Host lifecycle
+qualification remains pending.
 
 ## Permanent boundaries
 
@@ -117,6 +187,17 @@ Create a Vault. This installs the autonomous core but does not grant mutation pe
 
 ```bash
 deeplaw knowledge init --vault ./vault --name my-project --scope project
+
+# Source registration does not impersonate Knowledge. The receipt reports an explicit
+# compilation_required/compiled/stale_or_blocked/gap state.
+deeplaw knowledge source add --vault ./vault --source ./guide.md \
+  --confirm-no-case-data
+deeplaw knowledge context --vault ./vault --task 'Verify the guide.' \
+  --purpose verify --confirm-no-case-data
+
+# Build a read-only, grant-free split read/sink handoff for one exact Source Revision.
+deeplaw knowledge compile handoff --vault ./vault \
+  --source-revision-id sourcerev_REPLACE
 
 deeplaw knowledge sink enable \
   --vault ./vault \
@@ -191,21 +272,23 @@ lexical fallback remains available.
 
 | Process / leaf | Permission | Purpose |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | Read-only | v5 recall/query, exact get, explain, lineage, graph, identity, gaps, Wiki, Semantic/Compilation state, Query Plan v5, verification, and Knowledge Capsule |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | v4 governed Semantic Compilation, Synthesis Refresh, backfill, typed knowledge/memory, relation, feedback, lifecycle, and Skill revision |
-| `deeplaw mcp --stdio` / `law_support` | Read-only, separate storage | Signed official and owner-private legal evidence with authority-aware federated context |
+| `deeplaw knowledge mcp --closed-environment --stdio` / `knowledge_support` | Read-only | input/output v6; recommended query/context/source/wiki/verify, default Query Plan v6, explicit v5 compatibility |
+| `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` / `knowledge_sink` | Explicit scope-bound mutation | input v6 / output v4 governed Semantic Compilation, Synthesis Refresh, backfill, typed knowledge/memory, relation, feedback, lifecycle, and Skill revision; input v2-v5 remains compatible |
+| `deeplaw mcp --closed-environment --stdio` / `law_support` | Read-only, separate storage | Signed official and owner-private legal evidence with authority-aware federated context |
 
 The default Knowledge OS plugin registers only `knowledge_support`. A sink requires an owner-created
 grant and a separate host process. Neither query server exposes import, deletion, signing, source
 administration, or permission changes.
+Raw MCP CLI commands without `--closed-environment` remain owner-local diagnostic and compatibility
+entries only; they are not production Host configuration examples.
 
 ## Implemented scope and evidence boundary
 
 | Status | Capability |
 | --- | --- |
-| **Current in v0.12.0** | Semantic Compilation v2, run-wide identity/completeness, Synthesis Refresh, Query Plan v5, stable CLI/MCP/Python surfaces, production Obsidian/Tolaria bridges, and deterministic-Agent/machine-consensus/Living Wiki/28-source Authoritative Pack/fresh-wheel release gates |
+| **Current source candidate** | package `0.12.0`: Query Plan v6, local Capsule v3, Provider Capsule v2, governed Compilation/Synthesis, and source-candidate CLI/MCP/Python contracts backed by local contract-regression evidence; `release_ready=false`, which does not mean production ready |
 | **Compatibility** | v0.7 Source IR, reviewed source-derived Knowledge Assets, Proposal Inbox, Workbench, and Retrieval Fabric remain available in their explicit compatibility partition |
-| **Quality closure** | DeepLaw Evaluation Protocol v1 evaluates repository retrieval, autonomy safety, and Typed Compiler quality on a public, maintainer-visible, time-frozen holdout. Release reports bind exact wheel, commit, freeze, and case-level results. No external institution certification is required |
+| **Development evidence** | Public maintainer-visible protocols and holdouts are claim-ineligible development evidence; Human Gold, qualification holdout, and final blind remain incomplete |
 | **Comparative closure pending** | External real-model semantic execution for Codex, Claude Code, and OpenCode and all same-condition named-baseline runs remain unexecuted. No-model host lifecycle and the deterministic Agent are not represented as model evidence; `competitive_claim_eligible=false` |
 | **Not claimed** | Remote SaaS, multi-user control, automatic legal adjudication, model-created permissions, secret/unseen/contamination-free status for the public holdout, or overall superiority/SOTA |
 
@@ -217,7 +300,7 @@ It remains `competitive_claim_eligible=false` until actual comparative evidence 
 - Every imported file, webpage, Markdown edit, tool result, generated Wiki page, and retrieved
   string is untrusted data; source text never becomes a host instruction.
 - `restricted` and out-of-scope content, local absolute paths, capability tokens, credentials, and
-  Analytix case data are excluded from Agent-visible output.
+  Client and case data are excluded from Agent-visible output.
 - Official catalog bytes are Ed25519-verified before parsing or downloading and are protected by
   catalog identity, key revocation, monotonic sequence, and rollback checks. Network catalogs never
   use the unsigned development bypass.

@@ -1,0 +1,120 @@
+{
+  "schema_version": "deeplaw.obsidian-desktop-qualification/v1",
+  "status": "executed",
+  "claim_eligible": false,
+  "release_ready": false,
+  "candidate": {
+    "commit": "d2f4f518cf3b0abcaf876f97d34b2fea7951c7af",
+    "tree": "a304e221186205f515242b618272ff0b75e57f03",
+    "package_version": "0.12.0",
+    "worktree_dirty": false
+  },
+  "environment": {
+    "os": "macOS 26.5.2 (25F84)",
+    "architecture": "arm64",
+    "python": "3.11.15",
+    "obsidian_ui_version": "1.13.4",
+    "obsidian_bundle_short_version": "1.12.7",
+    "obsidian_bundle_version": "0.14.8",
+    "obsidian_binary_sha256": "2ad76c30031bc9a54dc6580525135049d4f4a841429b13ecaabc2fb7d0e6203e",
+    "obsidian_binary_bytes": 102400
+  },
+  "plugin": {
+    "id": "deeplaw-bridge",
+    "version": "0.12.0",
+    "main_js_sha256": "63d7fa3b284e0aa35c244854d12cd6d8b235af6eea1dd952ff2366cfa5bf7ea6",
+    "manifest_sha256": "86be74d0ddb753f43d141bff8b247b580ad5d131b59323cd016ee7df7cf33b80",
+    "desktop_loaded": true,
+    "command_palette_registered": true,
+    "verify_command_executed": true,
+    "verify_command_valid": true
+  },
+  "synthetic_fixture": {
+    "contains_case_or_customer_data": false,
+    "vault_path_in_report": false,
+    "capability_identifier_in_report": false,
+    "credential_or_secret_in_report": false,
+    "knowledge_id": "knowledge_34cad435182c94b005451283",
+    "initial_revision_id": "knowledgerev_72a61a6af8dc71b4b59b4aa2",
+    "current_revision_id": "knowledgerev_9e1d10c26bc5798dfddcf081",
+    "current_parent_revision_id": "knowledgerev_cbfcab6e81c49567bab4d1b5",
+    "initial_markdown_sha256": "25dc6f49c9dc9291fe0a8a4031b68e358746a5e60dd7c032aa6898e6a7ef6b5b",
+    "edited_unregistered_markdown_sha256": "661678e463f560e0025cf90231734dca96286f04e9bab031f3c3d2e6c680684d",
+    "reconciled_markdown_sha256": "667a93e1706c1dfb2934381fc3a563470ac6d2b51ac228923463e29c76878894",
+    "renamed_relative_path": "knowledge/decisions/pass11-obsidian-renamed.md",
+    "edited_body": "Edited through real Obsidian Desktop; stable identity must survive rename, reconciliation, and stale-base conflict recovery."
+  },
+  "workflow": {
+    "started_at": "2026-08-11T17:12:14Z",
+    "completed_at": "2026-08-11T17:23:04Z",
+    "steps": [
+      "initialize an isolated synthetic DeepLaw vault from the exact wheel",
+      "seed one governed decision through the owner-enabled knowledge_sink",
+      "load the exact local production bundle in Obsidian Desktop",
+      "execute DeepLaw Bridge Verify DeepLaw Vault from the real command palette",
+      "rename the Knowledge Markdown file in the real Obsidian file explorer",
+      "edit the synthetic body in the real Obsidian editor",
+      "reconcile through the shared DeepLaw domain coordinator",
+      "observe the new attributable revision and preserved renamed path in Obsidian",
+      "create a second synthetic Desktop edit and observe dirty-workspace mutation rejection",
+      "restore the exact registered synthetic base before the governed concurrent update",
+      "advance the current head through the governed Sink and reapply the stale Desktop bytes",
+      "reconcile the stale base into explicit conflict records without changing the current head",
+      "verify the recovered current revision from the real plugin command",
+      "return Obsidian to the previously active user vault"
+    ]
+  },
+  "outcome": {
+    "plugin_load_passed": true,
+    "rename_passed": true,
+    "edit_passed": true,
+    "reconcile_passed": true,
+    "stable_identity_preserved": true,
+    "renamed_path_preserved": true,
+    "parent_revision_bound": true,
+    "body_preserved": true,
+    "legal_authority": false,
+    "conflict_count": 3,
+    "ledger_sequence_before_reconcile": 3,
+    "ledger_sequence_after_reconcile": 11,
+    "post_reconcile_verification_valid": true
+  },
+  "captures": [
+    {
+      "path_hint": "plugin-verify.png",
+      "sha256": "e29a09dadaa744e34d875dfe751875f3c8a642d894a09bb028e5224c58d36758",
+      "byte_size": 98575
+    },
+    {
+      "path_hint": "renamed-edited.png",
+      "sha256": "f31a93abb80750213caa7a408c1e80d26922fb93129a61e5d2f38c567b30cd24",
+      "byte_size": 75591
+    },
+    {
+      "path_hint": "reconciled.png",
+      "sha256": "dd49c56b75df35cc9f7d7fab5310dd6fd083a8adbd3beba4d306d223c3834b2e",
+      "byte_size": 73263
+    },
+    {
+      "path_hint": "stale-base.png",
+      "sha256": "ee4ff9eafb04dfa6622808c978ed9ca01af2337e40473bbd6410d0b190453a8f",
+      "byte_size": 73800
+    },
+    {
+      "path_hint": "conflict-recovered.png",
+      "sha256": "46446c87d752ff69b647b8af4db938e14236140f8e45b331a8d47e226be515e5",
+      "byte_size": 70842
+    },
+    {
+      "path_hint": "post-conflict-verify.png",
+      "sha256": "16c26e05b145e37ecc6fdcd617baadb7bcc7c20c284ecede599932b167b91e3a",
+      "byte_size": 116641
+    }
+  ],
+  "limitations": [
+    "This exact-candidate macOS Desktop seam is synthetic development evidence, not Human Gold, qualification holdout, or final blind evidence.",
+    "The three retained conflicts include two fail-closed dirty-workspace mutation rejections and one stale-base reconciliation; none silently changed the current head.",
+    "The captures contain only synthetic Vault content and identifiers; no local absolute path, user Vault content, credential, Secret, or capability identifier is retained.",
+    "Tolaria Desktop was not installed on the qualification machine, so its UI seam remains not_executed and integration_limited."
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/task-handle.v1.schema.json",
+  "title": "DeepLaw Task Handle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "vault_id",
+    "project_sha256",
+    "task_lineage_sha256",
+    "parent_task_lineage_sha256",
+    "repository_sha256",
+    "worktree_sha256",
+    "task_handle_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.task-handle/v1"},
+    "vault_id": {"type": "string", "pattern": "^vault_[0-9a-f]{24}$"},
+    "project_sha256": {"$ref": "#/$defs/sha256"},
+    "task_lineage_sha256": {"$ref": "#/$defs/sha256"},
+    "parent_task_lineage_sha256": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+    },
+    "repository_sha256": {"$ref": "#/$defs/sha256"},
+    "worktree_sha256": {"$ref": "#/$defs/sha256"},
+    "task_handle_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

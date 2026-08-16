@@ -7,18 +7,36 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.quality.run_repository_gold import run_suite
-from deeplaw.util import canonical_json, sha256_bytes
+from deeplaw.util import canonical_json, sha256_bytes, sha256_file
 
 
-def test_repository_gold_covers_all_required_domains_and_runs_offline() -> None:
+def test_repository_gold_v1_is_immutable_and_rejects_current_source_drift() -> None:
     repository = Path(__file__).resolve().parents[1]
     suite_path = repository / "benchmarks/quality/repository-gold-v1.json"
     suite = json.loads(suite_path.read_text(encoding="utf-8"))
     suite_schema = json.loads(
         (repository / "contracts/repository-gold-set.v1.schema.json").read_text()
     )
+    Draft202012Validator(
+        suite_schema, format_checker=FormatChecker()
+    ).validate(suite)
+    assert (
+        sha256_file(suite_path)
+        == "ffce55aabd36738589abc979c903f830baaf18fb6943e218c430079d33de9e97"
+    )
+    with pytest.raises(ValueError, match="source hash changed"):
+        run_suite(suite_path, repository=repository)
+
+
+def test_repository_gold_v3_covers_all_required_domains_and_runs_offline() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    suite_path = repository / "benchmarks/quality/repository-gold-development-v3.json"
+    suite = json.loads(suite_path.read_text(encoding="utf-8"))
+    suite_schema = json.loads(
+        (repository / "contracts/repository-gold-set.v3.schema.json").read_text()
+    )
     report_schema = json.loads(
-        (repository / "contracts/repository-gold-report.v1.schema.json").read_text()
+        (repository / "contracts/repository-gold-report.v3.schema.json").read_text()
     )
 
     Draft202012Validator(
@@ -40,6 +58,12 @@ def test_repository_gold_covers_all_required_domains_and_runs_offline() -> None:
     assert report["competitive_claim_eligible"] is False
     assert report["secret_held_out"] is False
     assert report["independently_evaluated"] is False
+    assert report["visibility"] == "repository"
+    assert report["labels_visible"] is True
+    assert report["secret"] is False
+    assert report["external_holdout"] is False
+    assert report["claim_eligible"] is False
+    assert report["contamination_claim_eligible"] is False
     assert report["quality_gate"]["passed"] is True
     for mode in ("lexical", "dense", "hybrid"):
         assert set(report["modes"][mode]["category_metrics"]) == set(report["categories"])
@@ -53,7 +77,7 @@ def test_repository_gold_covers_all_required_domains_and_runs_offline() -> None:
 def test_repository_gold_rejects_source_drift(tmp_path: Path) -> None:
     repository = Path(__file__).resolve().parents[1]
     suite = json.loads(
-        (repository / "benchmarks/quality/repository-gold-v1.json").read_text()
+        (repository / "benchmarks/quality/repository-gold-development-v3.json").read_text()
     )
     suite["documents"][0]["sha256"] = "0" * 64
     path = tmp_path / "drifted.json"
@@ -66,7 +90,7 @@ def test_repository_gold_rejects_source_drift(tmp_path: Path) -> None:
 def test_repository_gold_quality_gate_fails_closed(tmp_path: Path) -> None:
     repository = Path(__file__).resolve().parents[1]
     suite = json.loads(
-        (repository / "benchmarks/quality/repository-gold-v1.json").read_text()
+        (repository / "benchmarks/quality/repository-gold-development-v3.json").read_text()
     )
     suite["quality_gate"]["hybrid"]["maximum_irrelevant_context_rate"] = 0.0
     path = tmp_path / "strict-gate.json"

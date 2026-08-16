@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from datetime import UTC, datetime
@@ -22,6 +23,25 @@ HOSTS = ("codex", "claude_code", "opencode", "gemini_cli")
 _SENSITIVE_ARGUMENT = re.compile(
     r"(?:api[-_]?key|access[-_]?token|password|secret|authorization)",
     re.IGNORECASE,
+)
+# Keep this in sync with the bounded baseline environment contract.  In
+# particular, do not add provider credentials or user configuration paths here:
+# those are ambient inputs, not part of a real-host benchmark invocation.
+_INHERITED_ENVIRONMENT = (
+    "COMSPEC",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "PATH",
+    "PATHEXT",
+    "PYTHONIOENCODING",
+    "PYTHONUTF8",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "TZ",
+    "WINDIR",
 )
 
 
@@ -46,6 +66,50 @@ def _validate(name: str, value: dict[str, Any]) -> None:
 
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _host_environment(
+    *,
+    fixed: dict[str, str],
+) -> dict[str, str]:
+    """Build the closed environment handed to one external host process.
+
+    The default path deliberately excludes all ambient variables, including
+    provider credentials and DeepLaw test canaries. Provider authentication is
+    intentionally not an environment input to this generic harness: a model
+    host would pass its environment to MCP children unless the exact host
+    configuration proves a separate, sanitized authentication boundary.
+    """
+
+    environment = {
+        name: os.environ[name]
+        for name in _INHERITED_ENVIRONMENT
+        if name in os.environ
+    }
+    environment["PATH"] = environment.get("PATH", os.defpath)
+    locale = environment.get("LC_ALL") or environment.get("LANG") or "C.UTF-8"
+    environment.setdefault("LANG", locale)
+    environment.setdefault("LC_ALL", locale)
+    environment.setdefault("LC_CTYPE", locale)
+    temporary_directory = next(
+        (
+            environment.get(name)
+            for name in ("TMPDIR", "TMP", "TEMP")
+            if environment.get(name)
+        ),
+        None,
+    ) or tempfile.gettempdir()
+    for name in ("TMPDIR", "TMP", "TEMP"):
+        environment.setdefault(name, temporary_directory)
+    environment.update(
+        {
+            "CI": "true",
+            "GIT_TERMINAL_PROMPT": "0",
+            "NO_COLOR": "1",
+        }
+    )
+    environment.update(fixed)
+    return environment
 
 
 def _prompt(*, host: str, model_identity: str, source_revision_id: str) -> str:
@@ -123,12 +187,54 @@ def _run_bounded(
     timeout_seconds: int,
     max_output_bytes: int,
 ) -> tuple[int, bytes, bytes, str | None]:
+    with tempfile.TemporaryDirectory(prefix="deeplaw-isolated-host-") as temporary:
+        isolation_root = Path(temporary)
+        isolation_root.chmod(0o700)
+        directories = {
+            "HOME": isolation_root / "home",
+            "USERPROFILE": isolation_root / "home",
+            "XDG_CONFIG_HOME": isolation_root / "xdg-config",
+            "XDG_DATA_HOME": isolation_root / "xdg-data",
+            "XDG_CACHE_HOME": isolation_root / "xdg-cache",
+            "XDG_STATE_HOME": isolation_root / "xdg-state",
+            "TMPDIR": isolation_root / "tmp",
+            "TMP": isolation_root / "tmp",
+            "TEMP": isolation_root / "tmp",
+            "CODEX_HOME": isolation_root / "codex-home",
+            "OPENCODE_CONFIG_DIR": isolation_root / "opencode-config",
+        }
+        for directory in set(directories.values()):
+            directory.mkdir(mode=0o700)
+        isolated_environment = dict(environment)
+        isolated_environment.update(
+            {name: str(directory) for name, directory in directories.items()}
+        )
+        return _run_bounded_process(
+            argv,
+            prompt=prompt,
+            environment=isolated_environment,
+            working_directory=isolation_root,
+            timeout_seconds=timeout_seconds,
+            max_output_bytes=max_output_bytes,
+        )
+
+
+def _run_bounded_process(
+    argv: list[str],
+    *,
+    prompt: bytes,
+    environment: dict[str, str],
+    working_directory: Path,
+    timeout_seconds: int,
+    max_output_bytes: int,
+) -> tuple[int, bytes, bytes, str | None]:
     process = subprocess.Popen(
         argv,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=environment,
+        cwd=working_directory,
         shell=False,
     )
     assert process.stdin is not None
@@ -256,9 +362,12 @@ def execute(
         source_revision_id=source_revision_id,
     )
     command_sha256 = sha256_bytes(canonical_json(command).encode("utf-8"))
-    environment = os.environ.copy()
-    environment["DEEPLAW_KNOWLEDGE_VAULT"] = str(vault.resolve(strict=True))
-    environment["DEEPLAW_REAL_HOST_HARNESS"] = "1"
+    environment = _host_environment(
+        fixed={
+            "DEEPLAW_KNOWLEDGE_VAULT": str(vault.resolve(strict=True)),
+            "DEEPLAW_REAL_HOST_HARNESS": "1",
+        },
+    )
     started = time.monotonic()
     try:
         exit_code, stdout, stderr, process_failure = _run_bounded(

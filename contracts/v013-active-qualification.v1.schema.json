@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-active-qualification.v1.schema.json",
+  "title": "DeepLaw v0.13 active qualification candidate binding v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "qualification_id",
+    "status",
+    "candidate_version",
+    "protocol_binding",
+    "candidate_binding",
+    "external_inputs",
+    "host_constraints",
+    "blocker",
+    "release_ready",
+    "claim_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-active-qualification/v1"},
+    "qualification_id": {"const": "deeplaw-v013-active-commercial-candidate"},
+    "status": {"enum": ["construction_candidate", "frozen_exact_candidate"]},
+    "candidate_version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "maxLength": 32
+    },
+    "protocol_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "schema_version", "relative_path", "sha256"],
+      "properties": {
+        "protocol_id": {"const": "deeplaw-v013-source-candidate-qualification"},
+        "schema_version": {"const": "deeplaw.v013-qualification-protocol/v1"},
+        "relative_path": {"const": "benchmarks/v013/qualification-protocol-v1.json"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidate_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_commit",
+        "source_tree",
+        "lock_sha256",
+        "wheel_filename",
+        "wheel_sha256",
+        "sdist_filename",
+        "sdist_sha256",
+        "artifact_manifest_sha256",
+        "source_date_epoch"
+      ],
+      "properties": {
+        "source_commit": {"$ref": "#/$defs/nullableGit"},
+        "source_tree": {"$ref": "#/$defs/nullableGit"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_filename": {"$ref": "#/$defs/nullableArtifactName"},
+        "wheel_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "sdist_filename": {"$ref": "#/$defs/nullableArtifactName"},
+        "sdist_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "artifact_manifest_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "source_date_epoch": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "integer", "minimum": 0, "maximum": 4102444800}
+          ]
+        }
+      }
+    },
+    "external_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_gold_manifest_sha256",
+        "qualification_holdout_sha256",
+        "final_blind_holdout_sha256",
+        "compiler_scorer_isolation_sha256"
+      ],
+      "properties": {
+        "human_gold_manifest_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "qualification_holdout_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "final_blind_holdout_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "compiler_scorer_isolation_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    },
+    "host_constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codex", "opencode"],
+      "properties": {
+        "codex": {"$ref": "#/$defs/hostConstraint"},
+        "opencode": {"$ref": "#/$defs/hostConstraint"}
+      }
+    },
+    "blocker": {
+      "anyOf": [
+        {"type": "null"},
+        {"enum": ["release_version_binding_deadlock", "blocked_external_qualification_input"]}
+      ]
+    },
+    "release_ready": {"const": false},
+    "claim_eligible": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableSha256": {
+      "anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+    },
+    "nullableGit": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      ]
+    },
+    "nullableArtifactName": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$"
+        }
+      ]
+    },
+    "hostConstraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_version", "model_id", "reasoning_effort"],
+      "properties": {
+        "tool_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "model_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "reasoning_effort": {
+          "anyOf": [
+            {"type": "null"},
+            {"enum": ["low", "medium", "high", "xhigh", "max"]}
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "construction_candidate"}}},
+      "then": {
+        "properties": {
+          "candidate_binding": {
+            "properties": {
+              "wheel_sha256": {"type": "null"},
+              "sdist_sha256": {"type": "null"},
+              "artifact_manifest_sha256": {"type": "null"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "frozen_exact_candidate"}}},
+      "then": {
+        "properties": {
+          "candidate_version": {"const": "0.13.0"},
+          "candidate_binding": {
+            "properties": {
+              "source_commit": {"type": "string"},
+              "source_tree": {"type": "string"},
+              "wheel_filename": {"type": "string"},
+              "wheel_sha256": {"$ref": "#/$defs/sha256"},
+              "sdist_filename": {"type": "string"},
+              "sdist_sha256": {"$ref": "#/$defs/sha256"},
+              "artifact_manifest_sha256": {"$ref": "#/$defs/sha256"},
+              "source_date_epoch": {"type": "integer"}
+            }
+          },
+          "external_inputs": {
+            "properties": {
+              "human_gold_manifest_sha256": {"$ref": "#/$defs/sha256"},
+              "qualification_holdout_sha256": {"$ref": "#/$defs/sha256"},
+              "final_blind_holdout_sha256": {"$ref": "#/$defs/sha256"},
+              "compiler_scorer_isolation_sha256": {"$ref": "#/$defs/sha256"}
+            }
+          },
+          "blocker": {"type": "null"}
+        }
+      }
+    }
+  ]
+}

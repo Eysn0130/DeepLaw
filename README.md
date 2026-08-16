@@ -50,12 +50,74 @@ DeepLaw 不替代 Codex、Claude Code、OpenCode 或其他 Agent Runtime。模�
 
 > [!NOTE]
 > **DeepLaw 2.0 是产品品牌，不是软件版本号。** **本地单用户 Agent Knowledge OS** 是当前交付边界。
-> 当前软件版本 `v0.12.0` 在 v0.11 的受治理编译事务之上，正式交付 Semantic
-> Compilation v2、跨 Packet identity 融合、revision-bound Synthesis Refresh、Query Plan v5、
-> 生产级 Obsidian/Tolaria Bridge，以及真实 Agent 语义质量门禁。旧版
+> 当前源码候选的 package 仍为 `0.12.0`，`release_ready=false`；默认 Context 已使用 Query Plan
+> v6 / local Capsule v3 / Provider Capsule v2。Obsidian 仍是 source candidate，Tolaria 仍是
+> `integration_limited`。Pass 10 的 Codex 三次运行因评分标签、expected marker、exact ID 污染与
+> receipt 合同漂移，现仅保留为 historical candidate evidence。Pass 11 已在 exact candidate 上
+> 执行一个隔离 synthetic Obsidian Desktop load/verify/rename/edit/reconcile/conflict-recovery seam，
+> 但它仍是 claim-ineligible development evidence；Human/blind 和更广资格未执行。
+> Pass 11 已建立 candidate/evaluator 分离与自然任务 discovery 的本地失败闭合测试，并运行了三次
+> exact-wheel Codex App Server A/B/C/D workflow；三次均为 partial/failed candidate evidence，
+> 19-operation C 与 exact MCP D 未通过，未准入 operation profile。多状态 continuity suite 未执行。
+> 另有一次隔离 OpenCode `1.18.16` / `deepseek-v4-flash` exact-wheel workflow：安全与 usage
+> 回执成立，但模型未调用 `knowledge_support`，没有 Provider Capsule，独立评分为 `not_scored`；不以
+> 同题重跑制造 continuity。另有 1k/10k/100k Wiki/Statement construction diagnostics，但 Relation、
+> 大规模增量等价、RSS、跨平台和法律独立资格仍未闭环。Human Gold 与 final blind 也未闭环。
+> 旧版
 > proposal/review 工作流只保留为
 > 来源编译、外部导入和迁移兼容面，不再是 Agent 派生知识的默认激活路径。当前契约与迁移边界见
 > [`docs/AUTONOMOUS_KNOWLEDGE_OS.md`](docs/AUTONOMOUS_KNOWLEDGE_OS.md)。
+
+默认产品叙事只突出 `init`、`doctor`、`source add`、`compile`、`reconcile`、`query/context`、
+`snapshot`、`forget` 与 `host connect`。Semantic/Synthesis/backfill、discovery profile、比较诊断、
+图分析和低层 Sink 操作保留在 Advanced；历史 alias 与持久合同本阶段不删除、不弃用。精确分类见
+[`governance/product-surface-manifest.v1.json`](governance/product-surface-manifest.v1.json)。
+当前证据处置见
+[`docs/V0_13_PASS10_CURRENT_DISPOSITION.md`](docs/V0_13_PASS10_CURRENT_DISPOSITION.md)。
+当前 Codex token-attribution 失败处置见
+[`docs/V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](docs/V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md)。
+当前 OpenCode continuity 失败处置见
+[`docs/V0_13_PASS11_OPENCODE_DISPOSITION.md`](docs/V0_13_PASS11_OPENCODE_DISPOSITION.md)。
+当前 Wiki、Obsidian、Tolaria、专业 Evidence 与 scale 处置见
+[`docs/V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](docs/V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md)。
+Pass 11 最终 executed/failed/not-executed 与 artifact 决策见
+[`docs/V0_13_PASS11_FINAL_DISPOSITION.md`](docs/V0_13_PASS11_FINAL_DISPOSITION.md)。
+
+默认 Help 只展示这条 Basic journey；`--help-advanced`、`--help-admin` 和
+`--help-compatibility` 分别展开专家、管理员和历史兼容入口。连接 Host 前，owner 可生成一个经过
+真实、无写入 Context 调用验证的只读合并计划：
+
+```bash
+uv run deeplaw knowledge host connect --host codex --vault ./vault
+```
+
+`--host` 也接受 `claude-code` 或 `opencode`。Codex direct plan 输出 TOML
+`mcp_servers`（目标为 `~/.codex/config.toml` 或 trusted-project `.codex/config.toml`），并给出等价
+`codex mcp add ...` 与 `codex mcp list`；Codex plugin 的 JSON manifest 以独立
+`codex_plugin_manifest` 标识。Claude Code 使用 `mcpServers` JSON；OpenCode 使用
+`opencode.json/jsonc` local command array，并默认 deny、只允许精确 read leaf。命令只输出需要人工
+合并的 `knowledge_support` 配置，不安装或修改 Host，不管理认证或 Host runtime，也不启用
+`knowledge_sink`。Host Connect 会在 DeepLaw 自己的 owner-local 配置中登记 Vault ID 与路径的私有
+绑定，但不会写 Host 配置或 canonical Knowledge。计划分别报告 core/canonical、read seam、compiled Knowledge 与 source-only
+honest Gap；read seam 不可调用时不会报告 ready。内部 preflight 仅证明其固定、无模型、无写入健康
+任务，不证明未来用户 task/goal、真实 Host 或 MCP registration；后续 caller 请求仍必须显式
+`confirm_no_case_data`。输出是 path-free 的，仅携带 opaque expected Vault ID；不得把 owner-local
+绑定文件、task handle 或 Host 配置复制到 Provider Capsule、benchmark receipt 或公开 support bundle。
+
+普通任务连续性不再要求用户手工构造 task binding 的多组 hash。先在 Git worktree 中生成一个稳定、
+不含项目名、任务原文或路径的 opaque handle，再把同一 handle 交给 Host Connect：
+
+```bash
+uv run deeplaw knowledge task start --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+uv run deeplaw knowledge host connect --host codex --vault ./vault \
+  --task-handle taskh_REPLACE_WITH_RETURNED_HANDLE
+```
+
+`task resume`、`task compaction` 与显式的 `task fork --mode continue-parent|child-task` 会重新验证
+Vault、repo/worktree 和当前 Git snapshot；wrong task、stale checkpoint 与 forget 后恢复返回 GAP。
+checkpoint/forget 仍要求独立的 `knowledge_sink` owner grant、幂等键和案件数据边界确认。该 driver
+只证明 deterministic data-plane recovery；native Host start/resume/fork/compaction 仍待真实资格验证。
 
 ## 核心边界
 
@@ -106,6 +168,16 @@ uv sync --all-extras
 
 # 新 Vault 默认同时安装 Markdown-native autonomous core；不会自动启用写权限
 uv run deeplaw knowledge init --vault ./vault --name my-project --scope project
+
+# Source 注册不冒充 Knowledge；回执明确报告 compilation_required/compiled/stale_or_blocked/gap
+uv run deeplaw knowledge source add --vault ./vault --source ./guide.md \
+  --confirm-no-case-data
+uv run deeplaw knowledge context --vault ./vault --task 'Verify the guide.' \
+  --purpose verify --confirm-no-case-data
+
+# 为 exact Source Revision 生成只读、无 Grant 的 split read/sink 编译交接
+uv run deeplaw knowledge compile handoff --vault ./vault \
+  --source-revision-id sourcerev_REPLACE
 
 # owner 显式创建最小权限 grant；token 只写入 Vault 内 owner-only capability 文件
 uv run deeplaw knowledge sink enable \
@@ -251,20 +323,21 @@ vault/
 
 | 进程 / leaf | 权限 | 用途 |
 | --- | --- | --- |
-| `deeplaw knowledge mcp --stdio` / `knowledge_support` | 只读 | v5：recall/get/lineage/graph/identity/gaps/Wiki/verify/Capsule、Semantic/Compilation 状态和 Query Plan v5 |
-| `deeplaw knowledge sink mcp --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | v4：受控 mutation、独立 allowlist 的 Semantic Compilation、Synthesis Refresh 与 backfill；默认插件仍不注册 |
-| `deeplaw mcp --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据，以及显式分区的 authority-aware federated context；单分区最多五张 evidence cards |
+| `deeplaw knowledge mcp --closed-environment --stdio` / `knowledge_support` | 只读 | input/output v6：推荐 query/context/source/wiki/verify；默认 Query Plan v6，v5 仅显式兼容 |
+| `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` / `knowledge_sink` | 显式、scope-bound mutation | input v6 / output v4：受控 mutation、独立 allowlist 的 Semantic Compilation、Synthesis Refresh 与 backfill；input v2-v5 保持兼容，默认插件仍不注册 |
+| `deeplaw mcp --closed-environment --stdio` / `law_support` | 只读、独立存储 | 官方与用户私有法律证据，以及显式分区的 authority-aware federated context；单分区最多五张 evidence cards |
 
 默认 `deeplaw-knowledge-os` 插件只注册 `knowledge_support`。启用 `knowledge_sink` 必须由 owner 在宿主
 配置中单独添加进程和具体 grant ID；插件、Skill、检索内容和模型都不能自行创建 grant 或扩大权限。
+不带 `--closed-environment` 的 raw MCP CLI 仅保留给 owner 的本地诊断和兼容调用，不应写入 Host 配置。
 
 ## 已实现、兼容与未宣称
 
 | 状态 | 内容 |
 | --- | --- |
-| **Current** | v0.12.0：Semantic Compilation v2、run-wide identity/completeness、Synthesis Refresh、Query Plan v5、稳定 API/CLI/MCP、生产级 Obsidian/Tolaria Bridge，以及确定性 Agent、多代理机器共识、Living Wiki、28-source Authoritative Pack 与 fresh-wheel 发布门禁 |
+| **Current source candidate** | package `0.12.0`：Query Plan v6、local Capsule v3、Provider Capsule v2、受治理 Compilation/Synthesis，以及通过本地 contract regression 的 CLI/MCP/Python 当前实现；`release_ready=false`，不代表 production ready |
 | **Compatibility** | v0.7 Source IR、reviewed Knowledge Asset、proposal Inbox、Workbench、retrieval fabric 和 package 命令仍可使用；`knowledge_support` 在迁移后以独立分区联合旧 source-derived 结果 |
-| **Quality closure** | DeepLaw Evaluation Protocol v1 以公开、维护者可见、时间冻结的 holdout 评估仓库检索、自治安全和 Typed Compiler；发布报告绑定 exact wheel、commit、freeze 和逐项结果。无需外部机构认证 |
+| **Development evidence** | 公开、维护者可见的协议与 holdout 只构成 claim-ineligible development evidence；Human Gold、qualification holdout 与 final blind 尚未完成 |
 | **Comparative closure pending** | Codex、Claude Code、OpenCode 外部真实模型语义执行和全部具名基线同条件比较均未执行；no-model 宿主生命周期与确定性 Agent 不冒充真实模型，因此 `competitive_claim_eligible=false` |
 | **Not claimed** | 没有远程 SaaS、多人控制平面、自动法律适用/裁判或模型自授予权限；公开 holdout 不被描述为 secret、unseen 或 contamination-free，也不宣称全面领先或 SOTA |
 

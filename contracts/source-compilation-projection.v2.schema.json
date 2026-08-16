@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-projection.v2.schema.json",
+  "title": "DeepLaw Source Compilation Projection Receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "derived_manifest_sha256", "derived_file_count",
+    "derived_file_inventory_sha256", "input_audit_head", "projection_profile_name",
+    "projection_profile_version", "living_wiki"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.source-compilation-projection/v2"},
+    "derived_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "derived_file_count": {"type": "integer", "minimum": 0, "maximum": 10000000},
+    "derived_file_inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "projection_profile_name": {"enum": ["minimal", "standard", "full"]},
+    "projection_profile_version": {"const": "1"},
+    "living_wiki": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "manifest_sha256", "knowledge_count", "relation_count",
+        "source_count", "file_count", "file_inventory_sha256", "index_shard_count",
+        "canvas_count", "community_count", "input_audit_head",
+        "projection_profile_name", "projection_profile_version"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.living-wiki-manifest/v2"},
+        "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "knowledge_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "relation_count": {"type": "integer", "minimum": 0, "maximum": 2000000},
+        "source_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "file_count": {"type": "integer", "minimum": 0, "maximum": 10000000},
+        "file_inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "index_shard_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "canvas_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "community_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "projection_profile_name": {"enum": ["minimal", "standard", "full"]},
+        "projection_profile_version": {"const": "1"}
+      }
+    }
+  }
+}

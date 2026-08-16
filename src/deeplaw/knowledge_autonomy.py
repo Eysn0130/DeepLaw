@@ -17,6 +17,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker
+from referencing import Registry, Resource
 
 from .knowledge_intelligence import (
     LOCAL_DENSE_MODEL,
@@ -26,7 +27,7 @@ from .knowledge_intelligence import (
     estimate_tokens,
     likely_contradiction,
     normalize_identity_text,
-    rerank_candidates,
+    rerank_candidate_views,
     search_dense_index,
     semantic_similarity,
     write_dense_index,
@@ -40,6 +41,11 @@ from .knowledge_store import (
 from .knowledge_store import (
     _database_path as _knowledge_database_path,
 )
+from .task_context import (
+    normalize_task_context_binding,
+    task_route_sha256,
+    task_snapshot_sha256,
+)
 from .util import (
     QUERY_EXPANSION_PROFILE,
     canonical_json,
@@ -47,6 +53,7 @@ from .util import (
     fts_query,
     has_instruction_risk,
     query_discovery_text,
+    query_discovery_views,
     query_expansion_terms,
     query_search_terms,
     search_terms,
@@ -73,7 +80,9 @@ KNOWLEDGE_RELATION_SCHEMA = "deeplaw.knowledge-relation/v3"
 KNOWLEDGE_CAPSULE_SCHEMA = "deeplaw.knowledge-capsule/v2"
 KNOWLEDGE_SINK_SCHEMA = "deeplaw.knowledge-sink/v1"
 AUTONOMOUS_EVENT_SCHEMA = "deeplaw.autonomous-event/v1"
-DERIVED_MANIFEST_SCHEMA = "deeplaw.derived-manifest/v1"
+DERIVED_MANIFEST_SCHEMA_V1 = "deeplaw.derived-manifest/v1"
+DERIVED_MANIFEST_SCHEMA = "deeplaw.derived-manifest/v2"
+DERIVED_MANIFEST_SCHEMA_V2 = DERIVED_MANIFEST_SCHEMA
 AUTONOMOUS_SNAPSHOT_SCHEMA = "deeplaw.autonomous-snapshot/v1"
 AUTONOMOUS_ACTIVATION_POLICY = "deeplaw.autonomous-activation/v1"
 AGENT_KNOWLEDGE_MUTABILITY = "revision_only"
@@ -221,11 +230,19 @@ _RELATION_REVISION_ID = re.compile(r"^relationrev_[0-9a-f]{24}$")
 _GRANT_ID = re.compile(r"^grant_[0-9a-f]{24}$")
 _RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_SAFE_ARTIFACT_ID = re.compile(r"^[A-Za-z][A-Za-z0-9._:-]{0,199}$")
+_SECRET_ARTIFACT_ID = re.compile(
+    r"(?:^|[._:-])(?:auth|credential|credentials|secret|secrets|password|passwd|"
+    r"api[_-]?key|private[_-]?key|token|key)(?:$|[._:-])",
+    re.IGNORECASE,
+)
 _WIKILINK = re.compile(r"\[\[([^\]|#]+)")
 _SKILL_FACTORY_STEP = re.compile(
     r"^\s*(?:\d{1,3}[.)]|[-*+])\s+(.{1,4000}?)\s+(?:=>|::)\s+(.{1,2000})\s*$"
 )
 _MAX_MARKDOWN_BYTES = 256 * 1024
+_MAX_LIVING_WIKI_MANIFEST_BYTES = 64 * 1024 * 1024
+_MAX_DERIVED_MANIFEST_V2_BYTES = 1 * 1024 * 1024
 _MAX_REQUEST_BYTES = 320 * 1024
 _MAX_TITLE_CHARS = 500
 _MAX_BODY_CHARS = 200_000
@@ -261,6 +278,20 @@ _MAX_RUN_METADATA_BYTES = 64 * 1024
 _MAX_LEASE_SECONDS = 300
 _MAX_CONTENT_GC_OBJECTS = 10_000
 _ORPHAN_GC_GRACE_SECONDS = _MAX_LEASE_SECONDS * 2
+_MAX_CHECKPOINT_ROUTE_LOOKUP = 64
+_MAX_CHECKPOINT_ROUTE_ROWS = 1_000_000
+_CHECKPOINT_ROUTE_COLUMNS = (
+    "route_sha256",
+    "task_sha256",
+    "snapshot_sha256",
+    "knowledge_id",
+    "revision_id",
+    "run_id",
+    "canonical_binding_json",
+    "scope",
+    "sensitivity",
+    "recorded_at",
+)
 _SOURCE_REFERENCE_FIELDS = {
     "source_id": 200,
     "source_revision_id": 200,
@@ -271,6 +302,29 @@ _SOURCE_REFERENCE_FIELDS = {
     "uri": 4_000,
     "quote_sha256": 64,
 }
+
+
+def normalize_run_artifact_ids(values: Any) -> list[str]:
+    """Validate content-minimized artifact identities before a Run commit."""
+
+    if not isinstance(values, list) or len(values) > 100:
+        raise ValueError("run metadata artifact_ids is invalid")
+    selected: list[str] = []
+    for value in values:
+        if (
+            not isinstance(value, str)
+            or _SAFE_ARTIFACT_ID.fullmatch(value) is None
+            or value in {".", ".."}
+            or ".." in value
+            or "/" in value
+            or "\\" in value
+            or _SECRET_ARTIFACT_ID.search(value) is not None
+        ):
+            raise ValueError(
+                "run metadata artifact_ids must contain opaque bounded safe identifiers"
+            )
+        selected.append(value)
+    return selected
 
 _KIND_DIRECTORIES = {
     "claim": "knowledge/claims",
@@ -433,10 +487,25 @@ def _contract_path(name: str) -> Path:
 
 
 @cache
+def _contract_registry(directory: Path) -> Registry:
+    resources = []
+    for path in directory.glob("*.schema.json"):
+        value = strict_json_loads(path.read_bytes())
+        if isinstance(value, dict) and isinstance(value.get("$id"), str):
+            resources.append((value["$id"], Resource.from_contents(value)))
+    return Registry().with_resources(resources)
+
+
+@cache
 def _contract_validator(name: str) -> Draft202012Validator:
-    schema = strict_json_loads(_contract_path(name).read_bytes())
+    path = _contract_path(name)
+    schema = strict_json_loads(path.read_bytes())
     Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema, format_checker=FormatChecker())
+    return Draft202012Validator(
+        schema,
+        registry=_contract_registry(path.parent),
+        format_checker=FormatChecker(),
+    )
 
 
 def _validate_contract(name: str, value: dict[str, Any]) -> None:
@@ -1283,6 +1352,10 @@ def _tables_sql() -> str:
     """
 
 
+def _checkpoint_route_values(row: dict[str, Any]) -> tuple[Any, ...]:
+    return tuple(row[column] for column in _CHECKPOINT_ROUTE_COLUMNS)
+
+
 def _register_content_object(
     connection: sqlite3.Connection,
     *,
@@ -1616,9 +1689,14 @@ def initialize_autonomous_core(
         (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
     )
     with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.rebuild_checkpoint_route_projection()
         evidence = store.evidence_sync
         recovery = store.recovery_sync
         verification = store.verify()
+    if os.name == "nt":
+        from .windows_acl import harden_windows_vault
+
+        harden_windows_vault(root)
     return {
         **manifest,
         "legacy_evidence": evidence,
@@ -2237,19 +2315,41 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         path: str | Path | None = None,
         *,
         read_only: bool = True,
+        legacy_snapshot: KnowledgeVault | None = None,
     ) -> None:
         self.root = (
             Path(path).expanduser().absolute() if path is not None else default_knowledge_vault()
         )
-        with KnowledgeVault(self.root, read_only=True) as vault:
+        if legacy_snapshot is not None:
+            if not read_only or not legacy_snapshot.read_only:
+                raise ValueError("legacy snapshot reuse is read-only only")
+            if legacy_snapshot.root != self.root:
+                raise ValueError("legacy snapshot belongs to another Knowledge Vault")
+            vault = legacy_snapshot
             self.vault_id = vault.vault_id
             opened_legacy_audit_head = vault.audit_head
             manifest_scope = vault.manifest.get("scope")
-            self.vault_scope: Scope = cast(
+            self.vault_scope = cast(
                 Scope,
                 manifest_scope if manifest_scope in SCOPES else "project",
             )
+        else:
+            with KnowledgeVault(self.root, read_only=True) as vault:
+                self.vault_id = vault.vault_id
+                opened_legacy_audit_head = vault.audit_head
+                manifest_scope = vault.manifest.get("scope")
+                self.vault_scope = cast(
+                    Scope,
+                    manifest_scope if manifest_scope in SCOPES else "project",
+                )
         self.database = _database_path(self.root)
+        self._opened_sqlite_sidecars: dict[str, tuple[int, int]] = {}
+        if os.name == "nt":
+            from .windows_acl import windows_sqlite_sidecar_identities
+
+            self._opened_sqlite_sidecars = windows_sqlite_sidecar_identities(
+                self.database
+            )
         if read_only:
             self.connection = sqlite3.connect(
                 f"{self.database.as_uri()}?mode=ro",
@@ -2261,7 +2361,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             self.connection.execute("PRAGMA journal_mode = WAL")
             self.connection.execute("PRAGMA synchronous = FULL")
         self.read_only = read_only
+        self._windows_acl_refresh_required = False
         self._held_file_leases: dict[str, tuple[str, int]] = {}
+        self._legacy_source_state_cache: dict[str, dict[str, dict[str, Any]]] = {}
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.execute("PRAGMA busy_timeout = 5000")
@@ -2278,6 +2380,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if metadata.get("vault_id") != self.vault_id:
             self.connection.close()
             raise RuntimeError("autonomous knowledge core Vault identity mismatch")
+        projection_missing = not self._checkpoint_route_projection_exists()
+        if not read_only:
+            self._ensure_checkpoint_route_projection()
+            if projection_missing:
+                self.rebuild_checkpoint_route_projection()
         if self.legacy_audit_head != opened_legacy_audit_head:
             self.connection.close()
             raise RuntimeError("knowledge read planes changed while opening a consistent snapshot")
@@ -2296,6 +2403,18 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
 
     def close(self) -> None:
         self.connection.close()
+        if not self.read_only and os.name == "nt":
+            self._windows_acl_refresh_required = False
+            from .windows_acl import harden_windows_vault
+
+            harden_windows_vault(self.root)
+        else:
+            from .windows_acl import harden_windows_sqlite_sidecars
+
+            harden_windows_sqlite_sidecars(
+                self.database,
+                previous_identities=self._opened_sqlite_sidecars,
+            )
 
     @property
     def audit_head(self) -> str:
@@ -2569,6 +2688,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             except BaseException:
                 self.connection.rollback()
                 raise
+        if imported and os.name == "nt":
+            self._windows_acl_refresh_required = True
         return {"source_count": source_count, "new_binding_count": imported}
 
     def enable_grant(
@@ -2867,10 +2988,80 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         response["audit_head"] = self.audit_head
         return response
 
+    def _legacy_source_state_at(
+        self,
+        legacy_audit_head: str,
+    ) -> dict[str, dict[str, Any]]:
+        """Replay source lifecycle through one exact legacy audit head."""
+
+        if not _SHA256.fullmatch(legacy_audit_head):
+            raise ValueError("legacy audit head is invalid")
+        cached = self._legacy_source_state_cache.get(legacy_audit_head)
+        if cached is not None:
+            return cached
+        lifecycles: dict[str, dict[str, Any]] = {}
+        found = False
+        for row in self.connection.execute(
+            """
+            SELECT sequence, event_type, object_id, payload_json, event_hash, created_at
+            FROM events ORDER BY sequence
+            """
+        ):
+            payload = strict_json_loads(row["payload_json"])
+            if not isinstance(payload, dict):
+                raise ValueError("legacy event payload is invalid")
+            event_type = row["event_type"]
+            object_id = row["object_id"]
+            if event_type == "source_compiled" and isinstance(object_id, str):
+                lifecycles[object_id] = {
+                    "source_key": payload.get("source_key"),
+                    "previous_source_id": payload.get("previous_source_id"),
+                    "status": "pending",
+                    "activated_at": None,
+                    "superseded_at": None,
+                    "removed_at": None,
+                }
+            elif event_type == "source_activated" and isinstance(object_id, str):
+                state = lifecycles.get(object_id)
+                if state is None:
+                    state = {
+                        "source_key": payload.get("source_key"),
+                        "previous_source_id": payload.get("previous_source_id"),
+                        "status": "pending",
+                        "activated_at": None,
+                        "superseded_at": None,
+                        "removed_at": None,
+                    }
+                    lifecycles[object_id] = state
+                previous_source_id = payload.get("previous_source_id")
+                previous = lifecycles.get(previous_source_id)
+                if previous is not None:
+                    previous["status"] = "superseded"
+                    previous["superseded_at"] = payload.get("activated_at")
+                state["status"] = "active"
+                state["activated_at"] = payload.get("activated_at")
+            elif event_type == "source_removed" and isinstance(object_id, str):
+                state = lifecycles.get(object_id)
+                if state is not None:
+                    state["status"] = "removed"
+                    state["removed_at"] = payload.get("removed_at")
+            if row["event_hash"] == legacy_audit_head:
+                found = True
+                break
+        if not found:
+            raise ValueError("legacy audit head is not registered")
+        self._legacy_source_state_cache[legacy_audit_head] = lifecycles
+        return lifecycles
+
     def _source_reference_binding(
         self,
         reference: dict[str, Any],
+        *,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
     ) -> dict[str, Any] | None:
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="source reference as_of")
         revision_id = reference.get("revision_id")
         if isinstance(revision_id, str):
             if any(key in reference for key in ("fragment_id", "locator", "uri", "quote_sha256")):
@@ -2920,10 +3111,17 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         source_id = reference.get("source_id")
         if not isinstance(source_revision_id, str) and not isinstance(source_id, str):
             return None
+        binding_time_clause = ""
+        binding_parameters: tuple[Any, ...]
         if isinstance(source_revision_id, str):
+            binding_parameters = (source_revision_id,)
+            if as_of is not None:
+                binding_time_clause = "AND evidence_bindings_v3.recorded_at <= ?"
+                binding_parameters = (source_revision_id, as_of)
             binding = self.connection.execute(
-                """
+                f"""
                 SELECT evidence_bindings_v3.legacy_source_id AS source_id,
+                       evidence_bindings_v3.source_revision_id,
                        evidence_bindings_v3.scope,
                        evidence_bindings_v3.sensitivity,
                        evidence_bindings_v3.lifecycle,
@@ -2937,16 +3135,22 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 LEFT JOIN source_lifecycle
                   ON source_lifecycle.source_id = evidence_bindings_v3.legacy_source_id
                 WHERE evidence_bindings_v3.source_revision_id = ?
+                  {binding_time_clause}
                 ORDER BY evidence_bindings_v3.recorded_at DESC,
                          evidence_bindings_v3.binding_id DESC
                 LIMIT 1
                 """,
-                (source_revision_id,),
+                binding_parameters,
             ).fetchone()
         else:
+            binding_parameters = (source_id,)
+            if as_of is not None:
+                binding_time_clause = "AND evidence_bindings_v3.recorded_at <= ?"
+                binding_parameters = (source_id, as_of)
             binding = self.connection.execute(
-                """
+                f"""
                 SELECT evidence_bindings_v3.legacy_source_id AS source_id,
+                       evidence_bindings_v3.source_revision_id,
                        evidence_bindings_v3.scope,
                        evidence_bindings_v3.sensitivity,
                        evidence_bindings_v3.lifecycle,
@@ -2960,33 +3164,87 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 LEFT JOIN source_lifecycle
                   ON source_lifecycle.source_id = evidence_bindings_v3.legacy_source_id
                 WHERE evidence_bindings_v3.legacy_source_id = ?
+                  {binding_time_clause}
                 ORDER BY evidence_bindings_v3.recorded_at DESC,
                          evidence_bindings_v3.binding_id DESC
                 LIMIT 1
                 """,
-                (source_id,),
+                binding_parameters,
             ).fetchone()
         if binding is None or (isinstance(source_id, str) and source_id != binding["source_id"]):
             return None
         if reference.get("uri") not in {None, binding["origin_uri"]}:
             return None
         fragment_id = reference.get("fragment_id")
+        active = binding["lifecycle"] == "active"
+        if binding["source_id"] is not None:
+            if as_of is None:
+                active = active and (
+                    binding["source_status"] == "active"
+                    or (
+                        binding["source_status"] == "pending"
+                        and binding["origin"] == "user_source"
+                        and binding["authority"] in {"user_provided", "verified_source"}
+                    )
+                )
+            else:
+                if legacy_audit_head is not None:
+                    lifecycles = self._legacy_source_state_at(legacy_audit_head)
+                    lifecycle = lifecycles.get(binding["source_id"])
+                    historical_status = lifecycle["status"] if lifecycle is not None else None
+                    active = active and (
+                        historical_status == "active"
+                        or (
+                            historical_status == "pending"
+                            and binding["origin"] == "user_source"
+                            and binding["authority"]
+                            in {"user_provided", "verified_source"}
+                        )
+                    )
+                else:
+                    lifecycle = self.connection.execute(
+                        """
+                        SELECT activated_at, superseded_at, removed_at
+                        FROM source_lifecycle
+                        WHERE source_id = ?
+                        """,
+                        (binding["source_id"],),
+                    ).fetchone()
+                    historical_status = None
+                    if lifecycle is not None:
+                        if (
+                            lifecycle["removed_at"] is not None
+                            and lifecycle["removed_at"] <= as_of
+                        ):
+                            historical_status = "removed"
+                        elif (
+                            lifecycle["superseded_at"] is not None
+                            and lifecycle["superseded_at"] <= as_of
+                        ):
+                            historical_status = "superseded"
+                        elif (
+                            lifecycle["activated_at"] is not None
+                            and lifecycle["activated_at"] <= as_of
+                        ):
+                            historical_status = "active"
+                        else:
+                            historical_status = "pending"
+                    active = active and (
+                        historical_status == "active"
+                        or (
+                            historical_status == "pending"
+                            and binding["origin"] == "user_source"
+                            and binding["authority"]
+                            in {"user_provided", "verified_source"}
+                        )
+                    )
         if fragment_id is None:
             if "locator" in reference or "quote_sha256" in reference:
                 return None
             return {
                 "scope": binding["scope"],
                 "sensitivity": binding["sensitivity"],
-                "active": binding["lifecycle"] == "active"
-                and (
-                    binding["source_id"] is None
-                    or binding["source_status"] == "active"
-                    or (
-                        binding["source_status"] == "pending"
-                        and binding["origin"] == "user_source"
-                        and binding["authority"] in {"user_provided", "verified_source"}
-                    )
-                ),
+                "active": active,
             }
         if not isinstance(fragment_id, str):
             return None
@@ -3006,16 +3264,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         return {
             "scope": binding["scope"],
             "sensitivity": binding["sensitivity"],
-            "active": binding["lifecycle"] == "active"
-            and (
-                binding["source_id"] is None
-                or binding["source_status"] == "active"
-                or (
-                    binding["source_status"] == "pending"
-                    and binding["origin"] == "user_source"
-                    and binding["authority"] in {"user_provided", "verified_source"}
-                )
-            ),
+            "active": active,
         }
 
     def _pin_source_references(
@@ -3050,8 +3299,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         scope: str | None = None,
         max_sensitivity: str | None = None,
         require_active: bool = True,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
     ) -> bool:
-        binding = self._source_reference_binding(reference)
+        binding = self._source_reference_binding(
+            reference,
+            as_of=as_of,
+            legacy_audit_head=legacy_audit_head,
+        )
         if binding is None:
             return False
         if require_active and binding["active"] is not True:
@@ -3076,6 +3331,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         consumer_revision_id: str,
         scope: str | None,
         max_sensitivity: str | None,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
     ) -> bool:
         """Admit an unchanged exact fragment through a recorded active successor."""
 
@@ -3083,18 +3340,23 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         fragment_id = reference.get("fragment_id")
         if not isinstance(source_revision_id, str) or not isinstance(fragment_id, str):
             return False
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="successor provenance as_of")
         dependency = self.connection.execute(
             """
-            SELECT freshness FROM knowledge_dependencies_v1
+            SELECT freshness, recorded_at, updated_at FROM knowledge_dependencies_v1
             WHERE consumer_kind = ? AND consumer_revision_id = ?
               AND source_revision_id = ? AND fragment_id = ?
               AND dependency_kind = 'direct'
+              AND (? IS NULL OR recorded_at <= ?)
             """,
             (
                 consumer_kind,
                 consumer_revision_id,
                 source_revision_id,
                 fragment_id,
+                as_of,
+                as_of,
             ),
         ).fetchone()
         event = self.connection.execute(
@@ -3103,21 +3365,35 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             FROM source_freshness_events_v1
             WHERE target_kind = ? AND target_id = ?
               AND source_revision_id = ?
+              AND (? IS NULL OR recorded_at <= ?)
             ORDER BY recorded_at DESC, freshness_event_id DESC
             LIMIT 1
             """,
-            (consumer_kind, consumer_revision_id, source_revision_id),
+            (consumer_kind, consumer_revision_id, source_revision_id, as_of, as_of),
         ).fetchone()
+        dependency_freshness = (
+            self._dependency_freshness_at(
+                dependency,
+                target_kind=consumer_kind,
+                target_id=consumer_revision_id,
+                source_revision_id=source_revision_id,
+                as_of=as_of,
+            )
+            if dependency is not None
+            else None
+        )
         if (
             dependency is None
-            or dependency["freshness"] != "fresh"
+            or dependency_freshness != "fresh"
             or event is None
             or event["freshness"] != "fresh"
             or event["replacement_source_revision_id"] is None
         ):
             return False
         successor = self._source_reference_binding(
-            {"source_revision_id": event["replacement_source_revision_id"]}
+            {"source_revision_id": event["replacement_source_revision_id"]},
+            as_of=as_of,
+            legacy_audit_head=legacy_audit_head,
         )
         if successor is None or successor["active"] is not True:
             return False
@@ -3133,8 +3409,60 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             )
         )
 
-    def revision_provenance_admitted(self, revision: dict[str, Any]) -> bool:
+    def _dependency_freshness_at(
+        self,
+        dependency: sqlite3.Row,
+        *,
+        target_kind: str,
+        target_id: str,
+        source_revision_id: str,
+        as_of: str | None,
+    ) -> str:
+        """Resolve a dependency's last known state without looking past ``as_of``."""
+
+        if as_of is None or dependency["updated_at"] <= as_of:
+            return dependency["freshness"]
+        prior = self.connection.execute(
+            """
+            SELECT freshness
+            FROM source_freshness_events_v1
+            WHERE target_kind = ? AND target_id = ?
+              AND source_revision_id = ? AND recorded_at <= ?
+            ORDER BY recorded_at DESC, freshness_event_id DESC
+            LIMIT 1
+            """,
+            (target_kind, target_id, source_revision_id, as_of),
+        ).fetchone()
+        if prior is not None:
+            return cast(str, prior["freshness"])
+        future = self.connection.execute(
+            """
+            SELECT previous_freshness
+            FROM source_freshness_events_v1
+            WHERE target_kind = ? AND target_id = ?
+              AND source_revision_id = ? AND recorded_at > ?
+              AND previous_freshness IS NOT NULL
+            ORDER BY recorded_at, freshness_event_id
+            LIMIT 1
+            """,
+            (target_kind, target_id, source_revision_id, as_of),
+        ).fetchone()
+        return (
+            cast(str, future["previous_freshness"])
+            if future is not None
+            else cast(str, dependency["freshness"])
+        )
+
+    def revision_provenance_admitted(
+        self,
+        revision: dict[str, Any],
+        *,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
+    ) -> bool:
         """Check current source lifecycle without changing immutable revision history."""
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="revision provenance as_of")
         references = revision.get("source_refs", [])
         source_admitted = revision.get("verification") != "source_bound" or (
             bool(references)
@@ -3145,6 +3473,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         reference,
                         scope=cast(str | None, revision.get("scope")),
                         max_sensitivity=cast(str | None, revision.get("sensitivity")),
+                        as_of=as_of,
+                        legacy_audit_head=legacy_audit_head,
                     )
                     or self._successor_equivalent_reference_is_admitted(
                         reference,
@@ -3152,6 +3482,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         consumer_revision_id=cast(str, revision.get("revision_id")),
                         scope=cast(str | None, revision.get("scope")),
                         max_sensitivity=cast(str | None, revision.get("sensitivity")),
+                        as_of=as_of,
+                        legacy_audit_head=legacy_audit_head,
                     )
                 )
                 for reference in references
@@ -3164,6 +3496,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 revision_id,
                 scope=cast(str | None, revision.get("scope")),
                 max_sensitivity=cast(str | None, revision.get("sensitivity")),
+                as_of=as_of,
+                legacy_audit_head=legacy_audit_head,
             )
         )
         return (
@@ -3172,6 +3506,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             and self._revision_dependencies_admitted(
                 consumer_kind="knowledge_revision",
                 consumer_revision_id=revision_id,
+                as_of=as_of,
             )
         )
 
@@ -3181,30 +3516,50 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         *,
         scope: str | None,
         max_sensitivity: str | None,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
     ) -> bool:
         rows = self.connection.execute(
             """
-            SELECT source_revision_id, freshness
+            SELECT source_revision_id, freshness, recorded_at, updated_at
             FROM knowledge_dependencies_v1
             WHERE consumer_kind = 'knowledge_revision'
               AND consumer_revision_id = ?
               AND dependency_kind = 'direct'
+              AND (? IS NULL OR recorded_at <= ?)
             ORDER BY source_revision_id
             """,
-            (revision_id,),
+            (revision_id, as_of, as_of),
         ).fetchall()
         return bool(rows) and all(
-            row["freshness"] == "fresh"
+            self._dependency_freshness_at(
+                row,
+                target_kind="knowledge_revision",
+                target_id=revision_id,
+                source_revision_id=row["source_revision_id"],
+                as_of=as_of,
+            )
+            == "fresh"
             and self._source_reference_is_bound(
                 {"source_revision_id": row["source_revision_id"]},
                 scope=scope,
                 max_sensitivity=max_sensitivity,
+                as_of=as_of,
+                legacy_audit_head=legacy_audit_head,
             )
             for row in rows
         )
 
-    def relation_provenance_admitted(self, relation: dict[str, Any]) -> bool:
+    def relation_provenance_admitted(
+        self,
+        relation: dict[str, Any],
+        *,
+        as_of: str | None = None,
+        legacy_audit_head: str | None = None,
+    ) -> bool:
         """Check whether every canonical relation evidence reference remains admissible."""
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="relation provenance as_of")
         references = relation.get("evidence_refs", [])
         return bool(references) and all(
             isinstance(reference, dict)
@@ -3213,6 +3568,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     reference,
                     scope=cast(str | None, relation.get("scope")),
                     max_sensitivity=cast(str | None, relation.get("sensitivity")),
+                    as_of=as_of,
+                    legacy_audit_head=legacy_audit_head,
                 )
                 or self._successor_equivalent_reference_is_admitted(
                     reference,
@@ -3223,6 +3580,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     ),
                     scope=cast(str | None, relation.get("scope")),
                     max_sensitivity=cast(str | None, relation.get("sensitivity")),
+                    as_of=as_of,
+                    legacy_audit_head=legacy_audit_head,
                 )
             )
             for reference in references
@@ -3232,6 +3591,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 str,
                 relation.get("relation_revision_id"),
             ),
+            as_of=as_of,
         )
 
     def _revision_dependencies_admitted(
@@ -3239,18 +3599,73 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         *,
         consumer_kind: str,
         consumer_revision_id: str,
+        as_of: str | None = None,
     ) -> bool:
-        row = self.connection.execute(
+        if as_of is not None:
+            as_of = canonical_timestamp(as_of, field="revision dependency as_of")
+        dependency_rows = self.connection.execute(
             """
-            SELECT COUNT(*) AS total,
-                   SUM(CASE WHEN freshness = 'fresh' THEN 1 ELSE 0 END) AS fresh
+            SELECT dependency_id, freshness, input_kind, input_id, recorded_at, updated_at
             FROM revision_dependencies_v1
             WHERE consumer_kind = ? AND consumer_revision_id = ?
             """,
             (consumer_kind, consumer_revision_id),
+        ).fetchall()
+        rows = [
+            row
+            for row in dependency_rows
+            if as_of is None or row["recorded_at"] <= as_of
+        ]
+        if not rows:
+            return True
+        return all(
+            self._revision_dependency_freshness_at(
+                row,
+                consumer_kind=consumer_kind,
+                consumer_revision_id=consumer_revision_id,
+                as_of=as_of,
+            )
+            == "fresh"
+            for row in rows
+        )
+
+    def _revision_dependency_freshness_at(
+        self,
+        dependency: sqlite3.Row,
+        *,
+        consumer_kind: str,
+        consumer_revision_id: str,
+        as_of: str | None,
+    ) -> str:
+        if as_of is None or dependency["updated_at"] <= as_of:
+            return cast(str, dependency["freshness"])
+        prior = self.connection.execute(
+            """
+            SELECT freshness
+            FROM source_freshness_events_v1
+            WHERE target_kind = ? AND target_id = ? AND recorded_at <= ?
+            ORDER BY recorded_at DESC, freshness_event_id DESC
+            LIMIT 1
+            """,
+            (consumer_kind, consumer_revision_id, as_of),
         ).fetchone()
-        return row is not None and (
-            row["total"] == 0 or row["fresh"] == row["total"]
+        if prior is not None:
+            return cast(str, prior["freshness"])
+        future = self.connection.execute(
+            """
+            SELECT previous_freshness
+            FROM source_freshness_events_v1
+            WHERE target_kind = ? AND target_id = ? AND recorded_at > ?
+              AND previous_freshness IS NOT NULL
+            ORDER BY recorded_at, freshness_event_id
+            LIMIT 1
+            """,
+            (consumer_kind, consumer_revision_id, as_of),
+        ).fetchone()
+        return (
+            cast(str, future["previous_freshness"])
+            if future is not None
+            else cast(str, dependency["freshness"])
         )
 
     def _knowledge_admission_reasons(
@@ -3332,15 +3747,31 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if ended_at < started_at:
             raise ValueError("run ended_at precedes started_at")
         selected_metadata = metadata or {}
-        allowed_metadata = {"task_kind", "tool_ids", "artifact_ids", "notes_sha256"}
+        allowed_metadata = {
+            "task_kind",
+            "tool_ids",
+            "artifact_ids",
+            "notes_sha256",
+            "task_binding",
+        }
         if not isinstance(selected_metadata, dict) or set(selected_metadata) - allowed_metadata:
             raise ValueError("run metadata does not match its closed contract")
+        selected_metadata = dict(selected_metadata)
+        if "task_binding" in selected_metadata:
+            selected_metadata["task_binding"] = normalize_task_context_binding(
+                selected_metadata["task_binding"],
+                allow_none=False,
+            )
+        if "artifact_ids" in selected_metadata:
+            selected_metadata["artifact_ids"] = normalize_run_artifact_ids(
+                selected_metadata["artifact_ids"]
+            )
         metadata_bytes = canonical_json(selected_metadata).encode("utf-8")
         if len(metadata_bytes) > _MAX_RUN_METADATA_BYTES or has_instruction_risk(
             metadata_bytes.decode("utf-8")
         ):
             raise ValueError("run metadata is unsafe or exceeds its size bound")
-        for list_field in ("tool_ids", "artifact_ids"):
+        for list_field in ("tool_ids",):
             values = selected_metadata.get(list_field, [])
             if (
                 not isinstance(values, list)
@@ -3407,6 +3838,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "recorded_at": recorded_at,
         }
         receipt_sha256 = sha256_bytes(canonical_json(receipt_body).encode("utf-8"))
+        task_binding_sha256 = (
+            selected_metadata["task_binding"].get("binding_sha256")
+            if isinstance(selected_metadata.get("task_binding"), dict)
+            else None
+        )
         response = {
             **receipt_body,
             "receipt_sha256": receipt_sha256,
@@ -3479,6 +3915,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "scope": scope,
                     "sensitivity": sensitivity,
                     "status": status,
+                    "task_binding_sha256": task_binding_sha256,
                     "receipt_sha256": receipt_sha256,
                 },
                 recorded_at=recorded_at,
@@ -3516,6 +3953,1066 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "legal_authority": False,
         }
 
+    def run_task_context_binding(self, run_id: str | None) -> dict[str, Any] | None:
+        """Return a verified task binding for one successful Run Record."""
+
+        if run_id is None or not _RUN_ID.fullmatch(run_id):
+            return None
+        row = self.connection.execute(
+            "SELECT * FROM knowledge_run_records_v4 WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if row is None or row["status"] != "succeeded":
+            return None
+        try:
+            metadata = strict_json_loads(row["metadata_json"])
+            if not isinstance(metadata, dict) or "task_binding" not in metadata:
+                return None
+            raw_binding = metadata["task_binding"]
+            binding = normalize_task_context_binding(raw_binding, allow_none=True)
+            if binding is None or canonical_json(raw_binding) != canonical_json(binding):
+                return None
+            if row["receipt_sha256"] != sha256_bytes(
+                canonical_json(
+                    {
+                        "schema_version": "deeplaw.knowledge-run-record/v1",
+                        "run_id": row["run_id"],
+                        "writer_id": row["writer_id"],
+                        "host_id": row["host_id"],
+                        "model_id": row["model_id"],
+                        "task_sha256": row["task_sha256"],
+                        "input_sha256": row["input_sha256"],
+                        "output_sha256": row["output_sha256"],
+                        "tool_results_sha256": row["tool_results_sha256"],
+                        "scope": row["scope"],
+                        "sensitivity": row["sensitivity"],
+                        "status": row["status"],
+                        "started_at": row["started_at"],
+                        "ended_at": row["ended_at"],
+                        "metadata": metadata,
+                        "recorded_at": row["recorded_at"],
+                    }
+                ).encode("utf-8")
+            ):
+                return None
+            event = self.connection.execute(
+                """
+                SELECT payload_json
+                FROM autonomous_events_v3
+                WHERE event_type = 'knowledge_run_recorded' AND object_id = ?
+                ORDER BY sequence DESC
+                LIMIT 1
+                """,
+                (run_id,),
+            ).fetchone()
+            if event is None:
+                return None
+            event_payload = strict_json_loads(event["payload_json"])
+            if (
+                not isinstance(event_payload, dict)
+                or event_payload.get("task_binding_sha256") != binding["binding_sha256"]
+            ):
+                return None
+            return binding
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+
+    def _checkpoint_route_projection_exists(self) -> bool:
+        """Return whether the rebuildable route index exists in this Vault."""
+
+        row = self.connection.execute(
+            """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'knowledge_checkpoint_routes_v1'
+            """
+        ).fetchone()
+        return row is not None
+
+    def _ensure_checkpoint_route_projection(self) -> None:
+        """Create only the additive derived route projection when writable."""
+
+        self._require_write()
+        self.connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS knowledge_checkpoint_routes_v1 (
+                route_sha256 TEXT NOT NULL,
+                task_sha256 TEXT NOT NULL,
+                snapshot_sha256 TEXT NOT NULL,
+                knowledge_id TEXT NOT NULL REFERENCES knowledge_objects_v3(knowledge_id),
+                revision_id TEXT NOT NULL REFERENCES knowledge_revisions_v3(revision_id),
+                run_id TEXT NOT NULL REFERENCES knowledge_run_records_v4(run_id),
+                canonical_binding_json TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                sensitivity TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                PRIMARY KEY(route_sha256, task_sha256, knowledge_id)
+            ) STRICT
+            """
+        )
+        self.connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS knowledge_checkpoint_routes_v1_route
+                ON knowledge_checkpoint_routes_v1(route_sha256, task_sha256, snapshot_sha256)
+            """
+        )
+        self.connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS knowledge_checkpoint_routes_v1_task
+                ON knowledge_checkpoint_routes_v1(task_sha256, route_sha256)
+            """
+        )
+        self.connection.commit()
+
+    def _checkpoint_route_projection_candidate(
+        self,
+        row: sqlite3.Row,
+    ) -> dict[str, Any] | None:
+        """Derive one bounded route row from a current working revision."""
+
+        if (
+            row["kind"] != "memory"
+            or row["lifecycle"] != "active"
+            or row["current_revision_id"] != row["revision_id"]
+        ):
+            return None
+        try:
+            metadata = strict_json_loads(row["metadata_json"])
+            generation = strict_json_loads(row["generation_json"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if (
+            not isinstance(metadata, dict)
+            or metadata.get("memory_type") != "working"
+            or not isinstance(generation, dict)
+        ):
+            return None
+        run_id = generation.get("run_id")
+        if not isinstance(run_id, str) or not _RUN_ID.fullmatch(run_id):
+            return None
+        binding = self.run_task_context_binding(run_id)
+        if binding is None:
+            return None
+        run = self.connection.execute(
+            """
+            SELECT task_sha256, writer_id, scope, sensitivity, status
+            FROM knowledge_run_records_v4
+            WHERE run_id = ?
+            LIMIT 1
+            """,
+            (run_id,),
+        ).fetchone()
+        if (
+            run is None
+            or run["status"] != "succeeded"
+            or run["writer_id"] != row["writer_id"]
+            or run["scope"] not in SCOPES
+            or row["scope"] not in SCOPES
+            or run["sensitivity"] not in SENSITIVITIES
+            or row["sensitivity"] not in SENSITIVITIES
+            or run["scope"] != row["scope"]
+            or SENSITIVITY_ORDER.index(run["sensitivity"])
+            > SENSITIVITY_ORDER.index(row["sensitivity"])
+            or not _SHA256.fullmatch(run["task_sha256"])
+        ):
+            return None
+        return {
+            "route_sha256": task_route_sha256(binding),
+            "task_sha256": run["task_sha256"],
+            "snapshot_sha256": task_snapshot_sha256(binding),
+            "knowledge_id": row["knowledge_id"],
+            "revision_id": row["revision_id"],
+            "run_id": run_id,
+            "canonical_binding_json": canonical_json(binding),
+            "scope": row["scope"],
+            "sensitivity": row["sensitivity"],
+            "recorded_at": row["recorded_at"],
+        }
+
+    def _upsert_checkpoint_route_projection(
+        self,
+        *,
+        knowledge_id: str,
+        revision_id: str,
+    ) -> None:
+        """Keep one current route row per Knowledge identity inside a mutation."""
+
+        if not self._checkpoint_route_projection_exists():
+            raise RuntimeError("checkpoint route projection is unavailable")
+        # A successor always retires every previous route row for the same
+        # Knowledge identity, including a binding-less legacy successor.
+        self.connection.execute(
+            "DELETE FROM knowledge_checkpoint_routes_v1 WHERE knowledge_id = ?",
+            (knowledge_id,),
+        )
+        row = self.connection.execute(
+            """
+            SELECT revisions.*, objects.current_revision_id
+            FROM knowledge_revisions_v3 AS revisions
+            JOIN knowledge_objects_v3 AS objects
+              ON objects.knowledge_id = revisions.knowledge_id
+            WHERE revisions.knowledge_id = ? AND revisions.revision_id = ?
+            LIMIT 1
+            """,
+            (knowledge_id, revision_id),
+        ).fetchone()
+        if row is None:
+            return
+        projection = self._checkpoint_route_projection_candidate(row)
+        if projection is None:
+            return
+        self.connection.execute(
+            """
+            INSERT INTO knowledge_checkpoint_routes_v1 (
+                route_sha256, task_sha256, snapshot_sha256,
+                knowledge_id, revision_id, run_id, canonical_binding_json,
+                scope, sensitivity, recorded_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(route_sha256, task_sha256, knowledge_id) DO UPDATE SET
+                snapshot_sha256 = excluded.snapshot_sha256,
+                revision_id = excluded.revision_id,
+                run_id = excluded.run_id,
+                canonical_binding_json = excluded.canonical_binding_json,
+                scope = excluded.scope,
+                sensitivity = excluded.sensitivity,
+                recorded_at = excluded.recorded_at
+            """,
+            _checkpoint_route_values(projection),
+        )
+
+    def _assert_checkpoint_head_write(
+        self,
+        *,
+        binding: dict[str, Any],
+        knowledge_id: str | None,
+        expected_revision_id: str | None,
+    ) -> None:
+        """Require CAS against the sole current head of a task route."""
+
+        if not self._checkpoint_route_projection_exists():
+            raise RuntimeError("checkpoint route projection is unavailable")
+        route_sha256 = task_route_sha256(binding)
+        rows = self.connection.execute(
+            """
+            SELECT knowledge_id, revision_id
+            FROM knowledge_checkpoint_routes_v1
+            WHERE route_sha256 = ?
+            ORDER BY knowledge_id
+            LIMIT 3
+            """,
+            (route_sha256,),
+        ).fetchall()
+        if len(rows) > 1:
+            raise RuntimeError("checkpoint_head_conflict: task route has multiple current heads")
+        if rows:
+            head = rows[0]
+            if (
+                knowledge_id != head["knowledge_id"]
+                or expected_revision_id != head["revision_id"]
+            ):
+                raise RuntimeError(
+                    "checkpoint_head_conflict: Knowledge Object compare-and-swap conflict"
+                )
+            return
+        if knowledge_id is None:
+            return
+        prior = self.connection.execute(
+            """
+            SELECT route_sha256
+            FROM knowledge_checkpoint_routes_v1
+            WHERE knowledge_id = ?
+            LIMIT 2
+            """,
+            (knowledge_id,),
+        ).fetchall()
+        if prior and any(row["route_sha256"] != route_sha256 for row in prior):
+            raise RuntimeError("checkpoint_head_conflict: task route identity cannot change")
+
+    def checkpoint_route_head_for_write(
+        self,
+        *,
+        task_binding: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Return the sole current checkpoint head needed for an explicit CAS write."""
+
+        binding = normalize_task_context_binding(task_binding, allow_none=False)
+        if not self._checkpoint_route_projection_exists():
+            return {"status": "index_unavailable"}
+        rows = self.connection.execute(
+            """
+            SELECT route_sha256, task_sha256, snapshot_sha256,
+                   knowledge_id, revision_id, run_id, canonical_binding_json,
+                   scope, sensitivity, recorded_at
+            FROM knowledge_checkpoint_routes_v1
+            WHERE route_sha256 = ?
+            ORDER BY knowledge_id
+            LIMIT 3
+            """,
+            (task_route_sha256(binding),),
+        ).fetchall()
+        if len(rows) > 1:
+            return {"status": "head_conflict"}
+        if not rows:
+            return {"status": "not_found"}
+        head = rows[0]
+        if not self._checkpoint_route_projection_row_is_current(head):
+            return {"status": "index_unavailable"}
+        return {
+            "status": "exact",
+            "knowledge_id": head["knowledge_id"],
+            "revision_id": head["revision_id"],
+        }
+
+    def _checkpoint_route_projection_row_is_current(self, row: sqlite3.Row) -> bool:
+        """Fail closed when a bounded lookup encounters stale derived state."""
+
+        revision = self.connection.execute(
+            """
+            SELECT revisions.*, objects.current_revision_id
+            FROM knowledge_revisions_v3 AS revisions
+            JOIN knowledge_objects_v3 AS objects
+              ON objects.knowledge_id = revisions.knowledge_id
+            WHERE revisions.knowledge_id = ? AND revisions.revision_id = ?
+            LIMIT 1
+            """,
+            (row["knowledge_id"], row["revision_id"]),
+        ).fetchone()
+        if revision is None:
+            return False
+        expected = self._checkpoint_route_projection_candidate(revision)
+        return bool(
+            expected is not None
+            and all(row[column] == expected[column] for column in _CHECKPOINT_ROUTE_COLUMNS)
+        )
+
+    def rebuild_checkpoint_route_projection(self) -> dict[str, Any]:
+        """Rebuild the derived route projection from current governed state."""
+
+        self._require_write()
+        self._ensure_checkpoint_route_projection()
+        rows = self.connection.execute(
+            """
+            SELECT revisions.*, objects.current_revision_id
+            FROM knowledge_revisions_v3 AS revisions
+            JOIN knowledge_objects_v3 AS objects
+              ON objects.knowledge_id = revisions.knowledge_id
+            WHERE revisions.lifecycle = 'active'
+              AND revisions.kind = 'memory'
+              AND revisions.revision_id = objects.current_revision_id
+            ORDER BY revisions.knowledge_id
+            LIMIT ?
+            """,
+            (_MAX_CHECKPOINT_ROUTE_ROWS + 1,),
+        ).fetchall()
+        if len(rows) > _MAX_CHECKPOINT_ROUTE_ROWS:
+            raise RuntimeError("checkpoint route projection exceeds its rebuild bound")
+        projections = [
+            projection
+            for row in rows
+            if (projection := self._checkpoint_route_projection_candidate(row)) is not None
+        ]
+        with self.connection:
+            self.connection.execute("DELETE FROM knowledge_checkpoint_routes_v1")
+            self.connection.executemany(
+                """
+                INSERT INTO knowledge_checkpoint_routes_v1 (
+                    route_sha256, task_sha256, snapshot_sha256,
+                    knowledge_id, revision_id, run_id, canonical_binding_json,
+                    scope, sensitivity, recorded_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    _checkpoint_route_values(projection)
+                    for projection in projections
+                ],
+            )
+        return {
+            "schema_version": "deeplaw.checkpoint-route-projection/v1",
+            "projection": "knowledge_checkpoint_routes_v1",
+            "row_count": len(projections),
+            "rebuildable": True,
+        }
+
+    def lookup_checkpoint_route_projection(
+        self,
+        *,
+        task_sha256: str,
+        task_binding: dict[str, Any] | None = None,
+        limit: int = _MAX_CHECKPOINT_ROUTE_LOOKUP,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity = "restricted",
+    ) -> dict[str, Any]:
+        """Perform a bounded exact route lookup without returning checkpoint text."""
+
+        if not _SHA256.fullmatch(task_sha256):
+            raise ValueError("task_sha256 is invalid")
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("checkpoint route lookup limit is invalid")
+        limit = min(limit, _MAX_CHECKPOINT_ROUTE_LOOKUP)
+        if scope is not None and scope not in SCOPES:
+            raise ValueError("checkpoint route lookup scope is invalid")
+        if max_sensitivity not in SENSITIVITIES:
+            raise ValueError("checkpoint route lookup sensitivity is invalid")
+        normalized_binding = normalize_task_context_binding(task_binding, allow_none=True)
+        base_response = {
+            "schema_version": "deeplaw.checkpoint-route-lookup/v1",
+            "task_sha256": task_sha256,
+            "limit": limit,
+        }
+        if not self._checkpoint_route_projection_exists():
+            return {**base_response, "status": "index_unavailable", "scanned": 0}
+        boundary = ""
+        boundary_args: list[Any] = []
+        if scope is not None:
+            boundary = " AND scope = ?"
+            boundary_args.append(scope)
+        sensitivity_limit = SENSITIVITY_ORDER.index(max_sensitivity)
+        sensitivity_clause = (
+            f" AND sensitivity IN ({','.join('?' for _ in range(sensitivity_limit + 1))})"
+        )
+        sensitivity_args = list(SENSITIVITY_ORDER[: sensitivity_limit + 1])
+        if normalized_binding is not None:
+            route_sha256 = task_route_sha256(normalized_binding)
+            snapshot_sha256 = task_snapshot_sha256(normalized_binding)
+            rows = self.connection.execute(
+                """
+                SELECT route_sha256, task_sha256, snapshot_sha256,
+                       knowledge_id, revision_id, run_id, canonical_binding_json,
+                       scope, sensitivity, recorded_at
+                FROM knowledge_checkpoint_routes_v1
+                WHERE route_sha256 = ?
+                """ + boundary + sensitivity_clause + " ORDER BY knowledge_id LIMIT ?",
+                (
+                    route_sha256,
+                    *boundary_args,
+                    *sensitivity_args,
+                    limit + 1,
+                ),
+            ).fetchall()
+            scanned = len(rows)
+            truncated = scanned > limit
+            rows = rows[:limit]
+            if any(not self._checkpoint_route_projection_row_is_current(row) for row in rows):
+                return {
+                    **base_response,
+                    "status": "index_unavailable",
+                    "scanned": scanned,
+                }
+            if truncated or len(rows) > 1:
+                return {
+                    **base_response,
+                    "status": "head_conflict",
+                    "scanned": scanned,
+                    "truncated": truncated,
+                }
+            if rows and rows[0]["snapshot_sha256"] == snapshot_sha256:
+                return {
+                    **base_response,
+                    "status": "exact",
+                    "route_sha256": route_sha256,
+                    "snapshot_sha256": snapshot_sha256,
+                    "revision_ids": [rows[0]["revision_id"]],
+                    "knowledge_ids": [rows[0]["knowledge_id"]],
+                    "scanned": scanned,
+                    "truncated": False,
+                }
+            if rows:
+                return {
+                    **base_response,
+                    "status": "workspace_diverged",
+                    "route_sha256": route_sha256,
+                    "snapshot_sha256": snapshot_sha256,
+                    "scanned": scanned,
+                    "truncated": truncated,
+                }
+            return {
+                **base_response,
+                "status": "not_found",
+                "route_sha256": route_sha256,
+                "snapshot_sha256": snapshot_sha256,
+                "scanned": scanned,
+            }
+
+        route_rows = self.connection.execute(
+            """
+            SELECT DISTINCT route_sha256
+            FROM knowledge_checkpoint_routes_v1
+            WHERE task_sha256 = ?
+            """ + boundary + sensitivity_clause + " ORDER BY route_sha256 LIMIT ?",
+            (task_sha256, *boundary_args, *sensitivity_args, limit + 1),
+        ).fetchall()
+        scanned = len(route_rows)
+        if len(route_rows) == 0:
+            return {**base_response, "status": "not_found", "scanned": scanned}
+        if len(route_rows) > 1:
+            return {
+                **base_response,
+                "status": "ambiguous",
+                "scanned": scanned,
+                "truncated": len(route_rows) > limit,
+            }
+        route_sha256 = route_rows[0]["route_sha256"]
+        rows = self.connection.execute(
+            """
+            SELECT route_sha256, task_sha256, snapshot_sha256,
+                   knowledge_id, revision_id, run_id, canonical_binding_json,
+                   scope, sensitivity, recorded_at
+            FROM knowledge_checkpoint_routes_v1
+            WHERE route_sha256 = ? AND task_sha256 = ?
+            """ + boundary + sensitivity_clause + " ORDER BY knowledge_id LIMIT ?",
+            (route_sha256, task_sha256, *boundary_args, *sensitivity_args, limit + 1),
+        ).fetchall()
+        truncated = len(rows) > limit
+        rows = rows[:limit]
+        if truncated or len(rows) > 1:
+            return {
+                **base_response,
+                "status": "head_conflict",
+                "scanned": scanned + len(rows),
+                "truncated": truncated,
+            }
+        if not rows:
+            return {**base_response, "status": "not_found", "scanned": scanned}
+        if any(not self._checkpoint_route_projection_row_is_current(row) for row in rows):
+            return {**base_response, "status": "index_unavailable", "scanned": scanned}
+        binding: Any = None
+        try:
+            binding = strict_json_loads(rows[0]["canonical_binding_json"])
+            normalized_binding = normalize_task_context_binding(binding, allow_none=False)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            normalized_binding = None
+        if (
+            not isinstance(binding, dict)
+            or normalized_binding is None
+            or canonical_json(binding) != canonical_json(normalized_binding)
+            or task_route_sha256(normalized_binding) != route_sha256
+            or task_snapshot_sha256(normalized_binding) != rows[0]["snapshot_sha256"]
+        ):
+            return {**base_response, "status": "index_unavailable", "scanned": scanned}
+        return {
+            **base_response,
+            "status": "exact",
+            "route_sha256": route_sha256,
+            "snapshot_sha256": rows[0]["snapshot_sha256"],
+            "canonical_binding": binding,
+            "revision_ids": [rows[0]["revision_id"]],
+            "knowledge_ids": [rows[0]["knowledge_id"]],
+            "scanned": scanned + len(rows),
+            "truncated": False,
+        }
+
+    def locate_checkpoint_route_projection(
+        self,
+        *,
+        route_sha256: str,
+        task_lineage_sha256: str,
+        project_sha256: str,
+        repository_sha256: str,
+        worktree_sha256: str,
+        snapshot_sha256: str,
+        limit: int = _MAX_CHECKPOINT_ROUTE_LOOKUP,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity = "restricted",
+    ) -> dict[str, Any]:
+        """Locate one current route by owner-visible task and workspace identities."""
+
+        for field, digest in (
+            ("route_sha256", route_sha256),
+            ("task_lineage_sha256", task_lineage_sha256),
+            ("project_sha256", project_sha256),
+            ("repository_sha256", repository_sha256),
+            ("worktree_sha256", worktree_sha256),
+            ("snapshot_sha256", snapshot_sha256),
+        ):
+            if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+                raise ValueError(f"{field} is invalid")
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("checkpoint route locate limit is invalid")
+        limit = min(limit, _MAX_CHECKPOINT_ROUTE_LOOKUP)
+        if scope is not None and scope not in SCOPES:
+            raise ValueError("checkpoint route locate scope is invalid")
+        if max_sensitivity not in SENSITIVITIES:
+            raise ValueError("checkpoint route locate sensitivity is invalid")
+        base = {
+            "schema_version": "deeplaw.checkpoint-route-locate/v1",
+            "route_sha256": route_sha256,
+            "task_lineage_sha256": task_lineage_sha256,
+            "limit": limit,
+        }
+        if not self._checkpoint_route_projection_exists():
+            return {**base, "status": "index_unavailable", "scanned": 0}
+        sensitivity_limit = SENSITIVITY_ORDER.index(max_sensitivity)
+        sensitivity_values = list(SENSITIVITY_ORDER[: sensitivity_limit + 1])
+        scope_clause = ""
+        parameters: list[Any] = [route_sha256]
+        if scope is not None:
+            scope_clause = " AND scope = ?"
+            parameters.append(scope)
+        sensitivity_clause = (
+            f" AND sensitivity IN ({','.join('?' for _ in sensitivity_values)})"
+        )
+        parameters.extend(sensitivity_values)
+        parameters.append(limit + 1)
+        rows = self.connection.execute(
+            """
+            SELECT route_sha256, task_sha256, snapshot_sha256,
+                   knowledge_id, revision_id, run_id, canonical_binding_json,
+                   scope, sensitivity, recorded_at
+            FROM knowledge_checkpoint_routes_v1
+            WHERE route_sha256 = ?
+            """
+            + scope_clause
+            + sensitivity_clause
+            + " ORDER BY route_sha256, knowledge_id LIMIT ?",
+            tuple(parameters),
+        ).fetchall()
+        if len(rows) > limit:
+            return {
+                **base,
+                "status": "ambiguous",
+                "scanned": len(rows),
+                "truncated": True,
+            }
+        matching_route: list[tuple[sqlite3.Row, dict[str, Any]]] = []
+        diverged = False
+        for row in rows:
+            if not self._checkpoint_route_projection_row_is_current(row):
+                return {**base, "status": "index_unavailable", "scanned": len(rows)}
+            try:
+                raw_binding = strict_json_loads(row["canonical_binding_json"])
+                binding = normalize_task_context_binding(raw_binding, allow_none=False)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return {**base, "status": "index_unavailable", "scanned": len(rows)}
+            if canonical_json(raw_binding) != canonical_json(binding):
+                return {**base, "status": "index_unavailable", "scanned": len(rows)}
+            if (
+                binding["project_sha256"] != project_sha256
+                or binding["task_lineage_sha256"] != task_lineage_sha256
+                or binding["repository_sha256"] != repository_sha256
+                or binding["worktree_sha256"] != worktree_sha256
+            ):
+                continue
+            if row["snapshot_sha256"] != snapshot_sha256:
+                diverged = True
+                continue
+            matching_route.append((row, binding))
+        if len(matching_route) > 1:
+            return {
+                **base,
+                "status": "ambiguous",
+                "scanned": len(rows),
+                "truncated": False,
+            }
+        if not matching_route:
+            return {
+                **base,
+                "status": "workspace_diverged" if diverged else "not_found",
+                "scanned": len(rows),
+                "truncated": False,
+            }
+        row, binding = matching_route[0]
+        return {
+            **base,
+            "status": "exact",
+            "route_sha256": row["route_sha256"],
+            "snapshot_sha256": row["snapshot_sha256"],
+            "canonical_binding": binding,
+            "knowledge_ids": [row["knowledge_id"]],
+            "revision_ids": [row["revision_id"]],
+            "run_ids": [row["run_id"]],
+            "scanned": len(rows),
+            "truncated": False,
+        }
+
+    def locate_checkpoint_task_projection(
+        self,
+        *,
+        task_sha256: str,
+        project_sha256: str,
+        repository_sha256: str,
+        worktree_sha256: str,
+        snapshot_sha256: str,
+        limit: int = _MAX_CHECKPOINT_ROUTE_LOOKUP,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity = "restricted",
+    ) -> dict[str, Any]:
+        """Locate a current route by task text plus stable workspace identities."""
+
+        for field, digest in (
+            ("task_sha256", task_sha256),
+            ("project_sha256", project_sha256),
+            ("repository_sha256", repository_sha256),
+            ("worktree_sha256", worktree_sha256),
+            ("snapshot_sha256", snapshot_sha256),
+        ):
+            if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+                raise ValueError(f"{field} is invalid")
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("checkpoint task locate limit is invalid")
+        limit = min(limit, _MAX_CHECKPOINT_ROUTE_LOOKUP)
+        if scope is not None and scope not in SCOPES:
+            raise ValueError("checkpoint task locate scope is invalid")
+        if max_sensitivity not in SENSITIVITIES:
+            raise ValueError("checkpoint task locate sensitivity is invalid")
+        base = {
+            "schema_version": "deeplaw.checkpoint-task-locate/v1",
+            "task_sha256": task_sha256,
+            "limit": limit,
+        }
+        if not self._checkpoint_route_projection_exists():
+            return {**base, "status": "index_unavailable", "scanned": 0}
+        sensitivity_limit = SENSITIVITY_ORDER.index(max_sensitivity)
+        sensitivity_values = list(SENSITIVITY_ORDER[: sensitivity_limit + 1])
+        scope_clause = ""
+        parameters: list[Any] = [task_sha256]
+        if scope is not None:
+            scope_clause = " AND scope = ?"
+            parameters.append(scope)
+        sensitivity_clause = (
+            f" AND sensitivity IN ({','.join('?' for _ in sensitivity_values)})"
+        )
+        parameters.extend(sensitivity_values)
+        parameters.append(limit + 1)
+        rows = self.connection.execute(
+            """
+            SELECT route_sha256, task_sha256, snapshot_sha256,
+                   knowledge_id, revision_id, run_id, canonical_binding_json,
+                   scope, sensitivity, recorded_at
+            FROM knowledge_checkpoint_routes_v1
+            WHERE task_sha256 = ?
+            """
+            + scope_clause
+            + sensitivity_clause
+            + " ORDER BY route_sha256, knowledge_id LIMIT ?",
+            tuple(parameters),
+        ).fetchall()
+        if len(rows) > limit:
+            return {
+                **base,
+                "status": "ambiguous",
+                "scanned": len(rows),
+                "truncated": True,
+            }
+        matches: list[tuple[sqlite3.Row, dict[str, Any]]] = []
+        for row in rows:
+            if not self._checkpoint_route_projection_row_is_current(row):
+                return {**base, "status": "index_unavailable", "scanned": len(rows)}
+            try:
+                raw_binding = strict_json_loads(row["canonical_binding_json"])
+                binding = normalize_task_context_binding(raw_binding, allow_none=False)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return {**base, "status": "index_unavailable", "scanned": len(rows)}
+            if (
+                canonical_json(raw_binding) != canonical_json(binding)
+                or task_route_sha256(binding) != row["route_sha256"]
+                or binding["project_sha256"] != project_sha256
+                or binding["repository_sha256"] != repository_sha256
+                or binding["worktree_sha256"] != worktree_sha256
+            ):
+                continue
+            matches.append((row, binding))
+        if len(matches) > 1:
+            return {
+                **base,
+                "status": "ambiguous",
+                "scanned": len(rows),
+                "truncated": False,
+            }
+        if not matches:
+            return {
+                **base,
+                "status": "not_found",
+                "scanned": len(rows),
+                "truncated": False,
+            }
+        row, binding = matches[0]
+        if row["snapshot_sha256"] != snapshot_sha256:
+            return {
+                **base,
+                "status": "workspace_diverged",
+                "canonical_binding": binding,
+                "route_sha256": row["route_sha256"],
+                "scanned": len(rows),
+                "truncated": False,
+            }
+        return {
+            **base,
+            "status": "exact",
+            "route_sha256": row["route_sha256"],
+            "snapshot_sha256": row["snapshot_sha256"],
+            "canonical_binding": binding,
+            "knowledge_ids": [row["knowledge_id"]],
+            "revision_ids": [row["revision_id"]],
+            "run_ids": [row["run_id"]],
+            "scanned": len(rows),
+            "truncated": False,
+        }
+
+    def locate_task_route_history(
+        self,
+        *,
+        task_sha256: str,
+        fallback_task_lineage_sha256: str,
+        project_sha256: str,
+        repository_sha256: str,
+        worktree_sha256: str,
+        snapshot_sha256: str | None,
+        scope: Scope | None = None,
+        max_sensitivity: Sensitivity = "restricted",
+    ) -> dict[str, Any]:
+        """Locate one stable task route from immutable Run history."""
+
+        for field, digest in (
+            ("task_sha256", task_sha256),
+            ("fallback_task_lineage_sha256", fallback_task_lineage_sha256),
+            ("project_sha256", project_sha256),
+            ("repository_sha256", repository_sha256),
+            ("worktree_sha256", worktree_sha256),
+        ):
+            if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+                raise ValueError(f"{field} is invalid")
+        if snapshot_sha256 is not None and not _SHA256.fullmatch(snapshot_sha256):
+            raise ValueError("snapshot_sha256 is invalid")
+        if scope is not None and scope not in SCOPES:
+            raise ValueError("task history scope is invalid")
+        if max_sensitivity not in SENSITIVITIES:
+            raise ValueError("task history sensitivity is invalid")
+        sensitivity_limit = SENSITIVITY_ORDER.index(max_sensitivity)
+        sensitivity_values = list(SENSITIVITY_ORDER[: sensitivity_limit + 1])
+        scope_clause = ""
+        parameters: list[Any] = [
+            task_sha256,
+            fallback_task_lineage_sha256,
+            project_sha256,
+            repository_sha256,
+            worktree_sha256,
+        ]
+        if scope is not None:
+            scope_clause = " AND scope = ?"
+            parameters.append(scope)
+        sensitivity_clause = (
+            f" AND sensitivity IN ({','.join('?' for _ in sensitivity_values)})"
+        )
+        parameters.extend(sensitivity_values)
+        rows = self.connection.execute(
+            """
+            SELECT run_id, task_sha256, metadata_json, recorded_at
+            FROM knowledge_run_records_v4
+            WHERE (task_sha256 = ?
+                   OR json_extract(metadata_json, '$.task_binding.task_lineage_sha256') = ?)
+              AND json_extract(metadata_json, '$.task_binding.project_sha256') = ?
+              AND json_extract(metadata_json, '$.task_binding.repository_sha256') = ?
+              AND json_extract(metadata_json, '$.task_binding.worktree_sha256') = ?
+            """
+            + scope_clause
+            + sensitivity_clause
+            + " ORDER BY recorded_at DESC, run_id LIMIT 101",
+            tuple(parameters),
+        ).fetchall()
+        base = {
+            "schema_version": "deeplaw.task-route-history-locate/v1",
+            "scanned": len(rows),
+        }
+        if not rows:
+            return {**base, "status": "not_found"}
+        routes: dict[str, dict[str, Any]] = {}
+        run_ids: list[str] = []
+        for row in rows:
+            binding = self.run_task_context_binding(row["run_id"])
+            if binding is None:
+                return {**base, "status": "index_unavailable"}
+            route = task_route_sha256(binding)
+            routes.setdefault(route, binding)
+            run_ids.append(str(row["run_id"]))
+        if len(rows) > 100 or len(routes) > 1:
+            return {**base, "status": "ambiguous"}
+        route_sha256, binding = next(iter(routes.items()))
+        current_rows = self.connection.execute(
+            """
+            SELECT snapshot_sha256, knowledge_id, revision_id
+            FROM knowledge_checkpoint_routes_v1
+            WHERE route_sha256 = ?
+            ORDER BY knowledge_id
+            LIMIT 2
+            """,
+            (route_sha256,),
+        ).fetchall()
+        if len(current_rows) > 1:
+            return {**base, "status": "ambiguous"}
+        if current_rows:
+            current = current_rows[0]
+            status = (
+                "exact"
+                if snapshot_sha256 is not None
+                and current["snapshot_sha256"] == snapshot_sha256
+                else "workspace_diverged"
+            )
+            return {
+                **base,
+                "status": status,
+                "route_sha256": route_sha256,
+                "canonical_binding": binding,
+                "knowledge_id": current["knowledge_id"],
+                "revision_id": current["revision_id"],
+            }
+        lifecycle_rows = self.connection.execute(
+            """
+            SELECT current.lifecycle
+            FROM knowledge_revisions_v3 AS historical
+            JOIN knowledge_objects_v3 AS objects
+              ON objects.knowledge_id = historical.knowledge_id
+            JOIN knowledge_revisions_v3 AS current
+              ON current.revision_id = objects.current_revision_id
+            WHERE json_extract(historical.generation_json, '$.run_id')
+                  IN (SELECT value FROM json_each(?))
+              AND historical.kind = 'memory'
+            ORDER BY historical.recorded_at DESC
+            LIMIT 2
+            """,
+            (canonical_json(run_ids),),
+        ).fetchall()
+        if lifecycle_rows and all(row["lifecycle"] == "forgotten" for row in lifecycle_rows):
+            return {
+                **base,
+                "status": "forgotten",
+                "route_sha256": route_sha256,
+                "canonical_binding": binding,
+            }
+        return {
+            **base,
+            "status": "index_unavailable",
+            "route_sha256": route_sha256,
+            "canonical_binding": binding,
+        }
+
+    def task_identity_timeline(
+        self,
+        *,
+        task_binding: dict[str, Any],
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """Return a bounded identity-only Run/Checkpoint/Ledger timeline."""
+
+        binding = normalize_task_context_binding(task_binding, allow_none=False)
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+            raise ValueError("task timeline limit is invalid")
+        rows = self.connection.execute(
+            """
+            SELECT *
+            FROM knowledge_run_records_v4
+            WHERE json_extract(metadata_json, '$.task_binding.project_sha256') = ?
+              AND json_extract(metadata_json, '$.task_binding.task_lineage_sha256') = ?
+              AND json_extract(metadata_json, '$.task_binding.repository_sha256') = ?
+              AND json_extract(metadata_json, '$.task_binding.worktree_sha256') = ?
+            ORDER BY recorded_at DESC, run_id
+            LIMIT ?
+            """,
+            (
+                binding["project_sha256"],
+                binding["task_lineage_sha256"],
+                binding["repository_sha256"],
+                binding["worktree_sha256"],
+                min(101, limit + 1),
+            ),
+        ).fetchall()
+        entries: list[dict[str, Any]] = []
+        related_object_ids: list[str] = []
+        route_sha256 = task_route_sha256(binding)
+        for row in rows:
+            verified_binding = self.run_task_context_binding(row["run_id"])
+            if verified_binding is None or task_route_sha256(verified_binding) != route_sha256:
+                continue
+            metadata = strict_json_loads(row["metadata_json"])
+            artifacts = metadata.get("artifact_ids", []) if isinstance(metadata, dict) else []
+            try:
+                artifact_identities = normalize_run_artifact_ids(artifacts)
+            except ValueError:
+                artifact_identities = []
+            checkpoint_revision = self.connection.execute(
+                """
+                SELECT historical.revision_id, historical.knowledge_id,
+                       historical.recorded_at, objects.current_revision_id,
+                       current.lifecycle AS current_lifecycle
+                FROM knowledge_revisions_v3 AS historical
+                JOIN knowledge_objects_v3 AS objects
+                  ON objects.knowledge_id = historical.knowledge_id
+                JOIN knowledge_revisions_v3 AS current
+                  ON current.revision_id = objects.current_revision_id
+                WHERE json_extract(historical.generation_json, '$.run_id') = ?
+                  AND historical.kind = 'memory'
+                  AND historical.lifecycle != 'forgotten'
+                ORDER BY historical.recorded_at DESC
+                LIMIT 1
+                """,
+                (row["run_id"],),
+            ).fetchone()
+            run_status = row["status"]
+            if run_status == "succeeded" and checkpoint_revision is None:
+                run_status = "checkpoint_pending"
+            entries.append(
+                {
+                    "entry_type": "run",
+                    "identity": row["run_id"],
+                    "status": run_status,
+                    "recorded_at": row["recorded_at"],
+                    "artifact_identities": artifact_identities,
+                }
+            )
+            related_object_ids.append(str(row["run_id"]))
+            if checkpoint_revision is not None:
+                related_object_ids.append(str(checkpoint_revision["knowledge_id"]))
+                checkpoint_status = "superseded"
+                if checkpoint_revision["current_lifecycle"] == "forgotten":
+                    checkpoint_status = "forgotten"
+                elif (
+                    checkpoint_revision["revision_id"]
+                    == checkpoint_revision["current_revision_id"]
+                ):
+                    checkpoint_status = "current"
+                entries.append(
+                    {
+                        "entry_type": "checkpoint",
+                        "identity": checkpoint_revision["revision_id"],
+                        "related_identity": checkpoint_revision["knowledge_id"],
+                        "status": checkpoint_status,
+                        "recorded_at": checkpoint_revision["recorded_at"],
+                        "artifact_identities": [],
+                    }
+                )
+        ledger = None
+        if related_object_ids:
+            ledger = self.connection.execute(
+                """
+                SELECT event_hash, recorded_at
+                FROM autonomous_events_v3
+                WHERE object_id IN (SELECT value FROM json_each(?))
+                ORDER BY sequence DESC
+                LIMIT 1
+                """,
+                (canonical_json(related_object_ids),),
+            ).fetchone()
+        if ledger is not None:
+            entries.append(
+                {
+                    "entry_type": "ledger",
+                    "identity": ledger["event_hash"],
+                    "status": "verified_head",
+                    "recorded_at": ledger["recorded_at"],
+                    "artifact_identities": [],
+                }
+            )
+        entries.sort(
+            key=lambda item: (str(item["recorded_at"]), str(item["identity"])),
+            reverse=True,
+        )
+        truncated = len(entries) > limit or len(rows) > limit
+        return {
+            "schema_version": "deeplaw.task-identity-timeline/v1",
+            "status": "exact",
+            "entries": entries[:limit],
+            "truncated": truncated,
+        }
+
     def _run_binding_admitted(
         self,
         run_id: str | None,
@@ -3527,13 +5024,18 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if run_id is None or not _RUN_ID.fullmatch(run_id):
             return False
         row = self.connection.execute(
-            "SELECT writer_id, scope, sensitivity FROM knowledge_run_records_v4 WHERE run_id = ?",
+            """
+            SELECT writer_id, scope, sensitivity, status
+            FROM knowledge_run_records_v4
+            WHERE run_id = ?
+            """,
             (run_id,),
         ).fetchone()
         return bool(
             row is not None
             and row["writer_id"] == writer_id
             and row["scope"] == scope
+            and row["status"] == "succeeded"
             and SENSITIVITY_ORDER.index(row["sensitivity"]) <= SENSITIVITY_ORDER.index(sensitivity)
         )
 
@@ -4156,6 +5658,17 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             sensitivity=sensitivity,
             writer_id=grant["writer_id"],
         )
+        checkpoint_binding = (
+            self.run_task_context_binding(run_id)
+            if kind == "memory" and memory_type == "working" and run_binding_valid
+            else None
+        )
+        if (
+            kind == "memory"
+            and memory_type == "working"
+            and (run_id is None or not run_binding_valid)
+        ):
+            raise ValueError("working memory requires a successful task-bound Run Record")
         if kind == "claim" and not selected_refs and run_id is None:
             raise ValueError("Claim knowledge requires a Source or immutable Run Record binding")
         source_free = not selected_refs and not run_binding_valid
@@ -4279,6 +5792,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             lifecycle: Lifecycle = lifecycle_override
         else:
             lifecycle = "quarantined" if quarantine_reasons else "active"
+        if lifecycle == "active" and checkpoint_binding is not None:
+            self._assert_checkpoint_head_write(
+                binding=checkpoint_binding,
+                knowledge_id=knowledge_id,
+                expected_revision_id=expected_revision_id,
+            )
         if lifecycle == "active":
             duplicate = self.connection.execute(
                 """
@@ -4308,6 +5827,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     knowledge_id is not None
                     and expected_revision_id != duplicate["current_revision_id"]
                 ):
+                    if checkpoint_binding is not None:
+                        raise RuntimeError(
+                            "checkpoint_head_conflict: Knowledge Object compare-and-swap conflict"
+                        )
                     raise RuntimeError("Knowledge Object compare-and-swap conflict")
                 return self._collapse_duplicate(
                     duplicate_knowledge_id=duplicate["knowledge_id"],
@@ -4368,6 +5891,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "quarantined Knowledge Object requires an explicit owner restore policy"
                     )
                 if expected_revision_id != parent_revision_id:
+                    if checkpoint_binding is not None:
+                        raise RuntimeError(
+                            "checkpoint_head_conflict: Knowledge Object compare-and-swap conflict"
+                        )
                     raise RuntimeError("Knowledge Object compare-and-swap conflict")
                 if parent_revision_id is not None:
                     current_lifecycle = self.connection.execute(
@@ -4554,6 +6081,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 self.connection.rollback()
                 stage_path.unlink(missing_ok=True)
                 return locked_replay
+            if lifecycle == "active" and checkpoint_binding is not None:
+                self._assert_checkpoint_head_write(
+                    binding=checkpoint_binding,
+                    knowledge_id=knowledge_id,
+                    expected_revision_id=expected_revision_id,
+                )
             current = self.connection.execute(
                 "SELECT current_revision_id FROM knowledge_objects_v3 WHERE knowledge_id = ?",
                 (knowledge_id,),
@@ -4581,6 +6114,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         ),
                     )
             elif current is None or current["current_revision_id"] != parent_revision_id:
+                if checkpoint_binding is not None:
+                    raise RuntimeError(
+                        "checkpoint_head_conflict: Knowledge Object compare-and-swap conflict"
+                    )
                 raise RuntimeError("Knowledge Object compare-and-swap conflict")
             if lifecycle == "active":
                 duplicate = self.connection.execute(
@@ -4715,6 +6252,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 self.connection.execute(
                     "INSERT INTO pending_materializations_v3 VALUES (?, ?, ?, ?, ?)",
                     (revision_id, workspace_path, markdown_sha256, action, recorded_at),
+                )
+                self._upsert_checkpoint_route_projection(
+                    knowledge_id=knowledge_id,
+                    revision_id=revision_id,
                 )
             mutation_id = stable_id("mutation", grant_id, idempotency_key, request_sha256)
             self.connection.execute(
@@ -7591,13 +9132,14 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if not confirm_no_case_data:
             raise ValueError("knowledge sink requires confirmation that no case data is present")
         grant = self._grant(grant_id, operation="forget", request_bytes=0)
-        current = self.get_current(knowledge_id)
+        # Include the terminal head so an exact retry can reach remember()'s
+        # durable idempotency binding before the CAS check. A new key with the
+        # stale expected revision still fails closed in remember().
+        current = self.get_current(knowledge_id, include_inactive=True)
         if current["scope"] != grant["allowed_scope"] or SENSITIVITY_ORDER.index(
             current["sensitivity"]
         ) > SENSITIVITY_ORDER.index(grant["max_sensitivity"]):
             raise KeyError(f"Knowledge Object is unavailable: {knowledge_id}")
-        if current["revision_id"] != expected_revision_id:
-            raise RuntimeError("Knowledge Object compare-and-swap conflict")
         reason = _bounded_string(reason, field="forget reason", maximum=2_000)
         result = self.remember(
             grant_id=grant_id,
@@ -7878,6 +9420,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             row["object_sha256"]
             for row in self.connection.execute("SELECT object_sha256 FROM content_objects_v3")
         }
+        known_objects.update(
+            row["artifact_sha256"]
+            for row in self.connection.execute(
+                "SELECT artifact_sha256 FROM source_compilation_artifacts_v1"
+            )
+        )
         orphan_candidates: list[dict[str, Any]] = []
         orphan_budget = max_objects - len(canonical_candidates)
         deferred_orphan_count = 0
@@ -8034,6 +9582,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         admitted_sensitivities = SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1]
         terms = query_search_terms(query, limit=_MAX_RECALL_TERMS, cover_tail=True)
         expansion_terms = query_expansion_terms(query)
+        discovery_views = query_discovery_views(query)
         discovery_query = query_discovery_text(query)
         exact_id = query if _KNOWLEDGE_ID.fullmatch(query) else None
         candidate_ids: list[str] = []
@@ -8540,7 +10089,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "feedback_utility": float(feedback_row["utility"]),
                     }
                 )
-            reranked = rerank_candidates(discovery_query, reranker_input)
+            reranked = rerank_candidate_views(discovery_views, reranker_input)
             candidate_ids = [item["knowledge_id"] for item in reranked]
             reranker_receipts = {
                 item["knowledge_id"]: {
@@ -8916,7 +10465,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "audit_head": self.audit_head,
         }
 
-    def build_capsule(
+    def _build_capsule_v5(
         self,
         *,
         task: str,
@@ -8936,6 +10485,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         required_tags: tuple[str, ...] = (),
         confirm_no_case_data: bool = False,
         force_canonical_lexical: bool = False,
+        _runtime_snapshot: Any | None = None,
     ) -> dict[str, Any]:
         if not confirm_no_case_data:
             raise ValueError("Knowledge Capsule requires confirmation that no case data is present")
@@ -8969,6 +10519,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             kinds=kinds,
             query_plan_version="5",
             force_canonical_lexical=force_canonical_lexical,
+            _runtime_snapshot=_runtime_snapshot,
         )
         if (
             retrieval.get("audit_head") != self.audit_head
@@ -9062,6 +10613,105 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             raise RuntimeError("Knowledge Capsule exceeds its hard 64 KiB provider budget")
         _validate_contract("knowledge-capsule.v2.schema.json", capsule)
         return capsule
+
+    def build_capsule(
+        self,
+        *,
+        task: str,
+        goal: str | None = None,
+        purpose: str = "answer",
+        policy: str | None = None,
+        scope: Scope = "project",
+        max_sensitivity: Sensitivity = "private",
+        limit: int = 8,
+        max_chars: int = 8_000,
+        max_tokens: int = 6_000,
+        max_sources: int = 12,
+        graph_hops: int = 1,
+        retrieval_mode: str = "hybrid",
+        as_of: str | None = None,
+        kinds: tuple[str, ...] = (),
+        required_tags: tuple[str, ...] = (),
+        confirm_no_case_data: bool = False,
+        force_canonical_lexical: bool = False,
+        query_plan_version: str = "6",
+        query_target: str | dict[str, Any] | None = None,
+        applicable_duties: tuple[str, ...] | list[str] | None = None,
+        projection: str = "standard",
+        task_binding: dict[str, Any] | None = None,
+        _runtime_snapshot: Any | None = None,
+    ) -> dict[str, Any]:
+        """Compile a v6 local capsule; v5 is explicit compatibility only."""
+
+        if query_plan_version not in {"5", "6"}:
+            raise ValueError("Knowledge Capsule query plan version is invalid")
+        if query_plan_version == "5":
+            if (
+                query_target is not None
+                or applicable_duties is not None
+                or projection != "standard"
+                or task_binding is not None
+            ):
+                raise ValueError("v6 context controls require query_plan_version=6")
+            return self._build_capsule_v5(
+                task=task,
+                goal=goal,
+                purpose=purpose,
+                policy=policy,
+                scope=scope,
+                max_sensitivity=max_sensitivity,
+                limit=limit,
+                max_chars=max_chars,
+                max_tokens=max_tokens,
+                max_sources=max_sources,
+                graph_hops=graph_hops,
+                retrieval_mode=retrieval_mode,
+                as_of=as_of,
+                kinds=kinds,
+                required_tags=required_tags,
+                confirm_no_case_data=confirm_no_case_data,
+                force_canonical_lexical=force_canonical_lexical,
+                _runtime_snapshot=_runtime_snapshot,
+            )
+        if required_tags:
+            raise ValueError(
+                "purpose-aware Knowledge Capsules do not support required-tag filters"
+            )
+        task = _bounded_string(task, field="Capsule task", maximum=5_000)
+        selected_goal = (
+            _bounded_string(goal, field="Capsule goal", maximum=2_000)
+            if goal is not None
+            else None
+        )
+        selected_as_of = (
+            canonical_timestamp(as_of, field="Capsule as_of") if as_of is not None else None
+        )
+        from .retrieval.capsule import build_v6_capsule
+
+        return build_v6_capsule(
+            self,
+            task=task,
+            goal=selected_goal,
+            purpose=purpose,
+            policy=policy,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            limit=limit,
+            max_chars=max_chars,
+            max_tokens=max_tokens,
+            max_sources=max_sources,
+            graph_hops=graph_hops,
+            retrieval_mode=retrieval_mode,
+            as_of=selected_as_of,
+            kinds=kinds,
+            force_canonical_lexical=force_canonical_lexical,
+            query_target=query_target,
+            applicable_duties=applicable_duties,
+            projection=projection,
+            task_binding=task_binding,
+            confirm_no_case_data=confirm_no_case_data,
+            runtime_snapshot=_runtime_snapshot,
+        )
 
     def semantic_lint(
         self,
@@ -9733,8 +11383,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             reference_time=reference_time,
             limit=_MAX_GRAPH_RELATION_SCAN + 1,
         )
-        relation_scan_truncated = len(relation_candidates) > _MAX_GRAPH_RELATION_SCAN
+        candidate_relations_scanned = 0
+        selection_truncated = False
         for relation in relation_candidates[:_MAX_GRAPH_RELATION_SCAN]:
+            candidate_relations_scanned += 1
             if not self.relation_provenance_admitted(relation):
                 rejected.append(
                     {
@@ -9798,6 +11450,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     }
                 )
                 continue
+            if len(relations) >= limit:
+                selection_truncated = True
+                break
             for endpoint in endpoints:
                 admitted[endpoint["knowledge_id"]] = {
                     "knowledge_id": endpoint["knowledge_id"],
@@ -9837,8 +11492,22 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             relation_card["source_free"] = relation["source_free"]
             relation_card["legal_authority"] = False
             relations.append(relation_card)
-            if len(relations) >= limit:
-                break
+        relation_scan_truncated = (
+            len(relation_candidates) > _MAX_GRAPH_RELATION_SCAN
+            and candidate_relations_scanned >= _MAX_GRAPH_RELATION_SCAN
+        )
+        gaps: list[str] = []
+        if selection_truncated:
+            gaps.append(
+                "graph relation selection reached the requested limit; additional admitted "
+                "relations were omitted"
+            )
+        if relation_scan_truncated:
+            gaps.append(
+                f"graph relation candidate scan reached its {_MAX_GRAPH_RELATION_SCAN}-row "
+                "bound; additional "
+                "candidates were not inspected"
+            )
         return {
             "schema_version": "deeplaw.knowledge-graph-view/v1",
             "vault_id": self.vault_id,
@@ -9851,11 +11520,11 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 "max_relations": limit,
                 "selected_relations": len(relations),
                 "max_candidate_relations_scanned": _MAX_GRAPH_RELATION_SCAN,
-                "candidate_relations_scanned": min(
-                    len(relation_candidates), _MAX_GRAPH_RELATION_SCAN
-                ),
+                "candidate_relations_scanned": candidate_relations_scanned,
                 "candidate_scan_truncated": relation_scan_truncated,
+                "selection_truncated": selection_truncated,
             },
+            "gaps": gaps,
             "audit_head": self.audit_head,
             "derived_adjacency": True,
             "canonical_relation_revisions": True,
@@ -9904,8 +11573,13 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         self,
         *,
         run_status_overrides: dict[str, str] | None = None,
+        projection_profile: str = "standard",
     ) -> dict[str, Any]:
         self._require_write()
+        from .projection.profiles import projection_profile as resolve_projection_profile
+
+        resolve_projection_profile(projection_profile)
+        self.rebuild_checkpoint_route_projection()
         for relative in _DERIVED_REBUILD_DIRECTORIES:
             _restore_owner_subdirectory(self.root, relative)
         input_audit_head = self.audit_head
@@ -10009,14 +11683,6 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             input_audit_head=input_audit_head,
             legacy_audit_head=self.legacy_audit_head,
         )
-        communities = self._communities(rows, relations)
-        community_directory = self.root / "wiki" / "communities"
-        if community_directory.is_symlink() or not community_directory.is_dir():
-            raise RuntimeError("derived community directory is missing or unsafe")
-        for stale in community_directory.glob("community_*.md"):
-            if stale.is_symlink() or not stale.is_file():
-                raise RuntimeError("derived community view is unsafe")
-            stale.unlink()
         generated_files: list[dict[str, Any]] = []
         for name in ("vectors.bin", "records.json", "manifest.json"):
             dense_path = self.root / ".deeplaw" / "derived" / "vectors" / name
@@ -10027,237 +11693,68 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     "sha256": sha256_file(dense_path),
                 }
             )
-
-        def write(relative: str, content: str) -> None:
-            payload = content.encode("utf-8")
-            if len(payload) > _MAX_MARKDOWN_BYTES:
-                raise RuntimeError("derived workspace file exceeds its hard byte limit")
-            destination = self.root / relative
-            _atomic_owner_write(destination, payload)
-            generated_files.append(
-                {
-                    "path": relative,
-                    "byte_size": len(payload),
-                    "sha256": sha256_bytes(payload),
-                }
-            )
-
-        overview_lines = [
-            "---",
-            "schema: deeplaw.living-wiki-overview/v1",
-            "derived_view: true",
-            f"audit_head: {input_audit_head}",
-            "authority: none",
-            "---",
-            "",
-            "# DeepLaw Living Wiki",
-            "",
-            f"Current autonomous Knowledge Objects: {len(rows)}",
-            f"Current canonical relations: {len(relations)}",
-            f"Semantic lint issues: {lint['issue_count']}",
-            "",
-            "## Knowledge",
-            "",
-        ]
-        overview_rows = rows[:_MAX_WIKI_ITEMS]
-        overview_lines.extend(
-            f"- [[{PurePosixPath(row['current_workspace_path']).with_suffix('').as_posix()}|"
-            f"{row['title']}]] — `{row['kind']}` / "
-            f"`{row['epistemic_state']}`"
-            for row in overview_rows
-        )
-        if len(rows) > len(overview_rows):
-            overview_lines.extend(
-                [
-                    "",
-                    f"> View truncated to {len(overview_rows)} of {len(rows)} Knowledge Objects.",
-                ]
-            )
-        overview_lines.extend(
-            [
-                "",
-                "> This is a rebuildable navigation view. Authority remains in the "
-                "Ledger and evidence.",
-                "",
-            ]
-        )
-        write("wiki/overview.md", "\n".join(overview_lines))
-        write("wiki/index.md", "\n".join(overview_lines))
-        lint_json = json.dumps(lint, ensure_ascii=False, indent=2, sort_keys=True)
-        write(
-            "wiki/gaps/semantic-lint.md",
-            "---\nschema: deeplaw.semantic-lint-view/v1\nderived_view: true\n"
-            f"audit_head: {input_audit_head}\n---\n\n"
-            f"# Semantic Lint\n\n```json\n{lint_json}\n```\n",
-        )
-        gaps_json = json.dumps(gaps, ensure_ascii=False, indent=2, sort_keys=True)
-        write(
-            "wiki/gaps/knowledge-gaps.md",
-            "---\nschema: deeplaw.knowledge-gap-view/v1\nderived_view: true\n"
-            f"audit_head: {input_audit_head}\n---\n\n"
-            f"# Knowledge Gaps\n\n```json\n{gaps_json}\n```\n",
-        )
-        workspace_paths = {
-            row["knowledge_id"]: PurePosixPath(row["current_workspace_path"])
-            .with_suffix("")
-            .as_posix()
-            for row in rows
-        }
-        relation_neighbors: dict[str, list[tuple[str, str]]] = defaultdict(list)
-        for relation in relations:
-            relation_neighbors[relation["subject_knowledge_id"]].append(
-                (relation["predicate"], relation["object_knowledge_id"])
-            )
-            relation_neighbors[relation["object_knowledge_id"]].append(
-                (f"inverse:{relation['predicate']}", relation["subject_knowledge_id"])
-            )
-        wiki_kind_directories = {
-            "concept": "concepts",
-            "entity": "entities",
-            "event": "events",
-            "comparison": "comparisons",
-            "synthesis": "syntheses",
-        }
-        for directory_name in wiki_kind_directories.values():
-            directory = self.root / "wiki" / directory_name
-            if directory.is_symlink() or not directory.is_dir():
-                raise RuntimeError("Living Wiki directory is missing or unsafe")
-            for stale in directory.glob("view_*.md"):
-                if stale.is_symlink() or not stale.is_file():
-                    raise RuntimeError("Living Wiki view is unsafe")
-                stale.unlink()
-        wiki_page_count = 0
-        for row in rows:
-            directory_name = wiki_kind_directories.get(row["kind"])
-            if directory_name is None or wiki_page_count >= _MAX_WIKI_ITEMS:
-                continue
-            neighbors = sorted(
-                relation_neighbors.get(row["knowledge_id"], []),
-                key=lambda item: (item[0], item[1]),
-            )[:100]
-            page_lines = [
-                "---",
-                "schema: deeplaw.living-wiki-page/v1",
-                "derived_view: true",
-                f"audit_head: {input_audit_head}",
-                f"knowledge_id: {row['knowledge_id']}",
-                f"revision_id: {row['revision_id']}",
-                "authority: none",
-                "---",
-                "",
-                f"# {row['title']}",
-                "",
-                "## Canonical knowledge",
-                "",
-                f"- [[{workspace_paths[row['knowledge_id']]}|{row['title']}]]",
-                f"- Kind: `{row['kind']}`",
-                f"- Epistemic state: `{row['epistemic_state']}`",
-                "",
-                "## Relations",
-                "",
-            ]
-            if neighbors:
-                page_lines.extend(
-                    f"- `{predicate}` → [[{workspace_paths[target]}|{target}]]"
-                    for predicate, target in neighbors
-                    if target in workspace_paths
-                )
-            else:
-                page_lines.append("- No admitted canonical relation.")
-            page_lines.extend(
-                [
-                    "",
-                    "> Rebuildable navigation page; it does not replace the canonical Markdown "
-                    "Knowledge Revision.",
-                    "",
-                ]
-            )
-            write(
-                f"wiki/{directory_name}/view_{row['knowledge_id']}.md",
-                "\n".join(page_lines),
-            )
-            wiki_page_count += 1
-        for community in communities[:_MAX_COMMUNITY_VIEWS]:
-            visible_members = community["knowledge_ids"][:_MAX_COMMUNITY_VIEW_MEMBERS]
-            lines = [
-                "---",
-                "schema: deeplaw.community-view/v1",
-                "derived_view: true",
-                f"audit_head: {input_audit_head}",
-                "authority: none",
-                "---",
-                "",
-                f"# Community {community['community_id']}",
-                "",
-                f"Members: {len(community['knowledge_ids'])}",
-                "",
-                *[f"- [[{workspace_paths[item]}|{item}]]" for item in visible_members],
-                "",
-            ]
-            if len(community["knowledge_ids"]) > len(visible_members):
-                lines.extend(
-                    [
-                        f"> View truncated to {len(visible_members)} members.",
-                        "",
-                    ]
-                )
-            write(
-                f"wiki/communities/{community['community_id']}.md",
-                "\n".join(lines),
-            )
-        nodes = []
-        positions: dict[str, str] = {}
-        for index, row in enumerate(rows[:500]):
-            node_id = stable_id("canvasnode", row["knowledge_id"])
-            positions[row["knowledge_id"]] = node_id
-            nodes.append(
-                {
-                    "id": node_id,
-                    "type": "file",
-                    "file": row["current_workspace_path"],
-                    "x": (index % 5) * 420,
-                    "y": (index // 5) * 260,
-                    "width": 360,
-                    "height": 200,
-                }
-            )
-        edges = []
-        for relation in relations[:1_000]:
-            source = positions.get(relation["subject_knowledge_id"])
-            target = positions.get(relation["object_knowledge_id"])
-            if source and target:
-                edges.append(
-                    {
-                        "id": relation["relation_revision_id"],
-                        "fromNode": source,
-                        "toNode": target,
-                        "label": relation["predicate"],
-                    }
-                )
-        canvas_payload = (
-            json.dumps(
-                {"nodes": nodes, "edges": edges},
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n"
-        )
-        write("canvas/knowledge-graph.canvas", canvas_payload)
         from .projection.builder import rebuild_living_wiki
 
         living_wiki = rebuild_living_wiki(
             self,
             input_audit_head=input_audit_head,
             run_status_overrides=run_status_overrides,
+            projection_profile=projection_profile,
+            reference_time=reference_time,
+            lint=lint,
+            gaps=gaps,
         )
-        generated_by_path = {item["path"]: item for item in generated_files}
-        generated_by_path.update(
-            {item["path"]: item for item in living_wiki["files"]}
+        living_wiki_manifest_path = (
+            self.root / ".deeplaw" / "derived" / "tree" / "living-wiki-manifest.json"
         )
-        generated_files = list(generated_by_path.values())
+        if (
+            living_wiki_manifest_path.is_symlink()
+            or not living_wiki_manifest_path.is_file()
+            or not 1 <= living_wiki_manifest_path.stat().st_size <= _MAX_LIVING_WIKI_MANIFEST_BYTES
+        ):
+            raise RuntimeError("Living Wiki manifest is missing or unsafe")
+        living_wiki_manifest = strict_json_loads(living_wiki_manifest_path.read_bytes())
+        if not isinstance(living_wiki_manifest, dict):
+            raise RuntimeError("Living Wiki manifest is not an object")
+        _validate_contract("living-wiki-manifest.v2.schema.json", living_wiki_manifest)
+        living_wiki_manifest_body = {
+            key: value for key, value in living_wiki_manifest.items() if key != "manifest_sha256"
+        }
+        if (
+            living_wiki_manifest.get("manifest_sha256")
+            != sha256_bytes(canonical_json(living_wiki_manifest_body).encode("utf-8"))
+            or living_wiki_manifest.get("manifest_sha256") != living_wiki["manifest_sha256"]
+            or living_wiki_manifest.get("input_audit_head") != input_audit_head
+            or living_wiki_manifest.get("legacy_audit_head") != self.legacy_audit_head
+        ):
+            raise RuntimeError("Living Wiki manifest binding is invalid")
+        living_wiki_files = living_wiki_manifest.get("files")
+        if not isinstance(living_wiki_files, list):
+            raise RuntimeError("Living Wiki manifest file inventory is invalid")
+        sorted_living_wiki_files = sorted(living_wiki_files, key=lambda item: item["path"])
+        if living_wiki_files != sorted_living_wiki_files:
+            raise RuntimeError("Living Wiki manifest file inventory is not sorted")
+        component = {
+            "component": "living_wiki",
+            "manifest_path": ".deeplaw/derived/tree/living-wiki-manifest.json",
+            "manifest_byte_size": living_wiki_manifest_path.stat().st_size,
+            "schema_version": living_wiki_manifest["schema_version"],
+            "manifest_sha256": living_wiki_manifest["manifest_sha256"],
+            "configuration_sha256": living_wiki_manifest["configuration_sha256"],
+            "profile_sha256": living_wiki_manifest["configuration"][
+                "projection_profile_sha256"
+            ],
+            "file_count": len(living_wiki_files),
+            "file_inventory_sha256": sha256_bytes(
+                canonical_json(sorted_living_wiki_files).encode("utf-8")
+            ),
+            "input_audit_head": living_wiki_manifest["input_audit_head"],
+            "legacy_audit_head": living_wiki_manifest["legacy_audit_head"],
+            "generator": living_wiki_manifest["generator"],
+            "generator_version": living_wiki_manifest["generator_version"],
+        }
         manifest = {
-            "schema_version": DERIVED_MANIFEST_SCHEMA,
+            "schema_version": DERIVED_MANIFEST_SCHEMA_V2,
             "input_audit_head": input_audit_head,
             "legacy_audit_head": self.legacy_audit_head,
             "generator": "deeplaw.knowledge-autonomy/v1",
@@ -10277,14 +11774,15 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "fts_rows_sha256": sha256_bytes(canonical_json(fts_rows).encode("utf-8")),
             "dense_manifest_sha256": dense_manifest["manifest_sha256"],
             "knowledge_revision_count": len(rows),
-            "knowledge_revision_ids_sha256": sha256_bytes(
-                canonical_json([row["revision_id"] for row in rows]).encode("utf-8")
-            ),
+            "knowledge_revision_ids_sha256": living_wiki_manifest[
+                "knowledge_revision_ids_sha256"
+            ],
             "relation_revision_count": len(relations),
-            "relation_revision_ids_sha256": sha256_bytes(
-                canonical_json([item["relation_revision_id"] for item in relations]).encode("utf-8")
-            ),
+            "relation_revision_ids_sha256": living_wiki_manifest[
+                "relation_revision_ids_sha256"
+            ],
             "files": sorted(generated_files, key=lambda item: item["path"]),
+            "components": [component],
             "generated_at": reference_time,
         }
         manifest["manifest_sha256"] = sha256_bytes(canonical_json(manifest).encode("utf-8"))
@@ -10311,10 +11809,397 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             **manifest,
             "knowledge_count": len(rows),
             "relation_count": len(relations),
-            "community_count": len(communities),
+            "community_count": living_wiki["community_count"],
             "lint": lint,
             "living_wiki": living_wiki,
         }
+
+    def _derived_search_snapshot_at(
+        self,
+        reference_time: str,
+        *,
+        legacy_audit_head: str | None = None,
+    ) -> tuple[list[tuple[str, str, str, str, str, str]], list[str], str]:
+        """Rebuild the lexical and relation identities at a Ledger event time."""
+
+        reference_time = canonical_timestamp(reference_time, field="derived snapshot time")
+        rows = self.connection.execute(
+            """
+            WITH ranked AS (
+                SELECT knowledge_revisions_v3.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY knowledge_id
+                           ORDER BY recorded_at DESC, revision_id DESC
+                       ) AS revision_rank
+                FROM knowledge_revisions_v3
+                WHERE recorded_at <= ?
+            )
+            SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
+                   ranked.*
+            FROM knowledge_objects_v3
+            JOIN ranked
+              ON ranked.knowledge_id = knowledge_objects_v3.knowledge_id
+             AND ranked.revision_rank = 1
+            WHERE ranked.lifecycle = 'active'
+            ORDER BY knowledge_objects_v3.knowledge_id
+            """,
+            (reference_time,),
+        ).fetchall()
+        expected_search: list[tuple[str, str, str, str, str, str]] = []
+        admitted_ids: set[str] = set()
+        for row in rows:
+            if not self.revision_provenance_admitted(
+                self._revision_row(row, include_body=False),
+                as_of=reference_time,
+                legacy_audit_head=legacy_audit_head,
+            ) or not _interval_admits(
+                reference_time=reference_time,
+                valid_from=row["valid_from"],
+                valid_to=row["valid_to"],
+                expires_at=row["expires_at"],
+            ):
+                continue
+            body = parse_knowledge_markdown(_read_object(self.root, row["markdown_sha256"]))["body"]
+            tags = strict_json_loads(row["tags_json"])
+            if not isinstance(tags, list):
+                raise ValueError("knowledge tags are invalid")
+            expected_search.append(
+                (
+                    row["knowledge_id"],
+                    row["revision_id"],
+                    " ".join(search_terms(row["title"])),
+                    " ".join(search_terms(body)),
+                    " ".join(search_terms(row["semantic_key"] or "")),
+                    " ".join(search_terms(" ".join(tags))),
+                )
+            )
+            admitted_ids.add(row["knowledge_id"])
+        relations = [
+            relation
+            for relation in self._relations_at(
+                reference_time,
+                reference_time=reference_time,
+            )
+            if self.relation_provenance_admitted(
+                relation,
+                as_of=reference_time,
+                legacy_audit_head=legacy_audit_head,
+            )
+            and relation["subject_knowledge_id"] in admitted_ids
+            and relation["object_knowledge_id"] in admitted_ids
+        ]
+        revision_ids = [
+            row["revision_id"]
+            for row in sorted(
+                rows,
+                key=lambda item: (item["kind"], item["title"], item["knowledge_id"]),
+            )
+            if row["knowledge_id"] in admitted_ids
+        ]
+        relation_ids = [relation["relation_revision_id"] for relation in relations]
+        return (
+            expected_search,
+            relation_ids,
+            sha256_bytes(canonical_json(revision_ids).encode("utf-8")),
+        )
+
+    def _read_dense_manifest(self) -> dict[str, Any]:
+        dense_manifest_path = self.root / ".deeplaw" / "derived" / "vectors" / "manifest.json"
+        if (
+            dense_manifest_path.is_symlink()
+            or not dense_manifest_path.is_file()
+            or not 1 <= dense_manifest_path.stat().st_size <= _MAX_MARKDOWN_BYTES
+        ):
+            raise ValueError("dense manifest is missing or unsafe")
+        dense_manifest = strict_json_loads(dense_manifest_path.read_bytes())
+        if not isinstance(dense_manifest, dict):
+            raise ValueError("dense manifest must be an object")
+        return dense_manifest
+
+    def _current_revision_ids_sha256(self, reference_time: str) -> str:
+        rows = self.connection.execute(
+            """
+            SELECT knowledge_objects_v3.workspace_path AS current_workspace_path,
+                   knowledge_revisions_v3.*
+            FROM knowledge_objects_v3
+            JOIN knowledge_revisions_v3
+              ON knowledge_revisions_v3.revision_id = knowledge_objects_v3.current_revision_id
+            WHERE knowledge_revisions_v3.lifecycle = 'active'
+            ORDER BY knowledge_revisions_v3.kind,
+                     knowledge_revisions_v3.title,
+                     knowledge_revisions_v3.knowledge_id
+            """
+        ).fetchall()
+        revision_ids = [
+            row["revision_id"]
+            for row in rows
+            if self.revision_provenance_admitted(
+                self._revision_row(row, include_body=False)
+            )
+            and _interval_admits(
+                reference_time=reference_time,
+                valid_from=row["valid_from"],
+                valid_to=row["valid_to"],
+                expires_at=row["expires_at"],
+            )
+        ]
+        return sha256_bytes(canonical_json(revision_ids).encode("utf-8"))
+
+    def _verify_derived_manifest_v2(
+        self,
+        manifest: dict[str, Any],
+        *,
+        manifest_path: Path,
+        expected_search: list[tuple[str, str, str, str, str, str]],
+        verification_time: str,
+    ) -> bool:
+        """Verify the additive aggregate manifest and its owned Living Wiki component."""
+
+        if manifest_path.stat().st_size > _MAX_DERIVED_MANIFEST_V2_BYTES:
+            raise ValueError("derived v2 manifest exceeds its local byte bound")
+        _validate_contract("derived-manifest.v2.schema.json", manifest)
+        manifest_body = {
+            key: value for key, value in manifest.items() if key != "manifest_sha256"
+        }
+        if manifest.get("manifest_sha256") != sha256_bytes(
+            canonical_json(manifest_body).encode("utf-8")
+        ):
+            raise ValueError("derived v2 manifest hash is invalid")
+        expected_configuration = {
+            "fts_tokenizer": "unicode61 remove_diacritics 2",
+            "community_algorithm": "weighted-label-propagation+semantic-bridges/1",
+            "dense_model": LOCAL_DENSE_MODEL,
+            "reranker_model": LOCAL_RERANKER_MODEL,
+            "canvas_node_limit": 500,
+            "canvas_edge_limit": 1_000,
+            "wiki_item_limit": _MAX_WIKI_ITEMS,
+            "community_view_limit": _MAX_COMMUNITY_VIEWS,
+            "community_member_limit": _MAX_COMMUNITY_VIEW_MEMBERS,
+            "semantic_lint_issue_limit": _MAX_LINT_ISSUES,
+        }
+        if manifest.get("configuration") != expected_configuration:
+            raise ValueError("derived v2 manifest configuration is invalid")
+        if canonical_timestamp(
+            manifest.get("generated_at"),
+            field="derived v2 generated_at",
+        ) != manifest.get("generated_at"):
+            raise ValueError("derived v2 manifest timestamp is invalid")
+        known_event_hash = self.connection.execute(
+            "SELECT recorded_at FROM autonomous_events_v3 WHERE event_hash = ?",
+            (manifest["input_audit_head"],),
+        ).fetchone()
+        if known_event_hash is None:
+            raise ValueError("derived v2 manifest audit input is not registered")
+        if manifest.get("generated_at") != known_event_hash["recorded_at"]:
+            raise ValueError("derived v2 manifest time is not bound to its audit input")
+        stale = bool(
+            manifest.get("input_audit_head") != self.audit_head
+            or manifest.get("legacy_audit_head") != self.legacy_audit_head
+        )
+
+        direct_files = manifest["files"]
+        if direct_files != sorted(direct_files, key=lambda item: item["path"]):
+            raise ValueError("derived v2 direct file inventory is not sorted")
+        direct_paths: set[str] = set()
+        expected_direct_paths = {
+            ".deeplaw/derived/vectors/vectors.bin",
+            ".deeplaw/derived/vectors/records.json",
+            ".deeplaw/derived/vectors/manifest.json",
+        }
+        for item in direct_files:
+            if not isinstance(item, dict) or set(item) != {"path", "byte_size", "sha256"}:
+                raise ValueError("derived v2 direct file manifest is invalid")
+            relative = _safe_derived_path(item["path"])
+            if (
+                relative not in expected_direct_paths
+                or relative in direct_paths
+                or not isinstance(item["byte_size"], int)
+                or isinstance(item["byte_size"], bool)
+                or not 0 <= item["byte_size"] <= 256 * 1024 * 1024
+                or not isinstance(item["sha256"], str)
+                or not _SHA256.fullmatch(item["sha256"])
+            ):
+                raise ValueError("derived v2 direct file escaped its allowed workspace")
+            direct_paths.add(relative)
+            path = self.root / relative
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or path.stat().st_size != item["byte_size"]
+                or sha256_file(path) != item["sha256"]
+            ):
+                raise ValueError("derived v2 direct file hash is invalid")
+        if direct_paths != expected_direct_paths:
+            raise ValueError("derived v2 direct file inventory is incomplete")
+
+        dense_manifest = self._read_dense_manifest()
+        dense_manifest_digest = dense_manifest.get("manifest_sha256")
+        dense_manifest_body = {
+            key: value for key, value in dense_manifest.items() if key != "manifest_sha256"
+        }
+        dense_binding_valid = bool(
+            dense_manifest.get("model_identity") == LOCAL_DENSE_MODEL
+            and dense_manifest.get("network_policy") == "offline"
+            and dense_manifest.get("input_audit_head") == manifest["input_audit_head"]
+            and dense_manifest.get("legacy_audit_head") == manifest["legacy_audit_head"]
+            and dense_manifest_digest
+            == sha256_bytes(canonical_json(dense_manifest_body).encode("utf-8"))
+        )
+        if (
+            manifest.get("dense_manifest_sha256") != dense_manifest_digest
+            or not dense_binding_valid
+        ):
+            raise ValueError("derived v2 dense manifest binding is invalid")
+
+        components = manifest["components"]
+        if len(components) != 1 or components[0].get("component") != "living_wiki":
+            raise ValueError("derived v2 component inventory is invalid")
+        component = components[0]
+        component_path = self.root / component["manifest_path"]
+        if (
+            component_path.is_symlink()
+            or not component_path.is_file()
+            or not 1 <= component_path.stat().st_size <= _MAX_LIVING_WIKI_MANIFEST_BYTES
+            or component_path.stat().st_size != component["manifest_byte_size"]
+        ):
+            raise ValueError("Living Wiki component manifest is missing or unsafe")
+        living_manifest = strict_json_loads(component_path.read_bytes())
+        if not isinstance(living_manifest, dict):
+            raise ValueError("Living Wiki component manifest is not an object")
+        _validate_contract("living-wiki-manifest.v2.schema.json", living_manifest)
+        living_manifest_body = {
+            key: value for key, value in living_manifest.items() if key != "manifest_sha256"
+        }
+        if (
+            component["schema_version"] != living_manifest.get("schema_version")
+            or component["manifest_sha256"] != living_manifest.get("manifest_sha256")
+            or component["manifest_sha256"]
+            != sha256_bytes(canonical_json(living_manifest_body).encode("utf-8"))
+            or component["input_audit_head"] != living_manifest.get("input_audit_head")
+            or component["legacy_audit_head"] != living_manifest.get("legacy_audit_head")
+            or component["input_audit_head"] != manifest["input_audit_head"]
+            or component["legacy_audit_head"] != manifest["legacy_audit_head"]
+            or living_manifest.get("generated_at") != manifest.get("generated_at")
+            or component["generator"] != living_manifest.get("generator")
+            or component["generator_version"] != living_manifest.get("generator_version")
+            or component["configuration_sha256"] != living_manifest.get("configuration_sha256")
+            or component["profile_sha256"]
+            != living_manifest.get("configuration", {}).get("projection_profile_sha256")
+        ):
+            raise ValueError("Living Wiki component binding is invalid")
+        living_configuration = living_manifest.get("configuration")
+        if not isinstance(living_configuration, dict):
+            raise ValueError("Living Wiki component configuration is invalid")
+        configuration_body = canonical_json(living_configuration).encode("utf-8")
+        if living_manifest.get("configuration_sha256") != sha256_bytes(configuration_body):
+            raise ValueError("Living Wiki component configuration hash is invalid")
+        projection_profile = living_configuration.get("projection_profile")
+        if not isinstance(projection_profile, dict):
+            raise ValueError("Living Wiki component projection profile is invalid")
+        if living_configuration.get("projection_profile_sha256") != sha256_bytes(
+            canonical_json(projection_profile).encode("utf-8")
+        ):
+            raise ValueError("Living Wiki component profile hash is invalid")
+        living_files = living_manifest.get("files")
+        if not isinstance(living_files, list):
+            raise ValueError("Living Wiki component file inventory is invalid")
+        if living_files != sorted(living_files, key=lambda item: item["path"]):
+            raise ValueError("Living Wiki component file inventory is not sorted")
+        component_inventory_sha256 = sha256_bytes(
+            canonical_json(living_files).encode("utf-8")
+        )
+        if (
+            component["file_count"] != len(living_files)
+            or component["file_inventory_sha256"] != component_inventory_sha256
+            or living_manifest.get("file_count", len(living_files)) != len(living_files)
+        ):
+            raise ValueError("Living Wiki component inventory binding is invalid")
+
+        component_paths: set[str] = set()
+        for item in living_files:
+            if not isinstance(item, dict) or set(item) != {"path", "byte_size", "sha256"}:
+                raise ValueError("Living Wiki component file manifest is invalid")
+            relative = _safe_derived_path(item["path"])
+            if (
+                not relative.startswith(("wiki/", "canvas/"))
+                or relative in component_paths
+                or relative in direct_paths
+                or not isinstance(item["byte_size"], int)
+                or isinstance(item["byte_size"], bool)
+                or not 0 <= item["byte_size"] <= _MAX_MARKDOWN_BYTES
+                or not isinstance(item["sha256"], str)
+                or not _SHA256.fullmatch(item["sha256"])
+            ):
+                raise ValueError("Living Wiki component file escaped its allowed workspace")
+            component_paths.add(relative)
+            path = self.root / relative
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or path.stat().st_size != item["byte_size"]
+                or sha256_file(path) != item["sha256"]
+            ):
+                raise ValueError("Living Wiki component file hash is invalid")
+        if direct_paths.intersection(component_paths):
+            raise ValueError("derived v2 direct and component ownership overlaps")
+
+        (
+            manifest_search,
+            manifest_relation_revisions,
+            manifest_revision_ids_sha256,
+        ) = self._derived_search_snapshot_at(
+            manifest["generated_at"],
+            legacy_audit_head=manifest["legacy_audit_head"],
+        )
+        if not (
+            manifest.get("knowledge_revision_count")
+            == living_manifest.get("knowledge_revision_count")
+            and manifest.get("knowledge_revision_ids_sha256")
+            == living_manifest.get("knowledge_revision_ids_sha256")
+            and manifest.get("relation_revision_count")
+            == living_manifest.get("relation_revision_count")
+            and manifest.get("relation_revision_ids_sha256")
+            == living_manifest.get("relation_revision_ids_sha256")
+        ):
+            raise ValueError("derived v2 top and Living Wiki inputs disagree")
+        if not (
+            manifest.get("knowledge_revision_count") == len(manifest_search)
+            and manifest.get("knowledge_revision_ids_sha256")
+            == manifest_revision_ids_sha256
+            and manifest.get("relation_revision_count") == len(manifest_relation_revisions)
+            and manifest.get("relation_revision_ids_sha256")
+            == sha256_bytes(canonical_json(manifest_relation_revisions).encode("utf-8"))
+            and manifest.get("fts_rows_sha256")
+            == sha256_bytes(canonical_json(manifest_search).encode("utf-8"))
+        ):
+            raise ValueError("derived v2 manifest input digests are invalid")
+
+        current_revision_ids_sha256 = self._current_revision_ids_sha256(verification_time)
+        current_knowledge_revisions = [item[1] for item in expected_search]
+        current_knowledge_ids = {item[0] for item in expected_search}
+        current_relation_revisions = [
+            relation["relation_revision_id"]
+            for relation in self._current_relations()
+            if self.relation_provenance_admitted(relation)
+            and relation["subject_knowledge_id"] in current_knowledge_ids
+            and relation["object_knowledge_id"] in current_knowledge_ids
+            and _interval_admits(
+                reference_time=verification_time,
+                valid_from=relation["valid_from"],
+                valid_to=relation["valid_to"],
+            )
+        ]
+        inputs_match = (
+            manifest.get("knowledge_revision_count") == len(current_knowledge_revisions)
+            and manifest.get("knowledge_revision_ids_sha256")
+            == current_revision_ids_sha256
+            and manifest.get("relation_revision_count") == len(current_relation_revisions)
+            and manifest.get("relation_revision_ids_sha256")
+            == sha256_bytes(canonical_json(current_relation_revisions).encode("utf-8"))
+            and manifest.get("fts_rows_sha256")
+            == sha256_bytes(canonical_json(expected_search).encode("utf-8"))
+        )
+        return stale or not inputs_match
 
     @staticmethod
     def _communities(
@@ -10327,9 +12212,25 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             {row["knowledge_id"]: row["semantic_key"] for row in rows},
         )
 
-    def verify(self) -> dict[str, Any]:
+    def verify(
+        self,
+        *,
+        preverified_legacy_integrity: dict[str, Any] | None = None,
+        preverified_legacy_audit_head: str | None = None,
+    ) -> dict[str, Any]:
         failures: list[dict[str, str]] = []
         warnings: list[dict[str, str]] = []
+        derived_manifest_v2_failed = False
+
+        class _VerifiedDerivedManifestV2(Exception):
+            pass
+
+        class _StaleDerivedManifestV2(Exception):
+            pass
+
+        class _InvalidDerivedManifestV2(Exception):
+            pass
+
         verification_time = utc_now()
         event_payloads: dict[tuple[str, str], dict[str, Any]] = {}
         event_recorded_at: dict[tuple[str, str], str] = {}
@@ -10424,9 +12325,22 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 )
             )
         try:
-            with KnowledgeVault(self.root, read_only=True) as legacy:
-                legacy_integrity = legacy.verify_integrity()
-                legacy_audit_head = legacy.audit_head
+            if preverified_legacy_integrity is None and preverified_legacy_audit_head is None:
+                with KnowledgeVault(self.root, read_only=True) as legacy:
+                    legacy_integrity = legacy.verify_integrity()
+                    legacy_audit_head = legacy.audit_head
+            elif (
+                isinstance(preverified_legacy_integrity, dict)
+                and isinstance(preverified_legacy_audit_head, str)
+            ):
+                # The caller supplies the result from the same pinned legacy
+                # snapshot.  We still compare its audit head against this
+                # autonomous snapshot; only the nested legacy open/verify is
+                # skipped.
+                legacy_integrity = preverified_legacy_integrity
+                legacy_audit_head = preverified_legacy_audit_head
+            else:
+                raise RuntimeError("preverified legacy integrity is incomplete")
             if (
                 legacy_integrity.get("valid") is not True
                 or legacy_audit_head != self.legacy_audit_head
@@ -11594,10 +13508,23 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 metadata = strict_json_loads(row["metadata_json"])
                 if (
                     not isinstance(metadata, dict)
-                    or set(metadata) - {"task_kind", "tool_ids", "artifact_ids", "notes_sha256"}
+                    or set(metadata)
+                    - {"task_kind", "tool_ids", "artifact_ids", "notes_sha256", "task_binding"}
                     or len(canonical_json(metadata).encode("utf-8")) > _MAX_RUN_METADATA_BYTES
                 ):
                     raise ValueError("Run Record metadata is invalid")
+                task_binding = None
+                if "task_binding" in metadata:
+                    raw_task_binding = metadata["task_binding"]
+                    task_binding = normalize_task_context_binding(
+                        raw_task_binding,
+                        allow_none=False,
+                    )
+                    if canonical_json(raw_task_binding) != canonical_json(task_binding):
+                        raise ValueError("Run Record task binding is not canonical")
+                task_binding_sha256 = (
+                    task_binding.get("binding_sha256") if task_binding is not None else None
+                )
                 for list_field in ("tool_ids", "artifact_ids"):
                     values = metadata.get(list_field, [])
                     if (
@@ -11665,6 +13592,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     and committed.get("scope") == row["scope"]
                     and committed.get("sensitivity") == row["sensitivity"]
                     and committed.get("status") == row["status"]
+                    and committed.get("task_binding_sha256") == task_binding_sha256
                     and committed.get("receipt_sha256") == row["receipt_sha256"]
                     and event_recorded_at.get(("knowledge_run_recorded", row["run_id"]))
                     == row["recorded_at"]
@@ -12370,6 +14298,135 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 failures.append(
                     {"code": "workspace_revision_mismatch", "object_id": row["revision_id"]}
                 )
+        if not self._checkpoint_route_projection_exists():
+            failures.append(
+                {
+                    "code": "checkpoint_route_projection_unavailable",
+                    "object_id": self.vault_id,
+                }
+            )
+        else:
+            projection_rows = self.connection.execute(
+                """
+                SELECT projection.*,
+                       runs.task_sha256 AS run_task_sha256,
+                       objects.current_revision_id AS object_current_revision_id
+                FROM knowledge_checkpoint_routes_v1 AS projection
+                LEFT JOIN knowledge_run_records_v4 AS runs
+                  ON runs.run_id = projection.run_id
+                LEFT JOIN knowledge_objects_v3 AS objects
+                  ON objects.knowledge_id = projection.knowledge_id
+                ORDER BY route_sha256, task_sha256, knowledge_id
+                LIMIT ?
+                """,
+                (_MAX_CHECKPOINT_ROUTE_ROWS + 1,),
+            ).fetchall()
+            if len(projection_rows) > _MAX_CHECKPOINT_ROUTE_ROWS:
+                failures.append(
+                    {
+                        "code": "checkpoint_route_projection_capacity_exceeded",
+                        "object_id": self.vault_id,
+                    }
+                )
+            expected_projection_rows = self.connection.execute(
+                """
+                SELECT revisions.*, objects.current_revision_id
+                FROM knowledge_revisions_v3 AS revisions
+                JOIN knowledge_objects_v3 AS objects
+                  ON objects.knowledge_id = revisions.knowledge_id
+                WHERE revisions.lifecycle = 'active'
+                  AND revisions.kind = 'memory'
+                  AND revisions.revision_id = objects.current_revision_id
+                ORDER BY revisions.knowledge_id
+                LIMIT ?
+                """,
+                (_MAX_CHECKPOINT_ROUTE_ROWS + 1,),
+            ).fetchall()
+            expected_projection: dict[tuple[str, str, str], dict[str, Any]] = {}
+            for row in expected_projection_rows[:_MAX_CHECKPOINT_ROUTE_ROWS]:
+                projection = self._checkpoint_route_projection_candidate(row)
+                if projection is not None:
+                    expected_projection[
+                        (
+                            projection["route_sha256"],
+                            projection["task_sha256"],
+                            projection["knowledge_id"],
+                        )
+                    ] = projection
+            actual_projection: dict[tuple[str, str, str], dict[str, Any]] = {}
+            for row in projection_rows[:_MAX_CHECKPOINT_ROUTE_ROWS]:
+                try:
+                    binding = strict_json_loads(row["canonical_binding_json"])
+                    normalized_binding = normalize_task_context_binding(
+                        binding,
+                        allow_none=False,
+                    )
+                    if (
+                        not isinstance(binding, dict)
+                        or normalized_binding is None
+                        or canonical_json(binding) != canonical_json(normalized_binding)
+                        or row["route_sha256"] != task_route_sha256(normalized_binding)
+                        or row["snapshot_sha256"] != task_snapshot_sha256(normalized_binding)
+                        or row["task_sha256"] != row["run_task_sha256"]
+                        or row["revision_id"] != row["object_current_revision_id"]
+                        or canonical_timestamp(
+                            row["recorded_at"], field="checkpoint route recorded_at"
+                        )
+                        != row["recorded_at"]
+                    ):
+                        raise ValueError("checkpoint route projection binding is invalid")
+                    key = (row["route_sha256"], row["task_sha256"], row["knowledge_id"])
+                    actual_projection[key] = dict(row)
+                except (
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    json.JSONDecodeError,
+                    sqlite3.DatabaseError,
+                ):
+                    failures.append(
+                        {
+                            "code": "checkpoint_route_projection_invalid",
+                            "object_id": str(row["knowledge_id"]),
+                        }
+                    )
+            expected_projection_set = {
+                (
+                    key[0],
+                    key[1],
+                    key[2],
+                    value["snapshot_sha256"],
+                    value["revision_id"],
+                    value["run_id"],
+                    value["canonical_binding_json"],
+                    value["scope"],
+                    value["sensitivity"],
+                    value["recorded_at"],
+                )
+                for key, value in expected_projection.items()
+            }
+            actual_projection_set = {
+                (
+                    key[0],
+                    key[1],
+                    key[2],
+                    value["snapshot_sha256"],
+                    value["revision_id"],
+                    value["run_id"],
+                    value["canonical_binding_json"],
+                    value["scope"],
+                    value["sensitivity"],
+                    value["recorded_at"],
+                )
+                for key, value in actual_projection.items()
+            }
+            if actual_projection_set != expected_projection_set:
+                failures.append(
+                    {
+                        "code": "checkpoint_route_projection_stale",
+                        "object_id": self.vault_id,
+                    }
+                )
         expected_search: list[tuple[str, str, str, str, str, str]] = []
         for row in self.connection.execute(
             """
@@ -12432,12 +14489,44 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             if (
                 derived_manifest_path.is_symlink()
                 or not derived_manifest_path.is_file()
-                or derived_manifest_path.stat().st_size > 4 * 1024 * 1024
             ):
                 raise RuntimeError("derived manifest is missing or unsafe")
             derived_manifest = strict_json_loads(derived_manifest_path.read_bytes())
             if not isinstance(derived_manifest, dict):
                 raise ValueError("derived manifest must be an object")
+            if derived_manifest.get("schema_version") == DERIVED_MANIFEST_SCHEMA_V2:
+                try:
+                    manifest_is_stale = self._verify_derived_manifest_v2(
+                        derived_manifest,
+                        manifest_path=derived_manifest_path,
+                        expected_search=expected_search,
+                        verification_time=verification_time,
+                    )
+                except (
+                    KeyError,
+                    OSError,
+                    RuntimeError,
+                    TypeError,
+                    ValueError,
+                    json.JSONDecodeError,
+                ):
+                    derived_manifest_v2_failed = True
+                    failures.append(
+                        {
+                            "code": "derived_manifest_invalid",
+                            "object_id": self.vault_id,
+                        }
+                    )
+                    raise _InvalidDerivedManifestV2 from None
+                else:
+                    if manifest_is_stale:
+                        warnings.append(
+                            {"code": "derived_manifest_stale", "object_id": self.vault_id}
+                        )
+                        raise _StaleDerivedManifestV2
+                    raise _VerifiedDerivedManifestV2
+            elif derived_manifest_path.stat().st_size > 4 * 1024 * 1024:
+                raise RuntimeError("derived manifest is missing or unsafe")
             manifest_digest = derived_manifest.get("manifest_sha256")
             manifest_body = {
                 key: value for key, value in derived_manifest.items() if key != "manifest_sha256"
@@ -12474,7 +14563,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             }
             if (
                 set(derived_manifest) != expected_manifest_fields
-                or derived_manifest.get("schema_version") != DERIVED_MANIFEST_SCHEMA
+                or derived_manifest.get("schema_version") != DERIVED_MANIFEST_SCHEMA_V1
                 or derived_manifest.get("generator") != "deeplaw.knowledge-autonomy/v1"
                 or derived_manifest.get("generator_version") != "1"
                 or derived_manifest.get("configuration") != expected_configuration
@@ -12523,16 +14612,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     or sha256_file(path) != item["sha256"]
                 ):
                     raise ValueError("derived file hash is invalid")
-            dense_manifest_path = self.root / ".deeplaw" / "derived" / "vectors" / "manifest.json"
-            if (
-                dense_manifest_path.is_symlink()
-                or not dense_manifest_path.is_file()
-                or not 1 <= dense_manifest_path.stat().st_size <= _MAX_MARKDOWN_BYTES
-            ):
-                raise ValueError("dense manifest is missing or unsafe")
-            dense_manifest = strict_json_loads(dense_manifest_path.read_bytes())
-            if not isinstance(dense_manifest, dict):
-                raise ValueError("dense manifest must be an object")
+            dense_manifest = self._read_dense_manifest()
             dense_manifest_digest = dense_manifest.get("manifest_sha256")
             dense_manifest_body = {
                 key: value for key, value in dense_manifest.items() if key != "manifest_sha256"
@@ -12580,6 +14660,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 and derived_manifest.get("legacy_audit_head") == self.legacy_audit_head
             ):
                 raise ValueError("derived manifest inputs are stale")
+        except (_VerifiedDerivedManifestV2, _StaleDerivedManifestV2, _InvalidDerivedManifestV2):
+            pass
         except (
             KeyError,
             OSError,
@@ -12748,7 +14830,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "valid": not failures,
             "failures": failures,
             "warnings": warnings,
-            "derived_ready": not warnings,
+            "derived_ready": not warnings and not derived_manifest_v2_failed,
             "sequence": self.sequence,
             "audit_head": self.audit_head,
             "legacy_audit_head": self.legacy_audit_head,

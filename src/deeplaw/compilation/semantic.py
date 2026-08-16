@@ -133,8 +133,68 @@ class SemanticCompilationService:
                     (compilation_run_id,),
                 )
             ]
+            profile_v3 = transaction["compiler_profile_version"] == "3"
+            if profile_v3:
+                freshness_counts = {
+                    item["freshness"]: item["count"]
+                    for item in store.connection.execute(
+                        """
+                        SELECT freshness, COUNT(*) AS count
+                        FROM knowledge_dependencies_v1
+                        WHERE compilation_run_id = ?
+                        GROUP BY freshness
+                        """,
+                        (compilation_run_id,),
+                    )
+                }
+                source_row = store.connection.execute(
+                    """
+                    SELECT source_lifecycle.status
+                    FROM source_revision_bindings_v2
+                    JOIN source_lifecycle
+                      ON source_lifecycle.source_id =
+                         source_revision_bindings_v2.legacy_source_id
+                    WHERE source_revision_bindings_v2.source_revision_id = ?
+                    LIMIT 1
+                    """,
+                    (transaction["source_revision_id"],),
+                ).fetchone()
+                freshness_order = ("invalidated", "stale", "unknown", "fresh")
+                freshness_state = next(
+                    (
+                        state
+                        for state in freshness_order
+                        if freshness_counts.get(state, 0) > 0
+                    ),
+                    "unknown",
+                )
+                verification_report = store.verify()
+                freshness = {
+                    "state": freshness_state,
+                    "source_status": (
+                        source_row["status"] if source_row is not None else "unknown"
+                    ),
+                    "dependency_counts": {
+                        state: int(freshness_counts.get(state, 0))
+                        for state in ("fresh", "unknown", "stale", "invalidated")
+                    },
+                }
+                verification = {
+                    "status": (
+                        "verified"
+                        if verification_report["valid"] is True
+                        else "invalid"
+                    ),
+                    "valid": verification_report["valid"] is True,
+                    "failure_count": len(verification_report["failures"]),
+                    "audit_head": store.audit_head,
+                }
         result = {
-            "schema_version": "deeplaw.source-compilation-run/v2",
+            "schema_version": (
+                "deeplaw.source-compilation-run/v3"
+                if profile_v3
+                else "deeplaw.source-compilation-run/v2"
+            ),
             "transaction": transaction,
             "semantic_status": row["semantic_status"],
             "observation_packet_count": row["observation_packet_count"],
@@ -147,7 +207,17 @@ class SemanticCompilationService:
             "duty_reports": reports,
             "gaps": self._gaps(row=row, reports=reports),
         }
-        _validate_contract("source-compilation-run.v2.schema.json", result)
+        if profile_v3:
+            result["freshness"] = freshness
+            result["verification"] = verification
+        _validate_contract(
+            (
+                "source-compilation-run.v3.schema.json"
+                if profile_v3
+                else "source-compilation-run.v2.schema.json"
+            ),
+            result,
+        )
         return result
 
     @staticmethod

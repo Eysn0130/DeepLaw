@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-context-bridge.v1.schema.json",
+  "title": "DeepLaw Host Context Bridge v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "host",
+    "agent_context_schema",
+    "bridge_api",
+    "domain_apis",
+    "integration_status",
+    "host_surface",
+    "exact_upstream",
+    "ephemeral",
+    "persistence_allowed",
+    "persistence_performed",
+    "authority",
+    "legal_authority",
+    "max_provider_characters"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-context-bridge/v1"},
+    "host": {"enum": ["obsidian", "opencode", "tolaria"]},
+    "agent_context_schema": {"const": "deeplaw.agent-context-envelope/v1"},
+    "bridge_api": {"const": "host_context_envelope"},
+    "domain_apis": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "mode", "grant_required"],
+        "properties": {
+          "name": {"enum": ["knowledge_support", "knowledge_sink"]},
+          "mode": {"enum": ["read_only", "mutation"]},
+          "grant_required": {"type": "boolean"}
+        }
+      }
+    },
+    "integration_status": {
+      "enum": ["supported_local_only", "integration_limited"]
+    },
+    "host_surface": {
+      "enum": [
+        "native_mcp_and_agent_guidance",
+        "official_plugin_api_and_domain_cli",
+        "stdio_mcp_config_and_ui_only_open_note"
+      ]
+    },
+    "exact_upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "commit",
+        "plugin_api_status",
+        "stable_active_note_preview_promote"
+      ],
+      "properties": {
+        "name": {"enum": ["Obsidian", "OpenCode", "Tolaria"]},
+        "version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "commit": {"type": "string", "minLength": 1, "maxLength": 100},
+        "plugin_api_status": {
+          "enum": ["beta", "not_available", "supported"]
+        },
+        "stable_active_note_preview_promote": {"type": "boolean"}
+      }
+    },
+    "ephemeral": {"const": true},
+    "persistence_allowed": {"const": false},
+    "persistence_performed": {"const": false},
+    "authority": {"const": "none"},
+    "legal_authority": {"const": false},
+    "max_provider_characters": {"const": 65536}
+  }
+}

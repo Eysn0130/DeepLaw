@@ -676,7 +676,7 @@ def test_source_compiler_requires_explicit_case_boundary_confirmation(
     )
     with (
         KnowledgeVault(root, read_only=False) as vault,
-        pytest.raises(ValueError, match="not Analytix case material"),
+        pytest.raises(ValueError, match="not client or case material"),
     ):
         compile_source(
             vault,

@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/codex-token-attribution-evaluation.v1.schema.json",
+  "title": "DeepLaw Codex token attribution evaluation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "release_ready", "claim_eligible", "observation", "evaluator", "conditions", "profile_change_admitted", "not_executed"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.codex-token-attribution-evaluation/v1"},
+    "status": {"enum": ["passed", "partial", "failed"]},
+    "release_ready": {"const": false},
+    "claim_eligible": {"const": false},
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "commit", "tree"],
+      "properties": {
+        "name": {"const": "codex-token-attribution-observation.json"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "commit": {"$ref": "#/$defs/sha40"},
+        "tree": {"$ref": "#/$defs/sha40"}
+      }
+    },
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gold_name", "gold_sha256", "scorer_name", "scorer_sha256"],
+      "properties": {
+        "gold_name": {"const": "continuity-qualification-gold-v1.json"},
+        "gold_sha256": {"$ref": "#/$defs/sha256"},
+        "scorer_name": {"const": "score_token_attribution_observation.py"},
+        "scorer_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/condition"}
+    },
+    "profile_change_admitted": {"const": false},
+    "not_executed": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    }
+  },
+  "$defs": {
+    "sha40": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "metric": {"type": ["number", "integer", "null"], "minimum": 0},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first_correct_action", "decision_preservation", "wrong_state_admission", "useful_context_recall", "relevant_chars", "context_chars", "relevant_chars_context_chars", "duty_coverage", "gap_correctness"],
+      "properties": {
+        "first_correct_action": {"$ref": "#/$defs/metric"},
+        "decision_preservation": {"$ref": "#/$defs/metric"},
+        "wrong_state_admission": {"$ref": "#/$defs/metric"},
+        "useful_context_recall": {"$ref": "#/$defs/metric"},
+        "relevant_chars": {"$ref": "#/$defs/metric"},
+        "context_chars": {"$ref": "#/$defs/metric"},
+        "relevant_chars_context_chars": {"$ref": "#/$defs/metric"},
+        "duty_coverage": {"$ref": "#/$defs/metric"},
+        "gap_correctness": {"$ref": "#/$defs/metric"}
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condition_id", "candidate_status", "scoring_status", "metrics", "duplicate_evidence", "redundancy", "distractor_answer_delta", "hard_failures"],
+      "properties": {
+        "condition_id": {"enum": ["A", "B", "C", "D"]},
+        "candidate_status": {"enum": ["passed", "failed", "not_executed"]},
+        "scoring_status": {"enum": ["scored", "not_scored"]},
+        "metrics": {"$ref": "#/$defs/metrics"},
+        "duplicate_evidence": {"type": ["integer", "null"], "minimum": 0},
+        "redundancy": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "distractor_answer_delta": {"type": "null"},
+        "hard_failures": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        }
+      }
+    }
+  }
+}

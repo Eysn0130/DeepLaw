@@ -383,7 +383,13 @@ def _query_cost(
 ) -> dict[str, Any] | None:
     if value is None:
         return None
-    _validate("semantic-query-cost.v1.schema.json", value)
+    schema_version = value.get("schema_version")
+    if schema_version == "deeplaw.semantic-query-cost/v1":
+        _validate("semantic-query-cost.v1.schema.json", value)
+    elif schema_version == "deeplaw.semantic-query-cost/v2":
+        _validate("semantic-query-cost.v2.schema.json", value)
+    else:
+        raise ValueError("semantic query cost schema is unsupported")
     if (
         value["gold_id"] != gold_id
         or value["compiler_report_id"] != compiler_report_id
@@ -956,7 +962,11 @@ def score(
             ),
             "build_tokens": token_total if token_measured else None,
             "query_tokens": (
-                measured_query_cost["total_query_tokens"]
+                measured_query_cost.get("total_query_tokens")
+                if measured_query_cost is not None
+                and measured_query_cost["schema_version"]
+                == "deeplaw.semantic-query-cost/v1"
+                else measured_query_cost.get("actual_provider_input_tokens")
                 if measured_query_cost is not None
                 else None
             ),

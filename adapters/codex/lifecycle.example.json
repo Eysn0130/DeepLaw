@@ -1,0 +1,13 @@
+{
+  "schema_version": "deeplaw.host-lifecycle-config/v1",
+  "enabled": false,
+  "host": "codex",
+  "host_version": "EXACT_OWNER_VERIFIED_VERSION",
+  "vault": "/OWNER/REGISTERED/KNOWLEDGE_VAULT",
+  "project": "OWNER_REGISTERED_PROJECT",
+  "task": "OWNER_REGISTERED_TASK",
+  "workspace": "/OWNER/REGISTERED/PROJECT_WORKTREE",
+  "workspace_class": "project",
+  "confirm_no_case_data": true,
+  "fork": null
+}

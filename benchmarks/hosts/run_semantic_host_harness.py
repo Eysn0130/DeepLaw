@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -13,7 +12,11 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from benchmarks.hosts.run_living_wiki_host_harness import _run_bounded, _safe_command
+from benchmarks.hosts.run_living_wiki_host_harness import (
+    _host_environment,
+    _run_bounded,
+    _safe_command,
+)
 from benchmarks.release.evidence import repository_binding
 from benchmarks.semantic.review_gold import validate_candidate
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
@@ -581,10 +584,13 @@ def execute_phased(
     successor_sources = [source for source in corpus["sources"] if source["phase"] == "successor"]
     if len(successor_sources) != 1:
         raise ValueError("phased semantic corpus requires exactly one successor source")
-    environment = os.environ.copy()
-    environment["DEEPLAW_KNOWLEDGE_VAULT"] = str(vault.resolve(strict=True))
-    environment["DEEPLAW_REAL_SEMANTIC_HOST_HARNESS"] = "1"
-    environment["DEEPLAW_COMPILATION_GRANT_ID"] = grant_id
+    environment = _host_environment(
+        fixed={
+            "DEEPLAW_KNOWLEDGE_VAULT": str(vault.resolve(strict=True)),
+            "DEEPLAW_REAL_SEMANTIC_HOST_HARNESS": "1",
+            "DEEPLAW_COMPILATION_GRANT_ID": grant_id,
+        },
+    )
     total_started = time.monotonic()
     phases: list[dict[str, Any]] = []
     transitions: list[dict[str, Any]] = []
@@ -980,10 +986,13 @@ def execute(
         corpus=corpus,
     )
     command_sha256 = sha256_bytes(canonical_json(command).encode("utf-8"))
-    environment = os.environ.copy()
-    environment["DEEPLAW_KNOWLEDGE_VAULT"] = str(vault.resolve(strict=True))
-    environment["DEEPLAW_REAL_SEMANTIC_HOST_HARNESS"] = "1"
-    environment["DEEPLAW_COMPILATION_GRANT_ID"] = grant_id
+    environment = _host_environment(
+        fixed={
+            "DEEPLAW_KNOWLEDGE_VAULT": str(vault.resolve(strict=True)),
+            "DEEPLAW_REAL_SEMANTIC_HOST_HARNESS": "1",
+            "DEEPLAW_COMPILATION_GRANT_ID": grant_id,
+        },
+    )
     started = time.monotonic()
     try:
         exit_code, stdout, stderr, process_failure = _run_bounded(

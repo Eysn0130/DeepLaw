@@ -1,0 +1,112 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/deeplaw_hook.py",
+              "--event",
+              "UserPromptSubmit",
+              "--marker",
+              "deeplaw-claude-lifecycle-v1"
+            ]
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/deeplaw_hook.py",
+              "--event",
+              "PreCompact",
+              "--marker",
+              "deeplaw-claude-lifecycle-v1"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/deeplaw_hook.py",
+              "--event",
+              "PostCompact",
+              "--marker",
+              "deeplaw-claude-lifecycle-v1"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/deeplaw_hook.py",
+              "--event",
+              "PostToolUse",
+              "--marker",
+              "deeplaw-claude-lifecycle-v1"
+            ]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/deeplaw_hook.py",
+              "--event",
+              "Stop",
+              "--marker",
+              "deeplaw-claude-lifecycle-v1"
+            ]
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/deeplaw_hook.py",
+              "--event",
+              "SessionEnd",
+              "--marker",
+              "deeplaw-claude-lifecycle-v1"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

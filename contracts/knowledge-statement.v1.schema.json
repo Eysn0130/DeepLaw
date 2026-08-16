@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-statement.v1.schema.json",
+  "title": "DeepLaw Knowledge Statement v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "statement_id", "knowledge_revision_id", "ordinal", "statement_text",
+    "statement_sha256", "statement_type", "support_status", "source_refs",
+    "knowledge_revision_refs", "relation_revision_refs", "valid_from", "valid_to",
+    "limitation", "gaps", "input_set_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-statement/v1"},
+    "statement_id": {"type": "string", "pattern": "^statement_[0-9a-f]{24}$"},
+    "knowledge_revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+    "ordinal": {"type": "integer", "minimum": 1, "maximum": 4096},
+    "statement_text": {"type": "string", "minLength": 1, "maxLength": 16384},
+    "statement_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "statement_type": {"enum": ["factual", "interpretation", "limitation", "unresolved"]},
+    "support_status": {"enum": ["supported", "contested", "unsupported", "not_applicable"]},
+    "source_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/sourceReference"}},
+    "knowledge_revision_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"}},
+    "relation_revision_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "pattern": "^relationrev_[0-9a-f]{24}$"}},
+    "valid_from": {"type": ["string", "null"], "format": "date-time"},
+    "valid_to": {"type": ["string", "null"], "format": "date-time"},
+    "limitation": {"type": ["string", "null"], "minLength": 1, "maxLength": 4000},
+    "gaps": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/gap"}},
+    "input_set_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "sourceReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_revision_id", "fragment_id", "locator", "quote_sha256"],
+      "properties": {
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "gap": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gap_id", "reason"],
+      "properties": {
+        "gap_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    }
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/platform-core-inventory-preflight.v1.schema.json",
+  "title": "DeepLaw Platform Core inventory preflight receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "candidate"}}},
+      "then": {
+        "properties": {
+          "status": {"const": "candidate_current_source_inventory"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"mode": {"const": "platform_core"}}},
+      "then": {
+        "properties": {
+          "status": {"const": "platform_core_inventory_preflight"}
+        }
+      }
+    }
+  ],
+  "required": [
+    "schema_version",
+    "mode",
+    "status",
+    "release_ready",
+    "candidate",
+    "selection",
+    "node_ids",
+    "count",
+    "digest",
+    "frozen_comparison",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.platform-core-inventory-preflight/v1"
+    },
+    "mode": {
+      "enum": ["candidate", "platform_core"]
+    },
+    "status": {
+      "enum": [
+        "candidate_current_source_inventory",
+        "platform_core_inventory_preflight"
+      ]
+    },
+    "release_ready": {
+      "const": false
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "tree", "worktree_clean"],
+      "properties": {
+        "head": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "worktree_clean": {
+          "type": "boolean"
+        }
+      }
+    },
+    "selection": {
+      "type": "string",
+      "enum": ["not qualification", "not qualification and not windows_native"]
+    },
+    "node_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "frozen_comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_sha256",
+        "manifest_inventory_sha256",
+        "expected_count",
+        "expected_digest",
+        "missing",
+        "unexpected",
+        "duplicate",
+        "matches",
+        "digest_matches"
+      ],
+      "properties": {
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_inventory_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "expected_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expected_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "missing": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "unexpected": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "duplicate": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "matches": {
+          "type": "boolean"
+        },
+        "digest_matches": {
+          "type": "boolean"
+        }
+      }
+    },
+    "record_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

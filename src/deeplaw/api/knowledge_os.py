@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from ..backfill import BackfillService
 from ..compilation import (
@@ -21,6 +21,7 @@ from ..knowledge_autonomy import (
     autonomous_core_installed,
 )
 from ..knowledge_store import KnowledgeVault
+from ..persistent_read_runtime import PersistentReadRuntime
 from ..read_services import SourceReadService, WikiReadService
 from ..retrieval import PurposeAwareRetrievalService
 
@@ -94,7 +95,7 @@ class CompilationRun:
         return dict(self._initial_receipt)
 
     def next_packet(self) -> dict[str, Any] | None:
-        if self.compiler_profile_version == "2":
+        if self.compiler_profile_version in {"2", "3"}:
             return _invoke(
                 SemanticCompilationService(self._coordinator.root).next_observation_packet,
                 self.compilation_run_id,
@@ -180,7 +181,7 @@ class CompilationRun:
         confirm_no_case_data: bool = False,
     ) -> dict[str, Any]:
         target = self._coordinator.commit
-        if self.compiler_profile_version == "2":
+        if self.compiler_profile_version in {"2", "3"}:
             target = SemanticCompilationService(self._coordinator.root).commit
         return _invoke(
             target,
@@ -218,13 +219,13 @@ class CompilationRun:
         )
 
     def status(self) -> dict[str, Any]:
-        if self.compiler_profile_version == "2":
+        if self.compiler_profile_version in {"2", "3"}:
             service = _invoke(SemanticCompilationService, self._coordinator.root)
             return _invoke(service.status, self.compilation_run_id)
         return _invoke(self._coordinator.status, self.compilation_run_id)
 
     def explain(self) -> dict[str, Any]:
-        if self.compiler_profile_version == "2":
+        if self.compiler_profile_version in {"2", "3"}:
             service = _invoke(SemanticCompilationService, self._coordinator.root)
             return _invoke(service.explain, self.compilation_run_id)
         return _invoke(self._coordinator.explain, self.compilation_run_id)
@@ -306,14 +307,14 @@ class _CompilationsAPI:
     def status(self, compilation_run_id: str) -> dict[str, Any]:
         coordinator = _invoke(CompilationCoordinator, self._root)
         status = _invoke(coordinator.status, compilation_run_id)
-        if status["compiler_profile_version"] == "2":
+        if status["compiler_profile_version"] in {"2", "3"}:
             return _invoke(SemanticCompilationService(self._root).status, compilation_run_id)
         return status
 
     def explain(self, compilation_run_id: str) -> dict[str, Any]:
         coordinator = _invoke(CompilationCoordinator, self._root)
         status = _invoke(coordinator.status, compilation_run_id)
-        if status["compiler_profile_version"] == "2":
+        if status["compiler_profile_version"] in {"2", "3"}:
             return _invoke(SemanticCompilationService(self._root).explain, compilation_run_id)
         return _invoke(coordinator.explain, compilation_run_id)
 
@@ -347,6 +348,7 @@ class _RetrievalAPI:
 @dataclass(frozen=True)
 class _ContextAPI:
     _root: Path
+    _runtime_factory: Callable[[], PersistentReadRuntime]
 
     def compile(
         self,
@@ -365,31 +367,43 @@ class _ContextAPI:
         retrieval_mode: str = "hybrid",
         as_of: str | None = None,
         kinds: tuple[str, ...] = (),
+        query_plan_version: str = "6",
+        query_target: str | dict[str, Any] | None = None,
+        applicable_duties: tuple[str, ...] | list[str] | None = None,
+        projection: str = "standard",
+        task_binding: dict[str, Any] | None = None,
         confirm_no_case_data: bool = False,
     ) -> dict[str, Any]:
-        def build() -> dict[str, Any]:
-            with AutonomousKnowledgeStore(self._root, read_only=True) as store:
-                if not store.verify()["valid"]:
-                    raise RuntimeError("Knowledge OS integrity is invalid")
-                return store.build_capsule(
-                    task=task,
-                    goal=goal,
-                    purpose=purpose,
-                    policy=policy,
-                    scope=cast(Any, scope),
-                    max_sensitivity=cast(Any, max_sensitivity),
-                    limit=limit,
-                    max_chars=max_chars,
-                    max_tokens=max_tokens,
-                    max_sources=max_sources,
-                    graph_hops=graph_hops,
-                    retrieval_mode=retrieval_mode,
-                    as_of=as_of,
-                    kinds=kinds,
-                    confirm_no_case_data=confirm_no_case_data,
-                )
-
-        return _invoke(build)
+        runtime = _invoke(self._runtime_factory)
+        snapshot = _invoke(runtime.get_snapshot, operation="context")
+        force_canonical_lexical = not bool(
+            snapshot.autonomous_integrity.get("derived_ready")
+        )
+        return _invoke(
+            snapshot.store.build_capsule,
+            task=task,
+            goal=goal,
+            purpose=purpose,
+            policy=policy,
+            scope=scope,
+            max_sensitivity=max_sensitivity,
+            limit=limit,
+            max_chars=max_chars,
+            max_tokens=max_tokens,
+            max_sources=max_sources,
+            graph_hops=graph_hops,
+            retrieval_mode=retrieval_mode,
+            as_of=as_of,
+            kinds=kinds,
+            query_plan_version=query_plan_version,
+            query_target=query_target,
+            applicable_duties=applicable_duties,
+            projection=projection,
+            force_canonical_lexical=force_canonical_lexical,
+            confirm_no_case_data=confirm_no_case_data,
+            task_binding=task_binding,
+            _runtime_snapshot=snapshot,
+        )
 
 
 @dataclass(frozen=True)
@@ -596,6 +610,8 @@ class KnowledgeOS:
     """Stable public facade; persistence internals are intentionally hidden."""
 
     _root: Path
+    _runtime: PersistentReadRuntime | None = None
+    _closed: bool = False
 
     @classmethod
     def open(cls, path: str | Path) -> KnowledgeOS:
@@ -604,19 +620,51 @@ class KnowledgeOS:
         def verify() -> None:
             if not autonomous_core_installed(root):
                 raise RuntimeError("Autonomous Knowledge OS is not initialized")
-            with (
-                KnowledgeVault(root, read_only=True) as legacy,
-                AutonomousKnowledgeStore(root, read_only=True) as store,
-            ):
-                if (
-                    legacy.audit_head != store.legacy_audit_head
-                    or not legacy.verify_integrity()["valid"]
-                    or not store.verify()["valid"]
-                ):
+            with KnowledgeVault(root, read_only=True) as legacy:
+                legacy_integrity = legacy.verify_integrity()
+                with AutonomousKnowledgeStore(
+                    root,
+                    read_only=True,
+                    legacy_snapshot=legacy,
+                ) as store:
+                    autonomous_integrity = store.verify(
+                        preverified_legacy_integrity=legacy_integrity,
+                        preverified_legacy_audit_head=legacy.audit_head,
+                    )
+                if not legacy_integrity["valid"] or not autonomous_integrity["valid"]:
                     raise RuntimeError("Knowledge OS integrity is invalid")
 
         _invoke(verify)
         return cls(root)
+
+    def _ensure_runtime(self) -> PersistentReadRuntime:
+        if self._closed:
+            raise RuntimeError("Knowledge OS is closed")
+        runtime = self._runtime
+        if runtime is None:
+            runtime = _invoke(PersistentReadRuntime, self._root)
+            object.__setattr__(self, "_runtime", runtime)
+        return runtime
+
+    def close(self) -> None:
+        """Close the verified read snapshot and its bounded identity observer."""
+
+        runtime = self._runtime
+        if runtime is not None:
+            runtime.close()
+        object.__setattr__(self, "_closed", True)
+
+    def __enter__(self) -> KnowledgeOS:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: Any,
+    ) -> bool:
+        self.close()
+        return False
 
     @property
     def compilations(self) -> _CompilationsAPI:
@@ -632,7 +680,7 @@ class KnowledgeOS:
 
     @property
     def context(self) -> _ContextAPI:
-        return _ContextAPI(self._root)
+        return _ContextAPI(self._root, self._ensure_runtime)
 
     @property
     def sources(self) -> _SourcesAPI:

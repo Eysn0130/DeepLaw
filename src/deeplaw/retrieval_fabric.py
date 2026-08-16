@@ -1399,11 +1399,15 @@ def retrieve(
     explain: bool = True,
     ranking_profile: dict[str, Any] | None = None,
     reranker_manifest: str | Path | None = None,
+    _preverified_audit_head: str | None = None,
 ) -> dict[str, Any]:
     if isinstance(max_chars, bool) or not 1 <= max_chars <= 20_000:
         raise ValueError("retrieval max_chars must be between 1 and 20000")
-    if not vault.verify_integrity()["valid"]:
-        raise RuntimeError("knowledge vault integrity is invalid; retrieval stopped")
+    if _preverified_audit_head is None:
+        if not vault.verify_integrity()["valid"]:
+            raise RuntimeError("knowledge vault integrity is invalid; retrieval stopped")
+    elif _preverified_audit_head != vault.audit_head:
+        raise RuntimeError("preverified knowledge snapshot audit head changed")
     selected_index = Path(discovery_index_path) if discovery_index_path is not None else None
     if ranking_profile is None:
         from .retrieval_profiles import load_active_retrieval_profile
@@ -1816,7 +1820,7 @@ def recall(
     if not confirm_no_case_data:
         raise ValueError(
             "knowledge recall requires confirmation that task and goal contain "
-            "no Analytix case material"
+            "no client or case material"
         )
     normalized_task = task.strip()
     normalized_goal = goal.strip() if goal else None

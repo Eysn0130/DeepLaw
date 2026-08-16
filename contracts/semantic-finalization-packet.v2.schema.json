@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-finalization-packet.v2.schema.json",
+  "title": "DeepLaw Semantic Finalization Packet v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compiler_profile_version", "finalization_packet_id", "compilation_run_id", "source_revision_id",
+    "expected_audit_head", "inventory_sha256", "applicability_policy_sha256",
+    "applicability_digest", "inventory", "duties", "existing_canonical_knowledge",
+    "previous_outputs", "affected_syntheses", "budgets", "truncated"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-finalization-packet/v2"},
+    "compiler_profile_version": {"const": "3"},
+    "finalization_packet_id": {"type": "string", "pattern": "^finalization_[0-9a-f]{24}$"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "expected_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "applicability_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "applicability_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "inventory": {"type": "object"},
+    "duties": {"type": "array", "minItems": 15, "maxItems": 15, "items": {"$ref": "#/$defs/dutyReport"}},
+    "existing_canonical_knowledge": {"type": "array", "maxItems": 256, "items": {"type": "object"}},
+    "previous_outputs": {"type": "array", "maxItems": 1000, "items": {"type": "object"}},
+    "affected_syntheses": {"type": "array", "maxItems": 1000, "items": {"type": "object"}},
+    "budgets": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider_bytes", "max_publications", "max_relations"],
+      "properties": {
+        "provider_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "max_publications": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "max_relations": {"type": "integer", "minimum": 1, "maximum": 100000}
+      }
+    },
+    "truncated": {"type": "boolean"}
+  },
+  "$defs": {
+    "dutyReport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["duty_id", "duty_type", "required", "applicability", "status", "output_refs", "evidence_refs", "reason", "unresolved_items", "omission_reason", "deterministic_basis"],
+      "properties": {
+        "duty_id": {"type": "string", "pattern": "^duty_[0-9a-f]{24}$"},
+        "duty_type": {"$ref": "#/$defs/dutyType"},
+        "required": {"type": "boolean"},
+        "applicability": {"enum": ["applicable", "not_applicable", "unknown"]},
+        "status": {"enum": ["satisfied", "unresolved", "omitted_with_reason"]},
+        "output_refs": {"type": "array", "maxItems": 1000, "uniqueItems": true, "items": {"type": "string", "pattern": "^(knowledge|relationkey|observation)_[0-9a-f]{24}$"}},
+        "evidence_refs": {"type": "array", "maxItems": 1000, "uniqueItems": true, "items": {"$ref": "#/$defs/sourceReference"}},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "unresolved_items": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+        "omission_reason": {"type": ["string", "null"], "minLength": 1, "maxLength": 2000},
+        "deterministic_basis": {"$ref": "#/$defs/deterministicBasis"}
+      }
+    },
+    "sourceReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_revision_id", "fragment_id", "locator", "quote_sha256"],
+      "properties": {
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "dutyType": {
+      "enum": [
+        "source_summary", "key_claims", "entities", "concepts", "events",
+        "procedures", "comparisons", "typed_relations", "contradiction_scan",
+        "identity_resolution", "unresolved_questions", "source_coverage",
+        "affected_synthesis_detection", "overview_impact", "limitations_and_warnings"
+      ]
+    },
+    "deterministicBasis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rule_id", "facts", "stable_refs", "facts_sha256", "reason"],
+      "properties": {
+        "rule_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,100}$"},
+        "facts": {"$ref": "#/$defs/closedFacts"},
+        "stable_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 300}},
+        "facts_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "closedFacts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_present", "source_admitted", "source_nonempty", "media_type", "byte_size", "lifecycle", "node_types", "signals", "observation_kinds", "observation_count", "existing_kinds", "existing_count", "relation_count", "previous_output_count", "affected_synthesis_count", "truncated"],
+      "properties": {
+        "source_present": {"type": "boolean"}, "source_admitted": {"type": "boolean"}, "source_nonempty": {"type": "boolean"},
+        "media_type": {"type": ["string", "null"], "maxLength": 200}, "byte_size": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+        "lifecycle": {"type": ["string", "null"], "maxLength": 100},
+        "node_types": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 10000}},
+        "signals": {"type": "object", "additionalProperties": false, "required": ["code", "table", "list", "timeline", "question", "procedure"], "properties": {"code": {"type": "boolean"}, "table": {"type": "boolean"}, "list": {"type": "boolean"}, "timeline": {"type": "boolean"}, "question": {"type": "boolean"}, "procedure": {"type": "boolean"}}},
+        "observation_kinds": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 100000}}, "observation_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "existing_kinds": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 100000}}, "existing_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "relation_count": {"type": "integer", "minimum": 0, "maximum": 100000}, "previous_output_count": {"type": "integer", "minimum": 0, "maximum": 1000}, "affected_synthesis_count": {"type": "integer", "minimum": 0, "maximum": 1000}, "truncated": {"type": "boolean"}
+      }
+    }
+  }
+}

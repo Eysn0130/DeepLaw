@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/obsidian-desktop-qualification.v1.schema.json",
+  "title": "DeepLaw Obsidian Desktop Qualification Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "claim_eligible",
+    "release_ready",
+    "candidate",
+    "environment",
+    "plugin",
+    "synthetic_fixture",
+    "workflow",
+    "outcome",
+    "captures",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.obsidian-desktop-qualification/v1"},
+    "status": {"enum": ["executed", "failed"]},
+    "claim_eligible": {"const": false},
+    "release_ready": {"const": false},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "environment": {"$ref": "#/$defs/environment"},
+    "plugin": {"$ref": "#/$defs/plugin"},
+    "synthetic_fixture": {"$ref": "#/$defs/fixture"},
+    "workflow": {"$ref": "#/$defs/workflow"},
+    "outcome": {"$ref": "#/$defs/outcome"},
+    "captures": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {"$ref": "#/$defs/capture"}
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {"type": "string", "minLength": 1, "maxLength": 200},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "package_version", "worktree_dirty"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "package_version": {"const": "0.12.0"},
+        "worktree_dirty": {"const": false}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "architecture",
+        "python",
+        "obsidian_ui_version",
+        "obsidian_bundle_short_version",
+        "obsidian_bundle_version",
+        "obsidian_binary_sha256",
+        "obsidian_binary_bytes"
+      ],
+      "properties": {
+        "os": {"type": "string", "minLength": 1, "maxLength": 200},
+        "architecture": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python": {"type": "string", "minLength": 1, "maxLength": 100},
+        "obsidian_ui_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "obsidian_bundle_short_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "obsidian_bundle_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "obsidian_binary_sha256": {"$ref": "#/$defs/sha256"},
+        "obsidian_binary_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "main_js_sha256",
+        "manifest_sha256",
+        "desktop_loaded",
+        "command_palette_registered",
+        "verify_command_executed",
+        "verify_command_valid"
+      ],
+      "properties": {
+        "id": {"const": "deeplaw-bridge"},
+        "version": {"const": "0.12.0"},
+        "main_js_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "desktop_loaded": {"type": "boolean"},
+        "command_palette_registered": {"type": "boolean"},
+        "verify_command_executed": {"type": "boolean"},
+        "verify_command_valid": {"type": "boolean"}
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contains_case_or_customer_data",
+        "vault_path_in_report",
+        "capability_identifier_in_report",
+        "credential_or_secret_in_report",
+        "knowledge_id",
+        "initial_revision_id",
+        "current_revision_id",
+        "current_parent_revision_id",
+        "initial_markdown_sha256",
+        "edited_unregistered_markdown_sha256",
+        "reconciled_markdown_sha256",
+        "renamed_relative_path",
+        "edited_body"
+      ],
+      "properties": {
+        "contains_case_or_customer_data": {"const": false},
+        "vault_path_in_report": {"const": false},
+        "capability_identifier_in_report": {"const": false},
+        "credential_or_secret_in_report": {"const": false},
+        "knowledge_id": {"$ref": "#/$defs/identifier"},
+        "initial_revision_id": {"$ref": "#/$defs/identifier"},
+        "current_revision_id": {"$ref": "#/$defs/identifier"},
+        "current_parent_revision_id": {"$ref": "#/$defs/identifier"},
+        "initial_markdown_sha256": {"$ref": "#/$defs/sha256"},
+        "edited_unregistered_markdown_sha256": {"$ref": "#/$defs/sha256"},
+        "reconciled_markdown_sha256": {"$ref": "#/$defs/sha256"},
+        "renamed_relative_path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.)[^\\u0000-\\u001f]{1,500}\\.md$"
+        },
+        "edited_body": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "completed_at", "steps"],
+      "properties": {
+        "started_at": {"type": "string", "format": "date-time"},
+        "completed_at": {"type": "string", "format": "date-time"},
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 30,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plugin_load_passed",
+        "rename_passed",
+        "edit_passed",
+        "reconcile_passed",
+        "stable_identity_preserved",
+        "renamed_path_preserved",
+        "parent_revision_bound",
+        "body_preserved",
+        "legal_authority",
+        "conflict_count",
+        "ledger_sequence_before_reconcile",
+        "ledger_sequence_after_reconcile",
+        "post_reconcile_verification_valid"
+      ],
+      "properties": {
+        "plugin_load_passed": {"type": "boolean"},
+        "rename_passed": {"type": "boolean"},
+        "edit_passed": {"type": "boolean"},
+        "reconcile_passed": {"type": "boolean"},
+        "stable_identity_preserved": {"type": "boolean"},
+        "renamed_path_preserved": {"type": "boolean"},
+        "parent_revision_bound": {"type": "boolean"},
+        "body_preserved": {"type": "boolean"},
+        "legal_authority": {"const": false},
+        "conflict_count": {"type": "integer", "minimum": 0},
+        "ledger_sequence_before_reconcile": {"type": "integer", "minimum": 0},
+        "ledger_sequence_after_reconcile": {"type": "integer", "minimum": 0},
+        "post_reconcile_verification_valid": {"type": "boolean"}
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_hint", "sha256", "byte_size"],
+      "properties": {
+        "path_hint": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}\\.(png|jpeg)$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/commercial-release-manifest.v6.schema.json",
+  "title": "DeepLaw semantic commercial release manifest v6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "environment", "release", "bindings", "artifacts",
+    "semantic_evidence", "commercial_release_eligible", "quality_protocol_eligible",
+    "competitive_claim_eligible", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.commercial-release-manifest/v6"},
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform_system", "platform_release", "platform_version", "machine",
+        "python_implementation", "python_version", "python_executable_name", "uv_version",
+        "ci", "github_actions", "github_runner_os", "github_runner_arch"
+      ],
+      "properties": {
+        "platform_system": {"type": "string"},
+        "platform_release": {"type": "string"},
+        "platform_version": {"type": "string"},
+        "machine": {"type": "string"},
+        "python_implementation": {"type": "string"},
+        "python_version": {"type": "string"},
+        "python_executable_name": {"type": "string"},
+        "uv_version": {"type": "string"},
+        "ci": {"type": "boolean"},
+        "github_actions": {"type": "boolean"},
+        "github_runner_os": {"type": ["string", "null"]},
+        "github_runner_arch": {"type": ["string", "null"]}
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "version", "tag", "commit", "tree"],
+      "properties": {
+        "repository": {"const": "Eysn0130/DeepLaw"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "tag": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"}
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prd_path", "prd_sha256", "traceability_path", "traceability_sha256",
+        "qualification_protocol_path", "qualification_protocol_sha256",
+        "thresholds_path", "thresholds_sha256",
+        "human_gold_manifest_path", "human_gold_manifest_sha256",
+        "compiler_evaluator_isolation_path", "compiler_evaluator_isolation_sha256",
+        "gate_classification_path", "gate_classification_sha256", "candidate_commit",
+        "candidate_tree", "candidate_wheel_sha256", "candidate_sdist_sha256",
+        "candidate_version"
+      ],
+      "properties": {
+        "prd_path": {"$ref": "#/$defs/safePath"},
+        "prd_sha256": {"$ref": "#/$defs/sha256"},
+        "traceability_path": {"$ref": "#/$defs/safePath"},
+        "traceability_sha256": {"$ref": "#/$defs/sha256"},
+        "qualification_protocol_path": {"$ref": "#/$defs/safePath"},
+        "qualification_protocol_sha256": {"$ref": "#/$defs/sha256"},
+        "thresholds_path": {"$ref": "#/$defs/safePath"},
+        "thresholds_sha256": {"$ref": "#/$defs/sha256"},
+        "human_gold_manifest_path": {"$ref": "#/$defs/safePath"},
+        "human_gold_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "compiler_evaluator_isolation_path": {"$ref": "#/$defs/safePath"},
+        "compiler_evaluator_isolation_sha256": {"$ref": "#/$defs/sha256"},
+        "gate_classification_path": {"$ref": "#/$defs/safePath"},
+        "gate_classification_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_commit": {"$ref": "#/$defs/git"},
+        "candidate_tree": {"$ref": "#/$defs/git"},
+        "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_sdist_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "semantic_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_path", "report_artifact_sha256", "report_record_sha256", "report_kind",
+        "status", "hard_zero", "release_ready", "claim_eligible",
+        "competitive_claim_eligible", "gate_statuses"
+      ],
+      "properties": {
+        "report_path": {"$ref": "#/$defs/safePath"},
+        "report_artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "report_record_sha256": {"$ref": "#/$defs/sha256"},
+        "report_kind": {"const": "v013_commercial_gate_collection"},
+        "status": {"const": "passed"},
+        "hard_zero": {"const": true},
+        "release_ready": {"const": true},
+        "claim_eligible": {"const": true},
+        "competitive_claim_eligible": {"const": false},
+        "gate_statuses": {
+          "type": "array",
+          "minItems": 19,
+          "maxItems": 19,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/gateStatus"}
+        }
+      }
+    },
+    "commercial_release_eligible": {"const": true},
+    "quality_protocol_eligible": {"const": true},
+    "competitive_claim_eligible": {"const": false},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "byte_size"],
+      "properties": {
+        "path": {"$ref": "#/$defs/safePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1}
+      }
+    },
+    "gateStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "category", "status"],
+      "properties": {
+        "gate_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "category": {"enum": ["Core", "Capability", "Competitive Claim"]},
+        "status": {
+          "enum": ["passed", "failed", "not_applicable", "not_executed", "not_claimed"]
+        }
+      }
+    }
+  }
+}

@@ -24,6 +24,7 @@ from deeplaw.compilation.models import (
     COMPILER_GRANT_OPERATIONS,
     MAX_PACKET_PROVIDER_BYTES,
     SEMANTIC_COMPILER_GRANT_OPERATIONS,
+    STATEMENT_EVIDENCE_CORE_SCHEMA,
 )
 from deeplaw.compilation.profiles import REQUIRED_SEMANTIC_DUTIES, SEMANTIC_DUTIES
 from deeplaw.compilation.semantic import SemanticCompilationService
@@ -400,7 +401,7 @@ def test_v011_compilation_check_domains_migrate_without_reimport(tmp_path: Path)
             "SELECT COUNT(*) FROM source_compilation_usage_v1"
         ).fetchone()[0]
     tables = {
-        "source_compilation_artifacts_v1": "semantic_receipt",
+        "source_compilation_artifacts_v1": "statement_bundle",
         "source_compilation_usage_v1": "freeze_semantic_inventory",
         "source_compilation_mcp_replays_v1": "abort_synthesis_refresh",
     }
@@ -417,6 +418,12 @@ def test_v011_compilation_check_domains_migrate_without_reimport(tmp_path: Path)
                 r",\s*'observation_plan'.*?'synthesis_receipt'",
                 "",
                 current_sql,
+                flags=re.DOTALL,
+            )
+            old_sql = re.sub(
+                r",\s*'statement'.*?'statement_bundle'",
+                "",
+                old_sql,
                 flags=re.DOTALL,
             )
             old_sql = re.sub(
@@ -1092,6 +1099,16 @@ def test_cli_api_and_mcp_share_one_compilation_domain_result(tmp_path: Path) -> 
         "--run-id",
         run_id,
     )
+    cli_runs = _cli_json(
+        "knowledge",
+        "compile",
+        "list",
+        *vault_args,
+        "--source-revision-id",
+        compiled["identity"]["source_revision_id"],
+    )
+    assert cli_runs["run_count"] == 1
+    assert cli_runs["runs"][0]["compilation_run_id"] == run_id
     api_status = KnowledgeOS.open(root).compilations.status(run_id)
     mcp_status = handle_knowledge_support(
         operation="compilation",
@@ -1445,6 +1462,9 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
         compilation_run_id=begun["compilation_run_id"],
         confirm_no_case_data=True,
     )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        baseline_verification = store.rebuild_derived()
+    assert baseline_verification["schema_version"] == "deeplaw.derived-manifest/v2"
 
     source.write_text(
         "\n\n".join(
@@ -1464,6 +1484,13 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
             confirm_no_case_data=True,
         )
         manifest = vault.source_review_manifest(second["source"]["source_id"])
+    # Register both evidence revisions before building the historical baseline;
+    # the successor remains pending and must not enter that projection.
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.import_legacy_evidence()
+        baseline_before_successor_approval = store.rebuild_derived()
+    assert baseline_before_successor_approval["schema_version"] == "deeplaw.derived-manifest/v2"
+    with KnowledgeVault(root, read_only=False) as vault:
         vault.approve_source_assets(
             second["source"]["source_id"],
             confirm_reviewed=True,
@@ -1471,12 +1498,66 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
             reviewer_id="freshness-test",
             review_reason="Activate the exact successor Source Revision.",
         )
-    report = coordinator.refresh(
-        grant_id=grant_id,
-        source_revision_id=first["identity"]["source_revision_id"],
-        replacement_source_revision_id=second["identity"]["source_revision_id"],
-        confirm_no_case_data=True,
-    )
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        stale_before_refresh = store.verify()
+    assert stale_before_refresh["valid"] is True, stale_before_refresh["failures"]
+    assert stale_before_refresh["derived_ready"] is False
+    assert "derived_manifest_stale" in {
+        item["code"] for item in stale_before_refresh["warnings"]
+    }
+
+    manifest_path = root / ".deeplaw" / "derived" / "manifest.json"
+    living_manifest_path = root / ".deeplaw" / "derived" / "tree" / "living-wiki-manifest.json"
+    manifest_bytes = manifest_path.read_bytes()
+    living_manifest_bytes = living_manifest_path.read_bytes()
+    try:
+        manifest = json.loads(manifest_bytes)
+        living_manifest = json.loads(living_manifest_bytes)
+        for value in (manifest, living_manifest):
+            value["knowledge_revision_count"] += 1
+            value["knowledge_revision_ids_sha256"] = sha256_bytes(b"tampered-revision-ids")
+            value["fts_rows_sha256"] = sha256_bytes(b"tampered-fts-rows")
+        living_body = {
+            key: value for key, value in living_manifest.items() if key != "manifest_sha256"
+        }
+        living_manifest["manifest_sha256"] = sha256_bytes(
+            canonical_json(living_body).encode("utf-8")
+        )
+        manifest["components"][0]["manifest_sha256"] = living_manifest["manifest_sha256"]
+        manifest["components"][0]["manifest_byte_size"] = len(
+            (
+                json.dumps(living_manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+        )
+        manifest_body = {
+            key: value for key, value in manifest.items() if key != "manifest_sha256"
+        }
+        manifest["manifest_sha256"] = sha256_bytes(
+            canonical_json(manifest_body).encode("utf-8")
+        )
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        )
+        living_manifest_path.write_text(
+            json.dumps(living_manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        )
+        with AutonomousKnowledgeStore(root, read_only=True) as store:
+            tampered_verification = store.verify()
+        assert tampered_verification["valid"] is False
+        assert "derived_manifest_invalid" in {
+            item["code"] for item in tampered_verification["failures"]
+        }
+    finally:
+        manifest_path.write_bytes(manifest_bytes)
+        living_manifest_path.write_bytes(living_manifest_bytes)
+
+    with KnowledgeOS.open(root) as knowledge_os:
+        report = knowledge_os.compilations.refresh(
+            grant_id=grant_id,
+            source_revision_id=first["identity"]["source_revision_id"],
+            replacement_source_revision_id=second["identity"]["source_revision_id"],
+            confirm_no_case_data=True,
+        )
     assert len(report["changed_fragment_ids"]) == 1
     assert len(report["unchanged_fragment_ids"]) == 2
     assert report["added_fragment_ids"] == []
@@ -1521,6 +1602,15 @@ def test_source_successor_stales_only_changed_fragments_and_carries_exact_matche
         gap["code"] for gap in unrelated_query["gaps"]
     }.isdisjoint({"stale_knowledge", "uncompiled_source"})
     assert verification["valid"] is True, verification["failures"]
+    assert verification["derived_ready"] is False
+    assert "derived_manifest_stale" in {
+        item["code"] for item in verification["warnings"]
+    }
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.rebuild_derived()
+        rebuilt_verification = store.verify()
+    assert rebuilt_verification["valid"] is True, rebuilt_verification["failures"]
+    assert rebuilt_verification["derived_ready"] is True
 
 
 def test_source_structural_diff_reports_added_and_moved_fragments(
@@ -2438,14 +2528,17 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     )["result"]
 
     assert result["policy_id"] == "compiled-first-v1"
-    assert result["compiled"]
+    assert result["schema_version"] == "deeplaw.purpose-aware-retrieval/v3"
+    assert result["query_plan"]["schema_version"] == "deeplaw.knowledge-query-plan/v6"
+    assert result["statements"] == []
     assert result["evidence"] == []
     assert result["query_plan"]["fallback"]["used"] is False
     assert result["write_performed"] is False
-    assert result["metrics"]["compiled_hit"] is True
+    assert result["metrics"]["selected_statement_count"] == 0
+    assert any(gap["code"] == "no_answer" for gap in result["gaps"])
     assert api_result["query_plan"]["query_sha256"] == result["query_plan"]["query_sha256"]
-    assert [item["revision_id"] for item in api_result["compiled"]] == [
-        item["revision_id"] for item in result["compiled"]
+    assert [item["statement_id"] for item in api_result["statements"]] == [
+        item["statement_id"] for item in result["statements"]
     ]
     assert v5_result["schema_version"] == "deeplaw.purpose-aware-retrieval/v2"
     assert v5_result["query_plan"]["schema_version"] == ("deeplaw.knowledge-query-plan/v5")
@@ -2477,32 +2570,31 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     assert "reranker" not in v5_result["compiled"][0]
     assert v5_result["query_plan"]["provider_surface"] == "knowledge_capsule"
     assert v5_result["query_plan"]["query_expansion"] == {
-        "profile": "deeplaw-deterministic-query-expansion/1",
+        "profile": "deeplaw-deterministic-query-expansion/2",
         "applied": False,
         "term_count": 0,
         "terms_sha256": sha256_bytes(b"[]"),
         "authority_changed": False,
         "stored_evidence_changed": False,
     }
-    assert {
-        api_capsule["query_plan"]["schema_version"],
-        cli_capsule["query_plan"]["schema_version"],
-        mcp_capsule["query_plan"]["schema_version"],
-    } == {"deeplaw.knowledge-query-plan/v5"}
-    assert cli_capsule["schema_version"] == "deeplaw.knowledge-capsule/v2"
-    expected_revision_ids = [
-        item["revision_id"]
-        for item in api_capsule["sections"]["agent_derived_knowledge"]
-    ]
-    assert expected_revision_ids
-    assert [
-        item["revision_id"]
-        for item in cli_capsule["sections"]["agent_derived_knowledge"]
-    ] == expected_revision_ids
-    assert [
-        item["revision_id"]
-        for item in mcp_capsule["sections"]["agent_derived_knowledge"]
-    ] == expected_revision_ids
+    assert api_capsule["schema_version"] == "deeplaw.knowledge-capsule/v3"
+    assert cli_capsule["schema_version"] == "deeplaw.knowledge-capsule/v3"
+    assert api_capsule["query_plan"]["schema_version"] == (
+        "deeplaw.knowledge-query-plan/v6"
+    )
+    assert cli_capsule["query_plan"]["schema_version"] == (
+        "deeplaw.knowledge-query-plan/v6"
+    )
+    assert api_capsule["write_performed"] is False
+    assert cli_capsule["write_performed"] is False
+    assert api_capsule["statements"] == cli_capsule["statements"]
+    assert any(gap["code"] == "no_answer" for gap in api_capsule["gaps"])
+    assert mcp_capsule["schema_version"] == "deeplaw.provider-knowledge-capsule/v2"
+    assert mcp_capsule["capsule"]["schema_version"] == (
+        "deeplaw.knowledge-capsule-projection/v1"
+    )
+    assert mcp_capsule["delivery"]["hard_limit_bytes"] == 65_536
+    assert mcp_capsule["delivery"]["provider_content_bytes"] <= 65_536
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         assert store.audit_head == audit_head
         assert (
@@ -2514,9 +2606,9 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         "Durable source statement",
         purpose="legal",
     )
-    assert legal["compiled"] == []
+    assert legal["statements"] == []
     assert legal["evidence"] == []
-    assert legal["gaps"][0]["code"] == "law_support_required"
+    assert any(gap["code"] == "law_support_required" for gap in legal["gaps"])
 
     with KnowledgeVault(root, read_only=True) as vault:
         stored_source = vault.source_file_path(compiled["source"]["source_id"])
@@ -2707,6 +2799,7 @@ def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
         "Durable source statement 1",
         purpose="answer",
         limit=5,
+        query_plan_version="5",
     )
 
     assert result["compiled"] == []
@@ -2771,6 +2864,7 @@ def test_raw_evidence_fallback_retains_exact_identity_v2_receipt(
         "NO-SUCH-FACT-CHI",
         purpose="answer",
         limit=5,
+        query_plan_version="5",
     )
     assert unanswerable["compiled"] == []
     assert unanswerable["evidence"] == []
@@ -2887,6 +2981,7 @@ def test_dense_only_low_relevance_candidates_do_not_report_empty_fallback_as_use
         "NO-SUCH-FACT-CHI",
         purpose="answer",
         limit=5,
+        query_plan_version="5",
     )
 
     assert result["compiled"] == []
@@ -2901,7 +2996,12 @@ def test_dense_only_low_relevance_candidates_do_not_report_empty_fallback_as_use
 
 def test_weak_single_term_lexical_match_cannot_answer_unknown_identifier(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        "deeplaw.knowledge_store.secrets.token_hex",
+        lambda _nbytes: "00000000000000000000000000000000000000000000000000000000000003bb",
+    )
     root, compiled, grant_id = _ready_source(tmp_path, section_count=1)
     coordinator = CompilationCoordinator(root)
     configuration_sha256 = sha256_bytes(b"lexical-relevance-floor-v1")
@@ -2943,6 +3043,7 @@ def test_weak_single_term_lexical_match_cannot_answer_unknown_identifier(
         "NO-SUCH-FACT-CHI",
         purpose="answer",
         limit=5,
+        query_plan_version="5",
     )
 
     assert result["compiled"] == []
@@ -3559,7 +3660,12 @@ def test_compilation_capable_sink_reuses_the_domain_coordinator(tmp_path: Path) 
         vault_path=root,
     )
     assert query["result"]["policy_id"] == "compiled-first-v1"
-    assert query["result"]["compiled"]
+    assert query["schema_version"] == "deeplaw.knowledge-support-output/v6"
+    assert set(query["result"]["receipt"]) == {"receipt_id"}
+    assert query["result"]["receipt"]["receipt_id"].startswith("queryreceipt_")
+    assert query["result"]["capsule"]["schema_version"] == (
+        "deeplaw.knowledge-capsule-projection/v1"
+    )
     Draft202012Validator(support.outputSchema).validate(status)
     Draft202012Validator(support.outputSchema).validate(query)
     assert KnowledgeOS.open(root).verify()["valid"] is True
@@ -4296,6 +4402,59 @@ def test_relation_freshness_propagates_from_changed_endpoint_revision(
         )
 
 
+def test_v012_statement_evidence_forward_migration_preserves_v5_and_snapshot(
+    tmp_path: Path,
+) -> None:
+    root, _compiled, _grant_id = _ready_source(tmp_path, section_count=1)
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        audit_head = store.audit_head
+        legacy_audit_head = store.legacy_audit_head
+
+    database = root / ".deeplaw" / "ledger.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        for table in (
+            "statement_evidence_receipts_v1",
+            "statement_evidence_refs_v1",
+            "statement_evidence_maps_v1",
+            "knowledge_statements_v1",
+            "statement_evidence_core_v1",
+        ):
+            connection.execute(f"DROP TABLE {table}")
+        connection.commit()
+
+    migrated = initialize_autonomous_core(
+        root,
+        migration_source="v0.12-to-v0.13-statement-evidence",
+    )
+    assert migrated["verification"]["valid"] is True
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        marker = store.connection.execute(
+            "SELECT schema_version, migration_source FROM statement_evidence_core_v1"
+        ).fetchone()
+        assert marker is not None
+        assert marker["schema_version"] == STATEMENT_EVIDENCE_CORE_SCHEMA
+        assert marker["migration_source"] == "v0.12-to-v0.13-statement-evidence"
+        assert store.audit_head == audit_head
+        assert store.legacy_audit_head == legacy_audit_head
+        assert store.verify()["valid"] is True
+
+    snapshot = tmp_path / "v013-statement-evidence-snapshot"
+    create_autonomous_snapshot(root, snapshot)
+    assert verify_autonomous_snapshot(snapshot)["valid"] is True
+    restored = tmp_path / "v013-statement-evidence-restored"
+    restore_autonomous_snapshot(restored, snapshot=snapshot, confirm=True)
+    with AutonomousKnowledgeStore(restored, read_only=True) as store:
+        marker = store.connection.execute(
+            "SELECT schema_version FROM statement_evidence_core_v1"
+        ).fetchone()
+        assert marker is not None
+        assert marker["schema_version"] == STATEMENT_EVIDENCE_CORE_SCHEMA
+        assert store.audit_head == audit_head
+        assert store.legacy_audit_head == legacy_audit_head
+        assert store.verify()["valid"] is True
+
+
 def test_old_vault_migration_snapshot_restore_and_rollback_preserve_compilation(
     tmp_path: Path,
 ) -> None:
@@ -4365,6 +4524,7 @@ def test_old_vault_migration_snapshot_restore_and_rollback_preserve_compilation(
     assert restored_os.retrieval.query(
         "Durable migrated source statement.",
         purpose="answer",
+        query_plan_version="5",
     )["compiled"]
 
     rolled_back = rollback_autonomous_core(root, backup=backup, confirm=True)

@@ -9,3 +9,29 @@
   border-inline-start: 3px solid var(--color-accent);
   padding-inline-start: var(--size-4-3);
 }
+
+.deeplaw-picker-label {
+  font-weight: var(--font-semibold);
+  overflow-wrap: anywhere;
+}
+
+.deeplaw-picker-meta {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-top: var(--size-2-1);
+  overflow-wrap: anywhere;
+}
+
+.deeplaw-links-heading {
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--size-4-2);
+  overflow-wrap: anywhere;
+}
+
+.deeplaw-pagination {
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  margin-bottom: var(--size-4-2);
+  overflow-wrap: anywhere;
+}

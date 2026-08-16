@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-capsule-verification.v3.schema.json",
+  "title": "DeepLaw Autonomous Knowledge Capsule Verification v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "capsule_id", "expected_capsule_id", "digest_valid", "id_valid",
+    "query_plan_valid", "provider_schema_valid", "provider_payload_bytes",
+    "provider_hard_limit_valid", "local_payload_bytes", "local_hard_limit_valid",
+    "receipt_identity_valid", "receipt_derivation_valid", "query_identity_valid",
+    "selection_identity_valid", "provider_projection_consistent", "budget_identity_valid",
+    "vault_matches", "audit_anchor_valid",
+    "autonomous_integrity_valid", "valid"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.knowledge-capsule-verification/v3"},
+    "capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
+    "expected_capsule_id": {"type": "string", "pattern": "^capsule_[0-9a-f]{24}$"},
+    "digest_valid": {"type": "boolean"},
+    "id_valid": {"type": "boolean"},
+    "query_plan_valid": {"type": "boolean"},
+    "provider_schema_valid": {"type": "boolean"},
+    "provider_payload_bytes": {"type": "integer", "minimum": 0},
+    "provider_hard_limit_valid": {"type": "boolean"},
+    "local_payload_bytes": {"type": "integer", "minimum": 0},
+    "local_hard_limit_valid": {"type": "boolean"},
+    "receipt_identity_valid": {"type": "boolean"},
+    "receipt_derivation_valid": {"type": "boolean"},
+    "query_identity_valid": {"type": "boolean"},
+    "selection_identity_valid": {"type": "boolean"},
+    "provider_projection_consistent": {"type": "boolean"},
+    "budget_identity_valid": {"type": "boolean"},
+    "vault_matches": {"type": ["boolean", "null"]},
+    "audit_anchor_valid": {"type": ["boolean", "null"]},
+    "autonomous_integrity_valid": {"type": ["boolean", "null"]},
+    "valid": {"type": "boolean"}
+  }
+}

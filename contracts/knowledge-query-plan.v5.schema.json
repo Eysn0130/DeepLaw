@@ -91,7 +91,12 @@
         "authority_changed", "stored_evidence_changed"
       ],
       "properties": {
-        "profile": {"const": "deeplaw-deterministic-query-expansion/1"},
+        "profile": {
+          "enum": [
+            "deeplaw-deterministic-query-expansion/1",
+            "deeplaw-deterministic-query-expansion/2"
+          ]
+        },
         "applied": {"type": "boolean"},
         "term_count": {"type": "integer", "minimum": 0, "maximum": 24},
         "terms_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

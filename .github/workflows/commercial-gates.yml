@@ -1,7 +1,6 @@
-name: Commercial GA gates
+name: Legacy v0.12 Commercial GA gates
 
 on:
-  pull_request:
   workflow_call:
     inputs:
       release_ref:
@@ -49,8 +48,19 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
+
+      - name: Reject v0.13 and later candidates
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          if tuple(map(int, version.split("."))) >= (0, 13, 0):
+              raise SystemExit("v0.13 must consume Candidate Full verified artifacts")
+          PY
 
       - name: Verify source and build exact distributions
         shell: bash
@@ -88,47 +98,47 @@ jobs:
             system: Linux
             python: "3.11"
             slug: linux-py311
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: ubuntu-latest
             system: Linux
             python: "3.12"
             slug: linux-py312
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: ubuntu-latest
             system: Linux
             python: "3.13"
             slug: linux-py313
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: macos-latest
             system: Darwin
             python: "3.11"
             slug: darwin-py311
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: macos-latest
             system: Darwin
             python: "3.12"
             slug: darwin-py312
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: macos-latest
             system: Darwin
             python: "3.13"
             slug: darwin-py313
-            marker: not windows_native
+            marker: not qualification and not windows_native
           - os: windows-latest
             system: Windows
             python: "3.11"
             slug: windows-py311
-            marker: all
+            marker: not qualification
           - os: windows-latest
             system: Windows
             python: "3.12"
             slug: windows-py312
-            marker: all
+            marker: not qualification
           - os: windows-latest
             system: Windows
             python: "3.13"
             slug: windows-py313
-            marker: all
+            marker: not qualification
 
     steps:
       - name: Check out exact candidate and history
@@ -142,6 +152,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: ${{ matrix.python }}
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -175,6 +186,27 @@ jobs:
       - name: Install mandatory test profile
         run: uv sync --frozen --extra dev --extra discovery
 
+      - name: Preflight frozen Platform Core collection
+        shell: bash
+        env:
+          PLATFORM_INVENTORY_SELECTION: ${{ matrix.system == 'Windows' && 'windows' || 'common' }}
+          PLATFORM_INVENTORY_PATH: ${{ runner.temp }}/platform-core-inventory-preflight-${{ matrix.slug }}.json
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m benchmarks.release.platform_inventory \
+            --mode platform_core \
+            --selection "${PLATFORM_INVENTORY_SELECTION}" \
+            --require-match \
+            --output "${PLATFORM_INVENTORY_PATH}"
+
+      - name: Upload Platform Core inventory preflight
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: platform-core-inventory-preflight-${{ matrix.slug }}
+          if-no-files-found: error
+          path: ${{ runner.temp }}/platform-core-inventory-preflight-${{ matrix.slug }}.json
+
       - name: Run full mandatory suite with zero skips
         shell: bash
         env:
@@ -207,6 +239,8 @@ jobs:
           set -euo pipefail
           uv run --frozen python -m benchmarks.release.platform_gate \
             --junit "${RUNNER_TEMP}/pytest-${{ matrix.slug }}.xml" \
+            --manifest "benchmarks/release/platform-core-test-manifest-v1.json" \
+            --binding-receipt "${RUNNER_TEMP}/platform-binding-${{ matrix.slug }}.json" \
             --lifecycle "${RUNNER_TEMP}/distribution-lifecycle-${{ matrix.slug }}.json" \
             --expected-system "${{ matrix.system }}" \
             --expected-python "${{ matrix.python }}" \
@@ -218,6 +252,12 @@ jobs:
             "${RUNNER_TEMP}/platform-evidence/distribution-lifecycle-${{ matrix.slug }}.json"
           cp "${RUNNER_TEMP}/platform-${{ matrix.slug }}.json" \
             "${RUNNER_TEMP}/platform-evidence/platform-${{ matrix.slug }}.json"
+          cp "${RUNNER_TEMP}/platform-binding-${{ matrix.slug }}.json" \
+            "${RUNNER_TEMP}/platform-evidence/platform-binding-${{ matrix.slug }}.json"
+          cp "${RUNNER_TEMP}/platform-core-inventory-preflight-${{ matrix.slug }}.json" \
+            "${RUNNER_TEMP}/platform-evidence/platform-core-inventory-preflight-${{ matrix.slug }}.json"
+          cp "benchmarks/release/platform-core-test-manifest-v1.json" \
+            "${RUNNER_TEMP}/platform-evidence/platform-core-test-manifest-v1.json"
 
       - name: Upload platform evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -244,6 +284,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -271,7 +312,7 @@ jobs:
           npm install --global --prefix "${RUNNER_TEMP}/host-clis" \
             @openai/codex@0.145.0 \
             @anthropic-ai/claude-code@2.1.220 \
-            opencode-ai@1.18.8
+            opencode-ai@1.18.16
           echo "${RUNNER_TEMP}/host-clis/bin" >> "${GITHUB_PATH}"
 
       - name: Run isolated lifecycle and MCP handshake without a model
@@ -285,8 +326,18 @@ jobs:
             --deeplaw "${RUNNER_TEMP}/host-runtime/bin/deeplaw" \
             --codex-version 0.145.0 \
             --claude-version 2.1.220 \
-            --opencode-version 1.18.8 \
+            --opencode-version 1.18.16 \
             --output "${RUNNER_TEMP}/no-model-host-acceptance.json"
+
+      - name: Assert no-model smoke is not model task acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '
+            .model_task_acceptance == false
+            and .model_task_results_claimed == false
+            and .isolation.model_or_api_call_attempted == false
+          ' "${RUNNER_TEMP}/no-model-host-acceptance.json" > /dev/null
 
       - name: Upload host evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -313,6 +364,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -408,6 +460,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -463,6 +516,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -525,6 +579,7 @@ jobs:
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
       - name: Upload Living Wiki quality evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: living-wiki-quality
@@ -559,6 +614,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.12"
+          version: "0.11.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
 

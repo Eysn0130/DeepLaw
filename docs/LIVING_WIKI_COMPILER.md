@@ -1,8 +1,11 @@
 # DeepLaw Living Wiki Compiler
 
-Status: **Current v0.12.0 implementation**, 2026-07-30. Release eligibility and exact evidence are
-tracked in [`V0_11_ACCEPTANCE_MATRIX.md`](V0_11_ACCEPTANCE_MATRIX.md) and the formal release
-manifest.
+Status: **Current source candidate; package 0.12.0; release_ready=false**, 2026-08-11. Release
+eligibility and exact evidence are tracked in [`V0_13_ACCEPTANCE_MATRIX.md`](V0_13_ACCEPTANCE_MATRIX.md),
+the product surface manifest, and the applicable frozen qualification artifacts. This status does
+not qualify Obsidian or Tolaria. One Obsidian seam executed at the historical b14 candidate;
+broader and exact-head qualification is pending. The retained receipt is not Human Gold, a
+qualification holdout, or a final blind run.
 
 ## Contract boundary
 
@@ -53,8 +56,18 @@ recall, graph, Wiki or context. Validation prepares exact Markdown bytes and rev
 The final `BEGIN IMMEDIATE` transaction publishes every non-proposal Knowledge and relation
 revision, dependencies, outputs, audit event, rebuild work and receipt together.
 
+Statement Evidence keeps a stable digest for every Statement, evidence map and receipt, but new
+commits store those small logical artifacts in deterministic CAS bundles capped at 768 members and
+8 MiB. The additive bundle-member mapping is part of the Ledger persistence contract. Readers first
+resolve that mapping and otherwise fall back to the previous one-digest/one-file layout. Bundle and
+member hashes are both verified; paths and ordinals never become semantic identity.
+
 Projection failure cannot undo canonical knowledge. It leaves the Run at `projection_pending`;
-`resume --project` retries deterministic materialization and verification.
+`resume --project` retries deterministic materialization and verification. User-facing Source
+status therefore reports canonical commit/admission independently from Wiki projection readiness:
+`projection_pending` remains canonically compiled and admissible, but
+`wiki_projection_pending=true` and `wiki_projection_ready=false`. Only `succeeded` reports the Wiki
+projection ready.
 
 ## Plan and identity rules
 
@@ -188,7 +201,10 @@ deeplaw knowledge query \
 
 `answer` defaults to `compiled-first-v1`. `verify`, `quote`, `historical` and `legal` default to
 evidence-first behavior. Any source fallback, truncation, gap or rejected candidate is visible in
-the Query Plan and bounded receipt. Query is read-only.
+the Query Plan and bounded receipt. Provider Source references/evidence are typed to exact Source
+Revision, fragment, locator and quote hash. If the complete source passage cannot fit its hard
+budget, it is withheld and the duty remains a Gap rather than returning a truncated passage as
+exact evidence. Query is read-only.
 
 ## Stable Python API
 
@@ -226,8 +242,9 @@ The public facade maps internal validation, not-found, permission and state conf
 
 ## MCP and host workflow
 
-`knowledge_support` v4 is read-only and exposes compilation inventory/profile/status/explain,
-purpose-aware query and existing context/verification operations. `knowledge_sink` v3 is a separate
+`knowledge_support` input/output v6 is read-only and exposes compilation
+inventory/profile/status/explain, purpose-aware Query Plan v6 query/context and existing
+verification operations. `knowledge_sink` input v6 / output v4 is a separate
 process and exposes only the operations in its owner-created grant. Its caller-supplied idempotency
 key is durably bound to the exact closed request and a content-addressed result; reusing the key for
 different input fails closed. A compiler host requires both processes; a Skill or retrieved

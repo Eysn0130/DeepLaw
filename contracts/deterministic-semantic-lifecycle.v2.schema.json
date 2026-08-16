@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/deterministic-semantic-lifecycle.v2.schema.json",
+  "title": "DeepLaw Deterministic Semantic Lifecycle v2 (development)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "report_id", "status", "compiler_profile_version",
+    "semantic_status", "semantic_status_counts", "binding", "gold_id", "gold_status",
+    "corpus_id", "fixture_manifest_sha256", "agent_identity", "model_identity",
+    "network_policy", "external_model_execution", "first_party_command_sha256",
+    "baseline_query_state", "runs", "transitions", "vault_verification_valid",
+    "metrics", "elapsed_ms", "recorded_at", "formal_release_evidence_ready",
+    "competitive_claim_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.deterministic-semantic-lifecycle/v2"},
+    "report_id": {"type": "string", "pattern": "^semanticdeterministic_[0-9a-f]{24}$"},
+    "status": {"enum": ["passed", "failed"]},
+    "compiler_profile_version": {"const": "3"},
+    "semantic_status": {"enum": ["complete", "partial", "blocked", "unknown"]},
+    "semantic_status_counts": {"$ref": "#/$defs/semantic_status_counts"},
+    "binding": {"$ref": "#/$defs/binding"},
+    "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+    "gold_status": {
+      "enum": [
+        "maintainer_review_pending", "machine_review_pending", "maintainer_confirmed"
+      ]
+    },
+    "corpus_id": {"type": "string", "pattern": "^semanticcorpus_[0-9a-f]{24}$"},
+    "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "agent_identity": {"const": "deeplaw-deterministic-gold-agent"},
+    "model_identity": {"const": null},
+    "network_policy": {"const": "offline"},
+    "external_model_execution": {"const": "not_executed"},
+    "first_party_command_sha256": {"$ref": "#/$defs/sha256"},
+    "baseline_query_state": {
+      "type": "object", "additionalProperties": false,
+      "required": ["snapshot_sha256", "audit_head", "verified"],
+      "properties": {
+        "snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "audit_head": {"$ref": "#/$defs/sha256"},
+        "verified": {"const": true}
+      }
+    },
+    "runs": {
+      "type": "array", "minItems": 12, "maxItems": 100,
+      "items": {"$ref": "#/$defs/run"}
+    },
+    "transitions": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/successor"}, {"$ref": "#/$defs/withdrawal"}
+      ],
+      "items": false
+    },
+    "vault_verification_valid": {"const": true},
+    "metrics": {"$ref": "#/$defs/metrics"},
+    "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 86400000},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "formal_release_evidence_ready": {"const": false},
+    "competitive_claim_eligible": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "commit", "tree", "package_version", "lock_sha256", "pyproject_sha256",
+        "contracts_inventory_sha256", "migrations_inventory_sha256", "worktree_clean"
+      ],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "package_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "pyproject_sha256": {"$ref": "#/$defs/sha256"},
+        "contracts_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "migrations_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "worktree_clean": {"type": "boolean"}
+      }
+    },
+    "semantic_status_counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["complete", "partial", "blocked", "unknown", "total"],
+      "properties": {
+        "complete": {"type": "integer", "minimum": 0, "maximum": 100},
+        "partial": {"type": "integer", "minimum": 0, "maximum": 100},
+        "blocked": {"type": "integer", "minimum": 0, "maximum": 100},
+        "unknown": {"type": "integer", "minimum": 0, "maximum": 100},
+        "total": {"type": "integer", "minimum": 12, "maximum": 100}
+      }
+    },
+    "run": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "source_key", "source_revision_id", "compilation_run_id",
+        "compiler_profile_version", "packet_count", "packet_ids", "observation_count",
+        "semantic_status", "applicability_policy_sha256", "applicability_digest",
+        "unresolved_duties", "transaction_status", "quality_receipt_sha256",
+        "source_summary_revision_id", "validation_sha256", "receipt_sha256",
+        "projection_manifest_sha256", "verification_valid", "compilation_latency_ms"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.deterministic-semantic-source-run/v2"},
+        "source_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,99}$"},
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+        "compiler_profile_version": {"const": "3"},
+        "packet_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "packet_ids": {
+          "type": "array", "minItems": 1, "maxItems": 10000, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^packet_[0-9a-f]{24}$"}
+        },
+        "observation_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "semantic_status": {"enum": ["complete", "partial", "blocked", "unknown"]},
+        "applicability_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "applicability_digest": {"$ref": "#/$defs/sha256"},
+        "unresolved_duties": {
+          "type": "array", "maxItems": 15, "uniqueItems": true,
+          "items": {"enum": [
+            "source_summary", "key_claims", "entities", "concepts", "events",
+            "procedures", "comparisons", "typed_relations", "contradiction_scan",
+            "identity_resolution", "unresolved_questions", "source_coverage",
+            "affected_synthesis_detection", "overview_impact", "limitations_and_warnings"
+          ]}
+        },
+        "transaction_status": {"const": "succeeded"},
+        "quality_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "source_summary_revision_id": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"},
+        "validation_sha256": {"$ref": "#/$defs/sha256"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "projection_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "verification_valid": {"const": true},
+        "compilation_latency_ms": {"type": "integer", "minimum": 0, "maximum": 86400000}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"semantic_status": {"const": "complete"}}},
+          "then": {"properties": {"unresolved_duties": {"maxItems": 0}}}
+        },
+        {
+          "if": {"properties": {"semantic_status": {"const": "partial"}}},
+          "then": {"properties": {"unresolved_duties": {"minItems": 1}}}
+        }
+      ]
+    },
+    "metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "first_compilation_latency_ms", "baseline_compilation_latency_ms",
+        "incremental_refresh_latency_ms", "successor_compilation_latency_ms",
+        "withdrawal_refresh_latency_ms", "snapshot_restore_latency_ms",
+        "transaction_success_rate", "transition_success_rate"
+      ],
+      "properties": {
+        "first_compilation_latency_ms": {"type": "integer", "minimum": 0},
+        "baseline_compilation_latency_ms": {"type": "integer", "minimum": 0},
+        "incremental_refresh_latency_ms": {"type": "integer", "minimum": 0},
+        "successor_compilation_latency_ms": {"type": "integer", "minimum": 0},
+        "withdrawal_refresh_latency_ms": {"type": "integer", "minimum": 0},
+        "snapshot_restore_latency_ms": {"type": "integer", "minimum": 0},
+        "transaction_success_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "transition_success_rate": {"const": 1.0}
+      }
+    },
+    "successor": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "operation", "status", "predecessor_source_revision_id",
+        "successor_source_revision_id", "review_receipt_sha256", "freshness_report_sha256"
+      ],
+      "properties": {
+        "operation": {"const": "activate_successor"},
+        "status": {"const": "passed"},
+        "predecessor_source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "successor_source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "review_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "freshness_report_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "withdrawal": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "operation", "status", "source_revision_id", "removal_audit_head",
+        "freshness_report_sha256"
+      ],
+      "properties": {
+        "operation": {"const": "withdraw_source"},
+        "status": {"const": "passed"},
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "removal_audit_head": {"$ref": "#/$defs/sha256"},
+        "freshness_report_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "passed"}}},
+      "then": {"properties": {"vault_verification_valid": {"const": true}}}
+    }
+  ]
+}

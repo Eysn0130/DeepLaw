@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-publication-plan.v3.schema.json",
+  "title": "DeepLaw Semantic Publication Plan v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compiler_profile_version", "compilation_run_id", "source_revision_id", "expected_audit_head",
+    "inventory_sha256", "finalization_packet_id", "applicability_policy_sha256",
+    "applicability_digest", "packet_plans", "statement_plans", "observation_dispositions",
+    "duty_reports", "semantic_status", "warnings"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-publication-plan/v3"},
+    "compiler_profile_version": {"const": "3"},
+    "compilation_run_id": {"type": "string", "pattern": "^compilationrun_[0-9a-f]{24}$"},
+    "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+    "expected_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "finalization_packet_id": {"type": "string", "pattern": "^finalization_[0-9a-f]{24}$"},
+    "applicability_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "applicability_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "observation_dispositions": {
+      "type": "array", "maxItems": 100000, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["observation_id", "disposition", "target_ref", "reason"],
+        "properties": {
+          "observation_id": {"type": "string", "pattern": "^observation_[0-9a-f]{24}$"},
+          "disposition": {"enum": ["published", "merged_into", "retained_existing", "proposed_only", "omitted_with_reason", "unresolved"]},
+          "target_ref": {"type": ["string", "null"], "maxLength": 300},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 4000}
+        }
+      }
+    },
+    "packet_plans": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"type": "object"}},
+    "statement_plans": {
+      "type": "array", "maxItems": 10000, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/statementPlan"}
+    },
+    "duty_reports": {"type": "array", "minItems": 15, "maxItems": 15, "items": {"$ref": "#/$defs/dutyReport"}},
+    "semantic_status": {"enum": ["complete", "partial", "blocked", "unknown"]},
+    "warnings": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 2000}}
+  },
+  "$defs": {
+    "dutyReport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["duty_id", "duty_type", "required", "applicability", "status", "output_refs", "evidence_refs", "reason", "unresolved_items", "omission_reason", "deterministic_basis"],
+      "properties": {
+        "duty_id": {"type": "string", "pattern": "^duty_[0-9a-f]{24}$"},
+        "duty_type": {"$ref": "#/$defs/dutyType"},
+        "required": {"type": "boolean"},
+        "applicability": {"enum": ["applicable", "not_applicable", "unknown"]},
+        "status": {"enum": ["satisfied", "unresolved", "omitted_with_reason"]},
+        "output_refs": {"type": "array", "maxItems": 1000, "uniqueItems": true, "items": {"type": "string", "pattern": "^(knowledge|relationkey|observation)_[0-9a-f]{24}$"}},
+        "evidence_refs": {"type": "array", "maxItems": 1000, "uniqueItems": true, "items": {"$ref": "#/$defs/sourceReference"}},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "unresolved_items": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+        "omission_reason": {"type": ["string", "null"], "minLength": 1, "maxLength": 2000},
+        "deterministic_basis": {"$ref": "#/$defs/deterministicBasis"}
+      }
+    },
+    "sourceReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_revision_id", "fragment_id", "locator", "quote_sha256"],
+      "properties": {
+        "source_revision_id": {"type": "string", "pattern": "^sourcerev_[0-9a-f]{24}$"},
+        "fragment_id": {"type": "string", "pattern": "^fragment_[0-9a-f]{24}$"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "quote_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "statementPlan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["packet_id", "object_action_ordinal", "statements"],
+      "properties": {
+        "packet_id": {"type": "string", "pattern": "^packet_[0-9a-f]{24}$"},
+        "object_action_ordinal": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "statements": {
+          "type": "array", "maxItems": 4096, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/statement"}
+        }
+      }
+    },
+    "statement": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "ordinal", "char_start", "char_end", "statement_text", "statement_sha256", "statement_type",
+        "support_status", "source_refs", "knowledge_revision_refs",
+        "relation_revision_refs", "valid_from", "valid_to", "limitation",
+        "gaps", "input_set_sha256"
+      ],
+      "properties": {
+        "ordinal": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "char_start": {"type": "integer", "minimum": 0, "maximum": 200000},
+        "char_end": {"type": "integer", "minimum": 1, "maximum": 200000},
+        "statement_text": {"type": "string", "minLength": 1, "maxLength": 16384},
+        "statement_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "statement_type": {"enum": ["factual", "interpretation", "limitation", "unresolved"]},
+        "support_status": {"enum": ["supported", "contested", "unsupported", "not_applicable"]},
+        "source_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/sourceReference"}},
+        "knowledge_revision_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "pattern": "^knowledgerev_[0-9a-f]{24}$"}},
+        "relation_revision_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "pattern": "^relationrev_[0-9a-f]{24}$"}},
+        "valid_from": {"type": ["string", "null"], "format": "date-time"},
+        "valid_to": {"type": ["string", "null"], "format": "date-time"},
+        "limitation": {"type": ["string", "null"], "minLength": 1, "maxLength": 4000},
+        "gaps": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/gap"}},
+        "input_set_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "gap": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gap_id", "reason"],
+      "properties": {
+        "gap_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "dutyType": {
+      "enum": [
+        "source_summary", "key_claims", "entities", "concepts", "events",
+        "procedures", "comparisons", "typed_relations", "contradiction_scan",
+        "identity_resolution", "unresolved_questions", "source_coverage",
+        "affected_synthesis_detection", "overview_impact", "limitations_and_warnings"
+      ]
+    },
+    "deterministicBasis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rule_id", "facts", "stable_refs", "facts_sha256", "reason"],
+      "properties": {
+        "rule_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,100}$"},
+        "facts": {"$ref": "#/$defs/closedFacts"},
+        "stable_refs": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 300}},
+        "facts_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "closedFacts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_present", "source_admitted", "source_nonempty", "media_type", "byte_size", "lifecycle", "node_types", "signals", "observation_kinds", "observation_count", "existing_kinds", "existing_count", "relation_count", "previous_output_count", "affected_synthesis_count", "truncated"],
+      "properties": {
+        "source_present": {"type": "boolean"}, "source_admitted": {"type": "boolean"}, "source_nonempty": {"type": "boolean"},
+        "media_type": {"type": ["string", "null"], "maxLength": 200}, "byte_size": {"type": "integer", "minimum": 0, "maximum": 1000000000},
+        "lifecycle": {"type": ["string", "null"], "maxLength": 100},
+        "node_types": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 10000}},
+        "signals": {"type": "object", "additionalProperties": false, "required": ["code", "table", "list", "timeline", "question", "procedure"], "properties": {"code": {"type": "boolean"}, "table": {"type": "boolean"}, "list": {"type": "boolean"}, "timeline": {"type": "boolean"}, "question": {"type": "boolean"}, "procedure": {"type": "boolean"}}},
+        "observation_kinds": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 100000}}, "observation_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "existing_kinds": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 100000}}, "existing_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "relation_count": {"type": "integer", "minimum": 0, "maximum": 100000}, "previous_output_count": {"type": "integer", "minimum": 0, "maximum": 1000}, "affected_synthesis_count": {"type": "integer", "minimum": 0, "maximum": 1000}, "truncated": {"type": "boolean"}
+      }
+    }
+  }
+}

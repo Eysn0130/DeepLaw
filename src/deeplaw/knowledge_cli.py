@@ -4,17 +4,18 @@ import argparse
 import json
 import os
 import secrets
+import sys
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
+from .agent_context import build_agent_context
 from .api import KnowledgeOS
 from .compilation.models import (
     COMPILER_GRANT_OPERATIONS,
     SEMANTIC_COMPILER_GRANT_OPERATIONS,
 )
+from .compilation_handoff import build_compilation_handoff
 from .context_compiler import compile_context, verify_capsule_file
 from .knowledge_autonomy import (
     FEEDBACK_EVALUATOR_TYPES,
@@ -23,7 +24,6 @@ from .knowledge_autonomy import (
     AutonomousKnowledgeStore,
     _validate_contract,
     autonomous_core_installed,
-    initialize_autonomous_core,
     migrate_autonomous_core,
     rollback_autonomous_core,
 )
@@ -93,6 +93,11 @@ from .knowledge_package import (
     import_knowledge_package,
     verify_knowledge_package,
 )
+from .knowledge_service import (
+    auto_aware_knowledge_vault,
+    initialize_default_knowledge_vault,
+    source_knowledge_status_for_result,
+)
 from .knowledge_store import (
     RELATION_PREDICATES,
     VAULT_SCOPES,
@@ -134,21 +139,106 @@ from .skill_factory import (
     install_skill_bundle,
     verify_skill_bundle,
 )
-from .util import excerpt, strict_json_loads
+from .task_context import normalize_task_context_binding
+from .util import canonical_json, excerpt, strict_json_loads
+
+_BASIC_KNOWLEDGE_COMMANDS = (
+    "init",
+    "doctor",
+    "source",
+    "compile",
+    "reconcile",
+    "task",
+    "host",
+    "context",
+    "wiki",
+    "snapshot",
+    "forget",
+)
+_KNOWLEDGE_HELP_TIERS = {
+    "advanced": (
+        "agent-context",
+        "autonomy",
+        "backfill",
+        "compare-retrieval",
+        "diagnose-retrieval",
+        "discovery-model",
+        "editor",
+        "lineage",
+        "projection",
+        "query",
+        "relation",
+        "retrieval-profile",
+        "semantic",
+        "structure",
+        "synthesis",
+        "workbench",
+    ),
+    "admin": (
+        "export",
+        "gc",
+        "import-package",
+        "inbox",
+        "job",
+        "mcp",
+        "migrate",
+        "rebuild-indexes",
+        "revoke",
+        "run-receipt",
+        "sink",
+        "skill",
+        "verify-package",
+    ),
+    "compatibility": (
+        "approve",
+        "approve-source",
+        "debug",
+        "explain",
+        "feedback",
+        "get",
+        "ingest",
+        "inspect",
+        "propose",
+        "recall",
+        "relate",
+        "review",
+        "search",
+        "verify",
+    ),
+}
 
 
-@contextmanager
-def _command_vault(
-    path: Path,
-    *,
-    read_only: bool,
-) -> Iterator[KnowledgeVault]:
-    """Close a successful legacy write before importing its immutable evidence."""
-    with KnowledgeVault(path, read_only=read_only) as vault:
-        yield vault
-    if not read_only and autonomous_core_installed(path):
-        with AutonomousKnowledgeStore(path, read_only=False):
-            pass
+def _tier_help(tier: str) -> str:
+    commands = _KNOWLEDGE_HELP_TIERS[tier]
+    rendered = "\n".join(f"  deeplaw knowledge {command}" for command in commands)
+    return (
+        f"DeepLaw Knowledge {tier.title()} commands\n\n{rendered}\n\n"
+        "These commands remain directly executable. No alias or persistent contract is removed.\n"
+    )
+
+
+class _KnowledgeTierHelp(argparse.Action):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        if option_string is None:
+            raise RuntimeError("knowledge help tier is unavailable")
+        tier = option_string.removeprefix("--help-")
+        parser._print_message(_tier_help(tier), sys.stdout)
+        parser.exit()
+
+
+def _curate_default_help(
+    action: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    by_name = {choice.dest: choice for choice in action._choices_actions}
+    action._choices_actions[:] = [
+        by_name[name] for name in _BASIC_KNOWLEDGE_COMMANDS
+    ]
 
 
 def _add_typed_extraction_arguments(parser: argparse.ArgumentParser) -> None:
@@ -180,6 +270,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     knowledge = commands.add_parser(
         "knowledge",
         help="Operate the local Markdown-native Agent Knowledge OS",
+        description=(
+            "Basic journey: init -> doctor -> source add -> compile -> reconcile -> "
+            "task start -> host context -> wiki/source drill-down -> checkpoint/snapshot/forget"
+        ),
+        epilog=(
+            "Use --help-advanced, --help-admin, or --help-compatibility for the "
+            "layered command inventory."
+        ),
     )
     knowledge.add_argument(
         "--format",
@@ -188,7 +286,18 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         default="json",
         help="Render the final result as pretty JSON, one JSONL event, or human-readable text",
     )
-    subcommands = knowledge.add_subparsers(dest="knowledge_command", required=True)
+    for tier in _KNOWLEDGE_HELP_TIERS:
+        knowledge.add_argument(
+            f"--help-{tier}",
+            action=_KnowledgeTierHelp,
+            nargs=0,
+            help=f"Show {tier} commands without changing their compatibility",
+        )
+    subcommands = knowledge.add_subparsers(
+        dest="knowledge_command",
+        required=True,
+        metavar="{" + ",".join(_BASIC_KNOWLEDGE_COMMANDS) + "}",
+    )
 
     init = subcommands.add_parser("init", help="Initialize an owner-only knowledge vault")
     init.add_argument("--vault", type=Path, default=default_knowledge_vault())
@@ -551,8 +660,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     forget_target = forget.add_mutually_exclusive_group(required=True)
     forget_target.add_argument("--knowledge-key")
     forget_target.add_argument("--asset-id")
+    forget_target.add_argument("--knowledge-id")
+    forget_target.add_argument("--source-revision-id")
+    forget.add_argument("--expected-revision-id")
+    forget.add_argument("--grant-id")
+    forget.add_argument("--idempotency-key")
     forget.add_argument("--reason", required=True)
     forget.add_argument("--confirm", action="store_true")
+    forget.add_argument("--confirm-no-case-data", action="store_true")
 
     relate = subcommands.add_parser(
         "relate",
@@ -747,6 +862,45 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     get.add_argument("--asset-id", required=True)
     get.add_argument("--include-inactive", action="store_true")
 
+    agent_context = subcommands.add_parser(
+        "agent-context",
+        help="Build one host-neutral, ephemeral Agent Context Envelope",
+    )
+    agent_context.add_argument("--task", required=True)
+    agent_context.add_argument("--goal")
+    agent_context.add_argument("--workspace-identity", required=True)
+    agent_context.add_argument("--repository-identity", required=True)
+    agent_context.add_argument("--commit")
+    agent_context.add_argument("--branch")
+    agent_context.add_argument("--active-file", action="append", default=[])
+    agent_context.add_argument("--selected-text")
+    agent_context.add_argument("--open-tab", action="append", default=[])
+    agent_context.add_argument("--current-note")
+    agent_context.add_argument(
+        "--purpose",
+        choices=(
+            "answer",
+            "verify",
+            "quote",
+            "historical",
+            "legal",
+            "debug",
+            "freshness_check",
+        ),
+        default="answer",
+    )
+    agent_context.add_argument(
+        "--scope",
+        choices=("personal", "project", "domain"),
+        default="project",
+    )
+    agent_context.add_argument(
+        "--max-sensitivity",
+        choices=("public", "internal", "private", "restricted"),
+        default="private",
+    )
+    agent_context.add_argument("--max-tokens", type=int, default=4_000)
+
     context = subcommands.add_parser(
         "context",
         help="Compile a bounded, verifiable Knowledge Capsule for one task",
@@ -767,6 +921,16 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         default="answer",
     )
     context.add_argument(
+        "--scope",
+        choices=sorted(AUTONOMOUS_SCOPES),
+        help="Autonomous scope; defaults to the Vault manifest scope",
+    )
+    context.add_argument(
+        "--max-sensitivity",
+        choices=sorted(AUTONOMOUS_SENSITIVITIES),
+        help="Maximum admitted sensitivity; defaults to private",
+    )
+    context.add_argument(
         "--policy",
         choices=("compiled-first-v1", "evidence-first-v1", "balanced-v1"),
     )
@@ -783,6 +947,27 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     context.add_argument("--as-of")
     context.add_argument("--kind", action="append", default=[])
     context.add_argument("--memory-tier", action="append", default=[])
+    context.add_argument(
+        "--query-plan-version", choices=("5", "6"), default="6"
+    )
+    context.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding JSON object (max 8 KiB)",
+    )
+    context.add_argument("--query-target")
+    context.add_argument(
+        "--applicable-duty",
+        choices=(
+            "primary_answer", "identity", "definition", "current_state",
+            "temporal_freshness", "procedure", "exception", "contradiction",
+            "applicability", "limitation", "source_evidence", "unresolved_gap",
+        ),
+        action="append",
+        default=[],
+    )
+    context.add_argument(
+        "--capsule-projection", choices=("compact", "standard", "audit"), default="standard"
+    )
     context.add_argument("--include-restricted", action="store_true")
     context.add_argument("--confirm-no-case-data", action="store_true")
     context.add_argument("--output", type=Path)
@@ -1195,6 +1380,13 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     autonomy_reconcile.add_argument("--vault", type=Path, default=default_knowledge_vault())
     autonomy_reconcile.add_argument("--grant-id", required=True)
     autonomy_reconcile.add_argument("--confirm-no-case-data", action="store_true")
+    reconcile = subcommands.add_parser(
+        "reconcile",
+        help="Reconcile safe Markdown edits through the shared domain coordinator",
+    )
+    reconcile.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    reconcile.add_argument("--grant-id", required=True)
+    reconcile.add_argument("--confirm-no-case-data", action="store_true")
     autonomy_watch = autonomy_commands.add_parser(
         "watch",
         help="Poll the bounded Markdown workspace and reconcile changes through the coordinator",
@@ -1316,6 +1508,27 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         default="hybrid",
     )
     autonomy_context.add_argument("--as-of")
+    autonomy_context.add_argument(
+        "--query-plan-version", choices=("5", "6"), default="6"
+    )
+    autonomy_context.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding JSON object (max 8 KiB)",
+    )
+    autonomy_context.add_argument("--query-target")
+    autonomy_context.add_argument(
+        "--applicable-duty",
+        choices=(
+            "primary_answer", "identity", "definition", "current_state",
+            "temporal_freshness", "procedure", "exception", "contradiction",
+            "applicability", "limitation", "source_evidence", "unresolved_gap",
+        ),
+        action="append",
+        default=[],
+    )
+    autonomy_context.add_argument(
+        "--capsule-projection", choices=("compact", "standard", "audit"), default="standard"
+    )
     autonomy_context.add_argument("--confirm-no-case-data", action="store_true")
     autonomy_identity = autonomy_commands.add_parser(
         "identity",
@@ -1385,6 +1598,20 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     compilation_profile.add_argument("--vault", type=Path, default=default_knowledge_vault())
     compilation_profile.add_argument("--compiler-profile", default="living-wiki-agent")
     compilation_profile.add_argument("--compiler-profile-version", default="1")
+    compilation_list = compilation_commands.add_parser(
+        "list",
+        help="List bounded Compilation Run metadata for operator selection",
+    )
+    compilation_list.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    compilation_list.add_argument("--source-revision-id")
+    compilation_handoff = compilation_commands.add_parser(
+        "handoff",
+        help="Build a read-only Source-to-Knowledge Host handoff",
+    )
+    compilation_handoff.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    compilation_handoff.add_argument("--source-revision-id", required=True)
     compilation_begin = compilation_commands.add_parser("begin")
     compilation_begin.add_argument("--vault", type=Path, default=default_knowledge_vault())
     compilation_begin.add_argument("--grant-id", required=True)
@@ -1529,6 +1756,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
             default="private",
         )
         wiki_page.add_argument("--limit", type=int, default=20)
+        wiki_page.add_argument("--cursor")
     wiki_graph = wiki_commands.add_parser("local-graph")
     wiki_graph.add_argument("--vault", type=Path, default=default_knowledge_vault())
     wiki_graph.add_argument("--knowledge-id", required=True)
@@ -1610,8 +1838,37 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     purpose_query.add_argument("--as-of")
     purpose_query.add_argument(
         "--query-plan-version",
-        choices=("4", "5"),
-        default="4",
+        choices=("4", "5", "6"),
+        default="6",
+    )
+    purpose_query.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding JSON object (max 8 KiB)",
+    )
+    purpose_query.add_argument("--query-target")
+    purpose_query.add_argument(
+        "--applicable-duty",
+        choices=(
+            "primary_answer",
+            "identity",
+            "definition",
+            "current_state",
+            "temporal_freshness",
+            "procedure",
+            "exception",
+            "contradiction",
+            "applicability",
+            "limitation",
+            "source_evidence",
+            "unresolved_gap",
+        ),
+        action="append",
+        default=[],
+    )
+    purpose_query.add_argument(
+        "--capsule-projection",
+        choices=("compact", "standard", "audit"),
+        default="standard",
     )
 
     backfill = subcommands.add_parser(
@@ -1693,9 +1950,14 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     sink_status.add_argument("--vault", type=Path, default=default_knowledge_vault())
     sink_status.add_argument("--grant-id", required=True)
+    sink_apply_help = (
+        "Apply one closed knowledge-sink input v2-v6 request; the contract is "
+        "selected from the active grant"
+    )
     sink_apply = sink_commands.add_parser(
         "apply",
-        help="Apply one closed knowledge-sink.input/v2 JSON request",
+        help=sink_apply_help,
+        description=sink_apply_help,
     )
     sink_apply.add_argument("--vault", type=Path, default=default_knowledge_vault())
     sink_apply.add_argument("--grant-id", required=True)
@@ -1713,6 +1975,97 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     sink_mcp.add_argument("--grant-id", required=True)
     sink_mcp.add_argument("--transport", choices=("stdio",), default="stdio")
     sink_mcp.add_argument("--stdio", action="store_true")
+    sink_mcp.add_argument(
+        "--closed-environment",
+        action="store_true",
+        help="Launch the fixed knowledge_sink child with an isolated environment",
+    )
+    sink_mcp.add_argument("--expected-vault-id")
+
+    task_driver = subcommands.add_parser(
+        "task",
+        help="Drive bounded task-handle continuity without storing Host transcripts",
+    )
+    task_commands = task_driver.add_subparsers(dest="task_command", required=True)
+    task_start = task_commands.add_parser("start")
+    task_start.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_start.add_argument("--project", required=True)
+    task_start.add_argument("--task", dest="task_text", required=True)
+    task_start.add_argument("--workspace", type=Path, default=Path.cwd())
+    for action in ("resume", "compaction"):
+        task_read = task_commands.add_parser(action)
+        task_read.add_argument("--vault", type=Path, default=default_knowledge_vault())
+        task_read.add_argument("--task-handle")
+        task_read.add_argument("--project")
+        task_read.add_argument("--task", dest="task_text")
+        task_read.add_argument("--workspace", type=Path, default=Path.cwd())
+    for action in ("locate", "inspect", "timeline"):
+        task_route = task_commands.add_parser(action)
+        task_route.add_argument("--vault", type=Path, default=default_knowledge_vault())
+        task_route.add_argument("--project", required=True)
+        task_route.add_argument("--task", dest="task_text", required=True)
+        task_route.add_argument("--workspace", type=Path, default=Path.cwd())
+        task_route.add_argument("--task-handle")
+        if action == "timeline":
+            task_route.add_argument("--limit", type=int, default=50)
+    task_fork = task_commands.add_parser("fork")
+    task_fork.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_fork.add_argument("--task-handle", required=True)
+    task_fork.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_fork.add_argument("--child-workspace", type=Path)
+    task_fork.add_argument(
+        "--mode",
+        choices=("continue-parent", "child-task"),
+        required=True,
+    )
+    task_fork.add_argument("--child-task")
+    task_checkpoint = task_commands.add_parser("checkpoint")
+    task_checkpoint.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_checkpoint.add_argument("--task-handle", required=True)
+    task_checkpoint.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_checkpoint.add_argument("--grant-id", required=True)
+    task_checkpoint.add_argument("--idempotency-key", required=True)
+    task_checkpoint.add_argument("--task", dest="task_text")
+    task_checkpoint.add_argument("--summary", required=True)
+    task_checkpoint.add_argument("--next-action", required=True)
+    task_checkpoint.add_argument("--expires-at", required=True)
+    task_checkpoint.add_argument("--decision", action="append", default=[])
+    task_checkpoint.add_argument("--gap", action="append", default=[])
+    task_checkpoint.add_argument("--artifact-ref", action="append", default=[])
+    task_checkpoint.add_argument("--confirm-no-case-data", action="store_true")
+    task_forget = task_commands.add_parser("forget")
+    task_forget.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_forget.add_argument("--task-handle", required=True)
+    task_forget.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_forget.add_argument("--grant-id", required=True)
+    task_forget.add_argument("--idempotency-key", required=True)
+    task_forget.add_argument("--reason", required=True)
+    task_forget.add_argument("--confirm-no-case-data", action="store_true")
+
+    host = subcommands.add_parser(
+        "host",
+        help="Build a read-only Host connection plan without managing Host auth/runtime",
+    )
+    host_commands = host.add_subparsers(dest="host_command", required=True)
+    host_connect = host_commands.add_parser(
+        "connect",
+        help="Verify one vault and print a merge-only read-only MCP configuration",
+    )
+    host_connect.add_argument(
+        "--host",
+        choices=("codex", "claude-code", "opencode"),
+        required=True,
+    )
+    host_connect.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    host_task = host_connect.add_mutually_exclusive_group()
+    host_task.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding embedded in the generated launcher",
+    )
+    host_task.add_argument(
+        "--task-handle",
+        help="Stable opaque task handle resolved by the launcher at Host start",
+    )
 
     mcp = subcommands.add_parser(
         "mcp",
@@ -1721,6 +2074,27 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     mcp.add_argument("--vault", type=Path)
     mcp.add_argument("--transport", choices=("stdio",), default="stdio")
     mcp.add_argument("--stdio", action="store_true")
+    mcp.add_argument(
+        "--closed-environment",
+        action="store_true",
+        help="Launch the fixed knowledge_support child with an isolated environment",
+    )
+    mcp.add_argument("--expected-vault-id")
+    mcp_task = mcp.add_mutually_exclusive_group()
+    mcp_task.add_argument(
+        "--task-binding",
+        help="Canonical opaque task-context binding used by read-only query/context calls",
+    )
+    mcp_task.add_argument(
+        "--task-handle",
+        help="Stable opaque task handle resolved against explicit Host workspace metadata",
+    )
+    mcp.add_argument(
+        "--workspace",
+        type=Path,
+        help="Explicit Host task worktree used only with --task-handle",
+    )
+    _curate_default_help(subcommands)
 
 
 def _write_capsule(path: Path, capsule: dict[str, Any]) -> None:
@@ -1983,34 +2357,151 @@ def _read_bounded_json_object(path: Path, *, label: str, max_bytes: int) -> dict
     return value
 
 
+def _parse_task_binding_argument(value: str | None) -> dict[str, Any] | None:
+    """Parse one bounded canonical task-binding JSON argument.
+
+    The CLI accepts only the opaque digest form defined by
+    ``normalize_task_context_binding``.  Paths, branch names, diffs, and raw
+    task content therefore fail before any retrieval seam is opened.
+    """
+
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise ValueError("--task-binding must be one canonical JSON object string")
+    encoded = value.encode("utf-8")
+    if len(encoded) > 8 * 1024:
+        raise ValueError("--task-binding exceeds its 8 KiB bound")
+    parsed = strict_json_loads(encoded)
+    if not isinstance(parsed, dict):
+        raise ValueError("--task-binding must contain one JSON object")
+    if canonical_json(parsed) != value:
+        raise ValueError("--task-binding must use canonical JSON")
+    return normalize_task_context_binding(parsed, allow_none=False)
+
+
 def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
+    if command == "task":
+        from .task_continuity import (
+            checkpoint_task,
+            forget_task,
+            fork_task,
+            inspect_task,
+            locate_task,
+            resume_task,
+            start_task,
+            timeline_task,
+        )
+
+        if args.task_command == "start":
+            return start_task(
+                vault_path=args.vault,
+                project=args.project,
+                task=args.task_text,
+                workspace=args.workspace,
+            )
+        if args.task_command in {"resume", "compaction"}:
+            return resume_task(
+                vault_path=args.vault,
+                task_handle=args.task_handle,
+                project=args.project,
+                task=args.task_text,
+                workspace=args.workspace,
+                operation=args.task_command,
+            )
+        if args.task_command in {"locate", "inspect", "timeline"}:
+            route_arguments = {
+                "vault_path": args.vault,
+                "project": args.project,
+                "task": args.task_text,
+                "workspace": args.workspace,
+                "task_handle": args.task_handle,
+            }
+            if args.task_command == "locate":
+                return locate_task(**route_arguments)
+            if args.task_command == "inspect":
+                return inspect_task(**route_arguments)
+            return timeline_task(**route_arguments, limit=args.limit)
+        if args.task_command == "fork":
+            return fork_task(
+                vault_path=args.vault,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                child_workspace=args.child_workspace,
+                mode=args.mode,
+                child_task=args.child_task,
+            )
+        if args.task_command == "checkpoint":
+            return checkpoint_task(
+                vault_path=args.vault,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                grant_id=args.grant_id,
+                idempotency_key=args.idempotency_key,
+                task=args.task_text,
+                summary=args.summary,
+                next_action=args.next_action,
+                expires_at=args.expires_at,
+                decisions=tuple(args.decision),
+                gaps=tuple(args.gap),
+                artifact_refs=tuple(args.artifact_ref),
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if args.task_command == "forget":
+            return forget_task(
+                vault_path=args.vault,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                grant_id=args.grant_id,
+                idempotency_key=args.idempotency_key,
+                reason=args.reason,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        raise ValueError(f"unsupported task continuity action: {args.task_command}")
+    if command == "host":
+        from .host_connect import build_host_connect_plan
+
+        if args.host_command != "connect":
+            raise ValueError(f"unsupported Host action: {args.host_command}")
+        return build_host_connect_plan(
+            host=args.host,
+            vault_path=args.vault,
+            task_binding=_parse_task_binding_argument(args.task_binding),
+            task_handle=args.task_handle,
+        )
+    if command == "reconcile":
+        args.autonomy_command = "reconcile"
+        command = "autonomy"
     if command == "init":
-        legacy = initialize_knowledge_vault(
+        if args.legacy_review_core:
+            return initialize_knowledge_vault(
+                args.vault,
+                name=args.name,
+                scope=cast(VaultScope, args.scope),
+            )
+        initialized = initialize_default_knowledge_vault(
             args.vault,
             name=args.name,
             scope=cast(VaultScope, args.scope),
         )
-        if args.legacy_review_core:
-            return legacy
-        autonomous = initialize_autonomous_core(
-            args.vault,
-            migration_source="new-vault",
-        )
-        return {
-            "schema_version": "deeplaw.knowledge-vault-initialization/v2",
-            "vault_id": legacy["vault_id"],
-            "legacy_compatibility": legacy,
-            "autonomous_core": autonomous,
-            "active_write_policy": "agent_derived_autonomous",
-        }
+        return initialized
     if command == "compile":
         action = args.compilation_command
+        if action == "handoff":
+            return build_compilation_handoff(
+                args.vault,
+                source_revision_id=args.source_revision_id,
+            )
         knowledge_os = KnowledgeOS.open(args.vault)
         if action == "profile":
             return knowledge_os.compilations.profile(
                 args.compiler_profile,
                 args.compiler_profile_version,
+            )
+        if action == "list":
+            return knowledge_os.sources.compilation_status(
+                source_revision_id=args.source_revision_id,
             )
         if action == "begin":
             profile = knowledge_os.compilations.profile(
@@ -2125,8 +2616,8 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             compilation_run_id=args.run_id,
             grant_id=args.grant_id,
         )
-        if run.compiler_profile_version != "2":
-            raise ValueError("semantic command requires compiler profile version 2")
+        if run.compiler_profile_version not in {"2", "3"}:
+            raise ValueError("semantic command requires compiler profile version 2 or 3")
         if action == "packet":
             packet = run.next_packet()
             return packet or {
@@ -2237,6 +2728,29 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             as_of=args.as_of,
             kinds=tuple(args.kind),
             query_plan_version=args.query_plan_version,
+            task_binding=_parse_task_binding_argument(args.task_binding),
+            query_target=args.query_target,
+            applicable_duties=(
+                tuple(args.applicable_duty) if args.applicable_duty else None
+            ),
+            projection=args.capsule_projection,
+        )
+    if command == "agent-context":
+        return build_agent_context(
+            task=args.task,
+            goal=args.goal,
+            workspace_identity=args.workspace_identity,
+            repository_identity=args.repository_identity,
+            commit=args.commit,
+            branch=args.branch,
+            requested_purpose=args.purpose,
+            scope=args.scope,
+            max_sensitivity=args.max_sensitivity,
+            active_files=args.active_file,
+            selected_text=args.selected_text,
+            open_tabs=args.open_tab,
+            current_note=args.current_note,
+            token_budget=args.max_tokens,
         )
     if command == "backfill":
         action = args.backfill_command
@@ -2469,6 +2983,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             if action == "conflicts":
                 return store.list_conflicts(limit=args.limit)
             if action == "context":
+                task_binding = _parse_task_binding_argument(args.task_binding)
                 return store.build_capsule(
                     task=args.task,
                     goal=args.goal,
@@ -2483,6 +2998,13 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     graph_hops=args.graph_hops,
                     retrieval_mode=args.retrieval_mode,
                     as_of=args.as_of,
+                    query_plan_version=args.query_plan_version,
+                    query_target=args.query_target,
+                    applicable_duties=(
+                        tuple(args.applicable_duty) if args.applicable_duty else None
+                    ),
+                    projection=args.capsule_projection,
+                    task_binding=task_binding,
                     confirm_no_case_data=args.confirm_no_case_data,
                     force_canonical_lexical=bool(
                         agent_read_integrity and not agent_read_integrity["derived_ready"]
@@ -2536,11 +3058,11 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             "limit": args.limit,
         }
         if action == "page":
-            return wiki_api.page(args.wiki_path, **options)
+            return wiki_api.page(args.wiki_path, cursor=args.cursor, **options)
         if action == "backlinks":
-            return wiki_api.backlinks(args.wiki_path, **options)
+            return wiki_api.backlinks(args.wiki_path, cursor=args.cursor, **options)
         if action == "outlinks":
-            return wiki_api.outlinks(args.wiki_path, **options)
+            return wiki_api.outlinks(args.wiki_path, cursor=args.cursor, **options)
         if action == "local-graph":
             return wiki_api.local_graph(args.knowledge_id, **options)
         if action == "browse-kind":
@@ -2558,12 +3080,32 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     if command == "sink":
         action = args.sink_command
         if action == "mcp":
+            if args.closed_environment:
+                from .closed_mcp_launcher import launch_closed_mcp
+
+                launch_closed_mcp(
+                    surface="knowledge_sink",
+                    vault_path=args.vault,
+                    expected_vault_id=args.expected_vault_id,
+                    grant_id=args.grant_id,
+                )
+                return None
             from .knowledge_sink_mcp_server import run_knowledge_sink_mcp
+
+            selected_vault = args.vault
+            if args.expected_vault_id is not None:
+                from .host_runtime import resolve_knowledge_vault
+
+                selected_vault = resolve_knowledge_vault(
+                    selected_vault,
+                    expected_vault_id=args.expected_vault_id,
+                    require_existing=True,
+                )
 
             run_knowledge_sink_mcp(
                 grant_id=args.grant_id,
                 transport="stdio" if args.stdio else args.transport,
-                vault_path=args.vault,
+                vault_path=selected_vault,
             )
             return None
         if action == "apply":
@@ -2685,11 +3227,41 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             model_root=args.model_root,
         )
     if command == "mcp":
+        if args.task_handle is not None and os.environ.get("DEEPLAW_TASK_BINDING"):
+            raise ValueError("task handle and inherited task binding are mutually exclusive")
+        task_binding = _parse_task_binding_argument(
+            args.task_binding or os.environ.get("DEEPLAW_TASK_BINDING")
+        )
+        if args.closed_environment:
+            from .closed_mcp_launcher import launch_closed_mcp
+
+            launch_closed_mcp(
+                surface="knowledge_support",
+                vault_path=args.vault,
+                expected_vault_id=args.expected_vault_id,
+                task_binding=task_binding,
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+            )
+            return None
+        if args.task_handle is not None:
+            raise ValueError("task handle requires the closed production launcher")
         from .knowledge_mcp_server import run_knowledge_mcp
+
+        selected_vault = args.vault
+        if args.expected_vault_id is not None:
+            from .host_runtime import resolve_knowledge_vault
+
+            selected_vault = resolve_knowledge_vault(
+                selected_vault,
+                expected_vault_id=args.expected_vault_id,
+                require_existing=True,
+            )
 
         run_knowledge_mcp(
             transport="stdio" if args.stdio else args.transport,
-            vault_path=args.vault,
+            vault_path=selected_vault,
+            default_task_binding=task_binding,
         )
         return None
     if command == "migrate" and args.rollback:
@@ -2699,6 +3271,40 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             args.vault,
             backup=args.backup,
             confirm=args.confirm_rollback,
+        )
+    if command == "forget" and args.knowledge_id is not None:
+        if not args.confirm:
+            raise ValueError("autonomous Knowledge Object forgetting requires --confirm")
+        if not args.confirm_no_case_data:
+            raise ValueError(
+                "autonomous Knowledge Object forgetting requires --confirm-no-case-data"
+            )
+        required = {
+            "--expected-revision-id": args.expected_revision_id,
+            "--grant-id": args.grant_id,
+            "--idempotency-key": args.idempotency_key,
+        }
+        missing = [name for name, value in required.items() if value is None]
+        if missing:
+            raise ValueError(
+                "autonomous Knowledge Object forgetting requires " + ", ".join(missing)
+            )
+        with AutonomousKnowledgeStore(args.vault, read_only=False) as store:
+            result = store.forget(
+                grant_id=args.grant_id,
+                idempotency_key=args.idempotency_key,
+                knowledge_id=args.knowledge_id,
+                expected_revision_id=args.expected_revision_id,
+                reason=args.reason,
+                confirm_no_case_data=True,
+            )
+        return {**result, "target_type": "autonomous_knowledge"}
+    if command == "forget" and any(
+        value is not None
+        for value in (args.expected_revision_id, args.grant_id, args.idempotency_key)
+    ):
+        raise ValueError(
+            "grant, idempotency, and revision controls apply only to --knowledge-id"
         )
 
     write_commands = {
@@ -2740,7 +3346,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         or (command == "gc" and not args.dry_run and not args.orphans)
     )
     command_read_only = command not in write_commands and not nested_write
-    with _command_vault(
+    with auto_aware_knowledge_vault(
         args.vault,
         read_only=command_read_only,
     ) as vault:
@@ -3089,20 +3695,23 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
         if command == "source":
             if args.source_command == "add":
                 return _bounded_ingest_receipt(
-                    compile_source(
+                    source_knowledge_status_for_result(
                         vault,
-                        args.source,
-                        source_kind=cast(SourceKind, args.source_kind),
-                        title=args.title,
-                        origin_uri=args.origin_uri,
-                        trust=cast(TrustLevel, args.trust),
-                        sensitivity=cast(Sensitivity, args.sensitivity),
-                        confirm_no_case_data=args.confirm_no_case_data,
-                        pdf_fallback=args.pdf_fallback,
-                        typed_extraction=args.typed_extraction,
-                        typed_extractor_manifest=args.typed_extractor_manifest,
-                        confirm_external_disclosure=args.confirm_external_disclosure,
-                        reference_proposals=args.reference_proposals,
+                        compile_source(
+                            vault,
+                            args.source,
+                            source_kind=cast(SourceKind, args.source_kind),
+                            title=args.title,
+                            origin_uri=args.origin_uri,
+                            trust=cast(TrustLevel, args.trust),
+                            sensitivity=cast(Sensitivity, args.sensitivity),
+                            confirm_no_case_data=args.confirm_no_case_data,
+                            pdf_fallback=args.pdf_fallback,
+                            typed_extraction=args.typed_extraction,
+                            typed_extractor_manifest=args.typed_extractor_manifest,
+                            confirm_external_disclosure=args.confirm_external_disclosure,
+                            reference_proposals=args.reference_proposals,
+                        ),
                     )
                 )
             if args.source_command == "add-dir":
@@ -3443,12 +4052,43 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 confirm=args.confirm,
             ).to_dict()
         if command == "forget":
-            return vault.selectively_forget(
+            if args.source_revision_id is not None:
+                binding = vault.connection.execute(
+                    """
+                    SELECT legacy_source_id
+                    FROM source_revision_bindings_v2
+                    WHERE source_revision_id = ?
+                    """,
+                    (args.source_revision_id,),
+                ).fetchone()
+                if binding is None:
+                    raise KeyError(
+                        f"Source Revision is unavailable: {args.source_revision_id}"
+                    )
+                result = vault.remove_source(
+                    str(binding["legacy_source_id"]),
+                    reason=args.reason,
+                    confirm=args.confirm,
+                )
+                return {
+                    **result,
+                    "target_type": "source_revision",
+                    "source_revision_id": args.source_revision_id,
+                }
+            result = vault.selectively_forget(
                 knowledge_key=args.knowledge_key,
                 asset_id=args.asset_id,
                 reason=args.reason,
                 confirm=args.confirm,
             )
+            return {
+                **result,
+                "target_type": (
+                    "legacy_knowledge_key"
+                    if args.knowledge_key is not None
+                    else "legacy_asset"
+                ),
+            }
         if command == "relate":
             return vault.add_relation(
                 subject_asset_id=args.subject_asset_id,
@@ -3481,11 +4121,12 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 )
             return asset.to_dict()
         if command == "context":
+            task_binding = _parse_task_binding_argument(args.task_binding)
             has_autonomous_core = autonomous_core_installed(args.vault)
             use_autonomous_context = False
             if has_autonomous_core:
                 with AutonomousKnowledgeStore(args.vault, read_only=True) as store:
-                    use_autonomous_context = bool(
+                    workspace_has_autonomous_state = bool(
                         store.connection.execute(
                             "SELECT COUNT(*) FROM knowledge_objects_v3"
                         ).fetchone()[0]
@@ -3493,16 +4134,31 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                             "SELECT COUNT(*) FROM source_compilation_runs_v1"
                         ).fetchone()[0]
                     )
+                use_autonomous_context = bool(
+                    args.query_plan_version == "6" or workspace_has_autonomous_state
+                )
             if (
                 not use_autonomous_context
                 and (
-                    args.purpose != "answer"
+                    args.query_plan_version == "6"
+                    or args.query_target is not None
+                    or args.applicable_duty
+                    or args.capsule_projection != "standard"
+                    or args.purpose != "answer"
                     or args.policy is not None
                     or args.as_of is not None
                 )
-                ):
+            ):
                 raise ValueError(
                     "purpose-aware context requires an autonomous compilation workspace"
+                )
+            if not use_autonomous_context and task_binding is not None:
+                raise ValueError("task_binding requires query_plan_version=6")
+            if not use_autonomous_context and (
+                args.scope is not None or args.max_sensitivity is not None
+            ):
+                raise ValueError(
+                    "scope and max_sensitivity require an autonomous compilation workspace"
                 )
             if use_autonomous_context and args.include_restricted:
                 raise ValueError("Knowledge Capsules cannot expose restricted content")
@@ -3512,8 +4168,8 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     goal=args.goal,
                     purpose=args.purpose,
                     policy=args.policy,
-                    scope=str(vault.manifest.get("scope", "project")),
-                    max_sensitivity="private",
+                    scope=args.scope or str(vault.manifest.get("scope", "project")),
+                    max_sensitivity=args.max_sensitivity or "private",
                     limit=args.max_items,
                     max_chars=args.max_chars,
                     max_tokens=args.max_tokens,
@@ -3524,6 +4180,13 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     kinds=tuple(
                         kind for kind in args.kind if kind in KNOWLEDGE_KINDS
                     ),
+                    query_plan_version=args.query_plan_version,
+                    task_binding=task_binding,
+                    query_target=args.query_target,
+                    applicable_duties=(
+                        tuple(args.applicable_duty) if args.applicable_duty else None
+                    ),
+                    projection=args.capsule_projection,
                     confirm_no_case_data=args.confirm_no_case_data,
                 )
             else:

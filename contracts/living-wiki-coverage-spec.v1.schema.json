@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-coverage-spec.v1.schema.json",
+  "title": "DeepLaw Living Wiki governed coverage specification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "spec_id",
+    "revision_id",
+    "status",
+    "generated_at",
+    "transaction_head",
+    "audit_head",
+    "owner_confirmation",
+    "scopes",
+    "topics",
+    "page_families",
+    "hierarchy",
+    "guided_tours",
+    "codemap",
+    "duties",
+    "max_pages",
+    "max_bytes",
+    "shard_bounds"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-coverage-spec/v1"},
+    "spec_id": {"$ref": "#/$defs/id"},
+    "revision_id": {"$ref": "#/$defs/id"},
+    "status": {"enum": ["draft", "owner_confirmed", "retired"]},
+    "generated_at": {"type": "string", "format": "date-time", "maxLength": 64},
+    "transaction_head": {"$ref": "#/$defs/sha256"},
+    "audit_head": {"$ref": "#/$defs/sha256"},
+    "transaction_id": {"$ref": "#/$defs/id"},
+    "owner_confirmation": {
+      "anyOf": [{"type": "null"}, {"$ref": "#/$defs/owner_confirmation"}]
+    },
+    "scopes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"enum": ["personal", "project", "domain"]}
+    },
+    "topics": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/topic"}
+    },
+    "page_families": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/page_family"}
+    },
+    "hierarchy": {"$ref": "#/$defs/hierarchy"},
+    "guided_tours": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/guided_tour"}
+    },
+    "codemap": {"$ref": "#/$defs/codemap"},
+    "duties": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "items": {"$ref": "#/$defs/duty"}
+    },
+    "max_pages": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "max_bytes": {"type": "integer", "minimum": 0, "maximum": 1073741824},
+    "shard_bounds": {"$ref": "#/$defs/shard_bounds"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "owner_confirmed"}}},
+      "then": {
+        "required": ["owner_confirmation"],
+        "properties": {
+          "owner_confirmation": {"$ref": "#/$defs/owner_confirmation"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "draft"}}},
+      "then": {
+        "properties": {
+          "owner_confirmation": {"type": "null"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "topic": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[^\\x00\\r\\n]+$"
+    },
+    "page_family": {
+      "enum": [
+        "sources",
+        "source_evidence",
+        "source_summary",
+        "concepts",
+        "entities",
+        "events",
+        "claims",
+        "procedures",
+        "syntheses",
+        "legal",
+        "memos",
+        "statutes",
+        "case_law",
+        "evidence",
+        "memory",
+        "guides",
+        "codemap",
+        "index",
+        "moc",
+        "glossary",
+        "conflicts",
+        "gaps",
+        "review_queue",
+        "recent_changes",
+        "activity",
+        "communities",
+        "evidence_pack",
+        "preferences",
+        "skills"
+      ]
+    },
+    "owner_confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipt_id", "confirmed_at", "confirmed_by", "grants_authority"],
+      "properties": {
+        "receipt_id": {"$ref": "#/$defs/id"},
+        "confirmed_at": {"type": "string", "format": "date-time", "maxLength": 64},
+        "confirmed_by": {"$ref": "#/$defs/id"},
+        "grants_authority": {"const": false}
+      }
+    },
+    "hierarchy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["roots", "edges"],
+      "properties": {
+        "roots": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/page_family"}
+        },
+        "edges": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/hierarchy_edge"}
+        }
+      }
+    },
+    "hierarchy_edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parent", "child"],
+      "properties": {
+        "parent": {"$ref": "#/$defs/page_family"},
+        "child": {"$ref": "#/$defs/page_family"}
+      }
+    },
+    "guided_tour": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tour_id", "page_families"],
+      "properties": {
+        "tour_id": {"$ref": "#/$defs/id"},
+        "page_families": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/page_family"}
+        },
+        "topics": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/topic"}
+        }
+      }
+    },
+    "codemap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "required_input_revision_refs", "required_edge_ids"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "required_input_revision_refs": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        },
+        "required_edge_ids": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        }
+      }
+    },
+    "duty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duty", "applicability"],
+      "properties": {
+        "duty": {
+          "enum": [
+            "answer",
+            "recommend",
+            "explain",
+            "define",
+            "compare",
+            "verify",
+            "quote",
+            "cite",
+            "refresh",
+            "invalidate",
+            "update",
+            "correct",
+            "reconcile",
+            "execute",
+            "remember"
+          ]
+        },
+        "applicability": {"enum": ["required", "not_applicable"]},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\x00\\r\\n]+$"},
+        "topics": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/topic"}
+        },
+        "scopes": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {"enum": ["personal", "project", "domain"]}
+        },
+        "page_families": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/page_family"}
+        },
+        "required_input_revision_refs": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        },
+        "estimated_page_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"applicability": {"const": "not_applicable"}}},
+          "then": {"required": ["reason"]},
+          "else": {"not": {"required": ["reason"]}}
+        }
+      ]
+    },
+    "shard_bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_shards", "max_pages_per_shard", "max_bytes_per_shard"],
+      "properties": {
+        "max_shards": {"type": "integer", "minimum": 1, "maximum": 200000},
+        "max_pages_per_shard": {"type": "integer", "minimum": 1, "maximum": 2000},
+        "max_bytes_per_shard": {"type": "integer", "minimum": 1, "maximum": 262144}
+      }
+    }
+  }
+}

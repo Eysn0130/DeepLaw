@@ -14,6 +14,12 @@ from benchmarks.release.evidence import (
     verify_record_digest,
     write_report,
 )
+from benchmarks.release.release_policy import (
+    V5_MANIFEST_SCHEMA,
+    ReleasePolicyError,
+    required_manifest_schema_version,
+    validate_manifest_for_release,
+)
 
 SCHEMA_VERSION = "deeplaw.post-release-verification/v1"
 
@@ -48,31 +54,40 @@ def verify(
     manifest_path = _downloaded(downloads, "commercial-release-manifest.json")
     manifest = load_json(manifest_path)
     verify_record_digest(manifest, field="commercial release manifest")
+    try:
+        expected_schema = required_manifest_schema_version(version)
+        validate_manifest_for_release(manifest, release_version=version)
+    except ReleasePolicyError as error:
+        raise PostReleaseError(str(error)) from error
     release = manifest.get("release", {})
-    if (
-        manifest.get("schema_version") != "deeplaw.commercial-release-manifest/v5"
-        or manifest.get("commercial_release_eligible") is not True
+    common_manifest_checks = (
+        manifest.get("commercial_release_eligible") is not True
         or manifest.get("quality_protocol_eligible") is not True
         or manifest.get("competitive_claim_eligible") is not False
         or release.get("version") != version
         or release.get("tag") != tag
         or release.get("commit") != binding["commit"]
-        or manifest.get("bindings", {}).get("lock_sha256") != binding["lock_sha256"]
-        or manifest.get("bindings", {}).get("contracts_inventory_sha256")
-        != binding["contracts"]["inventory_sha256"]
-        or manifest.get("bindings", {}).get("migrations_inventory_sha256")
-        != binding["migrations"]["inventory_sha256"]
-        or manifest.get("living_wiki_quality", {}).get("passed") is not True
-        or manifest.get("living_wiki_quality", {}).get("quality_regression") is not False
-        or manifest.get("living_wiki_quality", {}).get("performance_regression") is not False
-        or manifest.get("authoritative_source_quality", {}).get("passed") is not True
-        or manifest.get("authoritative_source_quality", {}).get("source_count") != 28
-        or manifest.get("semantic_living_wiki_quality", {}).get("passed") is not True
-        or manifest.get("semantic_living_wiki_quality", {}).get("formal_release_eligible")
-        is not True
-        or manifest.get("authoritative_evidence_quality", {}).get("passed") is not True
-        or manifest.get("editor_integrations", {}).get("passed") is not True
-    ):
+        or release.get("tree") != binding["tree"]
+    )
+    if expected_schema == V5_MANIFEST_SCHEMA:
+        common_manifest_checks = common_manifest_checks or (
+            manifest.get("bindings", {}).get("lock_sha256") != binding["lock_sha256"]
+            or manifest.get("bindings", {}).get("contracts_inventory_sha256")
+            != binding["contracts"]["inventory_sha256"]
+            or manifest.get("bindings", {}).get("migrations_inventory_sha256")
+            != binding["migrations"]["inventory_sha256"]
+            or manifest.get("living_wiki_quality", {}).get("passed") is not True
+            or manifest.get("living_wiki_quality", {}).get("quality_regression") is not False
+            or manifest.get("living_wiki_quality", {}).get("performance_regression") is not False
+            or manifest.get("authoritative_source_quality", {}).get("passed") is not True
+            or manifest.get("authoritative_source_quality", {}).get("source_count") != 28
+            or manifest.get("semantic_living_wiki_quality", {}).get("passed") is not True
+            or manifest.get("semantic_living_wiki_quality", {}).get("formal_release_eligible")
+            is not True
+            or manifest.get("authoritative_evidence_quality", {}).get("passed") is not True
+            or manifest.get("editor_integrations", {}).get("passed") is not True
+        )
+    if common_manifest_checks:
         raise PostReleaseError("downloaded commercial manifest does not bind the tag checkout")
 
     verified_assets: list[dict[str, Any]] = []
@@ -98,22 +113,24 @@ def verify(
             }
         )
 
-    authoritative_manifest = manifest["authoritative_evidence_quality"]
-    authoritative_path = _downloaded(downloads, authoritative_manifest["report_path"])
-    authoritative_report = load_json(authoritative_path)
-    verify_record_digest(
-        authoritative_report,
-        field="downloaded Authoritative evidence quality report",
-    )
-    if (
-        sha256_file(authoritative_path) != authoritative_manifest["report_sha256"]
-        or authoritative_report.get("record_sha256") != authoritative_manifest["record_sha256"]
-        or authoritative_report.get("binding", {}).get("commit") != binding["commit"]
-        or authoritative_report.get("passed") is not True
-        or not all(authoritative_report.get("checks", {}).values())
-        or any(authoritative_report.get("security_failures", {}).values())
-    ):
-        raise PostReleaseError("downloaded Authoritative evidence quality report is invalid")
+    if expected_schema == V5_MANIFEST_SCHEMA:
+        authoritative_manifest = manifest["authoritative_evidence_quality"]
+        authoritative_path = _downloaded(downloads, authoritative_manifest["report_path"])
+        authoritative_report = load_json(authoritative_path)
+        verify_record_digest(
+            authoritative_report,
+            field="downloaded Authoritative evidence quality report",
+        )
+        if (
+            sha256_file(authoritative_path) != authoritative_manifest["report_sha256"]
+            or authoritative_report.get("record_sha256")
+            != authoritative_manifest["record_sha256"]
+            or authoritative_report.get("binding", {}).get("commit") != binding["commit"]
+            or authoritative_report.get("passed") is not True
+            or not all(authoritative_report.get("checks", {}).values())
+            or any(authoritative_report.get("security_failures", {}).values())
+        ):
+            raise PostReleaseError("downloaded Authoritative evidence quality report is invalid")
 
     lifecycle = load_json(lifecycle_path)
     verify_record_digest(lifecycle, field="post-release distribution lifecycle")
@@ -142,7 +159,8 @@ def verify(
         or formal_candidate.get("role") != "formal_release"
         or formal_candidate.get("commit") != binding["commit"]
         or formal_candidate.get("version") != version
-        or formal_candidate.get("artifact_sha256") != lifecycle["artifacts"]["wheel"]["sha256"]
+        or formal_candidate.get("artifact_sha256")
+        != lifecycle["artifacts"]["wheel"]["sha256"]
         or formal_quality.get("suite", {}).get("suite_sha256")
         != file_record(repository / "benchmarks/living_wiki/quality-suite-v1.json")["sha256"]
         or formal_quality.get("suite", {}).get("runner_sha256")

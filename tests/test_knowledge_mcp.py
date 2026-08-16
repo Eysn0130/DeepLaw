@@ -286,7 +286,7 @@ def test_knowledge_mcp_context_requires_explicit_case_boundary_confirmation(
 ) -> None:
     root, _ = _ready_vault(tmp_path)
 
-    with pytest.raises(ValueError, match="no Analytix case material"):
+    with pytest.raises(ValueError, match="no client or case material"):
         handle_knowledge_support(
             operation="context",
             task="compile project context",

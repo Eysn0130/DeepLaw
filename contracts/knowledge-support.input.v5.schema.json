@@ -3,14 +3,24 @@
   "$id": "https://deeplaw.dev/contracts/knowledge-support.input.v5.schema.json",
   "title": "DeepLaw Knowledge Support Input v5",
   "oneOf": [
-    {"$ref": "knowledge-support.input.v4.schema.json"},
+    {
+      "allOf": [
+        {"$ref": "knowledge-support.input.v4.schema.json"},
+        {
+          "properties": {
+            "operation": {"not": {"enum": ["query", "context"]}}
+          }
+        }
+      ]
+    },
     {
       "type": "object", "additionalProperties": false,
       "required": [
-        "operation", "task", "confirm_no_case_data", "purpose"
+        "operation", "task", "confirm_no_case_data", "query_plan_version"
       ],
       "properties": {
         "operation": {"const": "context"},
+        "query_plan_version": {"const": "5"},
         "plane": {"enum": ["all", "source_derived", "autonomous"]},
         "task": {"type": "string", "minLength": 1, "maxLength": 5000},
         "goal": {"type": "string", "minLength": 1, "maxLength": 2000},

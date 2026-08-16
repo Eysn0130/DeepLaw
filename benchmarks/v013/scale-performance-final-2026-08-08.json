@@ -1,0 +1,2983 @@
+{
+  "candidate": {
+    "package_version": "0.12.0",
+    "runner": "benchmarks/v013/scale_performance.py",
+    "runner_sha256": "b046598f146c10a466a105b45bae0a10b6c005a3f490176b1af02253d0ac4c8f"
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "Deterministic synthetic temporary Vault construction diagnostic; it is not real-user quality evidence, a competitor run, or a release claim.",
+  "configuration": {
+    "execute_expensive": true,
+    "max_latency_samples": 1000,
+    "projection_profile": "standard",
+    "query_plan_version": "6",
+    "query_runs": 3,
+    "rss_requests": 10000,
+    "scales": [
+      1000,
+      10000,
+      100000
+    ],
+    "semantic_profile": "not_executed",
+    "warmup_runs": 1
+  },
+  "environment": {
+    "cpu": {
+      "logical_count": 12,
+      "model": "arm"
+    },
+    "filesystem": {
+      "block_size": 4096,
+      "kind": "unknown",
+      "reason": "Python statvfs does not expose a portable filesystem type"
+    },
+    "git_commit": "bb6a942970186f03ea41e108a2eceaaca54e3bcb",
+    "git_reason": null,
+    "os": {
+      "machine": "arm64",
+      "name": "Darwin",
+      "release": "25.5.0"
+    },
+    "python": "3.12.13",
+    "ram": {
+      "reason": null,
+      "total_bytes": 25769803776
+    },
+    "working_tree_dirty": false
+  },
+  "generated_at_utc": "2026-08-08T06:08:15Z",
+  "limitations": [
+    "No network, model, Gold/scorer, user Vault, legal source, or case data is read.",
+    "Deterministic synthetic identifiers measure mechanics only and are claim-ineligible.",
+    "Scale counts are synthetic source-derived Asset records; autonomous probes are bounded separately and do not represent real-user knowledge quality.",
+    "not_executed, degraded, and fail outcomes are retained and never converted to pass.",
+    "10k/100k reruns require --execute-expensive; no smaller substitute is used."
+  ],
+  "operation_inventory": [
+    "exact_get",
+    "wiki_page",
+    "backlinks",
+    "outlinks",
+    "compiled_first",
+    "evidence_first",
+    "context",
+    "verify",
+    "source_update",
+    "incremental_projection",
+    "full_rebuild",
+    "mcp_cold",
+    "mcp_warm",
+    "concurrent_read",
+    "rss_stability_10000_requests",
+    "cache_invalidation_after_source_update",
+    "storage_sqlite_bytes",
+    "storage_file_count",
+    "storage_canvas_count",
+    "provider_payload_bytes"
+  ],
+  "overall": {
+    "degraded_count": 0,
+    "executed_count": 47,
+    "fail_count": 0,
+    "limitations": [
+      "This construction diagnostic cannot satisfy the v0.13 release gate.",
+      "Any not_executed operation remains an unmet gate and is never counted as pass."
+    ],
+    "not_executed": [
+      {
+        "operation": "source_update",
+        "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+        "scale": 1000
+      },
+      {
+        "operation": "rss_stability_10000_requests",
+        "reason": "RSS stability requires a dedicated child-process harness; this construction runner does not claim a substitute measurement",
+        "scale": 1000
+      },
+      {
+        "operation": "cache_invalidation_after_source_update",
+        "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+        "scale": 1000
+      },
+      {
+        "operation": "source_update",
+        "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+        "scale": 10000
+      },
+      {
+        "operation": "mcp_cold",
+        "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+        "scale": 10000
+      },
+      {
+        "operation": "mcp_warm",
+        "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+        "scale": 10000
+      },
+      {
+        "operation": "rss_stability_10000_requests",
+        "reason": "RSS process isolation requires a dedicated child-process harness; this local construction runner does not claim a substitute measurement",
+        "scale": 10000
+      },
+      {
+        "operation": "cache_invalidation_after_source_update",
+        "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+        "scale": 10000
+      },
+      {
+        "operation": "source_update",
+        "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+        "scale": 100000
+      },
+      {
+        "operation": "mcp_cold",
+        "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+        "scale": 100000
+      },
+      {
+        "operation": "mcp_warm",
+        "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+        "scale": 100000
+      },
+      {
+        "operation": "rss_stability_10000_requests",
+        "reason": "RSS stability requires a dedicated child-process harness; this construction runner does not claim a substitute measurement",
+        "scale": 100000
+      },
+      {
+        "operation": "cache_invalidation_after_source_update",
+        "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+        "scale": 100000
+      }
+    ],
+    "not_executed_count": 13,
+    "operation_count": 60,
+    "pass_count": 15,
+    "release_gate_passed": false,
+    "status": "not_released"
+  },
+  "profile": "construction_diagnostic",
+  "reference_targets": {
+    "cache_invalidation_after_source_update": {
+      "stale_cache_served": {
+        "operator": "==",
+        "unit": "boolean",
+        "value": false
+      }
+    },
+    "concurrent_readers": {
+      "successful_readers": {
+        "operator": ">=",
+        "unit": "readers",
+        "value": 8
+      }
+    },
+    "provider_hard_limit_violations": {
+      "violations": {
+        "operator": "==",
+        "unit": "count",
+        "value": 0
+      }
+    },
+    "rss_stability_10000_requests": {
+      "rss_growth_percent": {
+        "operator": "<=",
+        "unit": "%",
+        "value": 10
+      }
+    },
+    "scale_1000": {
+      "backlinks_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 150
+      },
+      "compiled_first_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 500
+      },
+      "wiki_page_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 150
+      }
+    },
+    "scale_10000": {
+      "compiled_first_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 1000
+      },
+      "context_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 1200
+      },
+      "exact_get_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 100
+      }
+    },
+    "scale_100000": {
+      "compiled_first_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 2000
+      },
+      "no_full_filesystem_scan": {
+        "operator": "==",
+        "unit": "boolean",
+        "value": false
+      },
+      "no_per_request_full_verify": {
+        "operator": "==",
+        "unit": "boolean",
+        "value": false
+      }
+    }
+  },
+  "release_gate_passed": false,
+  "report_sha256": "e0d15a421678eaa4f12bae7f1923233432aed948a766cb232b8a70a6fe0f59b7",
+  "rerun_commands": [
+    "uv run python -m benchmarks.v013.scale_performance --output REPORT.json --scale 1000 --query-runs 3 --warmup-runs 1 --rss-requests 10000",
+    "uv run python -m benchmarks.v013.scale_performance --output REPORT.json --scale 10000 --query-runs 3 --warmup-runs 1 --rss-requests 10000 --execute-expensive",
+    "uv run python -m benchmarks.v013.scale_performance --output REPORT.json --scale 100000 --query-runs 3 --warmup-runs 1 --rss-requests 10000 --execute-expensive"
+  ],
+  "scale_reports": [
+    {
+      "fixture_reason": "real temporary synthetic Vault created and torn down by the harness",
+      "fixture_status": "executed",
+      "object_count": 1000,
+      "operations": [
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.861792,
+            "p50": 0.800625,
+            "p95": 0.861792,
+            "p99": 0.861792,
+            "samples": [
+              0.800625,
+              0.753,
+              0.861792
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "exact_get",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 61.409584,
+            "p50": 61.254417,
+            "p95": 61.409584,
+            "p99": 61.409584,
+            "samples": [
+              61.409584,
+              61.254417,
+              60.678
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 61.409584,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "wiki_page",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_1000.wiki_page_p95_ms",
+            "unit": "ms",
+            "value": 150
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 76.523333,
+            "p50": 60.698583,
+            "p95": 76.523333,
+            "p99": 76.523333,
+            "samples": [
+              60.608833,
+              60.698583,
+              76.523333
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 76.523333,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "backlinks",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_1000.backlinks_p95_ms",
+            "unit": "ms",
+            "value": 150
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 75.798916,
+            "p50": 60.71775,
+            "p95": 75.798916,
+            "p99": 75.798916,
+            "samples": [
+              60.71775,
+              60.224833,
+              75.798916
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "outlinks",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 7.297125,
+            "p50": 7.278708,
+            "p95": 7.297125,
+            "p99": 7.297125,
+            "samples": [
+              7.297125,
+              6.915459,
+              7.278708
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 7.297125,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "compiled_first",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_1000.compiled_first_p95_ms",
+            "unit": "ms",
+            "value": 500
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 8.296625,
+            "p50": 8.262584,
+            "p95": 8.296625,
+            "p99": 8.296625,
+            "samples": [
+              7.682375,
+              8.262584,
+              8.296625
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "evidence_first",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 9.023209,
+            "p50": 8.947292,
+            "p95": 9.023209,
+            "p99": 9.023209,
+            "samples": [
+              8.947292,
+              8.760208,
+              9.023209
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "context",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 9.534541,
+            "p50": 9.247584,
+            "p95": 9.534541,
+            "p99": 9.534541,
+            "samples": [
+              9.534541,
+              8.843959,
+              9.247584
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": false,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": true,
+            "value": 1
+          },
+          "operation": "verify",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "source_update",
+          "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 1000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 347.178042,
+            "p50": 339.5215,
+            "p95": 347.178042,
+            "p99": 347.178042,
+            "samples": [
+              339.5215,
+              347.178042,
+              337.298375
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "incremental_projection",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 274.185292,
+            "p50": 260.976666,
+            "p95": 274.185292,
+            "p99": 274.185292,
+            "samples": [
+              250.25075,
+              274.185292,
+              260.976666
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": false,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": null,
+            "value": null
+          },
+          "operation": "full_rebuild",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 183.153125,
+            "p50": 171.754875,
+            "p95": 183.153125,
+            "p99": 183.153125,
+            "samples": [
+              169.208917,
+              171.754875,
+              183.153125
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_cold",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 33.417042,
+            "p50": 33.163875,
+            "p95": 33.417042,
+            "p99": 33.417042,
+            "samples": [
+              33.163875,
+              33.417042,
+              32.746542
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_warm",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 399.273833,
+            "p50": 394.976375,
+            "p95": 399.273833,
+            "p99": 399.273833,
+            "samples": [
+              399.273833,
+              355.91325,
+              394.976375
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 8,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": 8,
+            "unit": "readers",
+            "valid": null,
+            "value": 8
+          },
+          "operation": "concurrent_read",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "successful_readers",
+            "operator": ">=",
+            "reason": null,
+            "reference": "concurrent_readers.successful_readers",
+            "unit": "readers",
+            "value": 8
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "rss_stability_10000_requests",
+          "reason": "RSS stability requires a dedicated child-process harness; this construction runner does not claim a substitute measurement",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 1000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "rss_growth_percent",
+            "operator": "<=",
+            "reason": "RSS target is frozen for the 10k scale report",
+            "reference": "rss_stability_10000_requests.rss_growth_percent",
+            "unit": "%",
+            "value": 10
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "cache_invalidation_after_source_update",
+          "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 1000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "stale_cache_served",
+            "operator": "==",
+            "reason": null,
+            "reference": "cache_invalidation_after_source_update.stale_cache_served",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.019208,
+            "p50": 0.014291,
+            "p95": 0.019208,
+            "p99": 0.019208,
+            "samples": [
+              0.019208,
+              0.014291,
+              0.013208
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 8400896
+          },
+          "operation": "storage_sqlite_bytes",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 2.993042,
+            "p50": 2.689917,
+            "p95": 2.993042,
+            "p99": 2.993042,
+            "samples": [
+              2.689917,
+              2.53725,
+              2.993042
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": 97,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "files",
+            "valid": null,
+            "value": 97
+          },
+          "operation": "storage_file_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.043416,
+            "p50": 0.037917,
+            "p95": 0.043416,
+            "p99": 0.043416,
+            "samples": [
+              0.043416,
+              0.037917,
+              0.034333
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": 5,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "canvas_files",
+            "valid": null,
+            "value": 5
+          },
+          "operation": "storage_canvas_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 8.284542,
+            "p50": 8.12475,
+            "p95": 8.284542,
+            "p99": 8.284542,
+            "samples": [
+              8.284542,
+              8.12475,
+              7.912291
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 0,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": 0,
+            "provider_payload_bytes": 7665,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 7665
+          },
+          "operation": "provider_payload_bytes",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "violations",
+            "operator": "==",
+            "reason": null,
+            "reference": "provider_hard_limit_violations.violations",
+            "unit": "count",
+            "value": 0
+          },
+          "warmup_count": 1
+        }
+      ],
+      "scale": 1000
+    },
+    {
+      "fixture_reason": "real temporary synthetic Vault created and torn down by the harness",
+      "fixture_status": "executed",
+      "object_count": 10000,
+      "operations": [
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 0.991167,
+            "p50": 0.907834,
+            "p95": 0.991167,
+            "p99": 0.991167,
+            "samples": [
+              0.991167,
+              0.907834,
+              0.771583
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 0.991167,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "exact_get",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_10000.exact_get_p95_ms",
+            "unit": "ms",
+            "value": 100
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 547.061459,
+            "p50": 511.952542,
+            "p95": 547.061459,
+            "p99": 547.061459,
+            "samples": [
+              511.952542,
+              469.241333,
+              547.061459
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "wiki_page",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 522.521917,
+            "p50": 515.542917,
+            "p95": 522.521917,
+            "p99": 522.521917,
+            "samples": [
+              511.132084,
+              522.521917,
+              515.542917
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "backlinks",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 542.241125,
+            "p50": 505.554125,
+            "p95": 542.241125,
+            "p99": 542.241125,
+            "samples": [
+              542.241125,
+              505.554125,
+              463.738625
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "outlinks",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 9.555584,
+            "p50": 9.497666,
+            "p95": 9.555584,
+            "p99": 9.555584,
+            "samples": [
+              9.555584,
+              9.497666,
+              9.019875
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 9.555584,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "compiled_first",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_10000.compiled_first_p95_ms",
+            "unit": "ms",
+            "value": 1000
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 10.085209,
+            "p50": 9.970375,
+            "p95": 10.085209,
+            "p99": 10.085209,
+            "samples": [
+              10.085209,
+              9.970375,
+              9.586875
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "evidence_first",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 10.322167,
+            "p50": 10.320791,
+            "p95": 10.322167,
+            "p99": 10.322167,
+            "samples": [
+              10.320791,
+              10.322167,
+              10.203709
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 10.322167,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "context",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_10000.context_p95_ms",
+            "unit": "ms",
+            "value": 1200
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 10.44675,
+            "p50": 10.265083,
+            "p95": 10.44675,
+            "p99": 10.44675,
+            "samples": [
+              10.44675,
+              10.265083,
+              10.215458
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": false,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": true,
+            "value": 1
+          },
+          "operation": "verify",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "source_update",
+          "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 2174.389833,
+            "p50": 2119.098541,
+            "p95": 2174.389833,
+            "p99": 2174.389833,
+            "samples": [
+              2028.684708,
+              2119.098541,
+              2174.389833
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "incremental_projection",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 1797.804709,
+            "p50": 1755.000833,
+            "p95": 1797.804709,
+            "p99": 1797.804709,
+            "samples": [
+              1728.663583,
+              1797.804709,
+              1755.000833
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": false,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": null,
+            "value": null
+          },
+          "operation": "full_rebuild",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_cold",
+          "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_warm",
+          "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 1600.19475,
+            "p50": 1515.65075,
+            "p95": 1600.19475,
+            "p99": 1600.19475,
+            "samples": [
+              1600.19475,
+              1515.65075,
+              1408.149625
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 8,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": 8,
+            "unit": "readers",
+            "valid": null,
+            "value": 8
+          },
+          "operation": "concurrent_read",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "successful_readers",
+            "operator": ">=",
+            "reason": null,
+            "reference": "concurrent_readers.successful_readers",
+            "unit": "readers",
+            "value": 8
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "rss_stability_10000_requests",
+          "reason": "RSS process isolation requires a dedicated child-process harness; this local construction runner does not claim a substitute measurement",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "rss_growth_percent",
+            "operator": "<=",
+            "reason": null,
+            "reference": "rss_stability_10000_requests.rss_growth_percent",
+            "unit": "%",
+            "value": 10
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "cache_invalidation_after_source_update",
+          "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "stale_cache_served",
+            "operator": "==",
+            "reason": null,
+            "reference": "cache_invalidation_after_source_update.stale_cache_served",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.0145,
+            "p50": 0.013,
+            "p95": 0.0145,
+            "p99": 0.0145,
+            "samples": [
+              0.0145,
+              0.013,
+              0.012709
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 74498048
+          },
+          "operation": "storage_sqlite_bytes",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 3.799833,
+            "p50": 3.465042,
+            "p95": 3.799833,
+            "p99": 3.799833,
+            "samples": [
+              3.259417,
+              3.465042,
+              3.799833
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": 306,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "files",
+            "valid": null,
+            "value": 306
+          },
+          "operation": "storage_file_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.043375,
+            "p50": 0.037917,
+            "p95": 0.043375,
+            "p99": 0.043375,
+            "samples": [
+              0.037917,
+              0.036,
+              0.043375
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": 5,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "canvas_files",
+            "valid": null,
+            "value": 5
+          },
+          "operation": "storage_canvas_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 10.721417,
+            "p50": 10.717833,
+            "p95": 10.721417,
+            "p99": 10.721417,
+            "samples": [
+              10.721417,
+              10.717833,
+              10.345042
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 0,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": 0,
+            "provider_payload_bytes": 7665,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 7665
+          },
+          "operation": "provider_payload_bytes",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 10000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "violations",
+            "operator": "==",
+            "reason": null,
+            "reference": "provider_hard_limit_violations.violations",
+            "unit": "count",
+            "value": 0
+          },
+          "warmup_count": 1
+        }
+      ],
+      "scale": 10000
+    },
+    {
+      "fixture_reason": "real temporary synthetic Vault created and torn down by the harness",
+      "fixture_status": "executed",
+      "object_count": 100000,
+      "operations": [
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.901667,
+            "p50": 0.76875,
+            "p95": 0.901667,
+            "p99": 0.901667,
+            "samples": [
+              0.76875,
+              0.729083,
+              0.901667
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "exact_get",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 6460.966125,
+            "p50": 6233.025333,
+            "p95": 6460.966125,
+            "p99": 6460.966125,
+            "samples": [
+              6233.025333,
+              6231.330458,
+              6460.966125
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "wiki_page",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 6245.596417,
+            "p50": 6234.476,
+            "p95": 6245.596417,
+            "p99": 6245.596417,
+            "samples": [
+              6029.541708,
+              6234.476,
+              6245.596417
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "backlinks",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 6409.958834,
+            "p50": 6300.912417,
+            "p95": 6409.958834,
+            "p99": 6409.958834,
+            "samples": [
+              6409.958834,
+              6285.007208,
+              6300.912417
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "outlinks",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 26.604166,
+            "p50": 25.352834,
+            "p95": 26.604166,
+            "p99": 26.604166,
+            "samples": [
+              25.292084,
+              25.352834,
+              26.604166
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 26.604166,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "compiled_first",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_100000.compiled_first_p95_ms",
+            "unit": "ms",
+            "value": 2000
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 26.80075,
+            "p50": 26.455041,
+            "p95": 26.80075,
+            "p99": 26.80075,
+            "samples": [
+              25.890667,
+              26.80075,
+              26.455041
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "evidence_first",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 26.454625,
+            "p50": 26.101792,
+            "p95": 26.454625,
+            "p99": 26.454625,
+            "samples": [
+              26.454625,
+              26.101792,
+              25.874083
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "context",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 26.6045,
+            "p50": 26.540417,
+            "p95": 26.6045,
+            "p99": 26.6045,
+            "samples": [
+              26.540417,
+              25.875042,
+              26.6045
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": false,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": false,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": true,
+            "value": 1
+          },
+          "operation": "verify",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "per_request_full_verify",
+            "operator": "==",
+            "reason": null,
+            "reference": "scale_100000.per_request_full_verify",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "source_update",
+          "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 18826.019667,
+            "p50": 18693.79875,
+            "p95": 18826.019667,
+            "p99": 18826.019667,
+            "samples": [
+              18693.79875,
+              18826.019667,
+              18683.652333
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "incremental_projection",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 16229.253542,
+            "p50": 16188.676542,
+            "p95": 16229.253542,
+            "p99": 16229.253542,
+            "samples": [
+              16188.676542,
+              16038.372375,
+              16229.253542
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": false,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": false,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": null,
+            "value": null
+          },
+          "operation": "full_rebuild",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "full_filesystem_scan",
+            "operator": "==",
+            "reason": null,
+            "reference": "scale_100000.full_filesystem_scan",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_cold",
+          "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_warm",
+          "reason": "persistent MCP cold/warm diagnostics are frozen to the 1k synthetic fixture; this scale was not executed",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 25977.414084,
+            "p50": 25311.965959,
+            "p95": 25977.414084,
+            "p99": 25977.414084,
+            "samples": [
+              25977.414084,
+              25311.965959,
+              25181.212958
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 8,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": 8,
+            "unit": "readers",
+            "valid": null,
+            "value": 8
+          },
+          "operation": "concurrent_read",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "successful_readers",
+            "operator": ">=",
+            "reason": null,
+            "reference": "concurrent_readers.successful_readers",
+            "unit": "readers",
+            "value": 8
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "rss_stability_10000_requests",
+          "reason": "RSS stability requires a dedicated child-process harness; this construction runner does not claim a substitute measurement",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "rss_growth_percent",
+            "operator": "<=",
+            "reason": "RSS target is frozen for the 10k scale report",
+            "reference": "rss_stability_10000_requests.rss_growth_percent",
+            "unit": "%",
+            "value": 10
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "cache_invalidation_after_source_update",
+          "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "stale_cache_served",
+            "operator": "==",
+            "reason": null,
+            "reference": "cache_invalidation_after_source_update.stale_cache_served",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.017708,
+            "p50": 0.014,
+            "p95": 0.017708,
+            "p99": 0.017708,
+            "samples": [
+              0.017708,
+              0.014,
+              0.012709
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 740503552
+          },
+          "operation": "storage_sqlite_bytes",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 10.69275,
+            "p50": 10.344583,
+            "p95": 10.69275,
+            "p99": 10.69275,
+            "samples": [
+              10.344583,
+              10.69275,
+              10.224625
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": 1951,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "files",
+            "valid": null,
+            "value": 1951
+          },
+          "operation": "storage_file_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.037708,
+            "p50": 0.035959,
+            "p95": 0.037708,
+            "p99": 0.037708,
+            "samples": [
+              0.037708,
+              0.035959,
+              0.034958
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": 5,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "canvas_files",
+            "valid": null,
+            "value": 5
+          },
+          "operation": "storage_canvas_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 1
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 26.422,
+            "p50": 26.296958,
+            "p95": 26.422,
+            "p99": 26.422,
+            "samples": [
+              26.296958,
+              26.234333,
+              26.422
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 0,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": 0,
+            "provider_payload_bytes": 7665,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 7665
+          },
+          "operation": "provider_payload_bytes",
+          "reason": "",
+          "run_count": 3,
+          "sample_count": 3,
+          "scale": 100000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "violations",
+            "operator": "==",
+            "reason": null,
+            "reference": "provider_hard_limit_violations.violations",
+            "unit": "count",
+            "value": 0
+          },
+          "warmup_count": 1
+        }
+      ],
+      "scale": 100000
+    }
+  ],
+  "schema_version": "deeplaw.v013-scale-performance-report/v1"
+}

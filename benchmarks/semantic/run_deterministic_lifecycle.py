@@ -27,6 +27,48 @@ def _timestamp() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+SEMANTIC_STATUS_PRIORITY = ("blocked", "unknown", "partial", "complete")
+SEMANTIC_STATUSES = frozenset(SEMANTIC_STATUS_PRIORITY)
+
+
+def _semantic_status_summary(runs: list[dict[str, Any]]) -> tuple[str, dict[str, int]]:
+    """Aggregate source-run semantics without confusing them with transaction state."""
+
+    counts = {status: 0 for status in SEMANTIC_STATUS_PRIORITY}
+    for run in runs:
+        status = run.get("semantic_status")
+        if status not in SEMANTIC_STATUSES:
+            raise ValueError("deterministic lifecycle run has an invalid semantic status")
+        counts[status] += 1
+    if not runs:
+        raise ValueError("deterministic lifecycle requires at least one source run")
+    counts["total"] = len(runs)
+    aggregate = next(status for status in SEMANTIC_STATUS_PRIORITY if counts[status])
+    return aggregate, counts
+
+
+def _mechanical_lifecycle_success(
+    *,
+    runs: list[dict[str, Any]],
+    baseline_verified: bool,
+    transitions: list[dict[str, Any]],
+    vault_verification_valid: bool,
+) -> bool:
+    """Return only the mechanical lifecycle result; semantic completeness is separate."""
+
+    return bool(
+        runs
+        and all(
+            item.get("transaction_status") == "succeeded"
+            and item.get("verification_valid") is True
+            for item in runs
+        )
+        and baseline_verified
+        and all(item.get("status") == "passed" for item in transitions)
+        and vault_verification_valid
+    )
+
+
 def _load(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
@@ -226,6 +268,24 @@ def run(
         verification_valid = bool(store.verify()["valid"])
     recorded_at = _timestamp()
     binding = _binding(binding_repository or _repository())
+    transitions = [
+        {
+            "operation": "activate_successor",
+            "status": "passed",
+            "predecessor_source_revision_id": predecessor["source_revision_id"],
+            "successor_source_revision_id": successor["source_revision_id"],
+            "review_receipt_sha256": approval["review_receipt"]["receipt_sha256"],
+            "freshness_report_sha256": successor_freshness["report_sha256"],
+        },
+        {
+            "operation": "withdraw_source",
+            "status": "passed",
+            "source_revision_id": withdrawn["source_revision_id"],
+            "removal_audit_head": removal["audit_head"],
+            "freshness_report_sha256": withdrawal_freshness["report_sha256"],
+        },
+    ]
+    semantic_status, semantic_status_counts = _semantic_status_summary(runs)
     body = {
         "binding": binding,
         "gold_id": gold["gold_id"],
@@ -245,23 +305,7 @@ def run(
             "verified": baseline_verified,
         },
         "runs": sorted(runs, key=lambda item: item["source_key"]),
-        "transitions": [
-            {
-                "operation": "activate_successor",
-                "status": "passed",
-                "predecessor_source_revision_id": predecessor["source_revision_id"],
-                "successor_source_revision_id": successor["source_revision_id"],
-                "review_receipt_sha256": approval["review_receipt"]["receipt_sha256"],
-                "freshness_report_sha256": successor_freshness["report_sha256"],
-            },
-            {
-                "operation": "withdraw_source",
-                "status": "passed",
-                "source_revision_id": withdrawn["source_revision_id"],
-                "removal_audit_head": removal["audit_head"],
-                "freshness_report_sha256": withdrawal_freshness["report_sha256"],
-            },
-        ],
+        "transitions": transitions,
         "vault_verification_valid": verification_valid,
         "metrics": {
             "first_compilation_latency_ms": runs[0]["compilation_latency_ms"],
@@ -286,9 +330,18 @@ def run(
         "formal_release_evidence_ready": False,
         "competitive_claim_eligible": False,
     }
-    status = "passed" if verification_valid and baseline_verified else "failed"
+    status = (
+        "passed"
+        if _mechanical_lifecycle_success(
+            runs=runs,
+            baseline_verified=baseline_verified,
+            transitions=transitions,
+            vault_verification_valid=verification_valid,
+        )
+        else "failed"
+    )
     report = {
-        "schema_version": "deeplaw.deterministic-semantic-lifecycle/v1",
+        "schema_version": "deeplaw.deterministic-semantic-lifecycle/v2",
         "report_id": stable_id(
             "semanticdeterministic",
             gold["gold_id"],
@@ -297,10 +350,13 @@ def run(
             recorded_at,
         ),
         "status": status,
+        "compiler_profile_version": "3",
+        "semantic_status": semantic_status,
+        "semantic_status_counts": semantic_status_counts,
         **body,
     }
     schema = _load(
-        _repository() / "contracts" / "deterministic-semantic-lifecycle.v1.schema.json"
+        _repository() / "contracts" / "deterministic-semantic-lifecycle.v2.schema.json"
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)

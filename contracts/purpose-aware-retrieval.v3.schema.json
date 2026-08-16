@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/purpose-aware-retrieval.v3.schema.json",
+  "title": "DeepLaw purpose-aware statement-selective retrieval v3",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "vault_id", "purpose", "policy_id", "query", "query_plan", "query_plan_sha256", "statements", "evidence", "contradictions", "gaps", "capsule", "projection", "receipt_id", "local_audit", "metrics", "budget", "audit_head", "authority_changed_by_ranking", "write_performed"],
+  "properties": {
+    "schema_version": {"const": "deeplaw.purpose-aware-retrieval/v3"},
+    "vault_id": {"type": "string", "pattern": "^(vault_[0-9a-f]{24})?$"},
+    "purpose": {"enum": ["answer", "verify", "quote", "historical", "legal", "debug", "freshness_check"]},
+    "policy_id": {"enum": ["compiled-first-v1", "evidence-first-v1", "balanced-v1"]},
+    "query": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "query_plan": {"type": "object"},
+    "query_plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "statements": {"type": "array", "maxItems": 20, "items": {"type": "object"}},
+    "evidence": {"type": "array", "maxItems": 32, "items": {"type": "object"}},
+    "contradictions": {"type": "array", "maxItems": 20, "items": {"type": "object"}},
+    "gaps": {"type": "array", "maxItems": 32, "items": {"type": "object"}},
+    "capsule": {"type": "object"},
+    "projection": {"enum": ["compact", "standard", "audit"]},
+    "receipt_id": {"type": "string", "pattern": "^queryreceipt_[0-9a-f]{24}$"},
+    "local_audit": {"type": "object"},
+    "metrics": {"type": "object"},
+    "budget": {"type": "object"},
+    "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authority_changed_by_ranking": {"const": false},
+    "write_performed": {"const": false}
+  }
+}

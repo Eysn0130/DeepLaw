@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/commercial-evidence-report.v1.schema.json",
+  "title": "DeepLaw v0.13 commercial evidence report v1",
+  "description": "Closed, source-free evidence observations. Status and release decisions are absent from the report and are derived only by the semantic validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_kind",
+    "report_id",
+    "candidate_binding",
+    "protocol_binding",
+    "threshold_binding",
+    "gold_binding",
+    "corpus",
+    "gates",
+    "artifacts",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.commercial-evidence-report/v1"},
+    "report_kind": {"const": "v013_commercial_gate_collection"},
+    "report_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "protocol_binding": {"$ref": "#/$defs/protocolBinding"},
+    "threshold_binding": {"$ref": "#/$defs/thresholdBinding"},
+    "gold_binding": {"$ref": "#/$defs/goldBinding"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/gateDeclaration"}
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["passed", "failed", "not_applicable", "not_executed", "not_claimed"]
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_commit",
+        "candidate_tree",
+        "candidate_wheel_sha256",
+        "candidate_sdist_sha256"
+      ],
+      "properties": {
+        "candidate_commit": {"$ref": "#/$defs/git"},
+        "candidate_tree": {"$ref": "#/$defs/git"},
+        "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "protocolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "protocol_sha256", "frozen"],
+      "properties": {
+        "protocol_id": {"$ref": "#/$defs/identifier"},
+        "protocol_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"type": "boolean"}
+      }
+    },
+    "thresholdBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threshold_id", "threshold_sha256", "frozen"],
+      "properties": {
+        "threshold_id": {"$ref": "#/$defs/identifier"},
+        "threshold_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"type": "boolean"}
+      }
+    },
+    "goldBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gold_sha256", "role", "source", "frozen"],
+      "properties": {
+        "gold_sha256": {"$ref": "#/$defs/sha256"},
+        "role": {
+          "type": "string",
+          "enum": ["development_gold", "qualification_gold", "final_blind_gold"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["repository", "repository_external"]
+        },
+        "frozen": {"type": "boolean"}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "source", "sha256", "frozen"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["development", "qualification_holdout", "final_blind"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["repository", "repository_external"]
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"type": "boolean"}
+      }
+    },
+    "gateDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "category",
+        "artifact_id"
+      ],
+      "properties": {
+        "gate_id": {"$ref": "#/$defs/identifier"},
+        "category": {
+          "type": "string",
+          "enum": ["Core", "Capability", "Competitive Claim"]
+        },
+        "artifact_id": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "gate_id", "content", "artifact_sha256"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/identifier"},
+        "gate_id": {"$ref": "#/$defs/identifier"},
+        "content": {"$ref": "#/$defs/gateObservation"},
+        "artifact_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "gateObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "gate_id",
+        "bindings",
+        "command",
+        "environment",
+        "thresholds",
+        "hard_failures",
+        "failure_inventory",
+        "corpus",
+        "redaction"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.commercial-gate-observation/v1"},
+        "gate_id": {"$ref": "#/$defs/identifier"},
+        "bindings": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate_commit",
+            "candidate_tree",
+            "candidate_wheel_sha256",
+            "candidate_sdist_sha256",
+            "protocol_sha256",
+            "threshold_sha256",
+            "gold_sha256"
+          ],
+          "properties": {
+            "candidate_commit": {"$ref": "#/$defs/git"},
+            "candidate_tree": {"$ref": "#/$defs/git"},
+            "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"},
+            "candidate_sdist_sha256": {"$ref": "#/$defs/sha256"},
+            "protocol_sha256": {"$ref": "#/$defs/sha256"},
+            "threshold_sha256": {"$ref": "#/$defs/sha256"},
+            "gold_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "command": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["argv", "exit_code", "run_count"],
+          "properties": {
+            "argv": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "items": {"type": "string", "minLength": 1, "maxLength": 500}
+            },
+            "exit_code": {"type": "integer", "minimum": -128, "maximum": 255},
+            "run_count": {"type": "integer", "minimum": 0, "maximum": 1000}
+          }
+        },
+        "environment": {"$ref": "#/$defs/environment"},
+        "thresholds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {"$ref": "#/$defs/thresholdObservation"}
+        },
+        "hard_failures": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {"$ref": "#/$defs/hardFailure"}
+        },
+        "failure_inventory": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {"$ref": "#/$defs/failure"}
+        },
+        "corpus": {"$ref": "#/$defs/corpus"},
+        "redaction": {"$ref": "#/$defs/redaction"},
+        "applicability": {
+          "type": "string",
+          "enum": ["applicable", "not_applicable"]
+        },
+        "not_applicable_reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["applicability"],
+            "properties": {"applicability": {"const": "not_applicable"}}
+          },
+          "then": {"required": ["not_applicable_reason"]}
+        }
+      ]
+    },
+    "thresholdObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric", "observed", "minimum", "maximum"],
+      "properties": {
+        "metric": {"$ref": "#/$defs/identifier"},
+        "observed": {"type": "number"},
+        "minimum": {"type": ["number", "null"]},
+        "maximum": {"type": ["number", "null"]}
+      }
+    },
+    "hardFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_id", "count", "maximum_allowed"],
+      "properties": {
+        "failure_id": {"$ref": "#/$defs/identifier"},
+        "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "maximum_allowed": {"const": 0}
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_id", "count", "severity"],
+      "properties": {
+        "failure_id": {"$ref": "#/$defs/identifier"},
+        "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "severity": {"enum": ["hard", "soft"]}
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["secret_canary_count", "private_path_count", "output_redacted"],
+      "properties": {
+        "secret_canary_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "private_path_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "output_redacted": {"type": "boolean"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os_name", "os_version", "python_version", "tool_name", "tool_version",
+        "model_id"
+      ],
+      "properties": {
+        "os_name": {"type": "string", "minLength": 1, "maxLength": 100},
+        "os_version": {"type": "string", "minLength": 1, "maxLength": 200},
+        "python_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "tool_name": {"type": "string", "minLength": 1, "maxLength": 100},
+        "tool_version": {"type": "string", "minLength": 1, "maxLength": 200},
+        "model_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 200}
+      }
+    }
+  }
+}

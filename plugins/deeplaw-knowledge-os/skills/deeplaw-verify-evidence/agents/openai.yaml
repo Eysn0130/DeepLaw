@@ -1,0 +1,4 @@
+interface:
+  display_name: "DeepLaw Evidence Verifier"
+  short_description: "Verify source-bound evidence before relying"
+  default_prompt: "Use $deeplaw-verify-evidence to verify the selected evidence before relying on it."

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/authoritative-review-disposition.v1.schema.json",
+  "title": "DeepLaw Authoritative Review Disposition v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "binding", "dispositions", "source_count", "warning_count",
+    "review_required_segments", "human_reviewed", "expert_reviewed",
+    "capability_downgraded", "pack_mutation_performed", "release_mutation_performed",
+    "official_prose_generated", "disposition_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.authoritative-review-disposition/v1"},
+    "binding": {"$ref": "#/$defs/binding"},
+    "dispositions": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"$ref": "#/$defs/disposition"}},
+    "source_count": {"const": 5},
+    "warning_count": {"const": 32},
+    "review_required_segments": {"const": 8},
+    "human_reviewed": {"const": false},
+    "expert_reviewed": {"const": false},
+    "capability_downgraded": {"const": true},
+    "pack_mutation_performed": {"const": false},
+    "release_mutation_performed": {"const": false},
+    "official_prose_generated": {"const": false},
+    "disposition_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "document_id": {"type": "string", "pattern": "^doc_[0-9a-f]{24}$"},
+    "release_id": {"type": "string", "pattern": "^lawrel_[0-9a-f]{32}$"},
+    "catalog_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,199}$"},
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["catalog_id", "catalog_sha256", "catalog_sequence", "release_id", "release_sha256", "matrix_record_sha256"],
+      "properties": {"catalog_id": {"$ref": "#/$defs/catalog_id"}, "catalog_sha256": {"$ref": "#/$defs/sha256"}, "catalog_sequence": {"const": 2}, "release_id": {"$ref": "#/$defs/release_id"}, "release_sha256": {"$ref": "#/$defs/sha256"}, "matrix_record_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "gap": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gap_id", "code", "label", "affected_capability", "warning_count", "review_required_segments"],
+      "properties": {"gap_id": {"type": "string", "pattern": "^authgap_[0-9a-f]{24}$"}, "code": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,199}$"}, "label": {"type": "string", "minLength": 1, "maxLength": 500}, "affected_capability": {"const": "identity_locator_only"}, "warning_count": {"type": "integer", "minimum": 1, "maximum": 100000}, "review_required_segments": {"type": "integer", "minimum": 1, "maximum": 2000000}}
+    },
+    "disposition": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "source_id", "release_id", "catalog_id", "catalog_sha256", "source_sha256",
+        "source_record_sha256", "warning_count", "review_required", "review_required_segments",
+        "status", "maintainer_status", "expert_status", "human_reviewed", "expert_reviewed",
+        "capability_downgraded", "affected_capability", "capability_after",
+        "pack_mutation_performed", "release_mutation_performed", "official_prose_generated", "gap"
+      ],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/document_id"}, "release_id": {"$ref": "#/$defs/release_id"}, "catalog_id": {"$ref": "#/$defs/catalog_id"}, "catalog_sha256": {"$ref": "#/$defs/sha256"}, "source_sha256": {"$ref": "#/$defs/sha256"}, "source_record_sha256": {"$ref": "#/$defs/sha256"}, "warning_count": {"type": "integer", "minimum": 1, "maximum": 100000}, "review_required": {"const": true}, "review_required_segments": {"type": "integer", "minimum": 1, "maximum": 2000000}, "status": {"const": "maintainer_review_pending"}, "maintainer_status": {"const": "maintainer_review_pending"}, "expert_status": {"const": "expert_review_pending"}, "human_reviewed": {"const": false}, "expert_reviewed": {"const": false}, "capability_downgraded": {"const": true}, "affected_capability": {"const": "identity_locator_only"}, "capability_after": {"const": "identity_locator_only"}, "pack_mutation_performed": {"const": false}, "release_mutation_performed": {"const": false}, "official_prose_generated": {"const": false}, "gap": {"$ref": "#/$defs/gap"}
+      }
+    }
+  }
+}

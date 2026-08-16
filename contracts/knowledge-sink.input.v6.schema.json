@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-sink.input.v6.schema.json",
+  "title": "DeepLaw Knowledge Sink Input v6",
+  "allOf": [
+    {"$ref": "knowledge-sink.input.v5.schema.json"},
+    {
+      "if": {
+        "type": "object",
+        "required": ["operation"],
+        "properties": {"operation": {"const": "record_run"}}
+      },
+      "then": {
+        "properties": {
+          "run_metadata": {
+            "properties": {
+              "artifact_ids": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,199}$",
+                  "not": {
+                    "anyOf": [
+                      {"pattern": "\\.\\."},
+                      {
+                        "pattern": "(^|[._:-])([Aa][Uu][Tt][Hh]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll][Ss]?|[Ss][Ee][Cc][Rr][Ee][Tt][Ss]?|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Kk][Ee][Yy])($|[._:-])"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

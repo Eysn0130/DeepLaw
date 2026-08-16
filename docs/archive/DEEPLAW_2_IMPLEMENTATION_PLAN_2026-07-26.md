@@ -45,7 +45,7 @@ DeepLaw 负责来源、生命周期、选择、上下文、验证与知识治理
 | 数字 confidence 决定可信度 | 未校准分数会伪装成事实或审核 | 使用离散 verification/trust/status，不虚构置信概率 |
 | 导入包继承原状态 | 可通过第三方包洗白 trust 和审核状态 | 所有导入均为 `untrusted + quarantined` |
 | 单一 MCP 混合全部能力 | 普通任务被带偏，工具 schema 和检索结果污染上下文 | Legal Pack 与 Knowledge OS 使用独立显式插件 |
-| 自动纳入案件资料 | 造成跨案件泄漏并破坏 Analytix 数据边界 | Analytix 案件项目永远在 DeepLaw 范围之外 |
+| 自动纳入案件资料 | 造成跨案件泄漏并破坏宿主数据边界 | 客户/案件项目永远在 DeepLaw 范围之外 |
 
 ## 三、最终架构
 
@@ -64,14 +64,14 @@ DeepLaw 负责来源、生命周期、选择、上下文、验证与知识治理
                   |                            |
        Knowledge Capsule                    Evidence Pack
 
-       Analytix case projects / case chats / case databases stay outside.
+       Client/case projects, chats and databases stay outside.
 ```
 
 两条路径只共享软件包和安全原则，不共享规范数据：
 
 - Knowledge Asset vault：面向非案件项目知识、决策、约束、经验、工具结果和领域资料；
 - Legal Pack：面向公共法律和用户私有法律参考资料；
-- Analytix case project：面向单案件附件、会话、事实、SQLite/DuckDB，由 Analytix 自己管理。
+- Client/case project：面向单案件附件、会话、事实、SQLite/DuckDB，由对应宿主管理。
 
 ### 权威、更新与 Agent 修改边界
 
@@ -80,7 +80,7 @@ DeepLaw 负责来源、生命周期、选择、上下文、验证与知识治理
 | 通用 Knowledge Asset vault | 本机 owner 通过 CLI 提议、人工审核、显式替代/撤销 | DeepLaw Agent 接口不得写入、审核、导入、删除或绕过 quarantine；restricted 不可读取 | 固定 `legal_authority=false`；`human_verified` 只表示人工审核激活 |
 | 官方 Legal Pack | DeepLaw 团队发布递增、签名目录；用户显式 install/update/disable/uninstall | DeepLaw Agent 接口不得修改法条正文、版本、时效、来源、segment、关系、审核状态或 ACTIVE | 固定 release 内可复核的官方研究来源；修正只能发布新 release |
 | 用户私有法律资料 | 当前 OS 用户通过 `private add/delete` 重建独立快照 | 不得改写官方目录或继承官方 authority/rank/review；MCP 不得上传/删除 | 用户提供、未经官方审核的法律参考 |
-| Analytix 案件项目 | 仅 Analytix 管理每案件附件、会话、SQLite/DuckDB | DeepLaw 不读取、不摄取、不索引、不共享 | 案件事实与证据，不是 DeepLaw 知识 scope |
+| 客户/案件项目 | 仅对应宿主管理每案件附件、会话、SQLite/DuckDB | DeepLaw 不读取、不摄取、不索引、不共享 | 案件事实与证据，不是 DeepLaw 知识 scope |
 
 普通用户不能在通用 vault 自行声明 `verified_source`；该枚举只为未来独立的发布者验签通道
 保留。把法条放入通用 vault 也不会提升其权威，法源研究必须使用 `law_support`。
@@ -159,7 +159,7 @@ source bytes
 - 指令式文本、不可见字符和双向控制字符触发 source quarantine；
 - 手工 proposal 使用同一风险检测，quarantine 不能仅凭普通审核确认激活；
 - 同一字节内容在不同 trust、sensitivity、origin 或 title 下不能混淆身份；
-- 每次 ingest/propose/debug/feedback 都要求确认不是 Analytix 案件资料；
+- 每次 ingest/propose/debug/feedback 都要求确认不是客户或案件资料；
 - Context Capsule 会持久化 task/goal，因此 CLI 与 MCP context 也必须显式确认非案件数据；
 - 处理成功从不等于审核通过。
 

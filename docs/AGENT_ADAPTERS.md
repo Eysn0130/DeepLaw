@@ -1,17 +1,20 @@
 # DeepLaw Agent Adapters
 
-DeepLaw provides local adapters for Codex, Claude Code, and OpenCode. The two default products are
+DeepLaw provides local configuration adapters for Codex, Claude Code and OpenCode, plus limited
+editor integrations for Obsidian and Tolaria. The two default Agent products are
 read-only; an autonomous mutation capability is a third, separately enabled process and must not be
 collapsed into either query surface:
 
 | Product | Plugin | Process | Single leaf |
 | --- | --- | --- | --- |
-| Chinese Legal Pack | `deeplaw` | `deeplaw mcp --stdio` | `law_support` |
-| Knowledge Asset core | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --stdio` | `knowledge_support` |
-| Autonomous mutation (not registered by default) | owner host config | `deeplaw knowledge sink mcp --grant-id … --stdio` | `knowledge_sink` |
+| Chinese Legal Pack | `deeplaw` | `deeplaw mcp --closed-environment --stdio` | `law_support` |
+| Knowledge Asset core | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --closed-environment --stdio` | `knowledge_support` |
+| Autonomous mutation (not registered by default) | owner host config | `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` | `knowledge_sink` |
 
 This document describes adapter behavior only. Corpus building, release
 governance, and retrieval internals are separate concerns.
+The default/Advanced/Compatibility/Experimental/Retire Candidate classification is frozen in
+[`../governance/product-surface-manifest.v1.json`](../governance/product-surface-manifest.v1.json).
 
 ## Acceptance status
 
@@ -25,13 +28,25 @@ governance, and retrieval internals are separate concerns.
 | No-model Codex plugin lifecycle | **Supported local-only** | official CLI, isolated local-Git marketplace, v0.5→v0.7 upgrade, enable/disable, remove/re-add and dual-product survival |
 | No-model Claude Code plugin lifecycle | **Supported local-only** | official CLI strict validation, discovery, install, enable/disable, v0.5→v0.7 upgrade, removal and isolation |
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
-| Real model/session tasks on all hosts | **External verification pending** | competitive evidence only; no-model lifecycle is not task acceptance |
+| Obsidian CLI bridge and bundle | **Source candidate / local-only** | exact-candidate synthetic macOS load/verify/rename/edit/reconcile/conflict-recovery seam executed; Human/blind and broader qualification pending |
+| Tolaria external MCP bridge | **`integration_limited`** | exact `v2026-08-11` source/hash contract and local CLI harness; Desktop/UI seam not executed |
+| Real model/session tasks on all hosts | **Failed candidate evidence only** | Three Pass 11 exact-wheel Codex App Server A/B/C/D workflows were partial/failed; one isolated OpenCode/DeepSeek workflow did not call `knowledge_support` and was `not_scored`; no profile was admitted and multi-state continuity remains unexecuted |
 
 The compiler workflow and grant boundary are specified in
 [`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). The default plugin remains read-only. A host
 must separately configure `knowledge_sink` with an owner-created grant limited to compilation
-operations, and the Agent must load the shared `compile-living-wiki` Skill. The opt-in real-host
-harness records unavailable model tasks as `not_executed`.
+operations, and the Agent must load the applicable split Skill, normally `deeplaw-compile-source`.
+The scheduled `compile-living-wiki` wrapper is compatibility-only. The opt-in real-host
+harness records unavailable model tasks as `not_executed`. The Pass 10 receipts under
+[`../benchmarks/hosts/evidence/`](../benchmarks/hosts/evidence/) remain historical candidate
+evidence only; the current invalidation is recorded in
+[`V0_13_PASS10_CURRENT_DISPOSITION.md`](V0_13_PASS10_CURRENT_DISPOSITION.md).
+The current Codex token-attribution failure disposition is recorded in
+[`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md).
+The current OpenCode continuity failure disposition is recorded in
+[`V0_13_PASS11_OPENCODE_DISPOSITION.md`](V0_13_PASS11_OPENCODE_DISPOSITION.md).
+The current editor/Wiki/scale evidence boundary is recorded in
+[`V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md).
 
 The retained v0.7.0 host report is historical evidence scoped to official-CLI configuration,
 manifest, lifecycle, and MCP stdio handshake without a model or API key. The v0.9 release gate
@@ -42,10 +57,10 @@ competitive evidence program.
 
 ## Stable boundary
 
-The Legal Pack process command is:
+The production Legal Pack launcher command is:
 
 ```text
-deeplaw mcp --stdio
+deeplaw mcp --closed-environment --stdio
 ```
 
 The common server key is `deeplaw`. Hosts add different prefixes to MCP tools,
@@ -53,8 +68,8 @@ so the visible name can differ, but the server-level leaf name must remain
 exactly `law_support`. For example, OpenCode renders it as
 `deeplaw_law_support`. Host namespacing does not create a second public tool.
 
-`law_support` routes nine read-only operations under the v0.9 v3 contract (the historical v0.7
-package retains the frozen v2 surface):
+`law_support` routes thirteen read-only operations under the current input/output v4 contract (the
+historical v1-v3 contracts remain compatibility surfaces):
 
 | Operation | Purpose | Required selector |
 | --- | --- | --- |
@@ -67,6 +82,10 @@ package retains the frozen v2 surface):
 | `private_verify` | Verify one private snapshot receipt | `segment_id`, `receipt_id` |
 | `private_info` | Inspect the private snapshot | none |
 | `federated_context` | Compile separately admitted official/private/Agent interpretation partitions | `query`, `confirm_no_case_data=true` |
+| `capabilities` | Read deterministic evidence capabilities for one exact segment | `segment_id` |
+| `challenge_trace` | Build a bounded deterministic Authoritative Pack challenge trace | `query` |
+| `challenge_get` | Fetch one exact locally retained challenge trace | `trace_id` |
+| `challenge_replay` | Replay and verify a supplied challenge trace | `trace` |
 
 No host adapter may expose a separate write, upload, memory,
 reindex, delete, activation, administration, case, or chat tool. Build and
@@ -121,10 +140,16 @@ PDF catalog build. A project-only `uv sync` is insufficient when the Agent
 launches the plugin from another working directory unless its environment also
 exposes that project's `.venv/bin`.
 
-The MCP process inherits its environment. Point it at an immutable database with
-`DEEPLAW_DB`, or point `DEEPLAW_HOME` at a directory containing `ACTIVE` and the
-corresponding `releases/<release-id>/deeplaw.sqlite3`. Do not put a machine-local
-database path in a committed plugin manifest. With neither override, every host
+The raw MCP process inherits its caller environment, so every official static and generated Host
+configuration uses the built-in fixed-target `--closed-environment` launcher. It accepts only
+`law_support`, `knowledge_support`, or an explicitly granted `knowledge_sink`; it is not a generic
+command runner. The child receives a small portable process allowlist, isolated `HOME`, Windows
+`USERPROFILE`, XDG and temporary roots, and only explicit DeepLaw data/task settings. `CODEX_HOME`,
+Host plugin/hook state, provider API keys, `.env` settings, credential paths, and the ambient user
+profile are absent. Point the launcher at an immutable database with
+`DEEPLAW_DB`, or at a directory containing `ACTIVE` and the corresponding
+`releases/<release-id>/deeplaw.sqlite3`. Do not put a machine-local database or credential path in a
+committed plugin manifest. With neither DeepLaw data override, every host
 uses the same user-level `~/.deeplaw` home, so a wheel install does not depend on
 the checkout or current working directory.
 
@@ -135,7 +160,8 @@ deeplaw doctor
 deeplaw mcp --help
 ```
 
-Running `deeplaw mcp --stdio` directly waits for MCP messages on standard input;
+Running either raw `deeplaw mcp --stdio` for local diagnostics or the production closed launcher
+waits for MCP messages on standard input;
 that is expected, not a startup hang.
 
 The plugin never downloads or mutates a corpus in the background. Official
@@ -145,8 +171,14 @@ pins both available scopes at startup. Restart it after an official update or a
 private mutation; after either managed epoch changes, the old process rejects
 later reads in that scope when its pinned epoch no longer matches.
 
-The Knowledge Asset process selects one vault through
-`DEEPLAW_KNOWLEDGE_VAULT` or `--vault`. It opens the vault read-only for each
+The closed Knowledge Asset launcher and Host Connect use the same resolver for ancestor
+symlink/junction/reparse rejection, owner, permission and Vault-identity checks. Host Connect binds
+the owner-selected path to its opaque Vault ID in a private owner-local DeepLaw configuration;
+generated Host configuration contains only `--expected-vault-id`, never a Vault path or binding
+file location. The launcher resolves that ID through the private binding and the raw child
+revalidates the same expected ID after process creation, closing the parent/child TOCTOU seam. An
+explicit local `--vault` remains an owner diagnostic/compatibility input, not a production Host
+configuration. The process opens the vault read-only for each
 operation, verifies its closed identities and audit chains, and never mutates
 knowledge. An untouched v0.7 Vault advertises the v1 reviewed-asset contract;
 an autonomous v0.9 Vault advertises v3 with source-derived and Agent-derived
@@ -184,7 +216,7 @@ vector dump or a complete legal memorandum.
 The Codex plugin is rooted at `plugins/deeplaw`:
 
 - `.codex-plugin/plugin.json` provides plugin metadata;
-- `.mcp.json` starts `deeplaw mcp --stdio`;
+- `.mcp.json` starts `deeplaw mcp --closed-environment --stdio`;
 - `skills/research-chinese-law/SKILL.md` is the shared workflow;
 - `skills/research-chinese-law/agents/openai.yaml` sets
   `policy.allow_implicit_invocation: false`.
@@ -327,18 +359,134 @@ Official references:
 ## Optional Knowledge Asset adapter
 
 The Knowledge Asset plugin is rooted at `plugins/deeplaw-knowledge-os` and must
-be installed separately. It is explicit-only:
+be installed separately. Its current split Skills are explicit-only:
 
-- Codex skill: `$use-knowledge-assets`
-- Claude Code skill: `/deeplaw-knowledge-os:use-knowledge-assets`
+- Codex Skills: `$deeplaw-query`, `$deeplaw-compile-source`,
+  `$deeplaw-verify-evidence`, `$deeplaw-refresh-synthesis`,
+  `$deeplaw-navigate-wiki`, and `$deeplaw-promote-draft`
+- Claude Code uses the same six packaged Skill names through its plugin namespace
 - OpenCode agent: `@deeplaw-knowledge`
 
-Codex development install:
+`use-knowledge-assets` and `compile-living-wiki` are scheduled compatibility
+wrappers, not the current default path.
+
+### Owner-side Host connection plan
+
+The Basic CLI journey exposes one real, read-only connection preflight for the supported static
+Host configuration shapes:
+
+```bash
+deeplaw knowledge host connect --host codex --vault ./vault
+deeplaw knowledge host connect --host claude-code --vault ./vault
+deeplaw knowledge host connect --host opencode --vault ./vault
+```
+
+Static Host configuration is task-neutral. For task continuity, DeepLaw normalizes the chosen
+project/task labels, derives only digests for project, task lineage, repository and worktree, and
+recomputes the base revision and bounded dirty snapshot from the explicitly selected Git worktree.
+An opaque task handle remains an optional exact optimization; ordinary recovery locates the route
+from project + task text + current workspace and returns a Gap if more than one route remains:
+
+```bash
+deeplaw knowledge task start --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+deeplaw knowledge task locate --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+deeplaw knowledge task timeline --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+deeplaw knowledge task resume --vault ./vault \
+  --project DeepLaw --task 'Finish the selected task.' --workspace .
+```
+
+The command verifies that the selected Vault is ready, canonically valid, and has the autonomous
+core installed. It also executes one fixed, bounded, no-write, no-model Context health probe and
+verifies that the audit head is unchanged. That attestation covers only the fixed internal probe;
+it does not attest a future user task or goal, a real Host launch, or MCP registration. Every later
+caller-supplied Context/ingestion/mutation request still requires its own explicit
+`confirm_no_case_data` confirmation. The plan distinguishes compiled Knowledge, a source-only
+honest Gap, and an empty honest Gap; an uncallable read seam is blocked rather than reported ready.
+It then validates and prints a
+[`host-connect-plan/v2`](../contracts/host-connect-plan.v2.schema.json) document containing only a
+`knowledge_support` stdio configuration. Codex direct setup is represented as TOML for either
+`~/.codex/config.toml` or trusted-project `.codex/config.toml`, together with the equivalent
+`codex mcp add ...` command and `codex mcp list` verification command. The separately named
+`codex_plugin_manifest` is JSON for the plugin-root `.mcp.json`; the `.codex-plugin/plugin.json`
+manifest points to it with `"mcpServers": "./.mcp.json"`. It is not Codex direct configuration.
+Claude Code receives its actual `mcpServers` JSON shape. OpenCode receives a local
+MCP command array for `opencode.json`/`opencode.jsonc`, wildcard deny, and the exact read leaf allow.
+`merge_required=true`: DeepLaw does not write Host configuration, install a Host, manage Host
+authentication or runtime state, or enable the separate `knowledge_sink` process. It does perform
+one narrowly scoped owner-local DeepLaw configuration write that binds the opaque Vault ID to the
+selected path; the plan reports that write explicitly. The plan itself is path-free, binds
+`--expected-vault-id`, and uses the fixed closed launcher. Static configuration cannot embed a task
+handle. At Host lifecycle time, a Host-local official session event supplies its current cwd plus
+an optional Host session/fork hint; the adapter passes the explicit workspace and DeepLaw
+re-resolves the Vault/project/task/workspace binding. The launcher never falls back to ambient
+`Path.cwd()`. The compatibility `--task-binding` form remains available for existing callers. A
+configured launcher binding is a fixed read boundary: a call cannot replace it with another line.
+
+Owner-side direct verification remains explicit:
+
+```bash
+codex mcp list
+claude mcp list
+opencode mcp list
+```
+
+This is an owner-side setup artifact, not provider-visible context. The owner-selected local Vault
+path remains only in the private DeepLaw owner binding and child environment; it never appears in
+the generated plan. Qualification
+receipts, Provider Capsules, logs, screenshots, and public support bundles also omit it. Adapters
+continue to delegate retrieval, admission, governance, and persistence to the shared domain
+services.
+
+Codex and OpenCode continuity consume only the official lifecycle seams documented in their
+adjacent adapter READMEs, verified lineage, and cwd. Host IDs are untrusted routing hints, not
+DeepLaw identity or Authority: DeepLaw rebinds them to the owner-selected Vault, project, task, and
+workspace. Neither adapter stores transcript, hidden reasoning, authentication material, or Host
+private memory, and neither implements a second Agent runtime.
+
+The disabled sidecars, owner-only enable/disable path, read-only boundary, and exact event
+mappings are documented in `adapters/codex/README.md` and `adapters/opencode/README.md`; static
+tests are not real Host receipts.
+
+The shipped MCP caller inventory is closed as follows:
+
+- static Codex/Claude plugin manifests for `deeplaw` and `deeplaw-knowledge-os`, plus the three
+  OpenCode samples, invoke the fixed launcher;
+- Host Connect v2 and Tolaria generated configurations use the shared resolver/config builder;
+- the Obsidian display-only MCP setting, Codex plugin smoke, no-model registration check and editor
+  integration harness show or exercise the same production command;
+- current Codex/OpenCode continuity and token-attribution runners, and retained Pass 13
+  compatibility runners, delegate their MCP child to the production launcher;
+- raw `law_support`, `knowledge_support`, and `knowledge_sink` stdio commands remain explicit
+  owner diagnostic/compatibility seams and are not emitted into production Host configuration.
+
+For owner/Host compilation orchestration, the command
+`deeplaw knowledge compile handoff --source-revision-id <exact-id>` produces a read-only receipt
+that binds the existing compiler profile and the public
+`knowledge_support`/separate `knowledge_sink` saga. It does not include a Grant, call a model, merge
+read and write leaves, or add another coordinator.
+
+Codex plugin development install uses the current local marketplace seam. Only `plugin.json` is
+stored below `.codex-plugin/`; bundled MCP configuration is the plugin-root `.mcp.json`:
 
 ```bash
 codex plugin marketplace add /absolute/path/to/DeepLaw
 codex plugin add deeplaw-knowledge-os@deeplaw
 ```
+
+Historical status — Pass 14 only: the no-model lifecycle check used a fresh temporary HOME,
+`CODEX_HOME` and XDG roots,
+discovered both local plugins, installed/removed/re-added them, and compared the cached plugin bytes
+with their source bytes. It passed with `codex-cli 0.147.0-alpha.1.2`, but remains
+`full_host_acceptance=false` and `claim_eligible=false`: no model or MCP session was started.
+The subsequent isolated ChatGPT-login preflight failed closed, so real Codex diagnostic and
+continuity qualification are `not_executed`. No installed OpenCode binary was available for its
+required version/config preflight, so its diagnostic and qualification were also `not_executed`.
+This paragraph does not describe current Pass 17 evidence; see
+[`V0_13_PASS17_DISPOSITION.md`](V0_13_PASS17_DISPOSITION.md). Pass 19 adds local no-model closed
+launcher and task-continuity regressions only and does not upgrade real-Host qualification.
 
 Claude Code development load:
 
@@ -355,36 +503,77 @@ Merge the sample rather than overwriting the user's configuration, then copy
 the skill and agent:
 
 ```bash
-mkdir -p .opencode/skills/use-knowledge-assets .opencode/agents
-cp plugins/deeplaw-knowledge-os/skills/use-knowledge-assets/SKILL.md \
-  .opencode/skills/use-knowledge-assets/SKILL.md
+mkdir -p .opencode/skills/deeplaw-query .opencode/agents
+cp plugins/deeplaw-knowledge-os/skills/deeplaw-query/SKILL.md \
+  .opencode/skills/deeplaw-query/SKILL.md
 cp adapters/opencode/agents/deeplaw-knowledge.md \
   .opencode/agents/deeplaw-knowledge.md
 ```
 
-After autonomous migration, `knowledge_support` routes twelve read operations:
+After autonomous migration, the recommended `knowledge_support` read path is:
 
 | Operation | Purpose |
 | --- | --- |
 | `search` / `recall` | return bounded source-derived and autonomous partitions without merging Authority |
 | `get` | read one exact active non-restricted `knowledge_id` or legacy `asset_id` |
-| `context` | compile a bounded Query Plan v5 Knowledge Capsule v2 through the shared domain service |
+| `query` | run default Query Plan v6 statement selection, duty coverage and targeted evidence completion |
+| `context` | compile default Query Plan v6 through the shared domain assembler into local Capsule v3 plus bounded Provider v2 |
+| `wiki` | read exact pages, indexed links, local graphs, kinds and recent changes |
+| `source` | read exact admitted Source Revisions and fragments |
 | `verify` | verify object/source binding, current usability, both event chains, and state reconciliation |
 | `inspect` | inspect sanitized readiness, scoped counts, integrity, and legacy compatibility state |
 | `lineage` | read bounded immutable revision metadata for one Knowledge Object |
 | `graph` | read bounded canonical relation revisions after endpoint admission |
-| `wiki_lookup` | discover through derived Wiki navigation while returning canonical revisions |
 | `explain` | return hashed query plans, admission/selection receipts, gaps, and budgets |
 | `identity_lookup` | return bounded Concept/Entity identity candidates without silently merging ambiguity |
 | `gaps` | return scope- and sensitivity-bounded semantic knowledge gaps without leaking other partitions |
 
-`context` requires `confirm_no_case_data=true` because its task and goal are
-persisted in the Capsule. A host may send that confirmation only after keeping
-Analytix case facts, chats, identifiers, and attachments out of the request.
+Autonomous `context` defaults to Query Plan v6 for Python, both Knowledge CLI Context commands,
+and MCP `operation=context`. `query_target`, `applicable_duties`, `projection`, `graph_hops`,
+`retrieval_mode`, and integrity-selected canonical lexical fallback are explicit v6 plan controls;
+they are not silently discarded. The local Capsule v3 is capped at 262,144 bytes, while Provider
+v2 content is capped at 65,536 bytes and receives only bounded Statement/evidence data plus the
+opaque `receipt_id`. The local Query Trace is bounded, redacted, non-persistent, and retained only
+after Provider and outer response validation. Explicit `query_plan_version=5` is compatibility-only:
+Python/CLI retain local Capsule v2, and MCP retains output/v3 with Capsule v2/Query Plan v5
+semantics. The legacy `deeplaw recall` command remains the `retrieval_fabric` path and is not a v6
+Context alias. Ordinary query/context calls are read-only and never append the Canonical Ledger.
+
+For v6 `query` and `context`, the MCP unstructured `content` text is exactly the canonical JSON of
+the nested Provider Capsule projection counted by `delivery.provider_content_bytes`. The validated
+`structuredContent` retains the complete local output contract for Host/application inspection;
+its outer Authority boundary, delivery record, and receipt wrapper are not duplicated into the
+Provider text block. Host observations must hash and count the actual `content` text rather than
+substituting the larger structured result or a locally reconstructed payload.
+
+`deeplaw knowledge context` is the single recommended Agent entry. `knowledge query` remains an
+owner/operator diagnostic surface; `deeplaw recall`, `knowledge recall`, and autonomy aliases stay
+compatibility or operator surfaces pending a consumer inventory. Working checkpoints are routed
+through the shared Host-neutral identity normalizer before ordinary content discovery. The route
+uses owner-registered opaque project, repository, stable-worktree, and task-line identifiers;
+checkpoint base/dirty state is a separate snapshot. Absolute paths, branch names, current commits,
+task text alone, and Host session/thread/memory references cannot create an identity, grant, or
+authorization. Adapters may only map available Host hints into this shared seam.
+
+For a binding-free cold request, exact task text can recover only when it resolves to one admitted
+task line in the selected Vault. Multiple admitted lines return `task_line_ambiguous`; selecting
+the newest is forbidden. The Provider sees neither candidate identities nor routing fields. This
+local exact-match development path and static Codex/Claude/OpenCode adapter parity are implemented;
+stable identity derivation and three-run real-Host cold-start qualification remain not executed.
+
+New bound mutations use additive `knowledge-sink.input/v6`. Frozen input v2-v5 bytes remain
+readable; an unbound legacy Run cannot silently ground a new default-v6 working checkpoint.
+Current Run Artifact IDs are validated once at the domain commit seam as opaque, bounded,
+non-path, non-Secret-shaped identifiers. Owner reconciliation creates a new bound Run and successor
+Revision; adapters must not rewrite history or implement a second identity/reconciliation path.
+
+`context` requires `confirm_no_case_data=true` because task and goal text become
+provider-visible Capsule data. A host may send that confirmation only after keeping
+client/case facts, chats, identifiers, and attachments out of the request.
 
 The default plugin has no `remember`, relation mutation, feedback write,
 `approve`, `import`, delete, shell, web, or case operation. Host configuration
-is not permission to copy Analytix case data into a vault.
+is not permission to copy client or case data into a vault.
 
 This read-only guarantee covers the DeepLaw MCP surface. A host must not give
 the same Agent a separate same-owner shell or filesystem route to
@@ -422,19 +611,45 @@ deeplaw knowledge sink enable \
 Only then may the owner add a separate host MCP entry whose command is:
 
 ```text
-deeplaw knowledge sink mcp --vault <owner-vault> --grant-id <exact-grant-id> --stdio
+deeplaw knowledge sink mcp --closed-environment \
+  --expected-vault-id <opaque-vault-id> --grant-id <exact-grant-id> --stdio
 ```
 
-Do not commit a Vault path, grant ID, or capability token. Never add this
+The owner first establishes the private Vault-ID binding through `knowledge host connect`; the Host
+configuration itself stays path-free. Do not commit a Vault path, grant ID, or capability token. Never add this
 server to the default plugin manifest. The server exposes exactly one
 `knowledge_sink` leaf; its closed request requires an idempotency key and
 `confirm_no_case_data=true`. A model, retrieved page, Skill, or router cannot
 run `sink enable`, choose a broader grant, or add owner-only operations.
 
-## Analytix remains outside DeepLaw
+### Explicit task checkpoint and restore chain
 
-Do not modify Analytix merely to make DeepLaw globally visible. DeepLaw does not store Analytix case
-projects. Any separately authorized future host bridge would have to preserve these invariants:
+Query and Context are always read-only and never checkpoint. At an explicit successful task
+boundary, a Host that has received an owner grant with only the needed operations performs two
+separate `knowledge_sink` calls: `record_run(status=succeeded)` with the canonical task binding in
+`run_metadata`, then `remember(kind=memory, memory_type=working, run_id=...)`. This reuses the
+existing Run, Knowledge Revision, Ledger event and rebuildable checkpoint-route projection; it
+does not store a transcript, hidden reasoning, complete log, authentication state or Host session.
+Selective withdrawal uses the same separately authorized Sink's `forget` operation with the exact
+current revision and owner reason.
+
+Each new MCP process can deterministically recover the same admitted data-plane line when it
+receives the same validated handle/binding. `task resume` and `task compaction` both reacquire a
+fresh bounded Capsule and never copy a transcript. Fork mode is explicit: `continue-parent` keeps
+the handle, while `child-task` creates a different lineage with an opaque parent digest.
+Concurrent worktrees remain distinct. Changed base/dirty snapshots return `workspace_diverged` or
+`stale_checkpoint`; wrong or ambiguous task lines and forgotten checkpoints return bounded Gaps
+without guessing. Without an exact binding, only a unique task-text route may be recovered; that
+compatibility path cannot prove the caller's current workspace snapshot and therefore is not a
+substitute for Host binding. Fork merge/conflict reconciliation, transcript crawling, background
+checkpointing and semantic whole-session restore are not implemented. Static MCP has no native
+Host lifecycle metadata, so local start/resume/compaction tests are deterministic restart/data-plane
+recovery only. Native Host start/resume/fork/compaction remains a real qualification claim.
+
+## Client and case workspaces remain outside DeepLaw
+
+DeepLaw does not store client or case projects. Any separately authorized host bridge must
+preserve these invariants:
 
 1. Register an optional DeepLaw stdio MCP profile, disabled for normal tasks.
 2. Start `deeplaw mcp --stdio` only after an explicit legal-research action or
@@ -442,12 +657,12 @@ projects. Any separately authorized future host bridge would have to preserve th
    sole activation gate.
 3. During MCP initialization, allowlist exactly the `law_support` leaf tool and
    reject any other DeepLaw tool before its schema reaches the model.
-4. Add the tool schema only to the legal-research turn. Preserve Analytix's
+4. Add the tool schema only to the legal-research turn. Preserve the host's
    stable system prefix and ordinary data tools for every other turn.
 5. Keep private case documents, facts, chats, embeddings, SQLite state, and
    DuckDB data inside the case project. Send only a minimal de-identified legal
    issue to the official DeepLaw scope. The optional DeepLaw user-private scope
-   is for legal references, not an Analytix case store.
+   is for legal references, not a case store.
 6. Keep the two-stage pattern: bounded `search`, then exact `get` and selective
    `verify`. Do not place broad retrieval results in the main context.
 7. Fail closed. If the process, release, receipt, or version check fails, report
@@ -457,8 +672,8 @@ projects. Any separately authorized future host bridge would have to preserve th
    queries when they may encode case facts.
 
 This keeps DeepLaw additive: legal-source research becomes available when
-requested without changing Analytix's behavior, context size, or tool choice on
-non-legal data work.
+requested without changing the host's behavior, context size, or tool choice
+on non-legal data work.
 
 ## Adapter validation checklist
 

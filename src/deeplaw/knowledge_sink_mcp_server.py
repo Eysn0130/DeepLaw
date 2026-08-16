@@ -40,7 +40,7 @@ _DESCRIPTION = (
     "Explicitly enabled, local-only, scope-bound mutation capability for Agent-derived "
     "DeepLaw knowledge. Every call requires an idempotency key and produces an immutable "
     "revision and audit event. It cannot mutate Legal Pack evidence, elevate authority, "
-    "delete audit history, use arbitrary paths, or store Analytix case data."
+    "delete audit history, use arbitrary paths, or store client or case data."
 )
 _INSTRUCTIONS = (
     "Use only when the owner has explicitly enabled this separate Knowledge Sink server. "
@@ -560,7 +560,15 @@ def _v4_input_schema(
         operation = operation_schema.get("const")
         if operation in embedded:
             field, contract_name = embedded[operation]
-            properties[field] = deepcopy(_contract(contract_name))
+            if operation == "finalize_semantic_compilation":
+                properties[field] = {
+                    "oneOf": [
+                        deepcopy(_contract(contract_name)),
+                        deepcopy(_contract("semantic-publication-plan.v3.schema.json")),
+                    ]
+                }
+            else:
+                properties[field] = deepcopy(_contract(contract_name))
     if operations is not None:
         allowed = set(operations)
         branches = []
@@ -594,15 +602,78 @@ def _v4_input_schema(
     return schema
 
 
+def _v5_input_schema(
+    *,
+    operations: tuple[str, ...] | None = None,
+    evaluator_types: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    schema = deepcopy(_contract("knowledge-sink.input.v5.schema.json"))
+    previous = _v4_input_schema(
+        operations=operations,
+        evaluator_types=evaluator_types,
+    )
+    previous.pop("$schema", None)
+    schema["oneOf"][0] = previous
+
+    task_binding = deepcopy(_contract("task-context-binding.v1.schema.json"))
+    task_binding.pop("$schema", None)
+    task_binding.pop("$id", None)
+    schema.setdefault("$defs", {})["task_binding"] = task_binding
+    bound_branch = schema["oneOf"][1]
+    bound_branch["properties"]["run_metadata"]["properties"]["task_binding"] = {
+        "$ref": "#/$defs/task_binding"
+    }
+
+    # Keep the historical evaluator advertisement location visible through the
+    # v4 branch for hosts that inspect the nested legacy branch directly.
+    if evaluator_types is not None:
+        legacy_branch = previous["oneOf"][0]
+        legacy_branch.setdefault("properties", {})["evaluator_type"] = {
+            "enum": list(evaluator_types)
+        }
+
+    schema["properties"]["operation"] = {
+        "enum": list(operations) if operations is not None else list(_OPERATION_FIELDS)
+    }
+    if evaluator_types is not None:
+        schema["properties"]["evaluator_type"] = {"enum": list(evaluator_types)}
+
+    if operations is not None and "record_run" not in operations:
+        schema["oneOf"] = [previous]
+
+    Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _v6_input_schema(
+    *,
+    operations: tuple[str, ...] | None = None,
+    evaluator_types: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    contract = deepcopy(_contract("knowledge-sink.input.v6.schema.json"))
+    schema = _v5_input_schema(
+        operations=operations,
+        evaluator_types=evaluator_types,
+    )
+    schema["$id"] = contract["$id"]
+    schema["title"] = contract["title"]
+    schema["allOf"] = [deepcopy(contract["allOf"][1])]
+    Draft202012Validator.check_schema(schema)
+    return schema
+
+
 def knowledge_sink_tool_definition(
     *,
     operations: tuple[str, ...] | None = None,
     evaluator_types: tuple[str, ...] | None = None,
 ) -> types.Tool:
+    v6 = operations is None or "record_run" in operations
     v4 = bool(operations and _V4_OPERATIONS.intersection(operations))
     extended = bool(operations and _EXTENDED_OPERATIONS.intersection(operations))
     input_schema = (
-        _v4_input_schema(operations=operations, evaluator_types=evaluator_types)
+        _v6_input_schema(operations=operations, evaluator_types=evaluator_types)
+        if v6
+        else _v4_input_schema(operations=operations, evaluator_types=evaluator_types)
         if v4
         else _v3_input_schema(operations=operations, evaluator_types=evaluator_types)
         if extended
@@ -650,10 +721,16 @@ def knowledge_sink_tool_definition(
 
 def _validate(name: str, value: dict[str, Any]) -> None:
     schema = (
-        _v4_input_schema()
+        _v6_input_schema()
+        if name == "knowledge-sink.input.v6.schema.json"
+        else _v5_input_schema()
+        if name == "knowledge-sink.input.v5.schema.json"
+        else _v4_input_schema()
         if name == "knowledge-sink.input.v4.schema.json"
         else _v3_input_schema()
         if name == "knowledge-sink.input.v3.schema.json"
+        else _hydrated_v2_input_schema()
+        if name == "knowledge-sink.input.v2.schema.json"
         else _contract(name)
     )
     error = next(
@@ -673,6 +750,8 @@ def _validate(name: str, value: dict[str, Any]) -> None:
         "knowledge-sink.input.v2.schema.json",
         "knowledge-sink.input.v3.schema.json",
         "knowledge-sink.input.v4.schema.json",
+        "knowledge-sink.input.v5.schema.json",
+        "knowledge-sink.input.v6.schema.json",
     }:
         operation = value.get("operation")
         allowed = _OPERATION_FIELDS.get(operation)
@@ -702,11 +781,14 @@ def handle_knowledge_sink(
     grant_operations = cast(list[str], grant_status["operations"])
     if operation not in grant_operations:
         raise PermissionError("Knowledge Sink operation is outside the active grant")
+    v6 = "record_run" in grant_operations
     v4 = bool(_V4_OPERATIONS.intersection(grant_operations))
     extended = bool(_EXTENDED_OPERATIONS.intersection(grant_operations))
     _validate(
         (
-            "knowledge-sink.input.v4.schema.json"
+            "knowledge-sink.input.v6.schema.json"
+            if v6
+            else "knowledge-sink.input.v4.schema.json"
             if v4
             else "knowledge-sink.input.v3.schema.json"
             if extended
@@ -798,7 +880,9 @@ def handle_knowledge_sink(
                     str | None,
                     request.get("expected_relation_revision_id"),
                 ),
-                evidence_refs=cast(list[dict[str, Any]] | None, request.get("evidence_refs")),
+                evidence_refs=cast(
+                    list[dict[str, Any]] | None, request.get("evidence_refs")
+                ),
                 valid_from=cast(str | None, request.get("valid_from")),
                 valid_to=cast(str | None, request.get("valid_to")),
                 confirm_no_case_data=True,
@@ -822,9 +906,7 @@ def handle_knowledge_sink(
                 action=str(request["action"]),
                 subject_knowledge_id=str(request["subject_knowledge_id"]),
                 object_knowledge_ids=cast(list[str], request["object_knowledge_ids"]),
-                evidence_refs=cast(
-                    list[dict[str, Any]] | None, request.get("evidence_refs")
-                ),
+                evidence_refs=cast(list[dict[str, Any]] | None, request.get("evidence_refs")),
                 run_id=cast(str | None, request.get("run_id")),
                 confirm_no_case_data=True,
             )
@@ -1108,8 +1190,8 @@ def _handle_extended_sink(
             compilation_run_id=str(request["compilation_run_id"]),
             grant_id=grant_id,
         )
-        if run.compiler_profile_version != "2":
-            raise ValueError("semantic operation requires compiler profile version 2")
+        if run.compiler_profile_version not in {"2", "3"}:
+            raise ValueError("semantic operation requires compiler profile version 2 or 3")
         if operation == "stage_semantic_observations":
             return run.stage_observations(
                 cast(dict[str, Any], request["plan"]),

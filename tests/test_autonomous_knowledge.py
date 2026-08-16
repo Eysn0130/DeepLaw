@@ -23,6 +23,7 @@ from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_inbox import reject_inbox_artifact, submit_inbox_artifact
 from deeplaw.knowledge_maintenance import knowledge_doctor
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
+from deeplaw.task_context import build_task_context_binding
 from deeplaw.util import QUERY_EXPANSION_PROFILE, canonical_json, sha256_bytes, stable_id
 
 
@@ -78,7 +79,7 @@ def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutat
         before_head = store.audit_head
 
         result = store.recall(
-            "比较两项诊断日志保留政策，并保留它们之间的冲突。",
+            "这两个日志政策有什么不同，哪里互相冲突?",
             retrieval_mode="hybrid",
         )
 
@@ -89,7 +90,7 @@ def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutat
         assert result["query_plan"]["query_expansion_profile"] == (
             QUERY_EXPANSION_PROFILE
         )
-        assert result["query_plan"]["query_expansion_term_count"] >= 6
+        assert result["query_plan"]["query_expansion_term_count"] >= 3
         assert store.audit_head == before_head
         _validate_contract(
             "autonomous-query-plan.v1.schema.json", result["query_plan"]
@@ -892,6 +893,7 @@ def test_graph_wiki_lint_capsule_and_forgetting_close_the_runtime_loop(
 
         capsule = store.build_capsule(
             task="Explain why ranking cannot establish authority",
+            query_plan_version="5",
             confirm_no_case_data=True,
         )
         assert capsule["sections"]["agent_memory"]
@@ -1437,8 +1439,8 @@ def test_scope_rate_token_and_ttl_bound_the_sink_capability(tmp_path: Path) -> N
             writer_id="bounded-agent",
             allowed_scope="project",
             max_sensitivity="internal",
-            operations=("remember", "expire"),
-            max_mutations_per_minute=2,
+            operations=("remember", "expire", "record_run"),
+            max_mutations_per_minute=3,
         )
         with pytest.raises(ValueError, match="no case data"):
             store.remember(
@@ -1471,6 +1473,21 @@ def test_scope_rate_token_and_ttl_bound_the_sink_capability(tmp_path: Path) -> N
                 sensitivity="internal",
                 confirm_no_case_data=True,
             )
+        run = store.record_run(
+            grant_id=grant["grant_id"],
+            idempotency_key="ttl-memory-run",
+            task="Exercise bounded working-memory expiry.",
+            host_id="test-host",
+            status="succeeded",
+            sensitivity="internal",
+            metadata={
+                "task_binding": build_task_context_binding(
+                    sha256_bytes(b"autonomous-test-project"),
+                    sha256_bytes(b"ttl-memory-task-line"),
+                )
+            },
+            confirm_no_case_data=True,
+        )
         due = store.remember(
             grant_id=grant["grant_id"],
             idempotency_key="ttl-memory",
@@ -1479,6 +1496,7 @@ def test_scope_rate_token_and_ttl_bound_the_sink_capability(tmp_path: Path) -> N
             memory_type="working",
             sensitivity="internal",
             expires_at="2026-01-01T00:00:00Z",
+            run_id=run["run_id"],
             confirm_no_case_data=True,
         )
         assert (root / due["workspace_path"]).is_file()

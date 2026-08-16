@@ -1,0 +1,387 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/v013-qualification-protocol.v1.schema.json",
+  "title": "DeepLaw v0.13 source-candidate qualification protocol v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_id",
+    "protocol_version",
+    "status",
+    "freeze_status",
+    "objective",
+    "candidate_binding",
+    "data_layers",
+    "compiler_contract",
+    "evaluator_contract",
+    "frozen_controls",
+    "metrics",
+    "hard_failures",
+    "external_gates",
+    "claim_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-qualification-protocol/v1"},
+    "protocol_id": {"const": "deeplaw-v013-source-candidate-qualification"},
+    "protocol_version": {"const": 1},
+    "status": {"const": "candidate_qualification"},
+    "freeze_status": {"const": "protocol_frozen_candidate_binding_pending"},
+    "objective": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "candidate_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_version",
+        "wheel_filename",
+        "wheel_sha256",
+        "source_commit",
+        "qualification_holdout_sha256",
+        "final_blind_holdout_sha256"
+      ],
+      "properties": {
+        "package_version": {"const": "0.12.0"},
+        "wheel_filename": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^deeplaw-[0-9]+\\.[0-9]+\\.[0-9]+[^/]*\\.whl$"}
+          ]
+        },
+        "wheel_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "source_commit": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+          ]
+        },
+        "qualification_holdout_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "final_blind_holdout_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    },
+    "data_layers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development", "qualification_holdout", "final_blind"],
+      "properties": {
+        "development": {"$ref": "#/$defs/developmentLayer"},
+        "qualification_holdout": {"$ref": "#/$defs/qualificationLayer"},
+        "final_blind": {"$ref": "#/$defs/finalBlindLayer"}
+      }
+    },
+    "compiler_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_artifact",
+        "allowed_inputs",
+        "forbidden_inputs",
+        "source_access",
+        "mcp_access",
+        "network_policy",
+        "input_mounts_read_only",
+        "repository_source_access",
+        "gold_access",
+        "scorer_access",
+        "expected_identity_access",
+        "ambient_secret_access"
+      ],
+      "properties": {
+        "execution_artifact": {"const": "exact_candidate_wheel_only"},
+        "allowed_inputs": {
+          "const": ["candidate_wheel", "selected_layer_source_corpus", "explicit_deeplaw_mcp"]
+        },
+        "forbidden_inputs": {
+          "const": [
+            "repository_source_tree",
+            "qualification_gold",
+            "final_blind_gold",
+            "scorer",
+            "expected_ids",
+            "private_corpus",
+            "ambient_credentials",
+            "host_global_config"
+          ]
+        },
+        "source_access": {"const": "selected_layer_source_corpus_only"},
+        "mcp_access": {"const": "explicit_deeplaw_mcp_only"},
+        "network_policy": {"const": "offline_except_explicit_provider_channel"},
+        "input_mounts_read_only": {"const": true},
+        "repository_source_access": {"const": false},
+        "gold_access": {"const": false},
+        "scorer_access": {"const": false},
+        "expected_identity_access": {"const": false},
+        "ambient_secret_access": {"const": false}
+      }
+    },
+    "evaluator_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_role",
+        "allowed_inputs",
+        "forbidden_inputs",
+        "read_only_inputs",
+        "repository_source_access",
+        "compiler_process_access",
+        "candidate_mutation",
+        "output_mutation"
+      ],
+      "properties": {
+        "execution_role": {"const": "read_only_output_and_gold_scorer"},
+        "allowed_inputs": {"const": ["compiled_output", "corresponding_gold"]},
+        "forbidden_inputs": {
+          "const": ["repository_source_tree", "candidate_wheel", "compiler_process", "private_material"]
+        },
+        "read_only_inputs": {"const": true},
+        "repository_source_access": {"const": false},
+        "compiler_process_access": {"const": false},
+        "candidate_mutation": {"const": false},
+        "output_mutation": {"const": false}
+      }
+    },
+    "frozen_controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "thresholds_frozen_before_final_result",
+        "budgets_frozen_before_final_result",
+        "failure_conditions_frozen_before_final_result",
+        "metric_set_id",
+        "provider_payload_bytes",
+        "statement_candidate_limit",
+        "graph_hops",
+        "graph_admission_limit",
+        "graph_scan_limit",
+        "rss_request_count",
+        "rss_max_relative_growth",
+        "concurrent_readers",
+        "query_trace_policy"
+      ],
+      "properties": {
+        "thresholds_frozen_before_final_result": {"const": true},
+        "budgets_frozen_before_final_result": {"const": true},
+        "failure_conditions_frozen_before_final_result": {"const": true},
+        "metric_set_id": {"const": "deeplaw-v013-qualification-metrics-v1"},
+        "provider_payload_bytes": {"const": 65536},
+        "statement_candidate_limit": {"const": 512},
+        "graph_hops": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minimum", "maximum"],
+          "properties": {"minimum": {"const": 0}, "maximum": {"const": 2}}
+        },
+        "graph_admission_limit": {"const": 500},
+        "graph_scan_limit": {"const": 5000},
+        "rss_request_count": {"const": 10000},
+        "rss_max_relative_growth": {"const": 0.1},
+        "concurrent_readers": {"const": 8},
+        "query_trace_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ttl_seconds", "max_entries", "max_bytes", "hash", "owner_delete", "plaintext_default"],
+          "properties": {
+            "ttl_seconds": {"const": 900},
+            "max_entries": {"const": 16},
+            "max_bytes": {"const": 1048576},
+            "hash": {"const": "sha256_integrity_recomputed_on_read"},
+            "owner_delete": {"const": true},
+            "plaintext_default": {"const": false}
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/metric"}
+    },
+    "hard_failures": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/hardFailure"}
+    },
+    "external_gates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/externalGate"}
+    },
+    "claim_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "quality_protocol_eligible",
+        "competitive_claim_eligible",
+        "release_disposition",
+        "forbidden_claims",
+        "holdout_contamination_claim_eligible"
+      ],
+      "properties": {
+        "quality_protocol_eligible": {"const": false},
+        "competitive_claim_eligible": {"const": false},
+        "release_disposition": {"const": "not_released_source_candidate"},
+        "forbidden_claims": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 200}
+        },
+        "holdout_contamination_claim_eligible": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableSha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+    "logicalId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+    },
+    "developmentLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layer_kind",
+        "residency",
+        "source_id",
+        "status",
+        "source_visibility",
+        "gold_visibility",
+        "scorer_visibility",
+        "tuning_policy",
+        "corpus_sha256"
+      ],
+      "properties": {
+        "layer_kind": {"const": "development"},
+        "residency": {"const": "repository_or_public_synthetic"},
+        "source_id": {"$ref": "#/$defs/logicalId"},
+        "status": {"const": "development_only"},
+        "source_visibility": {"const": "compiler_visible_source_only"},
+        "gold_visibility": {"const": "development_labels_may_be_visible"},
+        "scorer_visibility": {"const": "compiler_forbidden"},
+        "tuning_policy": {"const": "permitted; never qualifies a holdout"},
+        "corpus_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    },
+    "qualificationLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layer_kind",
+        "residency",
+        "source_id",
+        "status",
+        "source_visibility",
+        "gold_visibility",
+        "scorer_visibility",
+        "tuning_policy",
+        "corpus_sha256",
+        "gold_sha256"
+      ],
+      "properties": {
+        "layer_kind": {"const": "qualification_holdout"},
+        "residency": {"const": "repo_external"},
+        "source_id": {"$ref": "#/$defs/logicalId"},
+        "status": {"const": "not_bound"},
+        "source_visibility": {"const": "compiler_visible_source_only"},
+        "gold_visibility": {"const": "evaluator_only"},
+        "scorer_visibility": {"const": "evaluator_only"},
+        "tuning_policy": {"const": "any diagnostic_or_tuning_use_downgrades_to_development"},
+        "corpus_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "gold_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    },
+    "finalBlindLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layer_kind",
+        "residency",
+        "source_id",
+        "status",
+        "source_visibility",
+        "gold_visibility",
+        "scorer_visibility",
+        "entry_condition",
+        "failure_policy",
+        "corpus_sha256",
+        "gold_sha256"
+      ],
+      "properties": {
+        "layer_kind": {"const": "final_blind"},
+        "residency": {"const": "repo_external"},
+        "source_id": {"$ref": "#/$defs/logicalId"},
+        "status": {"const": "not_bound"},
+        "source_visibility": {"const": "compiler_visible_source_only"},
+        "gold_visibility": {"const": "evaluator_only"},
+        "scorer_visibility": {"const": "evaluator_only"},
+        "entry_condition": {"const": "after_final_candidate_freeze_only"},
+        "failure_policy": {"const": "failure_then_repair_requires_new_unseen_holdout"},
+        "corpus_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "gold_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {"enum": ["minimum", "maximum", "exact", "report_only"]},
+        "value": {"type": "number", "minimum": 0}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"mode": {"enum": ["minimum", "maximum", "exact"]}}},
+          "then": {"required": ["value"]}
+        },
+        {
+          "if": {"properties": {"mode": {"const": "report_only"}}},
+          "then": {"not": {"required": ["value"]}}
+        }
+      ]
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "category", "direction", "acceptance", "measurement_status", "zero_denominator_status"],
+      "properties": {
+        "metric_id": {"$ref": "#/$defs/logicalId"},
+        "category": {"enum": ["retrieval", "context", "living_wiki", "legal", "security", "performance"]},
+        "direction": {"enum": ["higher", "lower", "exact", "reported"]},
+        "acceptance": {"$ref": "#/$defs/acceptance"},
+        "measurement_status": {"const": "not_executed"},
+        "zero_denominator_status": {"const": "not_executed"}
+      }
+    },
+    "hardFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_id", "maximum_allowed", "effect", "measurement_status"],
+      "properties": {
+        "failure_id": {"$ref": "#/$defs/logicalId"},
+        "maximum_allowed": {"const": 0},
+        "effect": {"const": "qualification_gate_failure"},
+        "measurement_status": {"const": "not_executed"}
+      }
+    },
+    "externalGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "status", "result", "reason"],
+      "properties": {
+        "gate_id": {"$ref": "#/$defs/logicalId"},
+        "status": {"const": "not_executed"},
+        "result": {"const": null},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    }
+  }
+}

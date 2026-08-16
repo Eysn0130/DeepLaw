@@ -598,7 +598,7 @@ def _write_index_with_embedder(
     if not confirm_no_case_data:
         raise ValueError(
             "discovery indexing requires confirmation that the vault contains no "
-            "Analytix case material"
+            "client or case material"
         )
     if not vault.verify_integrity()["valid"]:
         raise RuntimeError("knowledge vault integrity is invalid; discovery build stopped")

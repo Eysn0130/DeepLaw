@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-coverage-gap.v1.schema.json",
+  "title": "DeepLaw Living Wiki governed coverage gap v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "gap_id",
+    "spec_id",
+    "spec_revision_id",
+    "status",
+    "reason",
+    "topic",
+    "scope",
+    "page_family",
+    "duty",
+    "required_input_revision_refs",
+    "observed_input_revision_refs",
+    "observed_page_ids",
+    "observed_page_ids_sha256",
+    "observed_page_ids_truncated",
+    "observed_page_count",
+    "required_page_count",
+    "required_bytes",
+    "observed_bytes",
+    "audit_head",
+    "transaction_head",
+    "audit_binding"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-coverage-gap/v1"},
+    "gap_id": {"$ref": "#/$defs/id"},
+    "spec_id": {"$ref": "#/$defs/id"},
+    "spec_revision_id": {"$ref": "#/$defs/id"},
+    "status": {"enum": ["missing", "not_applicable", "unavailable", "over_budget"]},
+    "reason": {
+      "enum": [
+        "required_page_or_revision_absent",
+        "spec_declared_not_applicable",
+        "canonical_input_unavailable_or_unverified",
+        "hard_page_or_byte_budget_exceeded"
+      ]
+    },
+    "topic": {"$ref": "#/$defs/topic"},
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "page_family": {
+      "enum": [
+        "sources",
+        "source_evidence",
+        "source_summary",
+        "concepts",
+        "entities",
+        "events",
+        "claims",
+        "procedures",
+        "syntheses",
+        "legal",
+        "memos",
+        "statutes",
+        "case_law",
+        "evidence",
+        "memory",
+        "guides",
+        "codemap",
+        "index",
+        "moc",
+        "glossary",
+        "conflicts",
+        "gaps",
+        "review_queue",
+        "recent_changes",
+        "activity",
+        "communities",
+        "evidence_pack",
+        "preferences",
+        "skills"
+      ]
+    },
+    "duty": {
+      "enum": [
+        "answer",
+        "recommend",
+        "explain",
+        "define",
+        "compare",
+        "verify",
+        "quote",
+        "cite",
+        "refresh",
+        "invalidate",
+        "update",
+        "correct",
+        "reconcile",
+        "execute",
+        "remember"
+      ]
+    },
+    "required_input_revision_refs": {
+      "type": "array",
+      "maxItems": 512,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    },
+    "observed_input_revision_refs": {
+      "type": "array",
+      "maxItems": 512,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    },
+    "observed_page_ids": {
+      "type": "array",
+      "maxItems": 512,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    },
+    "observed_page_ids_sha256": {"$ref": "#/$defs/sha256"},
+    "observed_page_ids_truncated": {"type": "boolean"},
+    "observed_page_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "required_page_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "required_bytes": {"type": "integer", "minimum": 0, "maximum": 1073741824},
+    "observed_bytes": {"type": "integer", "minimum": 0, "maximum": 1073741824},
+    "audit_head": {"$ref": "#/$defs/sha256"},
+    "transaction_head": {"$ref": "#/$defs/sha256"},
+    "audit_binding": {"$ref": "#/$defs/audit_binding"}
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "topic": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[^\\x00\\r\\n]+$"
+    },
+    "audit_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spec_audit_head", "inventory_audit_head", "transaction_head"],
+      "properties": {
+        "spec_audit_head": {"$ref": "#/$defs/sha256"},
+        "inventory_audit_head": {"$ref": "#/$defs/sha256"},
+        "transaction_head": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-change-set.v2.schema.json",
+  "title": "DeepLaw Living Wiki Change Set v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "old_manifest_sha256", "new_manifest_sha256",
+    "old_v3_manifest_sha256", "new_v3_manifest_sha256",
+    "old_inventory_sha256", "new_inventory_sha256",
+    "input_audit_head", "legacy_audit_head", "projection_profile_name",
+    "projection_profile_sha256", "created", "updated", "deleted", "unchanged",
+    "total_count", "truncated", "truncation_reason", "change_set_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-change-set/v2"},
+    "old_manifest_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "new_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "old_v3_manifest_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "new_v3_manifest_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "old_inventory_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "new_inventory_sha256": {"$ref": "#/$defs/nullable_sha256"},
+    "input_audit_head": {"$ref": "#/$defs/sha256"},
+    "legacy_audit_head": {"$ref": "#/$defs/sha256"},
+    "projection_profile_name": {"enum": ["minimal", "standard", "full"]},
+    "projection_profile_sha256": {"$ref": "#/$defs/sha256"},
+    "created": {"type": "array", "maxItems": 1000000, "items": {"$ref": "#/$defs/new_descriptor"}},
+    "updated": {"type": "array", "maxItems": 1000000, "items": {"$ref": "#/$defs/updated_descriptor"}},
+    "deleted": {"type": "array", "maxItems": 1000000, "items": {"$ref": "#/$defs/old_descriptor"}},
+    "unchanged": {"type": "array", "maxItems": 1000000, "items": {"$ref": "#/$defs/new_descriptor"}},
+    "total_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+    "truncated": {"const": false},
+    "truncation_reason": {"type": "null"},
+    "change_set_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+    "path": {
+      "type": "string", "minLength": 1, "maxLength": 2000,
+      "pattern": "^(wiki|canvas)/[^./][^\\u0000]*$|^\\.deeplaw/derived/wiki/v3/manifest\\.json$|^\\.deeplaw/derived/wiki/v3/(registry|links|coverage|resolver)/[^./][^\\u0000]*$"
+    },
+    "size": {"type": "integer", "minimum": 0, "maximum": 1048576},
+    "new_descriptor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "byte_size", "sha256"],
+      "properties": {"path": {"$ref": "#/$defs/path"}, "byte_size": {"$ref": "#/$defs/size"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "old_descriptor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "old_byte_size", "old_sha256"],
+      "properties": {"path": {"$ref": "#/$defs/path"}, "old_byte_size": {"$ref": "#/$defs/size"}, "old_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "updated_descriptor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "old_byte_size", "old_sha256", "byte_size", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"}, "old_byte_size": {"$ref": "#/$defs/size"},
+        "old_sha256": {"$ref": "#/$defs/sha256"}, "byte_size": {"$ref": "#/$defs/size"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

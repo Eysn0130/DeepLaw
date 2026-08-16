@@ -1,0 +1,33 @@
+{
+  "schema_version": "deeplaw.host-context-bridge/v1",
+  "host": "opencode",
+  "agent_context_schema": "deeplaw.agent-context-envelope/v1",
+  "bridge_api": "host_context_envelope",
+  "domain_apis": [
+    {
+      "name": "knowledge_support",
+      "mode": "read_only",
+      "grant_required": false
+    },
+    {
+      "name": "knowledge_sink",
+      "mode": "mutation",
+      "grant_required": true
+    }
+  ],
+  "integration_status": "supported_local_only",
+  "host_surface": "native_mcp_and_agent_guidance",
+  "exact_upstream": {
+    "name": "OpenCode",
+    "version": "v2-plugin-api",
+    "commit": "unversioned",
+    "plugin_api_status": "beta",
+    "stable_active_note_preview_promote": false
+  },
+  "ephemeral": true,
+  "persistence_allowed": false,
+  "persistence_performed": false,
+  "authority": "none",
+  "legal_authority": false,
+  "max_provider_characters": 65536
+}

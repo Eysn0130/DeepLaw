@@ -1,56 +1,77 @@
 # DeepLaw Evaluation Protocol
 
-Status: **Current v1 contract for software v0.12.0**, frozen on 2026-07-30.
+Status: **v1 historical boundary; v2 current repository-visible development protocol**.
 
 ## Decision
 
-DeepLaw does not require certification by an external institution. Its core quality gate is a
-public, reproducible, self-verifying protocol made of:
+Protocol v1 remains immutable evidence for the v0.12 source boundary. Its frozen repository Gold
+correctly rejects the current v0.13 source-candidate bytes; changing v1 hashes to hide that drift is
+forbidden. Protocol v2 and repository Gold development v3 are the current default local-development
+fixtures. They are public, label-visible, repository-visible, non-independent, and never release or
+claim evidence.
+
+The v0.13 release gate additionally requires repository-external Human Gold, Compiler/Evaluator
+isolation receipts, frozen qualification/final-blind holdouts, passing real Host/model tasks, exact
+Legal Pack evidence, complete current-candidate scale, and cross-platform results. Pass 11 retains
+some claim-ineligible exact-candidate Host, editor, scale, and artifact observations, but they do
+not supply this complete external gate set and are not part of this repository-visible development
+protocol. See [`V0_13_PASS11_FINAL_DISPOSITION.md`](V0_13_PASS11_FINAL_DISPOSITION.md).
+
+DeepLaw's evaluation architecture uses:
 
 1. a public benchmark and machine-readable schemas;
 2. scoring rules fixed before the release candidate;
-3. a maintainer-visible, time-frozen holdout;
+3. explicitly labelled development, qualification, and final-blind data boundaries;
 4. one offline runner that emits every component result;
 5. a complete report, functional scoring digest, and checksum inventory;
 6. an independent verification mode that rejects changed or missing bytes.
 
-Independent replication remains useful, but it neither creates product Authority nor blocks a
-release. Comparative superiority is a separate claim: it still requires actual same-condition
-named-baseline runs, real host-model tasks, paired confidence intervals, and complete failure and
-cost records.
+Independent replication neither creates product Authority nor replaces the v0.13 commercial gate.
+Comparative superiority is a separate claim requiring actual same-condition named-baseline runs,
+real Host-model tasks, paired uncertainty, and complete failure and cost records.
 
 ## Canonical artifacts
 
 | Role | Path |
 | --- | --- |
-| Protocol | `benchmarks/evaluation/protocol-v1.json` |
+| Current development protocol | `benchmarks/evaluation/protocol-v2.json` |
+| Historical protocol | `benchmarks/evaluation/protocol-v1.json` |
+| Current repository development Gold | `benchmarks/quality/repository-gold-development-v3.json` |
+| Historical repository Gold | `benchmarks/quality/repository-gold-v1.json` |
 | Public temporal holdout | `benchmarks/evaluation/repository-temporal-holdout-v1.json` |
 | Autonomy and security suite | `benchmarks/evaluation/autonomy-safety-v1.json` |
 | Typed Compiler gold suite | `benchmarks/evaluation/typed-compiler-gold-v1.json` |
 | Runner and verifier | `benchmarks/evaluation/run_protocol.py` |
-| Protocol schema | `contracts/evaluation-protocol.v1.schema.json` |
-| Summary schema | `contracts/evaluation-report.v1.schema.json` |
+| Current protocol schema | `contracts/evaluation-protocol.v2.schema.json` |
+| Current summary schema | `contracts/evaluation-report.v2.schema.json` |
+| Historical protocol/report schemas | `contracts/evaluation-protocol.v1.schema.json`, `contracts/evaluation-report.v1.schema.json` |
 
-The protocol, labels, thresholds, runner, component schemas, and holdout hashes are freeze paths.
-For a release-bound result, the candidate commit must be a strict descendant of the most recent
-commit that changed any freeze path. The candidate must use a clean worktree and the exact wheel
-whose SHA-256 enters both the evaluation report and release manifest. Editing a freeze path starts
-a new freeze; a report cannot silently reuse the old temporal boundary.
+The protocol, labels, thresholds, runner, component schemas, and corpus hashes are freeze paths.
+A candidate must be a strict descendant of the newest commit changing its selected freeze paths.
+Editing a freeze path starts a new development freeze; it never converts visible labels into an
+external holdout. A release-bound candidate must also use a clean worktree and the exact wheel
+whose SHA-256 enters both the external evaluation package and commercial manifest.
 
-The holdout is public and its labels are visible to maintainers. The report therefore always fixes:
+The v2 corpus is visible to the candidate authors. Every v2 report therefore fixes or derives the
+equivalent of:
 
 ```text
 public_holdout=true
 labels_visible=true
 secret=false
 contamination_claim_eligible=false
+external_human_gold=false
+independent_evaluator=false
+quality_protocol_eligible=false
 ```
 
-Calling this dataset secret, unseen, blind, or contamination-free is a protocol violation.
+Calling it external, independent, secret, unseen, blind, contamination-free, qualification, or
+final evidence is a protocol violation. Supplying a wheel or clean commit cannot change these
+facts.
 
-## Fixed score
+## Historical v1 score and current v2 purpose
 
-The v1 overall score is:
+The immutable v1 overall score remains:
 
 ```text
 0.10 × repository_development
@@ -67,18 +88,61 @@ The v1 overall score is:
 | Typed Compiler quality | 1.00 | deterministic bilingual typed-section extraction against source-bound gold claims |
 | Weighted overall | 0.85 | fixed weighted sum after all component minima pass |
 
-Scores cannot average away hard failures. Any forbidden version/authority admission, autonomy suite
+Scores cannot average away hard failures. Any forbidden version/Authority admission, autonomy suite
 gate failure, unauthorized mutation, authority elevation, persistent injection admission,
 restricted disclosure, Typed Compiler hallucination, or unsupported claim fails the protocol.
 Latency is reported by component suites but excluded from the cross-machine functional digest.
 
-The Typed Compiler component tests deterministic, source-bound extraction. It does not stand in for
-model-generated cross-document synthesis. The core report also does not execute real Codex, Claude
-Code, or OpenCode model sessions and does not execute a competing product.
+Protocol v2 keeps these deterministic checks available for regression and rotates repository source
+hashes through the explicit development-v3 fixture. Its report cannot set
+`quality_protocol_eligible=true`, even when all component thresholds pass. The Typed Compiler
+component does not stand in for model-generated cross-document synthesis; neither v1 nor v2 runs
+real Codex, Claude Code, OpenCode, or a competing product.
+
+### Pass 12 continuity evaluator v2
+
+The Pass 12 continuity scorer is a separate, claim-ineligible evaluator design. Its canonical
+development inputs are:
+
+- `benchmarks/evaluator/continuity-qualification-gold-v2.json`;
+- `benchmarks/evaluator/score_continuity_qualification_v2.py`;
+- `contracts/continuity-qualification-gold.v2.schema.json`;
+- `contracts/continuity-human-review.v1.schema.json`.
+
+Candidate prompts and fixtures may not contain the expected action, Gold/marker labels, or exact
+expected/forbidden Statement IDs. Gold and candidate bytes are loaded separately, and an
+independent bilingual Human review must bind the exact SHA-256 of both artifacts before the result
+is scored. Missing, incomplete, non-independent, rejected, or digest-mismatched review fails
+closed. The checked-in Gold remains `development_evaluator_only`, and no real Human review artifact
+is fabricated by tests.
+
+Machine correctness uses selected Statement IDs, a closed action, a closed release state, gap
+codes, and explicitly frozen required-duty labels. Duty Coverage is computed per duty from each
+duty's bound Statement IDs and Gap codes; it is not an alias for Statement recall. It reports First
+Correct Action, Decision Preservation, Wrong-State Admission, Recall@K,
+Precision@K, MRR, nDCG, Useful Context Recall, relevant/context characters, redundancy, duplicate
+evidence, Duty Coverage, Gap Correctness, and Provider bytes. `context_chars` covers the complete
+canonical Provider content, not only Statement text. `provider_bytes` and its SHA-256 are recomputed
+from the exact canonical inner Provider Capsule and must match both the Host observation and
+delivery metadata; receipt, Query Trace, route metadata, and local audit metadata are outside that
+content. Natural-language summary substrings, English casing, and translation wording cannot
+create a pass. Forbidden state and a Provider payload above 65,536 bytes remain hard failures.
+
+Host-call scoring records first-call validity independently. One initial call plus at most one
+safe, read-only, budget-bounded retry is allowed. Zero calls, more than two calls, any write or
+wrong leaf, an invalid final Capsule, repeated large payloads, or aggregate payload overflow hard
+fails. Exact-one-call is therefore observable but is not the sole success definition. Human review
+remains mandatory and claim eligibility remains false even when all machine fields pass.
+
+The v3 repository development corpus may rotate only exact source-byte hashes after an accepted
+current-source correction. Its cases, labels, expected/forbidden IDs, thresholds, and governance
+fields are not changed to fit candidate output. Historical v1 and retained Pass 11 evidence are
+never rebound.
 
 ## Run and verify
 
-Source-tree runs are useful for development but cannot set `quality_protocol_eligible=true`.
+The default runner selects protocol v2 and repository development Gold v3. These commands are local
+development checks only:
 
 ```bash
 uv run python -m benchmarks.evaluation.run_protocol \
@@ -90,22 +154,17 @@ uv run python -m benchmarks.evaluation.run_protocol \
   --verify-report-dir /tmp/deeplaw-evaluation
 ```
 
-The formal release job installs the exact candidate wheel into an isolated environment and uses:
+The v1 runner remains explicitly callable to verify the historical boundary. Against current
+source bytes it is expected to reject the changed source hash:
 
 ```bash
-python -m benchmarks.evaluation.run_protocol \
+uv run python -m benchmarks.evaluation.run_protocol \
   --repository . \
-  --candidate-wheel /path/to/deeplaw-0.12.0-py3-none-any.whl \
-  --output-dir /path/to/evaluation \
-  --require-eligible
-
-python -m benchmarks.evaluation.run_protocol \
-  --repository . \
-  --verify-report-dir /path/to/evaluation \
-  --require-eligible
+  --protocol benchmarks/evaluation/protocol-v1.json \
+  --output-dir /tmp/deeplaw-evaluation-v1
 ```
 
-Passing `--candidate-wheel` is not a label-only assertion. Before any suite runs, the protocol
+Passing a candidate wheel is not a label-only assertion. Before any suite runs, the protocol
 opens the wheel as a bounded ZIP, validates its path and metadata inventory, and compares every
 installed `deeplaw/` package file byte-for-byte with that wheel. Editable-source, mixed-install,
 symlinked, missing, extra, or hash-mismatched runtimes fail before a report can become eligible.
@@ -117,17 +176,16 @@ The output directory contains:
 - `EVALUATION_REPORT.md`;
 - `SHA256SUMS`.
 
-The release preserves these bytes, renaming the nested checksum file to
-`EVALUATION_SHA256SUMS` only to keep all flattened GitHub release asset names unique. The root
-release checksum inventory, Sigstore signing inputs, GitHub provenance, and release manifest cover
-the evaluation artifacts.
+These outputs are reproducible local diagnostics, not the repository-external v0.13 Human Gold or
+Host package. A v0.13 commercial manifest must bind separate external evidence and isolation
+receipts; development output cannot be renamed to satisfy that gate.
 
 ## Claim policy
 
-`quality_protocol_eligible=true` means only:
+Historical v1 `quality_protocol_eligible=true` meant only:
 
-> The exact DeepLaw release wheel passed the published DeepLaw Evaluation Protocol v1 at its fixed
-> thresholds, hard-failure rules, and public temporal freeze.
+> The exact DeepLaw v0.12 release wheel passed Evaluation Protocol v1 at its fixed thresholds,
+> hard-failure rules, and public temporal freeze.
 
 It does not mean:
 
@@ -137,6 +195,7 @@ It does not mean:
 - no future workload can fail;
 - an evaluator grants legal, official, or product Authority.
 
+Protocol v2 never makes that statement and always remains development-only.
 `competitive_claim_eligible` remains `false` until the comparative track contains real results for
 the predeclared named systems, real model-task receipts on all three hosts, paired uncertainty, and
 the complete cost/failure inventory. No synthetic fixture, feature matrix, lifecycle smoke test, or

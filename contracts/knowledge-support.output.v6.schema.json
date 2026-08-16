@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-support.output.v6.schema.json",
+  "title": "DeepLaw Knowledge Support Output v6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "authority_boundary", "result"],
+  "properties": {
+    "schema_version": {
+      "enum": [
+        "deeplaw.knowledge-support-output/v3",
+        "deeplaw.knowledge-support-output/v4",
+        "deeplaw.knowledge-support-output/v5",
+        "deeplaw.knowledge-support-output/v6"
+      ]
+    },
+    "operation": {
+      "enum": [
+        "search", "recall", "get", "context", "verify", "inspect",
+        "lineage", "graph", "wiki_lookup", "explain", "identity_lookup",
+        "gaps", "query", "compilation", "source", "wiki", "editor_context",
+        "synthesis", "semantic"
+      ]
+    },
+    "authority_boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "legal_authority", "official_legal_sources_tool", "persistent_writes",
+        "case_data_allowed", "authority_from_ranking"
+      ],
+      "properties": {
+        "legal_authority": {"const": false},
+        "official_legal_sources_tool": {"const": "law_support"},
+        "persistent_writes": {"const": "separate_explicit_knowledge_sink"},
+        "case_data_allowed": {"const": false},
+        "authority_from_ranking": {"const": false}
+      }
+    },
+    "result": {"type": "object"}
+  }
+}

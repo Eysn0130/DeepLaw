@@ -381,6 +381,8 @@ def test_cli_full_knowledge_asset_lifecycle(tmp_path: Path) -> None:
         "context",
         "--vault",
         str(vault),
+        "--query-plan-version",
+        "5",
         "--task",
         "Prepare the Mercury release and resolve compatibility approval.",
         "--confirm-no-case-data",

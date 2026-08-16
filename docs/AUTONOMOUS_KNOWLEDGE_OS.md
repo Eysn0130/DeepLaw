@@ -5,6 +5,60 @@ Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence implementation. Hist
 proposal/review documents remain source-governance and migration evidence, not the default policy
 for new Agent-derived knowledge.
 
+## Continuity Pass 2 (development kernel; source candidate, not released)
+
+Pass 2 is the follow-up to the retained **Pass 1** continuity remediation. Pass 1's reviewed
+implementation, historical Gold/protocol inputs, and local evidence remain intact; this section
+binds the continuity correction commit `2f31bff4069e6cf01edf017134e5a760becb5360` and semantic
+release-evidence commit `d7da1869287fd590d820f7dd60506abdcb826ad4`. A tracked note cannot
+bind its own final tree, and no qualification wheel/report hash exists. The correction is not
+external qualification and does not lower a Core gate.
+
+Three reproduced root causes have bounded repairs:
+
+- **Route reservation:** an exact task-route candidate is a separate, bounded admission partition
+  reserved before ordinary Statement selection. The no-route ceiling remains `512`; with one
+  reserved route slot at most `511` ordinary candidates remain, so the final global/combined
+  budget is unchanged and unrelated task-line content is not admitted.
+- **Task/goal identity:** retrieval query text is `task + goal` when a goal is present. The task
+  route digest is generated only from the canonical task inside this domain, not by a Host adapter
+  or caller, so adding a goal never changes the route key.
+- **Single current head:** the first checkpoint on a route creates one Knowledge Object. A later
+  checkpoint for that object creates a new Knowledge Revision and requires the current
+  `expected_revision` CAS. Stale or concurrent writes fail as `checkpoint_head_conflict`. If a
+  pre-fix projection contains multiple current heads, reads fail closed with only a sanitized Gap;
+  the Owner uses the existing `forget`/withdraw lifecycle and projection rebuild to reconcile the
+  state. There is no last-writer-wins path and no historical in-place rewrite.
+
+No new canonical Knowledge table, migration, or sink schema is introduced by the continuity
+correction. The route projection is derived and rebuildable, while `knowledge-sink.input/v2` bytes
+remain unchanged. This is a semantic
+compatibility boundary: new writes enforce one route/one current head, and legacy bytes/history
+remain immutable and verifiable.
+
+Gate labels stay separate: active Gate v6 **Core** gates, including Timeline, Codex, and OpenCode,
+remain required and are not reduced; **Capability** gates may be `not_claimed` when not declared
+(semantic restore and Claude remain deferred); and the **Competitive Claim** gate is independent
+of kernel evidence. For the affected rows, Pass 2 records `kernel=Implemented`, `E2E=Target`, and
+`external qualification=not_executed`.
+
+### Pass 21 task identity projection
+
+The current source candidate exposes owner-local `task locate`, `task inspect`, and `task timeline`
+operations through `task_continuity.py`. They reuse `knowledge_run_records_v4`,
+`knowledge_checkpoint_routes_v1`, and related `autonomous_events_v3` identities. Timeline is a
+bounded content-minimized projection, not a new canonical table: it returns only route-related
+identity, status, recorded time, and opaque Artifact identity. A global or unrelated Ledger head
+is not inserted into another task's timeline.
+
+Workspace binding hashes bounded non-sensitive untracked file content so same-size/same-metadata
+changes cannot alias. Secret-looking tracked, untracked, or direct ignored candidates are classified
+by bounded path metadata only and return `workspace_secret_unverifiable`; their bytes are not opened.
+Ignored directory contents are collapsed instead of recursively enumerated, and ordinary ignored
+state does not contribute to route or snapshot identity. Per-file, total byte, and path-count limits
+return `workspace_snapshot_bound`. Provider Capsules never receive workspace
+metadata, raw diffs, local paths, or these local inspection details.
+
 ## 1. Product boundary
 
 DeepLaw is a local, single-user, owner-controlled knowledge layer for Agent runtimes. It does not
@@ -54,6 +108,14 @@ GC first commits a recoverable tombstone/event, then removes bytes; startup reco
 interrupted purge. Historical reads report
 `content_purged` instead of inventing the body. User-source deletion and user-private Legal Pack
 deletion remain separate owner operations with their own policies.
+
+The v0.13 source candidate keeps each Statement, evidence map and independent receipt as a logical
+content digest, while new semantic commits physically pack those small JSON artifacts into
+deterministic CAS bundles capped at 768 members and 8 MiB. An additive Ledger mapping binds each
+logical digest to one bundle ordinal. Legacy one-digest/one-file layouts remain readable; neither
+the bundle path nor ordinal becomes Statement identity. Verification checks the bundle hash and
+replays every logical member digest, snapshots preserve both the CAS bundle and mapping, and
+content GC excludes every Ledger-registered compilation artifact from orphan deletion.
 
 ### Markdown Knowledge Objects
 
@@ -126,8 +188,11 @@ The `knowledge_sink` domain path applies this sequence:
    the existing stable ID with an immutable resolution/event and idempotent receipt. Semantic
    candidates may produce aliases or explicit same-as/merge/split decisions; high-precision
    contradictions remain independent contested objects/relations instead of being silently merged.
-   Existing Knowledge Object and relation updates require their exact parent revision. A direct
-   mutation refuses to overwrite a workspace body that has not first been reconciled.
+   Existing Knowledge Object and relation updates require their exact parent revision. For a
+   working checkpoint, the first write for a task route creates one Knowledge Object; every later
+   revision of that object requires `expected_revision` CAS, and stale/concurrent writes fail
+   closed as `checkpoint_head_conflict`. A direct mutation refuses to overwrite a workspace body
+   that has not first been reconciled.
 5. **Gate risk**. Unknown provenance, origin/authority elevation, direct-user-statement
    misclassification, stored prompt injection, or governance metadata edits are quarantined.
 6. **Commit** the CAS Markdown bytes, immutable Ledger revision, event, usage, idempotent response,
@@ -232,6 +297,12 @@ automation/test boundary.
 
 This is intentionally not last-writer-wins.
 
+If a legacy/pre-fix route projection already contains multiple current heads, route lookup returns
+only a sanitized `checkpoint_head_conflict` Gap and no revision or object identifiers. The Owner
+resolves the anomaly with the existing `forget`/withdraw operation followed by a rebuild of the
+derived route projection; this reconciliation never rewrites historical bytes and never chooses
+an LWW winner.
+
 ## 6. Query and Capsule contract
 
 The query pipeline keeps these stages distinct:
@@ -267,19 +338,69 @@ both current audit heads and has no pending rebuild. When it is stale or unavail
 uses a scope-filtered canonical Markdown scan capped at 500 current objects, records the fallback
 channel, and emits an explicit gap if that scan truncates; stale FTS is never silently presented as
 complete.
-Once a Vault contains an autonomous compilation run or governed Knowledge Object, the default
-Capsule path uses the same purpose-aware Query Plan v5 service for CLI `query`, CLI `context`, the
-Python API, and MCP. An untouched v0.7 compatibility Vault with neither remains on the retained v1
-context compiler until it enters the autonomous compilation workflow. The v5 plan binds both the
+Once a Vault contains an autonomous compilation run or governed Knowledge Object, the v0.13 source
+candidate defaults Python `KnowledgeOS.context.compile`, `deeplaw knowledge context`,
+`deeplaw knowledge autonomy context`, and autonomous-core MCP `operation=context` to additive
+Query Plan v6: statement-level selection, dynamic duty coverage, targeted evidence completion,
+exact suppression receipts and bounded local projections. `deeplaw recall` remains the legacy
+`retrieval_fabric` path and is not a v6 Context alias. Ordinary content discovery first selects at
+most 20 governed revisions through the requested lexical/dense/graph controls, then matches a
+maximum of 512 Statement candidates only within those revisions; a fixed global Statement prefix
+is not a retrieval channel. Working checkpoints use a separate bounded, indexed task-route
+admission projection before ordinary content discovery. An exact route therefore cannot be
+displaced by the ordinary Top-20, but it also cannot widen the public ordinary-revision count or
+admit non-checkpoint content. Every projected row is revalidated against its immutable Run,
+Knowledge Revision, and Ledger event; the projection is derived, rebuildable, and capped. The
+shared domain assembler emits local
+`deeplaw.knowledge-capsule/v3` (maximum 262,144 bytes) and its nested
+`deeplaw.provider-knowledge-capsule/v2` projection (Provider content maximum 65,536 bytes). The
+Provider receives only bounded Statements/evidence, authority/verification/freshness,
+contradiction/limitation/gap state, delivery metadata, and opaque `receipt_id`; it never receives
+the full Query Plan, candidate scores, rejected-candidate text, SQL/cache/parser diagnostics,
+local paths, or secrets. An `audit` request is reduced to the Provider's `standard` projection;
+the redacted bounded local Query Trace is retained only after successful Provider and outer
+validation. Explicit `query_plan_version=5` remains compatibility-only: Python and CLI retain
+local Capsule v2, while MCP retains output/v3 plus Capsule v2/Query Plan v5 compatibility.
+`query_target`, `applicable_duties`, `projection`, `graph_hops`, `retrieval_mode`, and integrity-
+selected canonical lexical fallback are explicit v6 plan controls; they are not silently dropped.
+An untouched v0.7 compatibility Vault with neither remains on the retained v1 context compiler
+until it enters the autonomous compilation workflow. Both v5 and v6 bind the
 autonomous audit head and the legacy evidence/Inbox audit head, plus the
 admitted-candidate state and derived-manifest digests, so lifecycle changes outside the autonomous
 event stream cannot masquerade as the same replay input.
-It also binds autonomous kind/tag filters, retrieval mode, token/source/hop budgets, dense model,
+They also bind autonomous kind/tag filters, retrieval mode, token/source/hop budgets, dense model,
 reranker profile and dense-manifest digest. The source-derived partition emits its own hashed compact
 plan binding query, compatible kind/memory-tier filters, scope, sensitivity, budget, Vault revision,
 legacy audit head, and historical intent when that compatibility partition is explicitly selected.
 Target identity admission applies before a raw-evidence fallback, so a stale or withdrawn named
 policy cannot be replaced by another policy merely because it is the nearest remaining hit.
+
+Task-line routing identity is distinct from checkpoint snapshot, Run identity, Host session, and
+capability. The route binds the selected Vault plus owner-registered opaque project, repository,
+stable-worktree, and task-line identifiers. It excludes absolute paths, branch names, current
+commit, remote URL, and Host session identifiers. The snapshot separately binds the checkpoint's
+base revision and dirty-state digest. A branch rename, normal commit, or dirty-state change does
+not create another task line; a snapshot change makes the prior checkpoint stale until a new
+checkpoint succeeds. Exact route plus exact snapshot may admit the checkpoint. Exact route plus a
+different snapshot emits a bounded `workspace_diverged` Gap and does not inject stale state. A
+different route fails closed without revealing whether another task line exists. The retrieval
+query may combine `task + goal` for discovery, but the route digest is always derived from the
+canonical task text inside the domain.
+
+The exact route hit is a reserved bounded candidate, not an addition to the combined pool: the
+no-route discovery ceiling remains `512`, and reserving one route slot leaves at most `511`
+ordinary candidates. Projection rows are revalidated against canonical Run/Revision/Ledger state
+before admission. The projection is derived/rebuildable and does not add a canonical Knowledge
+table, migration, or sink schema.
+
+When no explicit binding is supplied, the current development resolver may use the exact task-text
+digest only to find one uniquely admitted route in the selected Vault. Multiple routes emit
+`task_line_ambiguous`; choosing the newest is forbidden. This is exact matching, not a semantic
+resolver and not proof of the ordinary real-Host cold-start workflow. Host thread/session/memory
+references remain untrusted hints that must be rebound through Vault/project/worktree admission;
+they create neither identity nor authorization. Provider projection recursively removes routing,
+snapshot, binding, branch, path, and Host-hint fields while retaining only a sanitized Gap and
+opaque receipt.
 
 The retained v0.7 source-derived partition currently has no transaction-time history contract.
 Consequently an `as_of` query does not silently substitute its current assets: that partition is
@@ -298,7 +419,12 @@ rechecked against current immutable source bytes. Changed or missing bytes fail 
 interval, and bounded evidence references; an endpoint-only contested marker is used only when no
 admitted typed relation represents the selected object.
 
-Knowledge Capsule v2 partitions:
+Provider Capsule v2 and its nested projection use typed Source references and Source evidence. A
+Source evidence card binds one exact Source Revision, fragment, locator and quote hash. If the
+complete passage cannot fit the evidence budget, the passage is withheld and the applicable duty
+stays an explicit Gap; a truncated excerpt cannot satisfy an exact-evidence duty.
+
+Local Knowledge Capsule v3 partitions (with explicit v2 compatibility):
 
 - official evidence (empty in `knowledge_support`; use `law_support`);
 - user-private legal evidence (empty in `knowledge_support`; use `law_support`);
@@ -307,13 +433,56 @@ Knowledge Capsule v2 partitions:
 - Agent memory;
 - contradictions, limitations, gaps, and receipts.
 
-The provider-visible response has a hard 64 KiB limit. Source metadata, tags, bodies, graph edges,
-and histories are bounded independently. `restricted` content is never available to MCP hosts.
+The local v3 capsule also retains the complete v6 plan/hash, selected Statement and evidence
+surfaces, budget, audit head, sealed identity/digest, and `write_performed=false`. Its local audit
+summary contains counts and hashed identities only; candidate scores, rejected-candidate text,
+query plaintext beyond the task/plan contract, hidden reasoning, SQL, cache/parser diagnostics,
+paths, credentials, and secrets are excluded. The nested Provider v2 projection has a hard 64 KiB
+content limit and an opaque `receipt_id`; Source metadata, tags, bodies, graph edges, and histories
+are bounded independently. `restricted` content is never available to MCP hosts. Explicit v5
+compatibility preserves local Capsule v2 for Python/CLI and MCP output/v3 with Capsule v2/Query
+Plan v5 semantics; it is never the default v6 Context path.
 Before either v1 or v3 `knowledge_support` response leaves the process, a recursive projection
 gate fails closed on local absolute paths or recognized secret material; it never reports the
 matched value in its error. Unsafe invisible/bidirectional Unicode is rejected at the same gate,
 and MCP exception text crosses the same projection rather than reflecting sensitive failure
 details.
+
+The published `knowledge-sink.input/v2` bytes remain a historical compatibility contract: an old
+client may still record an unbound Run. Input v5 remains byte-frozen history, while additive
+`knowledge-sink.input/v6` is the current bound-write seam. It narrows every current Run commit to
+opaque, bounded, non-path, non-Secret-shaped Artifact IDs at the shared domain commit seam; CLI,
+MCP, task checkpoints, and Timeline reuse that rule. An unbound legacy Run and checkpoint remain
+immutable, verifiable history but are withheld from default v6 Context. Owner-controlled
+reconciliation creates a new bound Run and an attributable successor Knowledge Revision; it never
+rewrites the historical Run or checkpoint in place. This is a semantic compatibility boundary
+and requires no new canonical table or migration. A runtime rollback to v5 can read v6-created
+records because their persistence shape is unchanged and their Artifact IDs are a strict v5 subset.
+
+Query receipts have three distinct roles. The provider receipt receives only an opaque `receipt_id`.
+The current source candidate keeps a process-local, non-persistent Query Trace with
+fixed TTL, entry/aggregate capacity, rotation, redaction, read-time integrity verification and
+runtime-owner deletion on identity change or close. It never stores query plaintext, Source body,
+hidden reasoning, credentials, or local paths. Canonical mutation receipts remain exclusively in
+the Knowledge Ledger; an ordinary query never appends a Ledger event. Durable Query Trace storage
+is not implemented because it would require an independent versioned store, migration, recovery,
+rollback and deletion contract rather than a hidden write inside `knowledge_support`.
+
+The stable Python facade preserves its existing startup integrity check. For repeated
+`KnowledgeOS.context.compile` calls on the same handle, it then lazily reuses the same
+`PersistentReadRuntime` as the MCP read plane and routes the verified snapshot into the canonical
+`AutonomousKnowledgeStore.build_capsule` implementation. Unchanged warm calls perform only the
+bounded live-identity check; an audit/database/manifest change closes the old snapshot and requires
+a verified reopen. `KnowledgeOS.verify` remains an explicit full verification. Retrieval, Source,
+Wiki and compatibility APIs retain their existing short-lived behavior rather than silently
+changing their fallback semantics.
+
+The Living Wiki keeps each Markdown page within its 256 KiB read boundary. A current Knowledge
+Revision with at most 64 Statements renders those anchors inline. A larger revision renders
+deterministic Statement Evidence shard pages (64 Statements per shard), links them from the stable
+Knowledge page, and registers every shard and Statement anchor in the same v3 Page Registry and
+Link Index. Sharding is derived state only; it does not change Statement, Knowledge Revision,
+evidence, Ledger identity, or Authority.
 
 ## 7. MCP and capability separation
 
@@ -383,8 +552,11 @@ text never grants tools by itself; the host and owner policy remain authoritativ
 deeplaw knowledge init --vault ./vault --name project --scope project
 ```
 
-This creates the retained v0.7 compatibility schema plus the v0.9 autonomous core. No mutation grant is
-enabled. `--legacy-review-core` exists only for compatibility testing and staged migration.
+This creates the retained v0.7 compatibility schema plus the v0.9 autonomous core. The root
+`deeplaw init` route delegates to the same default service, so fresh root and nested Vaults no
+longer diverge. No mutation grant is enabled. `--legacy-review-core` exists only for compatibility
+testing and staged migration. A Source-only Vault remains a valid v6 workspace: Context returns a
+bounded `uncompiled_source` Gap until governed compilation succeeds.
 
 ### Existing Vault
 

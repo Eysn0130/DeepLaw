@@ -1,0 +1,23 @@
+{
+  "schema_version": "deeplaw.pass11-wiki-evidence-manifest/v1",
+  "candidate": {
+    "git_commit": "69db28cb99846540e3b7c3c600f5268705405015",
+    "git_tree": "a32e3218658403376cfbf9340972f9aa0caab177",
+    "package_version": "0.12.0",
+    "wheel_sha256": "ce5631098d331325c909275d3fa6db788e0630a6b165cf82408c5922db89e33a"
+  },
+  "artifacts": [
+    {
+      "name": "query-graph-scale-69db28c.json",
+      "bytes": 97238,
+      "sha256": "fa4aadd28c07bd1432c7fb4ec38f2afcb2f6b526efa7307860d8deff8f27d724"
+    },
+    {
+      "name": "scale-performance-69db28c.json",
+      "bytes": 116498,
+      "sha256": "48a6d843ac8e8f305e8c8cdd2e80898b5aa43c287c4978a6e107cac61f9699f2"
+    }
+  ],
+  "claim_eligible": false,
+  "release_ready": false
+}

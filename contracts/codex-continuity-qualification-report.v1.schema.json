@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/codex-continuity-qualification-report.v1.schema.json",
+  "title": "DeepLaw Codex Continuity Qualification Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "release_ready",
+    "claim_eligible",
+    "binding",
+    "environment",
+    "fixture",
+    "host",
+    "security",
+    "preflight",
+    "runs",
+    "aggregate",
+    "not_executed"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.codex-continuity-qualification-report/v1"},
+    "status": {"enum": ["executed", "partial", "failed"]},
+    "release_ready": {"const": false},
+    "claim_eligible": {"const": false},
+    "binding": {"$ref": "#/$defs/binding"},
+    "environment": {"$ref": "#/$defs/environment"},
+    "fixture": {"$ref": "#/$defs/fixture"},
+    "host": {"$ref": "#/$defs/host"},
+    "security": {"$ref": "#/$defs/security"},
+    "preflight": {"$ref": "#/$defs/preflight"},
+    "runs": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/run"}
+    },
+    "aggregate": {"$ref": "#/$defs/aggregate"},
+    "not_executed": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 100}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit", "tree", "package_version", "worktree_clean",
+        "candidate_wheel_name", "candidate_wheel_sha256"
+      ],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "package_version": {"const": "0.12.0"},
+        "worktree_clean": {"const": true},
+        "candidate_wheel_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+\\.whl$"},
+        "candidate_wheel_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operating_system", "architecture", "python_version"],
+      "properties": {
+        "operating_system": {"type": "string", "minLength": 1, "maxLength": 100},
+        "architecture": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+.*$"}
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "sha256", "configuration_sha256", "case_id", "task_sha256",
+        "correct_binding_sha256", "wrong_binding_sha256", "expected_first_action",
+        "expected_decision", "expected_marker", "forbidden_markers_sha256"
+      ],
+      "properties": {
+        "name": {"const": "continuity-real-host-candidate-v1.json"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "configuration_sha256": {"$ref": "#/$defs/sha256"},
+        "case_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "task_sha256": {"$ref": "#/$defs/sha256"},
+        "correct_binding_sha256": {"$ref": "#/$defs/sha256"},
+        "wrong_binding_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_first_action": {"type": "string", "minLength": 1, "maxLength": 500},
+        "expected_decision": {"type": "string", "minLength": 1, "maxLength": 500},
+        "expected_marker": {"const": "PASS10-FEATURE-RECEIPT"},
+        "forbidden_markers_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binary_name", "binary_sha256", "version", "model", "authentication",
+        "argv", "argv_sha256", "mcp_argv", "enabled_tools", "disabled_capabilities"
+      ],
+      "properties": {
+        "binary_name": {"const": "codex"},
+        "binary_sha256": {"$ref": "#/$defs/sha256"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 200},
+        "model": {"const": "gpt-5.6-luna"},
+        "authentication": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "source", "auth_file_read"],
+          "properties": {
+            "status": {"const": "logged_in_using_chatgpt"},
+            "source": {"const": "existing_codex_login"},
+            "auth_file_read": {"const": false}
+          }
+        },
+        "argv": {"type": "array", "minItems": 8, "maxItems": 100, "items": {"type": "string", "maxLength": 500}},
+        "argv_sha256": {"$ref": "#/$defs/sha256"},
+        "mcp_argv": {"type": "array", "minItems": 2, "maxItems": 20, "items": {"type": "string", "maxLength": 200}},
+        "enabled_tools": {"const": ["knowledge_support"]},
+        "disabled_capabilities": {"type": "array", "minItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}}
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_canaries_injected", "mcp_child_closed_environment", "provider_capsule_clean",
+        "provider_internal_surface_leak", "event_receipts_clean", "report_clean",
+        "absolute_path_leak", "secret_leak", "credential_path_forwarded",
+        "mcp_wrapper_sha256"
+      ],
+      "properties": {
+        "host_canaries_injected": {"const": true},
+        "mcp_child_closed_environment": {"type": "boolean"},
+        "provider_capsule_clean": {"type": "boolean"},
+        "provider_internal_surface_leak": {"type": "boolean"},
+        "event_receipts_clean": {"type": "boolean"},
+        "report_clean": {"type": "boolean"},
+        "absolute_path_leak": {"type": "boolean"},
+        "secret_leak": {"type": "boolean"},
+        "credential_path_forwarded": {"type": "boolean"},
+        "mcp_wrapper_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status", "provider_capsule_sha256", "provider_bytes", "provider_hard_limit_bytes",
+        "relevant_chars", "context_chars", "relevant_chars_context_chars",
+        "correct_state_admitted", "stale_state_admitted", "wrong_state_admission",
+        "wrong_state_rejection_reason", "ledger_audit_head", "write_performed"
+      ],
+      "properties": {
+        "status": {"const": "passed"},
+        "provider_capsule_sha256": {"$ref": "#/$defs/sha256"},
+        "provider_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "provider_hard_limit_bytes": {"const": 65536},
+        "relevant_chars": {"type": "integer", "minimum": 1},
+        "context_chars": {"type": "integer", "minimum": 1},
+        "relevant_chars_context_chars": {"type": "number", "minimum": 0, "maximum": 1},
+        "correct_state_admitted": {"const": true},
+        "stale_state_admitted": {"const": false},
+        "wrong_state_admission": {"const": 0},
+        "wrong_state_rejection_reason": {"const": "query_target_mismatch"},
+        "ledger_audit_head": {"$ref": "#/$defs/sha256"},
+        "write_performed": {"const": false}
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "input_tokens", "cached_input_tokens", "output_tokens", "total_tokens"],
+      "properties": {
+        "status": {"enum": ["provider_reported", "unreported"]},
+        "input_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "cached_input_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "output_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "total_tokens": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "environmentReceipt": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "closed", "home_isolated", "blocked_names_present",
+        "environment_names", "child_argv"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.closed-mcp-environment-receipt/v1"},
+        "closed": {"const": true},
+        "home_isolated": {"const": true},
+        "blocked_names_present": {"const": []},
+        "environment_names": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 100}
+        },
+        "child_argv": {"type": "array", "minItems": 4, "maxItems": 20, "items": {"type": "string", "maxLength": 200}}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_index", "status", "exit_status", "latency_ms", "prompt_sha256",
+        "actual_event_receipt", "usage", "environment_receipt", "first_correct_action",
+        "decision_preservation", "wrong_state_admission", "provider_internal_surface_leak",
+        "provider_bytes",
+        "ledger_audit_head_before", "ledger_audit_head_after", "ledger_unchanged",
+        "failure_class", "failure_summary"
+      ],
+      "properties": {
+        "run_index": {"type": "integer", "minimum": 1, "maximum": 3},
+        "status": {"enum": ["passed", "failed"]},
+        "exit_status": {"type": ["integer", "null"]},
+        "latency_ms": {"type": "integer", "minimum": 0},
+        "prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "actual_event_receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stdout_sha256", "stdout_bytes", "stderr_sha256", "stderr_bytes",
+            "sanitized_events_name", "sanitized_events_sha256", "sanitized_event_types",
+            "tool_calls", "turn_completed_count", "final_response_sha256"
+          ],
+          "properties": {
+            "stdout_sha256": {"$ref": "#/$defs/sha256"},
+            "stdout_bytes": {"type": "integer", "minimum": 0},
+            "stderr_sha256": {"$ref": "#/$defs/sha256"},
+            "stderr_bytes": {"type": "integer", "minimum": 0},
+            "sanitized_events_name": {"type": "string", "pattern": "^codex-run-[1-3]-events\\.sanitized\\.jsonl$"},
+            "sanitized_events_sha256": {"$ref": "#/$defs/sha256"},
+            "sanitized_event_types": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+            "tool_calls": {
+              "type": "array", "maxItems": 10,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": [
+                  "tool", "status", "arguments_sha256", "result_sha256", "result_bytes"
+                ],
+                "properties": {
+                  "tool": {"type": "string", "minLength": 1, "maxLength": 200},
+                  "status": {"type": ["string", "null"], "maxLength": 100},
+                  "arguments_sha256": {"$ref": "#/$defs/nullableSha256"},
+                  "result_sha256": {"$ref": "#/$defs/nullableSha256"},
+                  "result_bytes": {"type": "integer", "minimum": 0, "maximum": 65536}
+                }
+              }
+            },
+            "turn_completed_count": {"type": "integer", "minimum": 0},
+            "final_response_sha256": {"$ref": "#/$defs/nullableSha256"}
+          }
+        },
+        "usage": {"$ref": "#/$defs/usage"},
+        "environment_receipt": {"$ref": "#/$defs/environmentReceipt"},
+        "first_correct_action": {"type": "boolean"},
+        "decision_preservation": {"type": "boolean"},
+        "wrong_state_admission": {"type": "integer", "minimum": 0},
+        "provider_internal_surface_leak": {"type": "boolean"},
+        "provider_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "ledger_audit_head_before": {"$ref": "#/$defs/sha256"},
+        "ledger_audit_head_after": {"$ref": "#/$defs/sha256"},
+        "ledger_unchanged": {"type": "boolean"},
+        "failure_class": {"type": ["string", "null"], "maxLength": 100},
+        "failure_summary": {"type": ["string", "null"], "maxLength": 500}
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passed_runs", "failed_runs", "wrong_state_admission", "first_correct_action_rate",
+        "decision_preservation_rate", "actual_input_tokens", "actual_cached_input_tokens",
+        "actual_output_tokens", "actual_total_tokens", "latency_ms", "release_gate_passed"
+      ],
+      "properties": {
+        "passed_runs": {"type": "integer", "minimum": 0, "maximum": 3},
+        "failed_runs": {"type": "integer", "minimum": 0, "maximum": 3},
+        "wrong_state_admission": {"type": "integer", "minimum": 0},
+        "first_correct_action_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "decision_preservation_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "actual_input_tokens": {"type": "integer", "minimum": 0},
+        "actual_cached_input_tokens": {"type": "integer", "minimum": 0},
+        "actual_output_tokens": {"type": "integer", "minimum": 0},
+        "actual_total_tokens": {"type": "integer", "minimum": 0},
+        "latency_ms": {
+          "type": "object", "additionalProperties": false,
+          "required": ["min", "max", "mean"],
+          "properties": {
+            "min": {"type": "integer", "minimum": 0},
+            "max": {"type": "integer", "minimum": 0},
+            "mean": {"type": "number", "minimum": 0}
+          }
+        },
+        "release_gate_passed": {"const": false}
+      }
+    }
+  }
+}

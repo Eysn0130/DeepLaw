@@ -1,0 +1,360 @@
+{
+  "candidate": {
+    "package_version": "0.12.0",
+    "runner": "benchmarks/v013/query_graph_scale.py",
+    "runner_sha256": "a9a0f7a0a5968b81a44012eadbd13b363a993b44543f910e779617d2e555fc9e",
+    "source_hashes": {
+      "benchmarks/v013/query_graph_scale.py": "a9a0f7a0a5968b81a44012eadbd13b363a993b44543f910e779617d2e555fc9e",
+      "contracts/v013-query-graph-scale-report.v1.schema.json": "be27b3d4814c31f8a35eba02530d824b11af9bee6a1a3839ad908858ebef4623",
+      "src/deeplaw/knowledge_autonomy.py": "832c0d6d26d722125434247d0e0309a6aba4a7d7e3826e0c3923d7ed19edfebc",
+      "src/deeplaw/projection/builder.py": "1ee5c10dc1fcd22cd5a8da4bfc66b02cd2eee336a87410cee30299dc57cc9b1a",
+      "src/deeplaw/retrieval/query_v6.py": "e68ca07e711da462f433c6fe88d6df88acc9acb7525e2c61b073331baff2064f"
+    }
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "Synthetic construction diagnostic; no Gold, legal Pack, real host, or user corpus is read.",
+  "competitive_claim_eligible": false,
+  "configuration": {
+    "execute_expensive": true,
+    "graph_admitted_bound": 500,
+    "graph_hops": [
+      0,
+      1,
+      2
+    ],
+    "graph_scanned_bound": 5000,
+    "legacy_global_prefix_scan_removed": true,
+    "max_provider_statements": 8,
+    "packet_max_fragments": 4,
+    "provider_hard_limit_bytes": 65536,
+    "scales": [
+      5001,
+      10000
+    ],
+    "seed": 221507603,
+    "statement_candidate_bound": 512,
+    "statements_per_revision": 1000
+  },
+  "environment": {
+    "cpu": {
+      "logical_count": 12,
+      "model": "arm"
+    },
+    "git_commit": "ee06bb3ef9989c671638deda95968690d628f8ca",
+    "git_reason": null,
+    "os": {
+      "machine": "arm64",
+      "name": "Darwin",
+      "release": "25.5.0"
+    },
+    "python": "3.12.13",
+    "ram_total_bytes": 25769803776,
+    "sqlite": "3.50.4",
+    "working_tree_dirty": false
+  },
+  "generated_at_utc": "2026-08-08T08:48:15Z",
+  "limitations": [
+    "Synthetic, temporary, claim-ineligible diagnostic; never a competitive, RC, GA, or SOTA claim.",
+    "Expensive lanes are never replaced by the 101-statement smoke lane.",
+    "The runner does not read credentials, network data, Gold/scorer material, or private Vaults.",
+    "No truncation check is passable without explicit bound evidence and an emitted Gap/Receipt."
+  ],
+  "overall": {
+    "executed_count": 0,
+    "fail_count": 0,
+    "not_executed": [
+      {
+        "reason": "not_executed: no safe equivalent audited bulk relation constructor is available; public add_relation is rate-bounded at 120 mutations/min; execution was explicitly requested",
+        "scale": 5001
+      },
+      {
+        "reason": "not_executed: no safe equivalent audited bulk relation constructor is available; public add_relation is rate-bounded at 120 mutations/min; execution was explicitly requested",
+        "scale": 10000
+      }
+    ],
+    "not_executed_count": 2,
+    "release_gate_passed": false,
+    "status": "not_released"
+  },
+  "profile": "construction_diagnostic",
+  "release_gate_passed": false,
+  "report_sha256": "224093a14cea7bf57f1e1013f243d3eeb2efa9638c0c1db65adcb27c72b82332",
+  "rerun_commands": [
+    "uv run --frozen python -m benchmarks.v013.query_graph_scale --output REPORT.json --scale 101",
+    "uv run --frozen python -m benchmarks.v013.query_graph_scale --output REPORT.json --scale 10000 --execute-expensive",
+    "uv run --frozen python -m benchmarks.v013.query_graph_scale --output REPORT.json --scale 100000 --execute-expensive"
+  ],
+  "scale_reports": [
+    {
+      "construction": "public_profile_v3_compilation",
+      "derived_rebuild": {
+        "reason": null,
+        "status": "executed"
+      },
+      "fixture": {
+        "audit_head": null,
+        "compilation_run_id": "compilationrun_1f1492f132b61ffaa96a9dc4",
+        "packet_count": 2,
+        "source_revision_id": "sourcerev_ce6436f1bbd32f792d714de3",
+        "statement_count": 5001
+      },
+      "graph": {
+        "checks": {},
+        "executed_relation_count": 0,
+        "graph_hops": {},
+        "nodes": [],
+        "reason": "not_executed: no safe equivalent audited bulk relation constructor is available; public add_relation is rate-bounded at 120 mutations/min; execution was explicitly requested",
+        "requested_relation_count": 5001,
+        "seed": null,
+        "status": "not_executed",
+        "truncation": {
+          "admitted_bound": 500,
+          "gap_or_receipt_evidence": false,
+          "scanned_bound": 5000,
+          "status": "not_executed"
+        }
+      },
+      "graph_status": "not_executed",
+      "limitations": [
+        "Synthetic, source-free quality diagnostic; not eligible for a release or competitive claim.",
+        "500/5000 relation truncation is not passable unless the bound and an explicit Gap/Receipt are observed."
+      ],
+      "reason": "not_executed: no safe equivalent audited bulk relation constructor is available; public add_relation is rate-bounded at 120 mutations/min; execution was explicitly requested",
+      "resource": {
+        "build_elapsed_ms": 23725.778,
+        "process_peak_rss_after_bytes": 172736512,
+        "process_peak_rss_before_bytes": 53100544,
+        "storage": {
+          "bytes": 56719881,
+          "file_count": 15187
+        }
+      },
+      "scale": 5001,
+      "source_sha256": "3822d67c5ce639c79019a7428c401b4c7b83fdd03a6228b8be23cd6101d1db39",
+      "statement": {
+        "candidate_bound": 512,
+        "legacy_global_prefix_scan_removed": true,
+        "max_provider_bytes": 5963,
+        "per_request_full_verify": false,
+        "position_independent": true,
+        "provider_hard_limit_bytes": 65536,
+        "query_elapsed_ms": 147.571,
+        "runtime_full_verify_count": 1,
+        "runtime_mode": "persistent_verified_snapshot",
+        "runtime_startup_ms": 13604.361,
+        "scan_strategy_bounded": true,
+        "statement_count": 5001,
+        "tail_recall": true,
+        "target_positions": [
+          0,
+          2500,
+          5000
+        ],
+        "targets": [
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [],
+            "gaps": [],
+            "position": 0,
+            "provider_bytes": 5954,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "9a5e709419e35d9a55ea991b23938cedf1c12f53ee082d185db0d7265f094506",
+            "receipt_id": "queryreceipt_0b5c2f622dc0361c62be4b85",
+            "selected": true,
+            "selected_ids": [
+              "statement_b3aeb866d07f774fb9997bd1"
+            ],
+            "statement_id": "statement_b3aeb866d07f774fb9997bd1",
+            "statement_text_sha256": "d496adbe531169102b95e5064122ba8eb7cde22057de03c3b656b787e4566f98"
+          },
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [],
+            "gaps": [],
+            "position": 2500,
+            "provider_bytes": 5962,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "de09264c359d17ab2784aa2d280ece600db212219fb2b5d924c2e30d76c719b1",
+            "receipt_id": "queryreceipt_aa87e591b16922519903daf1",
+            "selected": true,
+            "selected_ids": [
+              "statement_f65cdbd713fb12f10ea466a8"
+            ],
+            "statement_id": "statement_f65cdbd713fb12f10ea466a8",
+            "statement_text_sha256": "1205e6e974668e43e7c12dbaf27129374d86b716e28b386e4a10908c769b5906"
+          },
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [],
+            "gaps": [],
+            "position": 5000,
+            "provider_bytes": 5963,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "9d63368b2a09142717b7b25ac3024f5fdee832f1d99ae9df7a4132136a81a027",
+            "receipt_id": "queryreceipt_e2115ee7aeca0110a3001bda",
+            "selected": true,
+            "selected_ids": [
+              "statement_d83156cc871180cacc8b8e00"
+            ],
+            "statement_id": "statement_d83156cc871180cacc8b8e00",
+            "statement_text_sha256": "14867f418afd7f3c0005bec5ffef7f361573d29a4e53b6c6d02cde91b67aa22d"
+          }
+        ]
+      },
+      "statement_status": "executed",
+      "status": "not_executed"
+    },
+    {
+      "construction": "public_profile_v3_compilation",
+      "derived_rebuild": {
+        "reason": null,
+        "status": "executed"
+      },
+      "fixture": {
+        "audit_head": null,
+        "compilation_run_id": "compilationrun_7cd98d01d10a6a01326a6962",
+        "packet_count": 4,
+        "source_revision_id": "sourcerev_2c0d6f010ec97525f86e25b9",
+        "statement_count": 10000
+      },
+      "graph": {
+        "checks": {},
+        "executed_relation_count": 0,
+        "graph_hops": {},
+        "nodes": [],
+        "reason": "not_executed: no safe equivalent audited bulk relation constructor is available; public add_relation is rate-bounded at 120 mutations/min; execution was explicitly requested",
+        "requested_relation_count": 10000,
+        "seed": null,
+        "status": "not_executed",
+        "truncation": {
+          "admitted_bound": 500,
+          "gap_or_receipt_evidence": false,
+          "scanned_bound": 5000,
+          "status": "not_executed"
+        }
+      },
+      "graph_status": "not_executed",
+      "limitations": [
+        "Synthetic, source-free quality diagnostic; not eligible for a release or competitive claim.",
+        "500/5000 relation truncation is not passable unless the bound and an explicit Gap/Receipt are observed."
+      ],
+      "reason": "not_executed: no safe equivalent audited bulk relation constructor is available; public add_relation is rate-bounded at 120 mutations/min; execution was explicitly requested",
+      "resource": {
+        "build_elapsed_ms": 60786.381,
+        "process_peak_rss_after_bytes": 316211200,
+        "process_peak_rss_before_bytes": 172736512,
+        "storage": {
+          "bytes": 112367344,
+          "file_count": 30303
+        }
+      },
+      "scale": 10000,
+      "source_sha256": "9ea42fae33e486f20553119e22878cbbf69860e2e88f3ef83da0bc62d4983620",
+      "statement": {
+        "candidate_bound": 512,
+        "legacy_global_prefix_scan_removed": true,
+        "max_provider_bytes": 6028,
+        "per_request_full_verify": false,
+        "position_independent": true,
+        "provider_hard_limit_bytes": 65536,
+        "query_elapsed_ms": 292.2,
+        "runtime_full_verify_count": 1,
+        "runtime_mode": "persistent_verified_snapshot",
+        "runtime_startup_ms": 34464.505,
+        "scan_strategy_bounded": true,
+        "statement_count": 10000,
+        "tail_recall": true,
+        "target_positions": [
+          0,
+          5000,
+          5001,
+          9999
+        ],
+        "targets": [
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [
+              "some candidates were rejected by admission or selection budgets"
+            ],
+            "gaps": [],
+            "position": 0,
+            "provider_bytes": 6026,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "66d54f0c36d3e2f55f8100d947181388c781c44c6fd1e43c111fb8d0efe538b2",
+            "receipt_id": "queryreceipt_479e3670f0afb0977cefb1bc",
+            "selected": true,
+            "selected_ids": [
+              "statement_295840c5ddba5f8c166b9a6c"
+            ],
+            "statement_id": "statement_295840c5ddba5f8c166b9a6c",
+            "statement_text_sha256": "51c686a416be944081d05c4a412bae7436443d7a022ea8ec14da90f98ce5ecce"
+          },
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [
+              "some candidates were rejected by admission or selection budgets"
+            ],
+            "gaps": [],
+            "position": 5000,
+            "provider_bytes": 6025,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "db53e68062d570cd9650615f18f1bf78ed5ea616068d580056a4fc38fe596e73",
+            "receipt_id": "queryreceipt_a47a499784d05ff8c4522eb0",
+            "selected": true,
+            "selected_ids": [
+              "statement_75f692e75b14e311654ec9f5"
+            ],
+            "statement_id": "statement_75f692e75b14e311654ec9f5",
+            "statement_text_sha256": "5f6bcac72f5edd430721dc50ca821c93d42387b91535c429c8d477649b521136"
+          },
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [
+              "some candidates were rejected by admission or selection budgets"
+            ],
+            "gaps": [],
+            "position": 5001,
+            "provider_bytes": 6026,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "c317a25803411d2f796244cc667870d05b16bac1d153cd74b3891905411fae96",
+            "receipt_id": "queryreceipt_5747737b1d324fcd7e7d7661",
+            "selected": true,
+            "selected_ids": [
+              "statement_27a3b1498e2b32e95ab477d4"
+            ],
+            "statement_id": "statement_27a3b1498e2b32e95ab477d4",
+            "statement_text_sha256": "b9fd114be39736fb1fc04385b0142a333575c44c1906ac908945d423c79f38c4"
+          },
+          {
+            "candidate_bound": 512,
+            "candidate_count": 1,
+            "discovery_limitations": [
+              "some candidates were rejected by admission or selection budgets"
+            ],
+            "gaps": [],
+            "position": 9999,
+            "provider_bytes": 6028,
+            "provider_hard_limit_bytes": 65536,
+            "query_plan_sha256": "87cb79be186ae4b9d08539622c71e7e9777f04f3e32e223a663cbfeb322ae390",
+            "receipt_id": "queryreceipt_b9992e784d5d4a1197250609",
+            "selected": true,
+            "selected_ids": [
+              "statement_3794ecef91bdd6c4a5764b85"
+            ],
+            "statement_id": "statement_3794ecef91bdd6c4a5764b85",
+            "statement_text_sha256": "07e73450ba279108c260067b0f4b390bcb2ef9a405e0e03ca944bf987c9b51b2"
+          }
+        ]
+      },
+      "statement_status": "executed",
+      "status": "not_executed"
+    }
+  ],
+  "schema_version": "deeplaw.v013-query-graph-scale-report/v1"
+}

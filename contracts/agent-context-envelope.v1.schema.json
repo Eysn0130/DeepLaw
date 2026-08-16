@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/agent-context-envelope.v1.schema.json",
+  "title": "DeepLaw Host-Neutral Agent Context Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "task", "goal", "workspace_identity",
+    "repository_identity", "commit", "branch", "active_files",
+    "selected_text", "open_tabs", "current_note", "tool_result_digests",
+    "requested_purpose", "scope", "max_sensitivity", "policy", "budget",
+    "ephemeral", "persistence_allowed", "persistence_performed", "authority",
+    "legal_authority", "envelope_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.agent-context-envelope/v1"},
+    "task": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "goal": {"type": ["string", "null"], "maxLength": 2000},
+    "workspace_identity": {"$ref": "#/$defs/identity"},
+    "repository_identity": {"$ref": "#/$defs/identity"},
+    "commit": {"type": ["string", "null"], "maxLength": 128},
+    "branch": {"type": ["string", "null"], "maxLength": 200},
+    "active_files": {
+      "type": "array", "maxItems": 64, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/relative_path"}
+    },
+    "selected_text": {
+      "type": ["string", "null"], "maxLength": 12000,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "open_tabs": {
+      "type": "array", "maxItems": 32, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/relative_path"}
+    },
+    "current_note": {
+      "type": ["string", "null"],
+      "allOf": [{"if": {"type": "string"}, "then": {"$ref": "#/$defs/relative_path"}}]
+    },
+    "tool_result_digests": {
+      "type": "array", "maxItems": 32, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tool_name", "result_type", "sha256"],
+        "properties": {
+          "tool_name": {"type": "string", "minLength": 1, "maxLength": 100},
+          "result_type": {"type": "string", "minLength": 1, "maxLength": 100},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "requested_purpose": {
+      "enum": ["answer", "verify", "quote", "historical", "legal", "debug", "freshness_check"]
+    },
+    "scope": {"enum": ["personal", "project", "domain"]},
+    "max_sensitivity": {"enum": ["public", "internal", "private", "restricted"]},
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy_id", "content_mode"],
+      "properties": {
+        "policy_id": {"const": "ephemeral-agent-context/v1"},
+        "content_mode": {"const": "bounded_selected_text"}
+      }
+    },
+    "budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["max_tokens", "max_selected_characters", "max_provider_characters"],
+      "properties": {
+        "max_tokens": {"type": "integer", "minimum": 128, "maximum": 32000},
+        "max_selected_characters": {"type": "integer", "minimum": 0, "maximum": 12000},
+        "max_provider_characters": {"const": 65536}
+      }
+    },
+    "ephemeral": {"const": true},
+    "persistence_allowed": {"const": false},
+    "persistence_performed": {"const": false},
+    "authority": {"const": "none"},
+    "legal_authority": {"const": false},
+    "envelope_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "identity": {
+      "type": "string", "minLength": 1, "maxLength": 500,
+      "pattern": "^(?!/)(?!\\\\)(?!~)(?![A-Za-z]:)[^\\u0000-\\u001F\\u007F]+$"
+    },
+    "relative_path": {
+      "type": "string", "minLength": 1, "maxLength": 500,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(^|/)\\.(/|$))(?!.*(^|/)\\.\\.(/|$))[^\\u0000-\\u001F\\u007F]+$"
+    }
+  }
+}

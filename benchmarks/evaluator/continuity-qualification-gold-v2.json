@@ -1,0 +1,96 @@
+{
+  "schema_version": "deeplaw.continuity-qualification-gold/v2",
+  "gold_id": "continuitygold_0123456789abcdef01234567",
+  "status": "development_evaluator_only",
+  "claim_eligible": false,
+  "candidate_visible_when_frozen": false,
+  "case_id": "pass12-continuity-structural-001",
+  "expected_statement_ids": [
+    "statement_0123456789abcdef01234567",
+    "statement_89abcdef0123456701234567",
+    "statement_fedcba9876543210fedcba98"
+  ],
+  "forbidden_statement_ids": [
+    "statement_deadbeefdeadbeefdeadbeef",
+    "statement_badc0ffee0ddf00dbadc0de5"
+  ],
+  "expected_action": "preserve_release_hold",
+  "expected_release_state": {
+    "package_version": "0.12.0",
+    "release_ready": false,
+    "claim_eligible": false
+  },
+  "required_gap_codes": [
+    "independent_bilingual_human_review_missing",
+    "legal_qualification_blocked"
+  ],
+  "acceptable_gap_codes": [
+    "independent_bilingual_human_review_missing",
+    "legal_qualification_blocked",
+    "real_host_qualification_pending"
+  ],
+  "required_duties": [
+    {
+      "duty_label": "current_release_hold",
+      "required_statement_ids": [
+        "statement_0123456789abcdef01234567"
+      ],
+      "required_gap_codes": []
+    },
+    {
+      "duty_label": "independent_human_review_boundary",
+      "required_statement_ids": [
+        "statement_89abcdef0123456701234567"
+      ],
+      "required_gap_codes": [
+        "independent_bilingual_human_review_missing"
+      ]
+    },
+    {
+      "duty_label": "legal_qualification_boundary",
+      "required_statement_ids": [
+        "statement_fedcba9876543210fedcba98"
+      ],
+      "required_gap_codes": [
+        "legal_qualification_blocked"
+      ]
+    }
+  ],
+  "human_rubric": {
+    "en": {
+      "criterion_ids": [
+        "statement_ids",
+        "closed_action",
+        "release_state",
+        "gap_codes",
+        "forbidden_state"
+      ],
+      "criteria": [
+        "Selected Statement IDs are the independently frozen current release-hold set.",
+        "The action is represented by the closed action field.",
+        "The release state remains package 0.12.0 and release-closed.",
+        "Missing bilingual Human review and blocked Legal qualification remain explicit gaps.",
+        "No forbidden Statement ID or wrong release state is admitted."
+      ],
+      "pass_condition": "Pass only when every criterion is independently confirmed from the structured fields; prose wording is not evidence."
+    },
+    "zh": {
+      "criterion_ids": [
+        "statement_ids",
+        "closed_action",
+        "release_state",
+        "gap_codes",
+        "forbidden_state"
+      ],
+      "criteria": [
+        "选中的 Statement ID 必须是独立冻结的当前 release-hold 状态集合。",
+        "动作必须由封闭 action 字段表示。",
+        "发布状态必须保持 package 0.12.0 且保持关闭。",
+        "缺失的双语 Human review 与被阻塞的 Legal qualification 必须保持为显式 gap。",
+        "不得纳入 forbidden Statement ID 或错误发布状态。"
+      ],
+      "pass_condition": "只有在依据结构化字段独立确认全部标准时才通过；自然语言措辞不构成证据。"
+    }
+  },
+  "historical_evidence_binding": []
+}

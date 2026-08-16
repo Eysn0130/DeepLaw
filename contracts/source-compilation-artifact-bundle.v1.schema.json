@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/source-compilation-artifact-bundle.v1.schema.json",
+  "title": "DeepLaw Source Compilation Artifact Bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "entries"],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.source-compilation-artifact-bundle/v1"
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 768,
+      "items": {"$ref": "#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_sha256", "artifact_role", "value"],
+      "properties": {
+        "artifact_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "artifact_role": {
+          "enum": ["statement", "statement_map", "statement_evidence_receipt"]
+        },
+        "value": {"type": "object"}
+      }
+    }
+  }
+}

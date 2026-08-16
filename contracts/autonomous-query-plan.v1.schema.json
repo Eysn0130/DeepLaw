@@ -79,7 +79,12 @@
     "dense_manifest_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
     "dense_model": {"const": "deeplaw-multilingual-hash-dense/1"},
     "reranker_model": {"const": "deeplaw-evidence-duty-reranker/1"},
-    "query_expansion_profile": {"const": "deeplaw-deterministic-query-expansion/1"},
+    "query_expansion_profile": {
+      "enum": [
+        "deeplaw-deterministic-query-expansion/1",
+        "deeplaw-deterministic-query-expansion/2"
+      ]
+    },
     "query_expansion_term_count": {"type": "integer", "minimum": 0, "maximum": 24},
     "query_expansion_terms_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "source_derived": {"type": "object"}

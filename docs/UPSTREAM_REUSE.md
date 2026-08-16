@@ -1,6 +1,6 @@
 # Upstream Reuse Review
 
-Reviewed: 2026-07-28
+Reviewed: 2026-08-11
 
 The full v0.7 product-system and parser comparison, including dependency,
 network, data-boundary and benchmark fields, is maintained in
@@ -29,17 +29,27 @@ DeepLaw accepts upstream work only when it preserves all of these invariants:
 - derived data is replaceable and cannot change legal validity.
 
 Current decision: none of the reviewed knowledge platforms is a DeepLaw runtime
-authority. No source code from these repositories has been copied into DeepLaw.
-The base MCP runtime stays lightweight. Offline builders may use separately
-installed OCR/PDF tools, the optional `document-engine` dependency, and the
-optional local Discovery runtime; every derived output remains a candidate
-subject to DeepLaw's own source, lifecycle, evidence, and admission policy.
+authority. Pass 8 records an Owner-authorized sibling-reuse path for OpenWiki
+and Tolaria; this supersedes the prior blanket no-code-reuse decision. A bounded
+implementation may directly reuse a named file or symbol when that is the
+smallest correct solution; it does not require a separate research pass or a
+new Owner approval. The implementation change must add or update the reuse
+manifest and verification in the same review. No source code from either
+repository has been copied into the current source tree or any release artifact.
+Whole-repository vendoring, large upstream runtimes, and product-control
+plane adoption remain prohibited; sibling material may not introduce another
+Authority, Ledger, Agent runtime, telemetry, or Secret model. The base MCP
+runtime stays lightweight. Offline builders may use separately installed OCR/PDF
+tools, the optional `document-engine` dependency, and the optional local
+Discovery runtime; every derived output remains a candidate subject to
+DeepLaw's own source, lifecycle, evidence, and admission policy.
 
 ## Reviewed Snapshot
 
 | Project | Commit reviewed | Published license | DeepLaw decision |
 | --- | --- | --- | --- |
 | [oomol-lab/wiki-graph](https://github.com/oomol-lab/wiki-graph) | `7f916f63cfb9` | Apache-2.0 | Source hierarchy, URI protocol, public grounding, job control, and schema-upgrade reference |
+| [langchain-ai/openwiki](https://github.com/langchain-ai/openwiki) | `7531d615216e8cbccf464f66cfbbae3668871c84` (package-version-0.3.1 review snapshot) | MIT | Owner-authorized focused reuse under the frozen manifest; no whole vendor/runtime |
 | [garrytan/gbrain](https://github.com/garrytan/gbrain) | `5008b287e47b` | MIT | Architectural and algorithm reference; no whole-system dependency |
 | [Open-Source-Legal/OpenContracts](https://github.com/Open-Source-Legal/OpenContracts) | `4896de1ef4fb` | MIT | Authority-pack, provenance, annotation, and MCP reference |
 | [QuantLaw/legal-data-preprocessing](https://github.com/QuantLaw/legal-data-preprocessing) | `d0952593ce0b` | BSD-2-Clause | Statute hierarchy and snapshot-lineage reference |
@@ -64,6 +74,7 @@ subject to DeepLaw's own source, lifecycle, evidence, and admission policy.
 | [Unstructured-IO/unstructured](https://github.com/Unstructured-IO/unstructured) | `c38745b32f53` | Apache-2.0 | Broad ETL reference; not selected as legal canonical representation |
 | [datalab-to/marker](https://github.com/datalab-to/marker) | `ef16c2caa29d` | GPL-3.0 | Not selected for the default Apache-distributed build path |
 | [datalab-to/surya](https://github.com/datalab-to/surya) | `fe8e2d968462` | GPL-3.0 code; separate model terms | Not selected for default redistribution |
+| [refactoringhq/tolaria](https://github.com/refactoringhq/tolaria) | `ab01faa6773136a58285d04cb81e2587c11bac85` | AGPL-3.0-or-later | Owner-authorized focused reuse under same-team authorization; release-time file/contributor-rights confirmation; no whole vendor/runtime |
 | [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime) | `v1.27.0` | MIT | Optional local execution dependency for fixed candidate-discovery models |
 | [huggingface/tokenizers](https://github.com/huggingface/tokenizers) | `v0.22.2` | Apache-2.0 | Optional fixed-tokenizer execution dependency |
 | [xenova/jina-embeddings-v2-small-en](https://huggingface.co/Xenova/jina-embeddings-v2-small-en) | `523cadcb9c2e` | Apache-2.0 model card | Fixed English Discovery profile; weights downloaded explicitly and not redistributed |
@@ -74,6 +85,75 @@ subject to DeepLaw's own source, lifecycle, evidence, and admission policy.
 Repository commit coordinates identify material reviewed and are not dependency
 pins. The explicit Tree-sitter and SQLGlot version coordinates are different:
 they are exact base-runtime dependency pins recorded in `uv.lock`.
+
+The current compatibility baseline binds OpenWiki released v0.3.1 to peeled commit
+`630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc`. The `7531d615216e8cbccf464f66cfbbae3668871c84`
+coordinate retained below is only a package-version-0.3.1 review snapshot.
+
+## Owner-authorized sibling reuse (Pass 8)
+
+Owner authorization permits focused, reviewable direct reuse from the two named
+sibling repositories. It is not permission to vendor either repository or adopt
+a large upstream runtime. The scope is:
+
+- each reuse must bind a concrete PRD outcome and name an exact commit, source
+  file/symbol, target file, rights basis, attribution, tests, and security or
+  dependency impact in the same change; this record is a merge/release control,
+  not a separate product-design phase;
+- `reuse_mode` is one of `verbatim`, `adapted`, `behavioral`, or `reference`;
+- only the individually named files/symbols in the manifest may be considered;
+  generated trees, transitive vendor directories, large runtimes, and unrelated
+  product code are out of scope;
+- reused material remains subordinate to DeepLaw's own source, provenance,
+  Authority, Ledger, MCP, and security boundaries and cannot create a second
+  Authority, Ledger, Agent runtime, telemetry, or Secret model.
+
+### Unified reuse manifest
+
+The following is the release-review manifest for reuse actually exercised in
+Pass 8. `behavioral` means the public outcome and fixtures were independently
+re-authored in DeepLaw; `reference` means design review or execution from a
+separate exact checkout. Neither mode below incorporates an upstream source
+fragment into a DeepLaw release artifact.
+
+| repository | exact commit | source file/symbol | reuse_mode | rights_basis | target file | modifications | attribution | tests | security/dependency impact |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `langchain-ai/openwiki` | `7531d615216e8cbccf464f66cfbbae3668871c84` (package-version-0.3.1 review snapshot) | `src/agent/wiki-link-validator.ts:validateWikiInternalLinks` | `reference` | `MIT at exact commit; Owner-authorized sibling reuse` | `docs/V0_13_PASS8_CAPABILITY_GAP_MATRIX.md` | Compared broken-link outcomes with DeepLaw's Registry/Link Index; retained stable Ledger identity and indexed reads; copied no implementation | This manifest and `THIRD_PARTY_NOTICES.md`; no MIT source fragment incorporated | `tests/test_v013_wiki_link_index.py` | No dependency, network, telemetry, runtime, or distributed upstream bytes |
+| `langchain-ai/openwiki` | `7531d615216e8cbccf464f66cfbbae3668871c84` (package-version-0.3.1 review snapshot) | `src/agent/utils.ts:getUpdateNoopStatus`; `src/agent/utils.ts:createOpenWikiContentSnapshot` | `reference` | `MIT at exact commit; Owner-authorized sibling reuse` | `docs/V0_13_PASS8_CAPABILITY_GAP_MATRIX.md` | Compared content-snapshot/no-op behavior; retained DeepLaw revision-bound projection manifests; copied no implementation | This manifest and `THIRD_PARTY_NOTICES.md`; no MIT source fragment incorporated | `tests/test_v013_projection_incremental.py` | No dependency or runtime impact; no upstream scheduler adopted |
+| `langchain-ai/openwiki` | `7531d615216e8cbccf464f66cfbbae3668871c84` (package-version-0.3.1 review snapshot) | `src/ingestion/code-mode.ts` managed-block behavior | `reference` | `MIT at exact commit; Owner-authorized sibling reuse` | `docs/V0_13_PASS8_CAPABILITY_GAP_MATRIX.md` | Compared user-content protection; retained DeepLaw canonical/editable/derived ownership separation; copied no implementation | This manifest and `THIRD_PARTY_NOTICES.md`; no MIT source fragment incorporated | `tests/test_knowledge_markdown.py`; `tests/test_v013_projection_ownership.py` | No dependency; did not adopt recursive directory sync, CI injection, or a second Authority model |
+| `refactoringhq/tolaria` | `ab01faa6773136a58285d04cb81e2587c11bac85` | `src/utils/wikilinks.ts:blankFencedCodeLines`; `src/utils/wikilinks.ts:extractOutgoingLinks`; `src/utils/wikilinks.test.ts`; `src/utils/wikilinks.table.test.ts`; `tests/smoke/wikilink-traditional-chinese.spec.ts` | `behavioral` | `Owner-declared same-team reuse authorization; published AGPL-3.0-or-later; release-time file/contributor-rights confirmation remains required only if derived source is distributed` | `tests/test_v013_wiki_link_index.py`; `tests/test_v013_wiki_resolver.py` | Independently re-authored Python table/code-fence/alias/CJK fixtures against DeepLaw stable identity and ambiguity semantics; copied no TypeScript implementation or test text | This manifest and `THIRD_PARTY_NOTICES.md`; no AGPL source fragment incorporated | `tests/test_v013_wiki_link_index.py`; `tests/test_v013_wiki_resolver.py` | No Node/Tauri/React/Rust dependency; no runtime, network, telemetry, Secret, Authority, or Ledger change |
+| `refactoringhq/tolaria` | `ab01faa6773136a58285d04cb81e2587c11bac85` | `mcp-server/tool-service.js:createMcpToolService`; `mcp-server/vault.js:getNote`; `mcp-server/vault.js:updateNote` | `reference` | `Owner-declared same-team reuse authorization; external checkout remains AGPL-3.0-or-later; no upstream bytes redistributed` | `benchmarks/hosts/run_tolaria_workspace_interop.py`; `benchmarks/hosts/tolaria_workspace_probe.mjs`; `contracts/tolaria-workspace-interop-report.v1.schema.json`; `tests/test_v013_tolaria_workspace_interop.py` | An independently authored development probe imports the exact external service to open/read/update one allowed synthetic note; DeepLaw policy denies protected paths before the call; `expectedMtime` is never treated as a Revision | This manifest, report provenance, and `THIRD_PARTY_NOTICES.md`; upstream remains a separately installed external checkout | `tests/test_v013_tolaria_workspace_interop.py`; exact external report `tolaria_interop_e9df12e58307d1da94ad995a` | External `npm audit` has six known high findings; none are redistributed. Closed child environment; no Secret; OS sandbox not proven; no Core dependency or canonical Ledger write |
+
+### Actual copied/adapted inventory
+
+- Verbatim upstream source in the DeepLaw tree or distribution: **none**.
+- Adapted upstream implementation in the DeepLaw tree or distribution: **none**.
+- Independently re-authored behavioral inventory:
+  `tests/test_v013_wiki_link_index.py` and
+  `tests/test_v013_wiki_resolver.py`.
+- Independently authored external-execution inventory:
+  `benchmarks/hosts/run_tolaria_workspace_interop.py`,
+  `benchmarks/hosts/tolaria_workspace_probe.mjs`,
+  `contracts/tolaria-workspace-interop-report.v1.schema.json`, and
+  `tests/test_v013_tolaria_workspace_interop.py`.
+- Exact external upstream bytes executed during the Development probe:
+  Tolaria `mcp-server/tool-service.js` and its separately installed locked
+  dependencies. They are not part of the DeepLaw source distribution, wheel,
+  sdist, SBOM, or runtime dependency graph.
+
+Tolaria's `rights_basis` is explicitly **Owner-declared same-team reuse
+authorization**. Before an Apache-2.0 release, the Owner/release reviewer must
+confirm that the authorization covers every actual copied file and the rights of
+all relevant contributors, not merely the repository as a whole. If an
+Apache-2.0 release depends on a separate grant for Tolaria-derived material,
+record a grant reference or an irreversible summary in the Owner-managed legal or
+release record; the underlying legal document may be kept outside this
+repository. Unrecorded oral authorization must not be the sole basis for a
+commercial artifact.
+
+The manifest is an authorization and audit aid, not a new product subsystem:
+OpenWiki/Tolaria code cannot become DeepLaw authority, a Ledger, an Agent runtime,
+telemetry path, a secret manager, or an MCP capability.
 
 ## Detailed Decisions
 
@@ -438,10 +518,12 @@ No such code has been copied yet.
 
 Before a future change imports or copies upstream code:
 
-1. Record repository, exact commit, file path, copyright, and license.
+1. Complete every unified reuse-manifest field and bind the entry to a concrete
+   PRD outcome before copying or adapting anything.
 2. Confirm compatibility with DeepLaw's Apache-2.0 distribution and intended
-   deployment.
-3. Add the required notice and preserve source headers.
+   deployment, including any separate grant and contributor-rights review.
+3. Add the required notice and preserve source headers only when the exact code
+   is actually copied into the release artifact.
 4. Isolate optional heavy dependencies from the core installation.
 5. Add tests proving source/version integrity, bounded results, offline
    behavior, and public/private separation.

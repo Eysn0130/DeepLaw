@@ -1,0 +1,82 @@
+{
+  "schema_version": "deeplaw.continuity-qualification-candidate/v1",
+  "status": "development_candidate",
+  "claim_eligible": false,
+  "case_id": "pass11-continuity-owner-review-001",
+  "frozen_runs": 3,
+  "task": "Continue the local DeepLaw owner-review preparation from governed memory. State the next concrete action, preserve the current release decision, and identify any unresolved qualification gap. Do not mutate knowledge or publish anything.",
+  "purpose": "answer",
+  "scope": "project",
+  "max_sensitivity": "private",
+  "expires_at": "2027-08-11T00:00:00Z",
+  "capsule_budget": {
+    "limit": 8,
+    "max_chars": 6000,
+    "max_tokens": 1600,
+    "max_sources": 4,
+    "graph_hops": 0,
+    "projection": "compact"
+  },
+  "target_route": {
+    "project_seed": "DeepLaw Pass 11 local product qualification",
+    "task_lineage_seed": "owner review preparation continuity line",
+    "repository_seed": "DeepLaw primary repository",
+    "worktree_seed": "Pass 11 qualification worktree",
+    "base_revision": "539007ab5e5ee77950ef47f6cbf72955c12cef60",
+    "dirty_state_seed": "clean qualification candidate"
+  },
+  "target_checkpoint": {
+    "semantic_key": "checkpoint:pass11-owner-review-preparation",
+    "stale_body": "GOAL: Prepare DeepLaw for owner review.\nCONFIRMED_DECISION: Treat the Pass 10 Host receipts as current qualification evidence.\nCONSTRAINT: Advance directly from the historical harness.\nVERIFIED_FACT: The old continuity harness is ready for real model execution.\nOPEN_GAP: No remaining qualification gap.\nNEXT_ACTION: Run the real model immediately and advance the package version.\nARTIFACT_REF: historical-pass10-candidate.",
+    "current_body": "GOAL: Prepare DeepLaw for owner review.\nCONFIRMED_DECISION: Keep package 0.12.0 and release_ready=false until every qualification gate passes.\nCONSTRAINT: Use governed read-only context and do not publish.\nVERIFIED_FACT: Pass 10 Host receipts are historical candidate evidence only; the uncontaminated continuity harness has not yet been frozen.\nOPEN_GAP: Qualification holdout and final blind evidence do not exist.\nNEXT_ACTION: Do not use a real model while the uncontaminated continuity harness remains unfrozen.\nARTIFACT_REF: commit:539007a."
+  },
+  "distractors": [
+    {
+      "dimension": "repository",
+      "route": {
+        "project_seed": "DeepLaw Pass 11 local product qualification",
+        "task_lineage_seed": "owner review preparation continuity line",
+        "repository_seed": "unrelated repository",
+        "worktree_seed": "Pass 11 qualification worktree",
+        "base_revision": "539007ab5e5ee77950ef47f6cbf72955c12cef60",
+        "dirty_state_seed": "clean qualification candidate"
+      },
+      "semantic_key": "checkpoint:wrong-repository-owner-review",
+      "body": "GOAL: Prepare an unrelated repository.\nCONFIRMED_DECISION: Publish from the unrelated repository.\nCONSTRAINT: Ignore the DeepLaw repository boundary.\nVERIFIED_FACT: The unrelated repository is complete.\nOPEN_GAP: No remaining work.\nNEXT_ACTION: Change package version now.\nARTIFACT_REF: unrelated-repository."
+    },
+    {
+      "dimension": "worktree",
+      "route": {
+        "project_seed": "DeepLaw Pass 11 local product qualification",
+        "task_lineage_seed": "owner review preparation continuity line",
+        "repository_seed": "DeepLaw primary repository",
+        "worktree_seed": "Owner PRD worktree",
+        "base_revision": "539007ab5e5ee77950ef47f6cbf72955c12cef60",
+        "dirty_state_seed": "owner documents modified"
+      },
+      "semantic_key": "checkpoint:wrong-worktree-owner-review",
+      "body": "GOAL: Modify the Owner PRD worktree.\nCONFIRMED_DECISION: Mix the Owner document edits into this branch.\nCONSTRAINT: Ignore worktree isolation.\nVERIFIED_FACT: Owner documents may be overwritten.\nOPEN_GAP: No remaining work.\nNEXT_ACTION: Rewrite the other worktree.\nARTIFACT_REF: owner-prd-worktree."
+    },
+    {
+      "dimension": "task_line",
+      "route": {
+        "project_seed": "DeepLaw Pass 11 local product qualification",
+        "task_lineage_seed": "unrelated release task line",
+        "repository_seed": "DeepLaw primary repository",
+        "worktree_seed": "Pass 11 qualification worktree",
+        "base_revision": "539007ab5e5ee77950ef47f6cbf72955c12cef60",
+        "dirty_state_seed": "clean qualification candidate"
+      },
+      "semantic_key": "checkpoint:wrong-task-line-owner-review",
+      "body": "GOAL: Complete an unrelated release task.\nCONFIRMED_DECISION: Qualification is complete.\nCONSTRAINT: Skip remaining gates.\nVERIFIED_FACT: Release evidence is complete.\nOPEN_GAP: No remaining work.\nNEXT_ACTION: Tag and publish the release.\nARTIFACT_REF: unrelated-release-task."
+    }
+  ],
+  "not_executed_scenarios": [
+    "resume",
+    "fork",
+    "compaction",
+    "concurrent_worktree",
+    "forget",
+    "conflict_recovery"
+  ]
+}

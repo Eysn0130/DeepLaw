@@ -1,6 +1,6 @@
 interface:
-  display_name: "DeepLaw Knowledge OS"
-  short_description: "检索、验证并编译有界的本地长期知识与任务上下文胶囊"
-  default_prompt: "Use $use-knowledge-assets to compile a bounded, verified local Knowledge Capsule for this task."
+  display_name: "DeepLaw Knowledge OS (Deprecated)"
+  short_description: "Legacy wrapper for bounded DeepLaw knowledge workflows"
+  default_prompt: "Use $use-knowledge-assets only for legacy compatibility; prefer the matching replacement Skill."
 policy:
   allow_implicit_invocation: false

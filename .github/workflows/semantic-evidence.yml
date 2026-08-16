@@ -1,4 +1,4 @@
-name: Semantic Living Wiki evidence
+name: Legacy pre-v0.13 Semantic Living Wiki evidence
 
 on:
   pull_request:
@@ -73,6 +73,16 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Reject v0.13 and later candidates
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          if tuple(map(int, version.split("."))) >= (0, 13, 0):
+              raise SystemExit("v0.13 must use the active qualification and Gate v6 path")
+          PY
+
       - name: Install exact candidate and pinned official host CLIs
         shell: bash
         run: |
@@ -87,7 +97,7 @@ jobs:
           uv pip install --python "${RUNNER_TEMP}/semantic-runtime/bin/python" "${wheels[0]}"
           npm install --global --prefix "${RUNNER_TEMP}/host-cli" \
             @anthropic-ai/claude-code@2.1.220 \
-            opencode-ai@1.18.8
+            opencode-ai@1.18.16
           mkdir -p "${RUNNER_TEMP}/semantic-evidence"
 
       - name: Prepare frozen pending Gold corpus
@@ -118,16 +128,17 @@ jobs:
             --vault "${RUNNER_TEMP}/semantic-vault" \
             --baseline-vault "${RUNNER_TEMP}/semantic-baseline-vault" \
             --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
-            --output "${evidence}/deterministic-semantic-lifecycle.json"
+            --output "${evidence}/deterministic-semantic-lifecycle-v2.json"
           uv run --frozen python -m benchmarks.semantic.run_query_suite \
             --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
-            --compiler-report "${evidence}/deterministic-semantic-lifecycle.json" \
+            --compiler-report "${evidence}/deterministic-semantic-lifecycle-v2.json" \
             --corpus "${corpus}" \
             --vault "${RUNNER_TEMP}/semantic-vault" \
             --baseline-vault "${RUNNER_TEMP}/semantic-baseline-vault" \
             --deeplaw-command "${RUNNER_TEMP}/deeplaw-command.json" \
             --output "${evidence}/semantic-query-report.json" \
-            --cost-output "${evidence}/semantic-query-cost.json"
+            --cost-output "${evidence}/semantic-query-cost.json" \
+            --context-output "${evidence}/semantic-context-outcome-v2.json"
           claude_observed=$("${RUNNER_TEMP}/host-cli/bin/claude" --version)
           opencode_observed=$("${RUNNER_TEMP}/host-cli/bin/opencode" --version)
           uv run --frozen python -m benchmarks.hosts.run_semantic_host_harness \
@@ -145,7 +156,7 @@ jobs:
             --not-executed-reason "External real-model semantic execution is not required and was not executed." \
             --output "${evidence}/claude-code-real-model-not-executed.json"
           uv run --frozen python -m benchmarks.hosts.run_semantic_host_harness \
-            --host opencode --host-version 1.18.8 --model-identity not_executed \
+            --host opencode --host-version 1.18.16 --model-identity not_executed \
             --grant-id "${grant_id}" --gold benchmarks/semantic/semantic-gold-candidate-v1.json \
             --corpus "${corpus}" --network-policy offline \
             --host-discovery-status discovered --version-command "opencode --version" \
@@ -164,6 +175,7 @@ jobs:
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
       - name: Upload deterministic candidate evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: semantic-deterministic-review-candidate
@@ -200,6 +212,16 @@ jobs:
           ref: ${{ inputs.evidence_ref }}
           path: .release-evidence-input
 
+      - name: Reject v0.13 and later candidates
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          if tuple(map(int, version.split("."))) >= (0, 13, 0):
+              raise SystemExit("v0.13 must use the active qualification and Gate v6 path")
+          PY
+
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
@@ -225,6 +247,8 @@ jobs:
             "${output}/semantic-query-report.json"
           cp "${evidence_root}/semantic/semantic-query-cost.json" \
             "${output}/semantic-query-cost.json"
+          cp "${evidence_root}/semantic/semantic-context-outcome-v2.json" \
+            "${output}/semantic-context-outcome-v2.json"
           cp "${evidence_root}"/semantic/machine-reviews/*.json \
             "${output}/machine-reviews/"
           cp "${evidence_root}/quality/v0.12-28-source-decision-matrix.json" \

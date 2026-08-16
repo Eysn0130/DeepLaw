@@ -286,7 +286,7 @@ async def _mcp_read_only_probe(
     selected_environment = {**environment, "DEEPLAW_DB": str(database)}
     parameters = StdioServerParameters(
         command=str(executable),
-        args=["mcp", "--stdio"],
+        args=["mcp", "--closed-environment", "--stdio"],
         env=selected_environment,
     )
     async with (

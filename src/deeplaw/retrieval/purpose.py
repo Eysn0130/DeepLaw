@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal, cast
@@ -14,17 +16,20 @@ from ..knowledge_autonomy import (
 from ..knowledge_intelligence import (
     estimate_tokens,
     normalize_identity_text,
-    rerank_candidates,
+    rerank_candidate_views,
 )
 from ..knowledge_models import canonical_timestamp, utc_now
 from ..knowledge_store import KnowledgeVault
 from ..retrieval_fabric import retrieve
+from ..task_context import normalize_task_context_binding
 from ..util import (
     QUERY_EXPANSION_PROFILE,
     canonical_json,
-    query_discovery_text,
+    query_discovery_views,
     query_expansion_terms,
+    query_identity_anchor_match,
     query_search_terms,
+    query_target_anchors,
     search_terms,
     sha256_bytes,
     strict_json_loads,
@@ -40,7 +45,7 @@ QueryPurpose = Literal[
     "freshness_check",
 ]
 QueryPolicy = Literal["compiled-first-v1", "evidence-first-v1", "balanced-v1"]
-QueryPlanVersion = Literal["4", "5"]
+QueryPlanVersion = Literal["4", "5", "6"]
 
 QUERY_PURPOSES: Final = frozenset(
     {
@@ -65,6 +70,50 @@ _DEFAULT_POLICY: Final[dict[str, QueryPolicy]] = {
     "debug": "balanced-v1",
     "freshness_check": "compiled-first-v1",
 }
+
+
+@contextmanager
+def _purpose_read_stores(
+    root: Path,
+    runtime_snapshot: Any | None,
+) -> Iterator[tuple[KnowledgeVault, AutonomousKnowledgeStore]]:
+    """Yield one verified snapshot without re-verifying a warm MCP lifespan."""
+
+    if runtime_snapshot is not None:
+        if bool(getattr(runtime_snapshot, "closed", True)):
+            raise RuntimeError("persistent knowledge read snapshot is closed")
+        evidence_store = getattr(runtime_snapshot, "legacy", None)
+        knowledge_store = getattr(runtime_snapshot, "store", None)
+        if not isinstance(evidence_store, KnowledgeVault) or not isinstance(
+            knowledge_store, AutonomousKnowledgeStore
+        ):
+            raise RuntimeError("persistent knowledge read snapshot is invalid")
+        if evidence_store.root != root or knowledge_store.root != root:
+            raise RuntimeError("persistent knowledge read snapshot belongs to another Vault")
+        if evidence_store.audit_head != knowledge_store.legacy_audit_head:
+            raise RuntimeError("knowledge read planes changed while opening a snapshot")
+        yield evidence_store, knowledge_store
+        return
+
+    with (
+        KnowledgeVault(root, read_only=True) as evidence_store,
+        AutonomousKnowledgeStore(
+            root,
+            read_only=True,
+            legacy_snapshot=evidence_store,
+        ) as knowledge_store,
+    ):
+        legacy_integrity = evidence_store.verify_integrity()
+        if not legacy_integrity["valid"]:
+            raise RuntimeError("knowledge vault integrity is invalid; query stopped")
+        if evidence_store.audit_head != knowledge_store.legacy_audit_head:
+            raise RuntimeError("knowledge read planes changed while opening a snapshot")
+        if not knowledge_store.verify(
+            preverified_legacy_integrity=legacy_integrity,
+            preverified_legacy_audit_head=evidence_store.audit_head,
+        )["valid"]:
+            raise RuntimeError("knowledge vault integrity is invalid; query stopped")
+        yield evidence_store, knowledge_store
 _POLICY_ORDER: Final[dict[QueryPolicy, tuple[str, ...]]] = {
     "compiled-first-v1": (
         "exact_identity",
@@ -254,14 +303,37 @@ class PurposeAwareRetrievalService:
         retrieval_mode: str = "hybrid",
         as_of: str | None = None,
         kinds: tuple[str, ...] = (),
-        query_plan_version: QueryPlanVersion = "4",
+        query_plan_version: QueryPlanVersion = "6",
         force_canonical_lexical: bool = False,
+        query_target: str | dict[str, Any] | None = None,
+        applicable_duties: tuple[str, ...] | list[str] | None = None,
+        projection: str = "standard",
+        task_binding: dict[str, Any] | None = None,
+        _runtime_snapshot: Any | None = None,
+        _task_route_text: str | None = None,
     ) -> dict[str, Any]:
         selected_query = self._bounded_query(query)
+        selected_task_route_text = (
+            self._bounded_query(_task_route_text)
+            if _task_route_text is not None
+            else selected_query
+        )
         if purpose not in QUERY_PURPOSES:
             raise ValueError("query purpose is invalid")
-        if query_plan_version not in {"4", "5"}:
+        if query_plan_version not in {"4", "5", "6"}:
             raise ValueError("query plan version is invalid")
+        normalized_task_binding = normalize_task_context_binding(
+            task_binding,
+            allow_none=True,
+        )
+        if query_plan_version != "6" and normalized_task_binding is not None:
+            raise ValueError("task_binding requires query_plan_version=6")
+        if query_plan_version == "6" and projection not in {
+            "compact",
+            "standard",
+            "audit",
+        }:
+            raise ValueError("query projection is invalid")
         selected_policy = policy or _DEFAULT_POLICY[purpose]
         if selected_policy not in QUERY_POLICIES:
             raise ValueError("query policy is invalid")
@@ -282,22 +354,47 @@ class PurposeAwareRetrievalService:
             raise ValueError("purpose-aware query token or source budget is invalid")
         if graph_hops not in {0, 1, 2}:
             raise ValueError("purpose-aware query graph-hop budget is invalid")
+        if retrieval_mode not in {"exact", "lexical", "dense", "graph", "hybrid"}:
+            raise ValueError("purpose-aware query retrieval mode is invalid")
+        if not isinstance(force_canonical_lexical, bool):
+            raise ValueError("purpose-aware canonical lexical control is invalid")
 
-        with (
-            KnowledgeVault(self.root, read_only=True) as evidence_store,
-            AutonomousKnowledgeStore(self.root, read_only=True) as knowledge_store,
+        with _purpose_read_stores(self.root, _runtime_snapshot) as (
+            evidence_store,
+            knowledge_store,
         ):
             selected_scope = scope or knowledge_store.vault_scope
             if selected_scope not in {"personal", "project", "domain"}:
                 raise ValueError("purpose-aware query scope is invalid")
-            if evidence_store.audit_head != knowledge_store.legacy_audit_head:
-                raise RuntimeError("knowledge read planes changed while opening a snapshot")
-            if not evidence_store.verify_integrity()["valid"] or not knowledge_store.verify()[
-                "valid"
-            ]:
-                raise RuntimeError("knowledge vault integrity is invalid; query stopped")
 
             if purpose == "legal":
+                if query_plan_version == "6":
+                    from .query_v6 import execute_v6
+
+                    return execute_v6(
+                        self,
+                        evidence_store=evidence_store,
+                        knowledge_store=knowledge_store,
+                        query=selected_query,
+                        purpose=purpose,
+                        policy=selected_policy,
+                        scope=selected_scope,
+                        max_sensitivity=max_sensitivity,
+                        limit=limit,
+                        max_chars=max_chars,
+                        max_tokens=max_tokens,
+                        max_sources=max_sources,
+                        graph_hops=graph_hops,
+                        retrieval_mode=retrieval_mode,
+                        as_of=selected_as_of,
+                        kinds=kinds,
+                        force_canonical_lexical=force_canonical_lexical,
+                        query_target=query_target,
+                        applicable_duties=applicable_duties,
+                        projection=projection,
+                        task_binding=normalized_task_binding,
+                        task_route_query=selected_task_route_text,
+                    )
                 result = self._legal_boundary_result(
                     query=selected_query,
                     policy=selected_policy,
@@ -322,6 +419,34 @@ class PurposeAwareRetrievalService:
                 else:
                     _validate_contract("purpose-aware-retrieval.v1.schema.json", result)
                 return result
+
+            if query_plan_version == "6":
+                from .query_v6 import execute_v6
+
+                return execute_v6(
+                    self,
+                    evidence_store=evidence_store,
+                    knowledge_store=knowledge_store,
+                    query=selected_query,
+                    purpose=purpose,
+                    policy=selected_policy,
+                    scope=selected_scope,
+                    max_sensitivity=max_sensitivity,
+                    limit=limit,
+                    max_chars=max_chars,
+                    max_tokens=max_tokens,
+                    max_sources=max_sources,
+                    graph_hops=graph_hops,
+                    retrieval_mode=retrieval_mode,
+                    as_of=selected_as_of,
+                    kinds=kinds,
+                    force_canonical_lexical=force_canonical_lexical,
+                    query_target=query_target,
+                    applicable_duties=applicable_duties,
+                    projection=projection,
+                    task_binding=normalized_task_binding,
+                    task_route_query=selected_task_route_text,
+                )
 
             compiled_budget, evidence_budget = self._partition_budget(
                 selected_policy,
@@ -736,6 +861,7 @@ class PurposeAwareRetrievalService:
         structured_query_anchors = set(_ISO_DATE_ANCHOR.findall(query))
         comparison_query = _is_comparison_query(normalized_query, query)
         query_policy_designators = _policy_designators(query)
+        identity_anchor_values = query_target_anchors(query)[0]
         for item in raw["results"]:
             if _policy_designator_conflicts(query_policy_designators, item):
                 low_relevance_prevented += 1
@@ -753,11 +879,15 @@ class PurposeAwareRetrievalService:
             identity_values = [item.get("title"), item.get("semantic_key")]
             if isinstance(aliases, list):
                 identity_values.extend(aliases)
-            exact_identity_phrase = any(
-                isinstance(value, str)
-                and len(normalized := normalize_identity_text(value)) >= 3
-                and normalized in normalized_query
-                for value in identity_values
+            identity_surface = " ".join(
+                value for value in identity_values if isinstance(value, str)
+            )
+            exact_identity_anchor = bool(
+                identity_anchor_values
+                and any(
+                    query_identity_anchor_match(anchor, identity_surface)
+                    for anchor in identity_anchor_values
+                )
             )
             exact_structured_anchor = _matches_structured_query_anchor(
                 structured_query_anchors, item
@@ -774,7 +904,7 @@ class PurposeAwareRetrievalService:
             )
             if (
                 not {"exact", "identity_alias"}.intersection(channels)
-                and not exact_identity_phrase
+                and not exact_identity_anchor
                 and not exact_structured_anchor
                 and not exact_identity_graph_neighbor
                 and (
@@ -2224,6 +2354,7 @@ class PurposeAwareRetrievalService:
             include_restricted=False,
             include_inactive=False,
             explain=False,
+            _preverified_audit_head=evidence_store.audit_head,
         )
         sensitivity_order = ("public", "internal", "private", "restricted")
         query_policy_designators = _policy_designators(query)
@@ -2240,11 +2371,10 @@ class PurposeAwareRetrievalService:
                 query_policy_designators, item
             )
         ]
-        discovery_query = query_discovery_text(query)
         evidence_scores = {
             item["knowledge_id"]: float(item["reranker_score"])
-            for item in rerank_candidates(
-                discovery_query,
+            for item in rerank_candidate_views(
+                query_discovery_views(query),
                 [
                     {
                         "knowledge_id": item["asset_id"],

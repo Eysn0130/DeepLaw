@@ -1,0 +1,4 @@
+interface:
+  display_name: "DeepLaw Draft Promoter"
+  short_description: "Promote reviewed drafts with owner approval"
+  default_prompt: "Use $deeplaw-promote-draft to review and explicitly promote this draft with owner approval."

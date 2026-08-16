@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/platform-core-test-manifest.v2.schema.json",
+  "title": "DeepLaw Platform Core Test Manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_sha256",
+    "generation",
+    "selection",
+    "inventories",
+    "classifications"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.platform-core-test-manifest/v2"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "generation": {
+      "$ref": "#/$defs/generation"
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "common",
+        "windows",
+        "qualification",
+        "windows_native"
+      ],
+      "properties": {
+        "common": {
+          "type": "string",
+          "const": "not qualification and not windows_native"
+        },
+        "windows": {
+          "type": "string",
+          "const": "not qualification"
+        },
+        "qualification": {
+          "type": "string",
+          "const": "qualification"
+        },
+        "windows_native": {
+          "type": "string",
+          "const": "windows_native"
+        }
+      }
+    },
+    "inventories": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "common",
+        "windows"
+      ],
+      "properties": {
+        "common": {
+          "$ref": "#/$defs/inventory"
+        },
+        "windows": {
+          "$ref": "#/$defs/windows_inventory"
+        }
+      }
+    },
+    "classifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qualification",
+        "nonapplicable",
+        "historical_compatibility"
+      ],
+      "properties": {
+        "qualification": {
+          "$ref": "#/$defs/classification"
+        },
+        "nonapplicable": {
+          "$ref": "#/$defs/classification"
+        },
+        "historical_compatibility": {
+          "$ref": "#/$defs/classification"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commands",
+        "pytest",
+        "selection_source"
+      ],
+      "properties": {
+        "commands": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "pytest": {
+          "type": "string",
+          "const": "pytest"
+        },
+        "selection_source": {
+          "type": "string",
+          "const": "repository test collection"
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id",
+        "junit"
+      ],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "junit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "classname",
+            "name"
+          ],
+          "properties": {
+            "classname": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection",
+        "count",
+        "sha256",
+        "cases"
+      ],
+      "properties": {
+        "selection": {
+          "type": "string",
+          "minLength": 1
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/case"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "windows_inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection",
+        "extends",
+        "count",
+        "sha256",
+        "additional_cases"
+      ],
+      "properties": {
+        "selection": {
+          "type": "string",
+          "minLength": 1
+        },
+        "extends": {
+          "const": "common"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "additional_cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/case"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "selection",
+        "cases"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "not_executed",
+            "nonapplicable",
+            "required_fixture"
+          ]
+        },
+        "selection": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/case"
+          }
+        }
+      }
+    }
+  }
+}

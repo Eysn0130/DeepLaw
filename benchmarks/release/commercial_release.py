@@ -18,6 +18,11 @@ from benchmarks.release.evidence import (
     verify_record_digest,
     write_report,
 )
+from benchmarks.release.release_policy import (
+    V5_MANIFEST_SCHEMA,
+    required_manifest_schema_version,
+    validate_manifest_for_release,
+)
 from benchmarks.semantic.build_machine_review_consensus import (
     candidate_binding as semantic_candidate_binding,
 )
@@ -28,7 +33,7 @@ from benchmarks.semantic.review_gold import validate_candidate
 from deeplaw.catalog_signing import verify_catalog_signature
 from deeplaw.util import canonical_json
 
-SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v5"
+SCHEMA_VERSION = V5_MANIFEST_SCHEMA
 LIVING_WIKI_BASELINE_COMMIT = "42382b264f4297965c25aaac6e85619e9e0d49b7"
 LIVING_WIKI_BASELINE_WHEEL_SHA256 = (
     "9bda60831e4380092c9a3bdb80103b5ec8abbf5a2be0adf6ffd57f61cfa46ca0"
@@ -698,6 +703,13 @@ def assemble(
     tag = f"v{version}"
     if not binding["worktree_clean"]:
         raise CommercialReleaseError("commercial manifest requires a clean release commit")
+    required_schema = required_manifest_schema_version(version)
+    if required_schema != V5_MANIFEST_SCHEMA:
+        raise CommercialReleaseError(
+            f"release {version} requires {required_schema}; "
+            "the historical v5/no-model assembler is closed; use "
+            "benchmarks.release.v013_commercial_release with semantically validated v6 evidence"
+        )
     versions = _unified_versions(repository)
     platform_reports = [
         _require_report(
@@ -1280,12 +1292,21 @@ def main() -> int:
             tolaria_report_path=args.tolaria_report.resolve(),
             source_date_epoch=args.source_date_epoch,
         )
-        schema = load_json(
-            args.repository.resolve() / "contracts/commercial-release-manifest.v5.schema.json"
+        release_version = tomllib.loads(
+            (args.repository.resolve() / "pyproject.toml").read_text(encoding="utf-8")
+        )["project"]["version"]
+        expected_schema = required_manifest_schema_version(release_version)
+        schema_name = (
+            "commercial-release-manifest.v5.schema.json"
+            if expected_schema == V5_MANIFEST_SCHEMA
+            else "commercial-release-manifest.v6.schema.json"
         )
+        schema = load_json(args.repository.resolve() / "contracts" / schema_name)
         Draft202012Validator.check_schema(schema)
         write_report(args.output.resolve(), report)
-        Draft202012Validator(schema).validate(load_json(args.output.resolve()))
+        emitted = load_json(args.output.resolve())
+        validate_manifest_for_release(emitted, release_version=release_version)
+        Draft202012Validator(schema).validate(emitted)
     except (OSError, RuntimeError) as error:
         print(str(error), file=sys.stderr)
         return 1

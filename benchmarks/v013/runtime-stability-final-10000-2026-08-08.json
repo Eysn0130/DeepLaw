@@ -1,0 +1,174 @@
+{
+  "candidate": {
+    "git_commit": "bb6a942970186f03ea41e108a2eceaaca54e3bcb",
+    "package_version": "0.12.0",
+    "runner": "benchmarks/v013/runtime_stability.py",
+    "runner_sha256": "a3440570a5651620609504c8b0e9ea5fd59cb4cdb22f6123bf6324ad85182230",
+    "schema": "contracts/v013-runtime-stability-report.v1.schema.json",
+    "schema_sha256": "d5d1feb6f7689fa730152b5cc7de0aaa7318a24c5ee236a4f230dc00d95ab23b",
+    "source_hashes": {
+      "src/deeplaw/knowledge_mcp_server.py": "e97e59dc2b264aa8d6f9b727944b1552dbe9e22a1421697f55ca65575617c98e",
+      "src/deeplaw/persistent_read_runtime.py": "47cdc76923e6f4613a5dfe586b37879ea32dfe30819a75908ed83bae347935e7",
+      "src/deeplaw/retrieval/query_v6.py": "339566f68b977a9d52b46d9b611776f87a70101589eaa82d7dad3ce6992ea96b"
+    },
+    "working_tree_dirty": false
+  },
+  "canonical_ledger": {
+    "counts_after": {
+      "autonomous_events": 6,
+      "legacy_events": 3,
+      "total": 9
+    },
+    "counts_before": {
+      "autonomous_events": 6,
+      "legacy_events": 3,
+      "total": 9
+    },
+    "event_count_after": 9,
+    "event_count_before": 9,
+    "unchanged": true
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "Synthetic source-free local diagnostic; it is not quality evidence, a competitive claim, RC/GA evidence, or a release gate.",
+  "concurrent_readers": {
+    "barrier_synchronized": true,
+    "canonical_ledger_event_count_after": 9,
+    "canonical_ledger_event_count_before": 9,
+    "canonical_ledger_unchanged": true,
+    "errors": [],
+    "failed_readers": 0,
+    "identity_consistent": true,
+    "identity_digests": [
+      "aaf78ce9db12b31684985f548739986c97d44749cb79def40b1aeb77e81002d3",
+      "aaf78ce9db12b31684985f548739986c97d44749cb79def40b1aeb77e81002d3",
+      "aaf78ce9db12b31684985f548739986c97d44749cb79def40b1aeb77e81002d3",
+      "aaf78ce9db12b31684985f548739986c97d44749cb79def40b1aeb77e81002d3",
+      "aaf78ce9db12b31684985f548739986c97d44749cb79def40b1aeb77e81002d3",
+      "aaf78ce9db12b31684985f548739986c97d44749cb79def40b1aeb77e81002d3",
+      "aaf78ce9db12b31684985f548739986c97d44749cb79def40b1aeb77e81002d3",
+      "aaf78ce9db12b31684985f548739986c97d44749cb79def40b1aeb77e81002d3"
+    ],
+    "ledger_counts_after": {
+      "autonomous_events": 6,
+      "legacy_events": 3,
+      "total": 9
+    },
+    "ledger_counts_before": {
+      "autonomous_events": 6,
+      "legacy_events": 3,
+      "total": 9
+    },
+    "read_only_consistent": true,
+    "read_only_flags": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "reader_count": 8,
+    "reason": null,
+    "receipt_consistent": true,
+    "receipt_ids": [
+      "queryreceipt_0a6b04a2e10244492d9575a0",
+      "queryreceipt_0a6b04a2e10244492d9575a0",
+      "queryreceipt_0a6b04a2e10244492d9575a0",
+      "queryreceipt_0a6b04a2e10244492d9575a0",
+      "queryreceipt_0a6b04a2e10244492d9575a0",
+      "queryreceipt_0a6b04a2e10244492d9575a0",
+      "queryreceipt_0a6b04a2e10244492d9575a0",
+      "queryreceipt_0a6b04a2e10244492d9575a0"
+    ],
+    "status": "executed",
+    "successful_readers": 8
+  },
+  "configuration": {
+    "execute_10k": true,
+    "projection": "standard",
+    "query_plan_version": "6",
+    "query_text_sha256": "5247316ead3f2fd9e1d16baa8c07223c0bab6a5e2edf183f9ba69d46d817a611",
+    "reader_count": 8,
+    "request_count": 10000,
+    "rss_growth_limit_percent": 10.0,
+    "target_request_count": 10000,
+    "warmup_requests": 2
+  },
+  "environment": {
+    "cpu": {
+      "logical_count": 12,
+      "model": "arm"
+    },
+    "os": {
+      "machine": "arm64",
+      "name": "Darwin",
+      "release": "25.5.0"
+    },
+    "python": "3.12.13",
+    "ram_total_bytes": 25769803776,
+    "sqlite": "3.50.4"
+  },
+  "fixture": {
+    "canonical_ledger_event_count": 9,
+    "construction": "public_profile_v3_compilation",
+    "source_revision_id": "sourcerev_e07454836f7bc7cce17e33d4",
+    "statement_count": 1,
+    "statement_id": "statement_1267a6ab3f1d5bfcfbb13251",
+    "statement_text_sha256": "5247316ead3f2fd9e1d16baa8c07223c0bab6a5e2edf183f9ba69d46d817a611",
+    "status": "executed"
+  },
+  "generated_at_utc": "2026-08-08T06:15:41Z",
+  "limitations": [
+    "No network, model, credential, environment Secret, private Vault, or case data is read.",
+    "All reads use a temporary source-free synthetic Vault and are claim-ineligible.",
+    "Query v6 reads must not mutate canonical Ledger events; before/after counts are retained.",
+    "Current RSS is not ru_maxrss: only macOS ps or Linux procfs current samples are accepted.",
+    "The 10,000-request lane executes only with explicit --execute-10k; smoke counts are not 10k."
+  ],
+  "profile": "runtime_stability_diagnostic",
+  "release_gate_passed": false,
+  "report_sha256": "9d168fe849fbaf8d33b1ad7dd62850049365a3fabf70d650329db7066a796d72",
+  "rerun_commands": [
+    "uv run --frozen python -m benchmarks.v013.runtime_stability --output REPORT.json",
+    "uv run --frozen python -m benchmarks.v013.runtime_stability --output REPORT.json --execute-10k"
+  ],
+  "rss_stability": {
+    "attempted_requests": 10000,
+    "canonical_ledger_event_count_after": 9,
+    "canonical_ledger_event_count_before": 9,
+    "canonical_ledger_unchanged": true,
+    "end_rss_bytes": 88260608,
+    "errors": [],
+    "failed_requests": 0,
+    "growth_limit_passed": true,
+    "growth_limit_percent": 10.0,
+    "ledger_counts_after": {
+      "autonomous_events": 6,
+      "legacy_events": 3,
+      "total": 9
+    },
+    "ledger_counts_before": {
+      "autonomous_events": 6,
+      "legacy_events": 3,
+      "total": 9
+    },
+    "limitations": [
+      "Current RSS is sampled only before and after the read loop; peak is unavailable.",
+      "The workload is synthetic and claim-ineligible; it is not a release gate."
+    ],
+    "measurement_method": "macos_ps_current_rss",
+    "peak_rss_bytes": null,
+    "reason": null,
+    "relative_growth_percent": 8.608871,
+    "request_count": 10000,
+    "start_rss_bytes": 81264640,
+    "status": "executed",
+    "successful_requests": 10000,
+    "target_10k_executed": true,
+    "target_request_count": 10000,
+    "warmup_requests": 2
+  },
+  "schema_version": "deeplaw.v013-runtime-stability-report/v1"
+}

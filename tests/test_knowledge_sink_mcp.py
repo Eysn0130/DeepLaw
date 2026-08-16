@@ -161,7 +161,7 @@ def test_sink_is_separate_closed_write_tool_and_support_stays_read_only(
     assert len(canonical_json(response).encode("utf-8")) <= 65_536
 
 
-def test_knowledge_support_v5_extends_without_mutating_frozen_v2_to_v4() -> None:
+def test_knowledge_support_v6_extends_without_mutating_frozen_v2_to_v4() -> None:
     repository = Path(__file__).resolve().parents[1]
     v2 = json.loads(
         (repository / "contracts/knowledge-support.input.v2.schema.json").read_text()
@@ -182,7 +182,7 @@ def test_knowledge_support_v5_extends_without_mutating_frozen_v2_to_v4() -> None
         "compilation",
     }
     assert knowledge_tool_definition(autonomous=True).inputSchema["$id"].endswith(
-        "knowledge-support.input.v5.schema.json"
+        "knowledge-support.input.v6.schema.json"
     )
     purpose_context = {
         "operation": "context",
@@ -402,6 +402,7 @@ def test_autonomous_read_support_exposes_federated_partitions_lineage_and_graph(
     )
     capsule = handle_knowledge_support(
         operation="context",
+        query_plan_version="5",
         task="Explain the authority and context boundaries",
         confirm_no_case_data=True,
         vault_path=root,
@@ -474,6 +475,7 @@ def test_source_derived_context_does_not_probe_or_report_autonomous_candidates(
 
     capsule = handle_knowledge_support(
         operation="context",
+        query_plan_version="5",
         task="Explain the source authority partition boundary",
         plane="source_derived",
         confirm_no_case_data=True,
@@ -639,6 +641,7 @@ def test_federated_kind_filters_route_only_to_compatible_planes(tmp_path: Path) 
 
     source_capsule = handle_knowledge_support(
         operation="context",
+        query_plan_version="5",
         task="Explain the source-derived fact boundary",
         plane="all",
         kinds=["fact"],
@@ -656,6 +659,7 @@ def test_federated_kind_filters_route_only_to_compatible_planes(tmp_path: Path) 
 
     autonomous_capsule = handle_knowledge_support(
         operation="context",
+        query_plan_version="5",
         task="Explain the autonomous concept boundary",
         plane="all",
         kinds=["concept"],
@@ -1408,7 +1412,7 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
             listed = await session.list_tools()
             assert [tool.name for tool in listed.tools] == ["knowledge_support"]
             assert listed.tools[0].inputSchema["$id"].endswith(
-                "knowledge-support.input.v5.schema.json"
+                "knowledge-support.input.v6.schema.json"
             )
             semantic = await session.call_tool(
                 "knowledge_support",
@@ -1426,12 +1430,28 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
                 "knowledge_support",
                 {
                     "operation": "context",
+                    "query_plan_version": "5",
                     "task": "Quote the admission boundary.",
                     "confirm_no_case_data": True,
                     "purpose": "quote",
                     "policy": "evidence-first-v1",
                     "limit": 8,
                     "max_chars": 8_000,
+                },
+            )
+            provider_context = await session.call_tool(
+                "knowledge_support",
+                {
+                    "operation": "context",
+                    "task": "Inspect the bounded provider transport projection.",
+                    "confirm_no_case_data": True,
+                    "purpose": "answer",
+                    "limit": 2,
+                    "max_chars": 1_000,
+                    "max_tokens": 256,
+                    "max_sources": 1,
+                    "graph_hops": 0,
+                    "capsule_projection": "compact",
                 },
             )
             editor = await session.call_tool(
@@ -1476,6 +1496,16 @@ def test_stdio_autonomous_support_exposes_v5_read_operations(tmp_path: Path) -> 
             assert purpose_context.structuredContent["result"]["query_plan"]["policy_id"] == (
                 "evidence-first-v1"
             )
+            assert provider_context.isError is False
+            provider = provider_context.structuredContent["result"]
+            provider_text = canonical_json(provider["capsule"])
+            assert [item.text for item in provider_context.content] == [provider_text]
+            assert len(provider_text.encode("utf-8")) == provider["delivery"][
+                "provider_content_bytes"
+            ]
+            assert '"authority_boundary"' not in provider_text
+            assert '"receipt":' not in provider_text
+            assert '"delivery"' not in provider_text
             assert editor.isError is False
             assert editor.structuredContent["result"]["ephemeral_context"] is True
             assert editor.structuredContent["result"]["persistence_performed"] is False

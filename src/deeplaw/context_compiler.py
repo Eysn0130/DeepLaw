@@ -278,6 +278,223 @@ def _verify_autonomous_capsule(
     return result
 
 
+@cache
+def _autonomous_v3_capsule_contract_validator() -> Draft202012Validator:
+    from .knowledge_autonomy import _contract_validator
+
+    return _contract_validator("knowledge-capsule.v3.schema.json")
+
+
+def _verify_autonomous_capsule_v3(
+    capsule: dict[str, Any],
+    *,
+    vault: KnowledgeVault | None,
+) -> dict[str, Any]:
+    if next(_autonomous_v3_capsule_contract_validator().iter_errors(capsule), None) is not None:
+        raise ValueError("knowledge capsule v3 does not match its closed JSON contract")
+    from .knowledge_autonomy import _validate_contract
+
+    plan = capsule["query_plan"]
+    provider = capsule["provider_capsule"]
+    audit = capsule["audit"]
+    expected_digest = sha256_bytes(
+        canonical_json(_digest_body(capsule)).encode("utf-8")
+    )
+    expected_id = stable_id("capsule", capsule["vault_id"], expected_digest)
+    digest_valid = capsule["capsule_digest"] == expected_digest
+    id_valid = capsule["capsule_id"] == expected_id
+    plan_hash_valid = capsule["query_plan_sha256"] == sha256_bytes(
+        canonical_json(plan).encode("utf-8")
+    )
+    plan_schema_valid = plan.get("schema_version") == "deeplaw.knowledge-query-plan/v6"
+    if plan_schema_valid:
+        try:
+            _validate_contract("knowledge-query-plan.v6.schema.json", plan)
+        except Exception:
+            plan_schema_valid = False
+    try:
+        _validate_contract("provider-knowledge-capsule.v2.schema.json", provider)
+        provider_schema_valid = True
+    except Exception:
+        provider_schema_valid = False
+    provider_body = provider.get("capsule")
+    provider_delivery = provider.get("delivery")
+    provider_payload_bytes = (
+        len(canonical_json(provider_body).encode("utf-8"))
+        if isinstance(provider_body, dict)
+        else 0
+    )
+    provider_delivery_bytes = (
+        provider_delivery.get("provider_content_bytes")
+        if isinstance(provider_delivery, dict)
+        else None
+    )
+    provider_hard_limit_valid = bool(
+        provider_payload_bytes <= 65_536
+        and isinstance(provider_delivery, dict)
+        and provider_delivery.get("hard_limit_bytes") == 65_536
+        and provider_delivery_bytes == provider_payload_bytes
+    )
+    receipt_id = capsule["receipt_id"]
+    provider_receipt = provider.get("receipt")
+    provider_body_receipt = (
+        provider_body.get("receipt_id") if isinstance(provider_body, dict) else None
+    )
+    receipt_identity_valid = bool(
+        plan.get("receipt_id") == receipt_id
+        and isinstance(provider_receipt, dict)
+        and provider_receipt.get("receipt_id") == receipt_id
+        and provider_body_receipt == receipt_id
+        and audit.get("receipt_id") == receipt_id
+        and audit.get("query_plan_sha256") == capsule["query_plan_sha256"]
+    )
+    plan_core = {
+        key: value
+        for key, value in plan.items()
+        if key not in {"query_sha256", "receipt_id"}
+    }
+    expected_receipt_id = stable_id(
+        "queryreceipt",
+        sha256_bytes(canonical_json(plan_core).encode("utf-8")),
+        capsule["audit_head"],
+    )
+    receipt_derivation_valid = bool(
+        receipt_id == expected_receipt_id
+        and plan.get("input_audit_head") == capsule["audit_head"]
+        and audit.get("input_audit_head") == capsule["audit_head"]
+        and audit.get("input_legacy_audit_head")
+        == plan.get("input_legacy_audit_head")
+    )
+    context_query = f"{capsule['task']} {capsule['goal'] or ''}".strip()
+    expected_query_sha256 = sha256_bytes(context_query.encode("utf-8"))
+    query_identity_valid = bool(
+        plan.get("query_sha256") == expected_query_sha256
+        and audit.get("query_sha256") == expected_query_sha256
+    )
+    statements = capsule["statements"]
+    evidence = capsule["evidence"]
+    contradictions = capsule["contradictions"]
+    gaps = capsule["gaps"]
+    selection = plan.get("selection")
+    selection_identity_valid = bool(
+        isinstance(selection, dict)
+        and selection.get("statement_ids")
+        == [item.get("statement_id") for item in statements]
+        and selection.get("evidence_ids")
+        == [item.get("evidence_id") for item in evidence]
+        and plan.get("residual_gap_ids") == [item.get("gap_id") for item in gaps]
+        and audit.get("selected_statement_ids") == selection.get("statement_ids")
+        and plan.get("selected_statement_count") == len(statements)
+        and plan.get("evidence_selected_count") == len(evidence)
+    )
+    plan_projection = plan.get("projection")
+    expected_provider_projection = (
+        "compact" if plan_projection == "compact" else "standard"
+    )
+    provider_statements = (
+        provider_body.get("statements") if isinstance(provider_body, dict) else None
+    )
+    provider_projection_consistent = bool(
+        isinstance(provider_body, dict)
+        and provider.get("purpose") == capsule["purpose"] == plan.get("purpose")
+        and provider.get("policy_id") == capsule["policy_id"] == plan.get("policy_id")
+        and provider_body.get("projection") == expected_provider_projection
+        and isinstance(provider_delivery, dict)
+        and provider_delivery.get("projection") == expected_provider_projection
+        and isinstance(provider_statements, list)
+        and len(provider_statements) == len(statements)
+        and all(
+            isinstance(provider_item, dict)
+            and isinstance(local_item, dict)
+            and all(local_item.get(key) == value for key, value in provider_item.items())
+            for provider_item, local_item in zip(provider_statements, statements, strict=True)
+        )
+        and provider_body.get("gaps") == gaps
+        and provider_body.get("selected_statement_count") == len(statements)
+        and provider_body.get("selected_source_count") == len(evidence)
+        and (
+            provider_body.get("projection") == "compact"
+            or (
+                provider_body.get("evidence") == evidence
+                and provider_body.get("contradictions") == contradictions[:16]
+            )
+        )
+    )
+    plan_budget = plan.get("budget")
+    local_budget = capsule["budget"]
+    budget_identity_valid = bool(
+        isinstance(plan_budget, dict)
+        and local_budget.get("max_items") == plan_budget.get("items")
+        and local_budget.get("max_characters") == plan_budget.get("characters")
+        and local_budget.get("max_tokens") == plan_budget.get("tokens")
+        and local_budget.get("max_provider_characters")
+        == plan_budget.get("provider_characters")
+        and local_budget.get("selected_items") == len(statements) + len(evidence)
+        and isinstance(local_budget.get("selected_characters"), int)
+        and 0 <= local_budget["selected_characters"] <= local_budget["max_characters"]
+        and local_budget.get("provider_payload_bytes") == provider_payload_bytes
+        and local_budget.get("local_payload_hard_limit_bytes") == 256 * 1024
+    )
+    local_payload_bytes = len(canonical_json(capsule).encode("utf-8"))
+    local_hard_limit_valid = local_payload_bytes <= 256 * 1024
+    vault_matches: bool | None = None
+    audit_anchor_valid: bool | None = None
+    autonomous_integrity_valid: bool | None = None
+    if vault is not None:
+        from .knowledge_autonomy import AutonomousKnowledgeStore
+
+        with AutonomousKnowledgeStore(vault.root, read_only=True) as store:
+            vault_matches = store.vault_id == capsule["vault_id"]
+            autonomous_integrity_valid = bool(store.verify().get("valid"))
+            audit_anchor_valid = store.connection.execute(
+                "SELECT 1 FROM autonomous_events_v3 WHERE event_hash = ?",
+                (capsule["audit_head"],),
+            ).fetchone() is not None
+    valid = bool(
+        digest_valid
+        and id_valid
+        and plan_hash_valid
+        and plan_schema_valid
+        and provider_schema_valid
+        and provider_hard_limit_valid
+        and receipt_identity_valid
+        and receipt_derivation_valid
+        and query_identity_valid
+        and selection_identity_valid
+        and provider_projection_consistent
+        and budget_identity_valid
+        and local_hard_limit_valid
+        and (vault_matches is not False)
+        and (autonomous_integrity_valid is not False)
+        and (audit_anchor_valid is not False)
+    )
+    result = {
+        "schema_version": "deeplaw.knowledge-capsule-verification/v3",
+        "capsule_id": capsule["capsule_id"],
+        "expected_capsule_id": expected_id,
+        "digest_valid": digest_valid,
+        "id_valid": id_valid,
+        "query_plan_valid": bool(plan_hash_valid and plan_schema_valid),
+        "provider_schema_valid": provider_schema_valid,
+        "provider_payload_bytes": provider_payload_bytes,
+        "provider_hard_limit_valid": provider_hard_limit_valid,
+        "local_payload_bytes": local_payload_bytes,
+        "local_hard_limit_valid": local_hard_limit_valid,
+        "receipt_identity_valid": receipt_identity_valid,
+        "receipt_derivation_valid": receipt_derivation_valid,
+        "query_identity_valid": query_identity_valid,
+        "selection_identity_valid": selection_identity_valid,
+        "provider_projection_consistent": provider_projection_consistent,
+        "budget_identity_valid": budget_identity_valid,
+        "vault_matches": vault_matches,
+        "audit_anchor_valid": audit_anchor_valid,
+        "autonomous_integrity_valid": autonomous_integrity_valid,
+        "valid": valid,
+    }
+    _validate_contract("knowledge-capsule-verification.v3.schema.json", result)
+    return result
+
+
 def _capsule_item(
     asset: KnowledgeAsset,
     *,
@@ -578,7 +795,7 @@ def compile_context(
     if not confirm_no_case_data:
         raise ValueError(
             "context compilation requires confirmation that task and goal contain "
-            "no Analytix case material"
+            "no client or case material"
         )
     task = task.strip()
     goal = goal.strip() if goal else None
@@ -981,6 +1198,8 @@ def verify_capsule(
 ) -> dict[str, Any]:
     if not isinstance(capsule, dict):
         raise ValueError("knowledge capsule must be an object")
+    if capsule.get("schema_version") == "deeplaw.knowledge-capsule/v3":
+        return _verify_autonomous_capsule_v3(capsule, vault=vault)
     if capsule.get("schema_version") == "deeplaw.knowledge-capsule/v2":
         return _verify_autonomous_capsule(capsule, vault=vault)
     _validate_capsule_contract(capsule)

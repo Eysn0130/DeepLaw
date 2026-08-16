@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-quality-metric-catalog.v1.schema.json",
+  "title": "DeepLaw v0.13 quality metric catalogue v1",
+  "description": "Definition-only, source-free inventory of the v0.13 quality metrics. It deliberately contains no observations or result values.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalogue_id",
+    "status",
+    "source_free",
+    "claim_eligible",
+    "claim_ineligibility_reason",
+    "competitive_claim_eligible",
+    "metric_count",
+    "category_order",
+    "category_counts",
+    "measurement_policy",
+    "metrics",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.v013-quality-metric-catalog/v1"
+    },
+    "catalogue_id": {
+      "const": "deeplaw-v013-quality-metric-catalog-v1"
+    },
+    "status": {
+      "const": "definition_only"
+    },
+    "source_free": {
+      "const": true
+    },
+    "claim_eligible": {
+      "const": false
+    },
+    "claim_ineligibility_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "competitive_claim_eligible": {
+      "const": false
+    },
+    "metric_count": {
+      "const": 44
+    },
+    "category_order": {
+      "const": [
+        "retrieval",
+        "grounding",
+        "living_wiki",
+        "context",
+        "agent",
+        "authoritative"
+      ]
+    },
+    "category_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retrieval",
+        "grounding",
+        "living_wiki",
+        "context",
+        "agent",
+        "authoritative"
+      ],
+      "properties": {
+        "retrieval": {"const": 8},
+        "grounding": {"const": 5},
+        "living_wiki": {"const": 8},
+        "context": {"const": 8},
+        "agent": {"const": 7},
+        "authoritative": {"const": 8}
+      }
+    },
+    "measurement_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_measurement_statuses",
+        "zero_denominator_rule",
+        "result_binding_requirement"
+      ],
+      "properties": {
+        "allowed_measurement_statuses": {
+          "const": ["not_executed", "review_pending"]
+        },
+        "zero_denominator_rule": {
+          "const": "A zero or undefined denominator is recorded as not_executed for that metric; it is never converted into a numerical result or a success state."
+        },
+        "result_binding_requirement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "minItems": 44,
+      "maxItems": 44,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/metric"}
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  },
+  "$defs": {
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric_id",
+        "category",
+        "display_name",
+        "definition",
+        "numerator_definition",
+        "denominator",
+        "scope",
+        "gold_status",
+        "direction",
+        "measurement_status",
+        "not_executed_semantics"
+      ],
+      "properties": {
+        "metric_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,99}$",
+          "minLength": 3,
+          "maxLength": 100
+        },
+        "category": {
+          "enum": [
+            "retrieval",
+            "grounding",
+            "living_wiki",
+            "context",
+            "agent",
+            "authoritative"
+          ]
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "definition": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200
+        },
+        "numerator_definition": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200
+        },
+        "denominator": {"$ref": "#/$defs/denominator"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "gold_status": {
+          "enum": [
+            "human_confirmed",
+            "expert_confirmed",
+            "public_source_free",
+            "synthetic",
+            "absent",
+            "review_pending"
+          ]
+        },
+        "direction": {
+          "enum": ["higher", "lower"]
+        },
+        "measurement_status": {
+          "enum": ["not_executed", "review_pending"]
+        },
+        "not_executed_semantics": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "denominator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "definition", "zero_denominator_semantics"],
+      "properties": {
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "definition": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200
+        },
+        "zero_denominator_semantics": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus",
+        "task",
+        "host",
+        "projection",
+        "authority_plane"
+      ],
+      "properties": {
+        "corpus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "task": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "projection": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "authority_plane": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        }
+      }
+    }
+  }
+}

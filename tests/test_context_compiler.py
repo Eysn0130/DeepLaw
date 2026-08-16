@@ -94,7 +94,7 @@ def test_context_compiler_requires_explicit_case_boundary_confirmation(
     root, _ = _ready_vault(tmp_path)
     with (
         KnowledgeVault(root, read_only=True) as vault,
-        pytest.raises(ValueError, match="no Analytix case material"),
+        pytest.raises(ValueError, match="no client or case material"),
     ):
         compile_context(
             vault,
@@ -176,6 +176,7 @@ def test_autonomous_capsule_is_verified_by_first_party_dispatch(tmp_path: Path) 
             task="Verify the autonomous Knowledge Capsule",
             scope="project",
             max_sensitivity="public",
+            query_plan_version="5",
             confirm_no_case_data=True,
         )
     with KnowledgeVault(root, read_only=True) as vault:
@@ -223,6 +224,7 @@ def test_autonomous_capsule_rejects_canonical_ledger_identity_tampering(
             task="Verify the Ledger identity receipt",
             scope="project",
             max_sensitivity="public",
+            query_plan_version="5",
             confirm_no_case_data=True,
         )
         store.connection.execute(
@@ -274,6 +276,7 @@ def test_autonomous_capsule_rechecks_bound_source_bytes(tmp_path: Path) -> None:
             task="immutable source evidence capsule receipt",
             scope="project",
             max_sensitivity="public",
+            query_plan_version="5",
             confirm_no_case_data=True,
         )
     assert capsule["sections"]["receipts"][0]["revision_id"] == revision["revision_id"]

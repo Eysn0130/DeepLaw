@@ -1,0 +1,4 @@
+interface:
+  display_name: "DeepLaw Query"
+  short_description: "Run bounded Knowledge OS queries safely"
+  default_prompt: "Use $deeplaw-query to answer this task from bounded local knowledge."

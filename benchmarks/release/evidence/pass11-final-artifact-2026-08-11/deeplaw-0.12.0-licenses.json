@@ -1,0 +1,2183 @@
+{
+  "binding": {
+    "commit": "9aea8598b231ae85a70a478f37682a9b7a17f024",
+    "contracts": {
+      "count": 279,
+      "files": [
+        {
+          "byte_size": 3823,
+          "path": "contracts/agent-context-envelope.v1.schema.json",
+          "sha256": "477fc7b8b0010ccd81f81c2d79fd0d6fcaa1dc6ca657d8d427fefdc8202e2a8a"
+        },
+        {
+          "byte_size": 702,
+          "path": "contracts/authoritative-challenge-replay.v1.schema.json",
+          "sha256": "5b5b19df3212f0b66b6b0b249b751abf45d1f6032fe7a7ad7ec9a388a14feefa"
+        },
+        {
+          "byte_size": 3419,
+          "path": "contracts/authoritative-challenge-trace.v1.schema.json",
+          "sha256": "3ed4ce9360362650026e3b4b82ef770f3cb7722c8c283ba744bf9a573b2c3e46"
+        },
+        {
+          "byte_size": 5097,
+          "path": "contracts/authoritative-evidence-quality.v1.schema.json",
+          "sha256": "5360035bc9dd5e1a056d24befddcc6b9bed0438398196958f9aeeed131ef88ba"
+        },
+        {
+          "byte_size": 15522,
+          "path": "contracts/authoritative-navigator.v1.schema.json",
+          "sha256": "baf7473bd3746adfaebf217d1fa00ebdd739bb37548a409e016254ed6170d499"
+        },
+        {
+          "byte_size": 3672,
+          "path": "contracts/authoritative-pack-core.v1.schema.json",
+          "sha256": "f55709942e49b099f4c2d497983ce1217d70d435909dbf0784ea38f2b72255ce"
+        },
+        {
+          "byte_size": 4345,
+          "path": "contracts/authoritative-review-disposition.v1.schema.json",
+          "sha256": "36a1c1cbec2d511b23161b34acf7887d6a33aed27ee9459c99723f6d9a6deee1"
+        },
+        {
+          "byte_size": 5783,
+          "path": "contracts/authoritative-source-quality-decision-matrix.v1.schema.json",
+          "sha256": "66645dc9248d01a0c3d78b71bfb27e3410494c0b4dc93d24b7489c752118dbc3"
+        },
+        {
+          "byte_size": 7198,
+          "path": "contracts/authoritative-source-quality-decision-matrix.v2.schema.json",
+          "sha256": "ac7071b20cb3d52da5b333ec558365ec2779ff4e7663897c8abd22622567bfd5"
+        },
+        {
+          "byte_size": 3909,
+          "path": "contracts/autonomous-query-plan.v1.schema.json",
+          "sha256": "d037e81436187961d0c8275687ecf82c5a9cc03acc1f094060c65b76e93dfd93"
+        },
+        {
+          "byte_size": 3262,
+          "path": "contracts/autonomy-evaluation-report.v1.schema.json",
+          "sha256": "3dd09a38c7e3db6d79affbca207196e976a01c65ea15bfbf70d2b3ecb0a5ed25"
+        },
+        {
+          "byte_size": 2690,
+          "path": "contracts/autonomy-evaluation-suite.v1.schema.json",
+          "sha256": "40e5bce1dc9a2b5a81b76d8ec1920872716c69ed796086258146381ce27bef19"
+        },
+        {
+          "byte_size": 1502,
+          "path": "contracts/baseline-adapter-registry.v1.schema.json",
+          "sha256": "84258313c80b83d16b3df1081129b7059dc2eef76ddcd218e645a1d29bf29dbf"
+        },
+        {
+          "byte_size": 5215,
+          "path": "contracts/baseline-evaluation-environment.v1.schema.json",
+          "sha256": "05f9c5d30653d83a2809b593f698602ce93c54654435bcf8954874b9b727b0bf"
+        },
+        {
+          "byte_size": 5583,
+          "path": "contracts/baseline-evidence-collection-report.v1.schema.json",
+          "sha256": "839100a3cffd476debc2216f1571cc013027b6d69187dd7a5d6660224693ec31"
+        },
+        {
+          "byte_size": 1226,
+          "path": "contracts/baseline-evidence-collection.v1.schema.json",
+          "sha256": "e76f95080d196c129dd3c273db143c4550d29ba0e4b1a8f26f6e1d49450272f6"
+        },
+        {
+          "byte_size": 1520,
+          "path": "contracts/benchmark-corpus-commitment.v1.schema.json",
+          "sha256": "9440c8792418c678d11fb8a9cb2cf78e9dff9f112ea3e977f34a1db73d4dfcd2"
+        },
+        {
+          "byte_size": 787,
+          "path": "contracts/catalog-signature.v1.schema.json",
+          "sha256": "6077f5fc5e0f3412fccf250602f6bb7d8896ada4a1f315a6e8f1f5a928295134"
+        },
+        {
+          "byte_size": 1037,
+          "path": "contracts/catalog-trust.v1.schema.json",
+          "sha256": "5fe00650702bc5a0ee55566cedda4c8c12763230f112c22cf0339c9168f92048"
+        },
+        {
+          "byte_size": 2194,
+          "path": "contracts/citation-audit.v1.schema.json",
+          "sha256": "10248ed73dda2dcbefbdea1379693e645e35ce19d31b14e81555f2dd8b41cee6"
+        },
+        {
+          "byte_size": 11311,
+          "path": "contracts/codex-continuity-observation.v1.schema.json",
+          "sha256": "bcbadb347f9d6d4568fe37029fa966e04ec94a6e25a4c702b42f38e56abc4de7"
+        },
+        {
+          "byte_size": 13621,
+          "path": "contracts/codex-continuity-qualification-report.v1.schema.json",
+          "sha256": "374ba58658ff9312a72a8e76417cb32a02e373d418cec548a0ee30af4123dc35"
+        },
+        {
+          "byte_size": 11315,
+          "path": "contracts/codex-plugin-host-smoke.v1.schema.json",
+          "sha256": "4d770eed7294f874ddc07c5ca5e3abf868e1301788e07dff9f0c4438f90c45c2"
+        },
+        {
+          "byte_size": 3806,
+          "path": "contracts/codex-token-attribution-evaluation.v1.schema.json",
+          "sha256": "d09dc1f7a77351926b2449d7502c20ed08475387a22f9bf9bffc6212179d6fcd"
+        },
+        {
+          "byte_size": 12669,
+          "path": "contracts/codex-token-attribution-observation.v1.schema.json",
+          "sha256": "c3dd37a3dc0b68009d9ddcd459eca32021f9d4c85e2c8b74e091cf1499630149"
+        },
+        {
+          "byte_size": 10187,
+          "path": "contracts/commercial-evidence-report.v1.schema.json",
+          "sha256": "4782c2909ff1d4491e744f37c7bcd9112a5ce3d0801faaa867b573577abc27b3"
+        },
+        {
+          "byte_size": 5862,
+          "path": "contracts/commercial-evidence-report.v2.schema.json",
+          "sha256": "0966f1c412fe220193d9dcad9b6be791b29ebb5d7ba730a1e774abda494c79ed"
+        },
+        {
+          "byte_size": 2780,
+          "path": "contracts/commercial-release-manifest.v1.schema.json",
+          "sha256": "f90704dd078fd598d72bd7a76982890c03368abd4973cb52a857dc2eed282c77"
+        },
+        {
+          "byte_size": 2865,
+          "path": "contracts/commercial-release-manifest.v2.schema.json",
+          "sha256": "972453d3e9a1c0fbcadbfc19ff80f2c67597e39a724e6c173ba81d5a4027fa09"
+        },
+        {
+          "byte_size": 5083,
+          "path": "contracts/commercial-release-manifest.v3.schema.json",
+          "sha256": "5f764c1e19030034acf36305790bf715a251804266c890cbd3381ea993194915"
+        },
+        {
+          "byte_size": 12148,
+          "path": "contracts/commercial-release-manifest.v4.schema.json",
+          "sha256": "3aa57d49bdf60105416fbf550e34f9ce494e3c6384e97ed7be4f403d194d25b1"
+        },
+        {
+          "byte_size": 18195,
+          "path": "contracts/commercial-release-manifest.v5.schema.json",
+          "sha256": "c093ed0385835d26d264e277b801f0b54b48a0c0ac334484a5183134d7ef01ab"
+        },
+        {
+          "byte_size": 6338,
+          "path": "contracts/commercial-release-manifest.v6.schema.json",
+          "sha256": "4d1411554ac6cc286f000d205b2346d9117860221a2aeb524f167b2ce6f6420a"
+        },
+        {
+          "byte_size": 1863,
+          "path": "contracts/corpus-release-manifest.v1.schema.json",
+          "sha256": "07066685a807e0fccbb0e84f70c9f6b99d2acded5f74292101594b8dfe86b8c9"
+        },
+        {
+          "byte_size": 2642,
+          "path": "contracts/corpus-release-manifest.v2.schema.json",
+          "sha256": "f95cfd24cf8d6f3aec05aa44ade06b7da3da24b2853e6e2bd40c536579e0ca78"
+        },
+        {
+          "byte_size": 2876,
+          "path": "contracts/corpus-release-manifest.v3.schema.json",
+          "sha256": "c9c5136d7cc69a5edc2a3ca90ef8d69d5fe7ff78660206acae3f146eddacf71f"
+        },
+        {
+          "byte_size": 4704,
+          "path": "contracts/derived-manifest.v2.schema.json",
+          "sha256": "95987b607bfdd2123b38a69a662bf24bacb77bb7d9de3ad54fa184af7233ada1"
+        },
+        {
+          "byte_size": 1683,
+          "path": "contracts/deterministic-fake-agent-compile.v1.schema.json",
+          "sha256": "fb624b37a7d21b29bb5165554722ef048078c1ef938adc688f493f085337b982"
+        },
+        {
+          "byte_size": 2137,
+          "path": "contracts/deterministic-fake-agent-compile.v2.schema.json",
+          "sha256": "42838c00aceca6341e51500f2f0d9397f3fc32042cf2128fb272bd80d6d7cb0b"
+        },
+        {
+          "byte_size": 7644,
+          "path": "contracts/deterministic-semantic-lifecycle.v1.schema.json",
+          "sha256": "15f3d724d64f89e970320bc24f448c5c0d202145ff9aeab588414574b73fc7f1"
+        },
+        {
+          "byte_size": 9745,
+          "path": "contracts/deterministic-semantic-lifecycle.v2.schema.json",
+          "sha256": "6dfa30a6f2a0434915d2551d6b7f327abc9f9894dd7aef6ab8a250a0dcbf2095"
+        },
+        {
+          "byte_size": 1744,
+          "path": "contracts/deterministic-semantic-source-run.v1.schema.json",
+          "sha256": "bd88441eceecae0061ac25714e839df7d40d9d019c24ea1437c089c1d0dbaae3"
+        },
+        {
+          "byte_size": 2931,
+          "path": "contracts/deterministic-semantic-source-run.v2.schema.json",
+          "sha256": "f25526c57353348584ac5a5948c51e9de4f6bc47356123ec49d545870da2d6cc"
+        },
+        {
+          "byte_size": 5019,
+          "path": "contracts/document-engine-actual-pdf-diagnostic.v1.schema.json",
+          "sha256": "8829e7fb4299ddc336901d79be3458dbfa9bebbd6b0d1ad2e6a0e724eaf6940d"
+        },
+        {
+          "byte_size": 4172,
+          "path": "contracts/editor-context-envelope.v1.schema.json",
+          "sha256": "16a6606edeb2b07a5e80abc6fb2208342dd92284a6d03651571e5d3d17f04150"
+        },
+        {
+          "byte_size": 1575,
+          "path": "contracts/editor-context-result.v1.schema.json",
+          "sha256": "ab63e227df8b54bbd6ab800b214ab3cc1870f6f419ccc53bb4c04229b8f1f318"
+        },
+        {
+          "byte_size": 7347,
+          "path": "contracts/evaluation-protocol.v1.schema.json",
+          "sha256": "1f2a95862445cec17c008e5e707a4158bfa33522d64cbf88b415a110424a69ee"
+        },
+        {
+          "byte_size": 7961,
+          "path": "contracts/evaluation-protocol.v2.schema.json",
+          "sha256": "e549688e06efdc126067b16dbfdf599c3dc07502c3dc7dc9af5f6a267c01a70f"
+        },
+        {
+          "byte_size": 9944,
+          "path": "contracts/evaluation-report.v1.schema.json",
+          "sha256": "0b7918920b96569cea2e6488e70bc7168c4b8d7d94b099e02bad4a3b3e725c77"
+        },
+        {
+          "byte_size": 12126,
+          "path": "contracts/evaluation-report.v2.schema.json",
+          "sha256": "adc647d62e1dcdeacd37d5ed715d577d3559b9e46df2b71327725efdb87f72e9"
+        },
+        {
+          "byte_size": 1690,
+          "path": "contracts/evaluator-model-manifest.v1.schema.json",
+          "sha256": "7b1caefcb8e86e373f83869b52ef02d22e322683476ee9b6c83998afe48063c3"
+        },
+        {
+          "byte_size": 2833,
+          "path": "contracts/evaluator-retrieval-profile-commitment.v1.schema.json",
+          "sha256": "fec7469405aefd983e602b419ae4c5ba71616911600235b28a3b090271522e50"
+        },
+        {
+          "byte_size": 1364,
+          "path": "contracts/evidence-capabilities.v1.schema.json",
+          "sha256": "d4b479f1b0671e7e1950111becadc10a33df64c8289da5e04adb20d23389ee20"
+        },
+        {
+          "byte_size": 1058,
+          "path": "contracts/evidence-capability-record.v1.schema.json",
+          "sha256": "b034456c85cd2c166388b1190fffe7ba7744ec18a7cd7945ee2e5462fa205436"
+        },
+        {
+          "byte_size": 1153,
+          "path": "contracts/external-evaluator-kit-attestation.v1.schema.json",
+          "sha256": "34940e15b33d6d22081a32dbed5d91dd1853bc9976fe642e405077d162c82173"
+        },
+        {
+          "byte_size": 8948,
+          "path": "contracts/external-evaluator-kit.v1.schema.json",
+          "sha256": "63ba06b285b45bafdd6bdac925632407928333fdf6ebdcbfd67fdffcb109d23e"
+        },
+        {
+          "byte_size": 4078,
+          "path": "contracts/host-connect-plan.v1.schema.json",
+          "sha256": "d27d2467278337feddb6e7181689f3c5a3c96016e78c1bfdb7d4d14a2f5948c6"
+        },
+        {
+          "byte_size": 2509,
+          "path": "contracts/host-context-bridge.v1.schema.json",
+          "sha256": "4b80c309f249c875c6a7d2b531e80a5788b1e8ddef134c3792c6fd2a80efdb0c"
+        },
+        {
+          "byte_size": 2048,
+          "path": "contracts/installed-license-inventory.v1.schema.json",
+          "sha256": "c7c00d2718d04e6b2f13aa41efa7d3cfd5cea5c217b90bcd05b3dc16930df909"
+        },
+        {
+          "byte_size": 2303,
+          "path": "contracts/internal-baseline-gate.v1.schema.json",
+          "sha256": "cda2cae8c75d670cb9b496d294e9ee267578553b7b72a7916f82d273b97c9fbf"
+        },
+        {
+          "byte_size": 5242,
+          "path": "contracts/knowledge-asset.v1.schema.json",
+          "sha256": "48e2449a017ec88dca10f69d5ffdf0b98e4b619b9a9545fa1b4b30ddd6b2ddd0"
+        },
+        {
+          "byte_size": 5267,
+          "path": "contracts/knowledge-backfill-draft.v1.schema.json",
+          "sha256": "3828c714276d45bed312c8c09661f062921ca1d7c637b40db8db56ac8a6d1a92"
+        },
+        {
+          "byte_size": 1492,
+          "path": "contracts/knowledge-backfill-receipt.v1.schema.json",
+          "sha256": "340ed525b0c4c603b5791dbbef8f386bdd35f3faf6f116ddae48256884de4cea"
+        },
+        {
+          "byte_size": 1335,
+          "path": "contracts/knowledge-backfill-status.v1.schema.json",
+          "sha256": "5af9eee218c6083cc9a60a41d46f90677dd75f5da49fde0939c42b486408e71b"
+        },
+        {
+          "byte_size": 1060,
+          "path": "contracts/knowledge-backfill-validation.v1.schema.json",
+          "sha256": "11b54cdcb33ac1237e6e410827b33d72d6cffa960388c24fa7870394c225b140"
+        },
+        {
+          "byte_size": 5740,
+          "path": "contracts/knowledge-capsule-projection.v1.schema.json",
+          "sha256": "1703ca44d1d003983dcb75d01c5aeb73c1808e74fec7bbc2db84e6d8aed3d3c6"
+        },
+        {
+          "byte_size": 1833,
+          "path": "contracts/knowledge-capsule-verification.v2.schema.json",
+          "sha256": "abe9e470d98b6a175d152cf88821574825f1b5bd74f7c7bd88de69672e7a35b5"
+        },
+        {
+          "byte_size": 1982,
+          "path": "contracts/knowledge-capsule-verification.v3.schema.json",
+          "sha256": "373942f9be4adc542d498f7d6f2a4d5b0da63aface33340651b8e0b014c23df1"
+        },
+        {
+          "byte_size": 10381,
+          "path": "contracts/knowledge-capsule.v1.schema.json",
+          "sha256": "d896d7452db9f0dc6a2ff933a14436dd4f55d04ba8223bbdec089cd338898cbd"
+        },
+        {
+          "byte_size": 2366,
+          "path": "contracts/knowledge-capsule.v2.schema.json",
+          "sha256": "aef07f2d14a7ffeff67b480e625fa30b28826e5c269ca9f4a2da56ce0e4575f2"
+        },
+        {
+          "byte_size": 6609,
+          "path": "contracts/knowledge-capsule.v3.schema.json",
+          "sha256": "6b7f53ee097ce6ef5002de585d168ff39b15ceb1fcdf9d1793f7f8f1b9070b81"
+        },
+        {
+          "byte_size": 5030,
+          "path": "contracts/knowledge-discovery-index.v1.schema.json",
+          "sha256": "3acbd6a9f74930843f0a5b0fee96d3ed387677baf055c6cbc0ea96dec91dd947"
+        },
+        {
+          "byte_size": 3758,
+          "path": "contracts/knowledge-feedback-ledger.v1.schema.json",
+          "sha256": "7bf40ad59b7c691a24f76fc3b835aa75d38f6f39d97fc70a323fb67c879e6804"
+        },
+        {
+          "byte_size": 1210,
+          "path": "contracts/knowledge-identity.v2.schema.json",
+          "sha256": "0f15a6120155192fe671db7e3bd3a7b5f7078aa9f21ee61b74d43171053eacbf"
+        },
+        {
+          "byte_size": 2044,
+          "path": "contracts/knowledge-inbox-artifact.v1.schema.json",
+          "sha256": "e74546ad14d4b37ac191d6732ce919056b66bb60230099d4bc34fb416e708919"
+        },
+        {
+          "byte_size": 2835,
+          "path": "contracts/knowledge-ingest-job.v1.schema.json",
+          "sha256": "2f717db790ca8401154c44bf68e7ac904d9f630d87d1836dfca92ac41434f7dd"
+        },
+        {
+          "byte_size": 4781,
+          "path": "contracts/knowledge-ingest-job.v2.schema.json",
+          "sha256": "0d9eb9d6c0f02fad58a9376363b1efb01713b9e790bea114a84fbdc7e9374012"
+        },
+        {
+          "byte_size": 4226,
+          "path": "contracts/knowledge-lineage-review.v1.schema.json",
+          "sha256": "0341274588b78c0668f4658d54064a9b331c44f82003b96c462805c7805ce8ef"
+        },
+        {
+          "byte_size": 7569,
+          "path": "contracts/knowledge-object.v1.schema.json",
+          "sha256": "2f0578f19fd608b55c927e31eef705ed09ecb886fa09a35d6eb48a9dc5091038"
+        },
+        {
+          "byte_size": 7568,
+          "path": "contracts/knowledge-object.v2.schema.json",
+          "sha256": "6d5eaa7a1fcfadb40e4b45ce3476128ceb571d5401423c41a2dce89d3eead1bb"
+        },
+        {
+          "byte_size": 8044,
+          "path": "contracts/knowledge-object.v3.schema.json",
+          "sha256": "ab4c9afefa51b97284985eb83e7693396a43063ae7a30b890395f0ee0564ca80"
+        },
+        {
+          "byte_size": 2687,
+          "path": "contracts/knowledge-package.v1.schema.json",
+          "sha256": "6569eb9d1759f76d092cf3cf792da09e23d2135e329c01576b29f48c78d894ec"
+        },
+        {
+          "byte_size": 1598,
+          "path": "contracts/knowledge-projection.v2.schema.json",
+          "sha256": "754bd8865ccf2ad962eb3cefe86502505f668bcac34c970eadae23e8c130212b"
+        },
+        {
+          "byte_size": 3684,
+          "path": "contracts/knowledge-query-plan.v1.schema.json",
+          "sha256": "6ed3bbccd7d4c211c7bf4a208178f85e03df39250b7f50fd3ed71768efb5b759"
+        },
+        {
+          "byte_size": 4335,
+          "path": "contracts/knowledge-query-plan.v2.schema.json",
+          "sha256": "2924e61e20c4959bcfed5d4084a6d93afd8f002fc4d8c09539cba2ac08a8adca"
+        },
+        {
+          "byte_size": 3486,
+          "path": "contracts/knowledge-query-plan.v3.schema.json",
+          "sha256": "f6d4501472a06be90d356b57251ae73ab620583b199eba485c00a665d2790bcf"
+        },
+        {
+          "byte_size": 4398,
+          "path": "contracts/knowledge-query-plan.v4.schema.json",
+          "sha256": "3e794e83549a486683186f51560d59406e1be93842cc9c9c1e13f6c3237e1fdd"
+        },
+        {
+          "byte_size": 5926,
+          "path": "contracts/knowledge-query-plan.v5.schema.json",
+          "sha256": "eaceb1ec759dde93e89e3ea5a84db73a76485e3c00562791706ec5b9c9dc2643"
+        },
+        {
+          "byte_size": 9239,
+          "path": "contracts/knowledge-query-plan.v6.schema.json",
+          "sha256": "6a42e5a2eaa590b043fb1e532275f161a5bbdedf2bfea9c8b4a52d05af71d0d3"
+        },
+        {
+          "byte_size": 2053,
+          "path": "contracts/knowledge-relation.v3.schema.json",
+          "sha256": "ca71ac0ff46fdbef835bb7459ef7f370a7f258f5fa83fc0dd6bb6a2a9b623415"
+        },
+        {
+          "byte_size": 4568,
+          "path": "contracts/knowledge-retrieval-trace.v1.schema.json",
+          "sha256": "85faf21fe1fce6d28c4339eeda1675f228f3afa989455d3501f639695e25fe13"
+        },
+        {
+          "byte_size": 2160,
+          "path": "contracts/knowledge-review-receipt.v1.schema.json",
+          "sha256": "326f3686c8a184c249ac5673e51f90f53ef61ee11d2ca7246d797cf639338f9e"
+        },
+        {
+          "byte_size": 2417,
+          "path": "contracts/knowledge-review-transform.v1.schema.json",
+          "sha256": "c9287055364596eb8e5e1949c4908d07400a71e1b9821574f18eb61070cd2578"
+        },
+        {
+          "byte_size": 4013,
+          "path": "contracts/knowledge-revision-detail.v1.schema.json",
+          "sha256": "da60df2b4712de77359f918aadcdf3bf6cbd0da3120decf1dbd08a176e7acdce"
+        },
+        {
+          "byte_size": 2685,
+          "path": "contracts/knowledge-revision.v1.schema.json",
+          "sha256": "75397bea6dfb2f826bf50e685a13e0e4aa74b895705efda06b8d9685240e149d"
+        },
+        {
+          "byte_size": 2831,
+          "path": "contracts/knowledge-revision.v2.schema.json",
+          "sha256": "9ffee0c4f12ff8e15c714caee18a574be0a62bed7dae2b43db2d1d24f6c6eba4"
+        },
+        {
+          "byte_size": 3144,
+          "path": "contracts/knowledge-run-receipt.v1.schema.json",
+          "sha256": "13b7d60bf696b41cf713ecb5a8d0f3990140490da47522a31a419caeb29f563c"
+        },
+        {
+          "byte_size": 12056,
+          "path": "contracts/knowledge-sink.input.v1.schema.json",
+          "sha256": "db877710987afe5acc8e4cdfb575f35ff6102388295ac80342fe47fa0ed58c4d"
+        },
+        {
+          "byte_size": 15531,
+          "path": "contracts/knowledge-sink.input.v2.schema.json",
+          "sha256": "b3c5c100471cec3a8ecdce115255ae3e4d0d7053800936e5a611fe103527019a"
+        },
+        {
+          "byte_size": 10094,
+          "path": "contracts/knowledge-sink.input.v3.schema.json",
+          "sha256": "828ccd6ca1faf1229c121236d43844ed7f3e010b98b7cf82d3dfc772958bbcd3"
+        },
+        {
+          "byte_size": 5285,
+          "path": "contracts/knowledge-sink.input.v4.schema.json",
+          "sha256": "8e127318b821169f19408f60c4be3da19d240a7cc180776adb5715e30efe2b77"
+        },
+        {
+          "byte_size": 4364,
+          "path": "contracts/knowledge-sink.input.v5.schema.json",
+          "sha256": "fd4dbcb6ab75dca703643f4c09f7f10fa09eddcc63674ae017cb8a77040011f7"
+        },
+        {
+          "byte_size": 8388,
+          "path": "contracts/knowledge-sink.output.v1.schema.json",
+          "sha256": "b825ff16cf91d7434156f8415fc63b1279ca349619349b98943d141a408ea866"
+        },
+        {
+          "byte_size": 12262,
+          "path": "contracts/knowledge-sink.output.v2.schema.json",
+          "sha256": "018cf29ff8a8194c3032acf6b8f7c994fd923ab33caeb3aaa674086eebc5573b"
+        },
+        {
+          "byte_size": 1755,
+          "path": "contracts/knowledge-sink.output.v3.schema.json",
+          "sha256": "33694381cc91d5a26ad30d7d389853bf149372922f598bd5b95df729166326f2"
+        },
+        {
+          "byte_size": 2083,
+          "path": "contracts/knowledge-sink.output.v4.schema.json",
+          "sha256": "7256c68ec042ea328a2f2f8004400d9288a7a2a3c51acb87ac3aeb25083b6007"
+        },
+        {
+          "byte_size": 3217,
+          "path": "contracts/knowledge-skill-draft.input.v1.schema.json",
+          "sha256": "a5c7e8bf068ac10d56e16999acf290cef44dc41ee2cfa28366c16f2bb558c08a"
+        },
+        {
+          "byte_size": 3209,
+          "path": "contracts/knowledge-skill.v1.schema.json",
+          "sha256": "c9d167aa6c22fb252f26754ff3d45f9d6efa2ce15fc927184a578640324dae14"
+        },
+        {
+          "byte_size": 1598,
+          "path": "contracts/knowledge-snapshot.v1.schema.json",
+          "sha256": "7df833c510653570be7cc5c77f891632814f6a2e8c9b20340ebcc44171838b1d"
+        },
+        {
+          "byte_size": 2875,
+          "path": "contracts/knowledge-statement.v1.schema.json",
+          "sha256": "97c5787c36223959111094f54c879de073e9b0c329d57e709c929f4221908fc0"
+        },
+        {
+          "byte_size": 2444,
+          "path": "contracts/knowledge-support.input.v1.schema.json",
+          "sha256": "4d45ebfac3dc0dc2d598ce46232ab8c4678e1c6ef833c7122adf710149388aca"
+        },
+        {
+          "byte_size": 5963,
+          "path": "contracts/knowledge-support.input.v2.schema.json",
+          "sha256": "5fa5795b1c58f333e7d816cbb955cded4a9354d372912dc8c4d83c12cf55aa84"
+        },
+        {
+          "byte_size": 6852,
+          "path": "contracts/knowledge-support.input.v3.schema.json",
+          "sha256": "44caffdf21399e921b40a1627a4b7519906bcb7b3ea257b73e7915e59b2ee861"
+        },
+        {
+          "byte_size": 9717,
+          "path": "contracts/knowledge-support.input.v4.schema.json",
+          "sha256": "a2331798c99b928dea507c62d1176393d1a8f41ae63db0eda2913a9f8e6ed62a"
+        },
+        {
+          "byte_size": 10541,
+          "path": "contracts/knowledge-support.input.v5.schema.json",
+          "sha256": "606687698b44a1ee87c19a28694fa299123ea5c24b281a37f482a69561a764a3"
+        },
+        {
+          "byte_size": 6784,
+          "path": "contracts/knowledge-support.input.v6.schema.json",
+          "sha256": "7996d4ada85fdd1dfa67fb2ee7bb734dcbf0e7d8d9a8b93cd6ce2ff083eee566"
+        },
+        {
+          "byte_size": 20298,
+          "path": "contracts/knowledge-support.output.v1.schema.json",
+          "sha256": "3dca89116b07530a27d8d08238ecb25a8deb1947040bd53dd5113805e6aa82a9"
+        },
+        {
+          "byte_size": 7643,
+          "path": "contracts/knowledge-support.output.v2.schema.json",
+          "sha256": "f10d7e60cab45bbc7e58868fc321dd0c571eedadbd24f6b96f3451bba755861e"
+        },
+        {
+          "byte_size": 11244,
+          "path": "contracts/knowledge-support.output.v3.schema.json",
+          "sha256": "8e6c6d900877bc3befc5eca4be5eca88480e4466fe64e48831b6ca73acc4c9b2"
+        },
+        {
+          "byte_size": 1987,
+          "path": "contracts/knowledge-support.output.v4.schema.json",
+          "sha256": "3338f6a43d6fccd68a1b815f7d442fb73d1d5b70b9d8732b55e71ae0ee6c2977"
+        },
+        {
+          "byte_size": 1443,
+          "path": "contracts/knowledge-support.output.v5.schema.json",
+          "sha256": "5c4e0c78903578e5463c5ecce7d3b8f72300095f79779f41c44fcd732ee0e182"
+        },
+        {
+          "byte_size": 1490,
+          "path": "contracts/knowledge-support.output.v6.schema.json",
+          "sha256": "d68270871d4ca16b0e574744ffb1c18e66dba8c71c634ecfa1e4294ceb7ba95e"
+        },
+        {
+          "byte_size": 3678,
+          "path": "contracts/law-federated-context.v1.schema.json",
+          "sha256": "28dbeaf7145b91fc942db09650d090cdafaaa155a0a69e0c0035fc5bf63e206c"
+        },
+        {
+          "byte_size": 766,
+          "path": "contracts/law-release-info.v1.schema.json",
+          "sha256": "5242e3fcea6c9a35ca4016926bb819573f7721bdcae28d0b2ce4f3333e874d97"
+        },
+        {
+          "byte_size": 766,
+          "path": "contracts/law-release-info.v2.schema.json",
+          "sha256": "7ae86a3f55a5113b2f725bf704ccbc1652bf7791c99690f82de7460b5931336e"
+        },
+        {
+          "byte_size": 726,
+          "path": "contracts/law-release-info.v3.schema.json",
+          "sha256": "f296591a4b07ac7049aceeb5d493dc89083c7944f9ca95120ea2639a901fe564"
+        },
+        {
+          "byte_size": 2400,
+          "path": "contracts/law-search-response.v1.schema.json",
+          "sha256": "303ec53abe647f90b0e7071b4e9d358486a9c61d06265ffd08c4772ee5ed1fd3"
+        },
+        {
+          "byte_size": 15604,
+          "path": "contracts/law-search-response.v2.schema.json",
+          "sha256": "4a0e5bd8678e8692999b29ac075741abfeb7e713e90c939918651e52544b3141"
+        },
+        {
+          "byte_size": 3348,
+          "path": "contracts/law-segment.v1.schema.json",
+          "sha256": "f89b1fd765e41a9546a68c3174212b6cb10e127ecba87341a7581a6f5f117606"
+        },
+        {
+          "byte_size": 3439,
+          "path": "contracts/law-segment.v2.schema.json",
+          "sha256": "6316b837b7453657c07c94fed41b55ef564f7aacde1adbea9e602e4bd3233e25"
+        },
+        {
+          "byte_size": 2604,
+          "path": "contracts/law-support.input.v1.schema.json",
+          "sha256": "320571eaf2c79f04edb43020c13e76b086c1b23154cf25869cac3914b2cad529"
+        },
+        {
+          "byte_size": 5921,
+          "path": "contracts/law-support.input.v2.schema.json",
+          "sha256": "2b5f4c52dc193854acd8a203e3e0241f1411c8c24e71ed252b708e490f4222b0"
+        },
+        {
+          "byte_size": 7313,
+          "path": "contracts/law-support.input.v3.schema.json",
+          "sha256": "3636852f39bdf24d8886272429a99ebdfa8da412ad43f6ee579ef8b82583f47a"
+        },
+        {
+          "byte_size": 1927,
+          "path": "contracts/law-support.input.v4.schema.json",
+          "sha256": "68b00d08db631ff7226abbc48ad8b4b8b5e78d6e5711e13b33d593b7f65899fe"
+        },
+        {
+          "byte_size": 401,
+          "path": "contracts/law-support.output.v1.schema.json",
+          "sha256": "412c68b34f63572af424f407dc7662fd16dfcc47cbff288fc307fc2daf42c99b"
+        },
+        {
+          "byte_size": 421,
+          "path": "contracts/law-support.output.v2.schema.json",
+          "sha256": "aa06d0ef36d1712a243db296aef42dcc3011319bfaa00b0fb9c74ece2332728e"
+        },
+        {
+          "byte_size": 484,
+          "path": "contracts/law-support.output.v3.schema.json",
+          "sha256": "26be184ea667d587596adfe0c1138996aa672a0e7726834b036d52ec85ca4f9e"
+        },
+        {
+          "byte_size": 582,
+          "path": "contracts/law-support.output.v4.schema.json",
+          "sha256": "235b348970784f2f13d04af366d9ee3d3971b1ed4e0a3defd0e8f0c658a634cd"
+        },
+        {
+          "byte_size": 719,
+          "path": "contracts/law-verification.v1.schema.json",
+          "sha256": "9b343cc603530c678af478662d24c66b842fd457a250385a58da1c150c5516d6"
+        },
+        {
+          "byte_size": 3164,
+          "path": "contracts/legal-evidence-card.v1.schema.json",
+          "sha256": "3899fcf3833ae1e15a13adcc3cc1085706a255b536466c458572805b7d8f2cb6"
+        },
+        {
+          "byte_size": 3432,
+          "path": "contracts/legal-evidence-card.v2.schema.json",
+          "sha256": "b12adac3f2fea47a64d1cde3d529007f05b2d7abbbed67ff14c6cc4f2deaa7d5"
+        },
+        {
+          "byte_size": 4407,
+          "path": "contracts/legal-held-out-gold.v1.schema.json",
+          "sha256": "612f87dfd73d0d4a40c49de03c969261a0da2c7f2ba3aded50f1c3551457befc"
+        },
+        {
+          "byte_size": 1904,
+          "path": "contracts/legal-quality-report.v1.schema.json",
+          "sha256": "d4d4c946a9f3cb983b002145c37da12df506fa3742d54df1b41a33751617b690"
+        },
+        {
+          "byte_size": 3314,
+          "path": "contracts/legal-quality-run.v1.schema.json",
+          "sha256": "51eaf07668fb12dc3855980379ccfd90622416d9debb0abfa865370acc0cfb05"
+        },
+        {
+          "byte_size": 3047,
+          "path": "contracts/living-wiki-benchmark-fixtures.v1.schema.json",
+          "sha256": "49194792c20b40f87dc9ea38b62ec7253dde240702869890fbea938113ca9bfc"
+        },
+        {
+          "byte_size": 4834,
+          "path": "contracts/living-wiki-benchmark-protocol.v1.schema.json",
+          "sha256": "ea6b8953e5d939977d10525846c0c1aacddc2507e33bfe430a3f113e4fb002f6"
+        },
+        {
+          "byte_size": 3208,
+          "path": "contracts/living-wiki-change-set.v1.schema.json",
+          "sha256": "60a933972bc3051b6dbe47a5342aee4285bf7f6d679f9558307d6f1fdf996c1f"
+        },
+        {
+          "byte_size": 3454,
+          "path": "contracts/living-wiki-change-set.v2.schema.json",
+          "sha256": "ef8d13f7ed00a79b8ef2b4babab3b70207073e33d57c7a3931e56c6deba27e41"
+        },
+        {
+          "byte_size": 1427,
+          "path": "contracts/living-wiki-compiler-profile.v1.schema.json",
+          "sha256": "b43d91a7451b48b8632312a98c67a278711e39491a25ce1f3db7d62bb6e02dee"
+        },
+        {
+          "byte_size": 4133,
+          "path": "contracts/living-wiki-coverage-gap.v1.schema.json",
+          "sha256": "c26cbee2cbfd1f4bf6888e05c8109c2e9aa52fdfdf312ea4e147e963f71a6dcc"
+        },
+        {
+          "byte_size": 8220,
+          "path": "contracts/living-wiki-coverage-spec.v1.schema.json",
+          "sha256": "3ad59e299276824662e3c42ab960632c1328c34b23d9c6ac75888ecee3d0c9aa"
+        },
+        {
+          "byte_size": 7738,
+          "path": "contracts/living-wiki-link-index.v1.schema.json",
+          "sha256": "2ac9723a2e30197a99c3ce517b310de65475829e29d59d9d3aa05f8b411bdc7d"
+        },
+        {
+          "byte_size": 4357,
+          "path": "contracts/living-wiki-manifest.v1.schema.json",
+          "sha256": "ee732dcdebe744d13a5d00744146ae6302598f674ce2dd37c411574b3bcaa06c"
+        },
+        {
+          "byte_size": 5705,
+          "path": "contracts/living-wiki-manifest.v2.schema.json",
+          "sha256": "ce870b52db64c38c1df79cf33b6ca8316be1e54704ec65254b55924aeaecb575"
+        },
+        {
+          "byte_size": 3983,
+          "path": "contracts/living-wiki-manifest.v3.schema.json",
+          "sha256": "9ba3c31c7b1319c1d8a1f9657a3781c82e4c5b9b7988e7ed6d8c50b340925093"
+        },
+        {
+          "byte_size": 7656,
+          "path": "contracts/living-wiki-page-registry.v1.schema.json",
+          "sha256": "bd7bc45b6a56e863e196fa0bdbae70808bb3cb35ce045d86738193a623bcf7d6"
+        },
+        {
+          "byte_size": 3464,
+          "path": "contracts/living-wiki-projection-journal.v1.schema.json",
+          "sha256": "b06dc40bdb072a323b2759d224b157942f47d7db26dde9e42382b2bd5569c18c"
+        },
+        {
+          "byte_size": 3748,
+          "path": "contracts/living-wiki-projection-journal.v2.schema.json",
+          "sha256": "9e1fea70b75954a14eebe426f4618ee05853874bb2a550661c89d5c95b617705"
+        },
+        {
+          "byte_size": 3395,
+          "path": "contracts/living-wiki-quality-comparison-failure.v1.schema.json",
+          "sha256": "df48242e107cd29476f94c46f4be9f36a0987d08e5d14022c309ebe70942e27b"
+        },
+        {
+          "byte_size": 2396,
+          "path": "contracts/living-wiki-quality-comparison.v1.schema.json",
+          "sha256": "174cf9c1e596ad95085c6d401811fb86d9ae31962988f7ecea3ceaf076342f33"
+        },
+        {
+          "byte_size": 2870,
+          "path": "contracts/living-wiki-quality-report.v1.schema.json",
+          "sha256": "636ea9d13ecae2aee2e051a939facb97f78eba756fe03c09ffcd42226e209f2a"
+        },
+        {
+          "byte_size": 3245,
+          "path": "contracts/living-wiki-quality-suite.v1.schema.json",
+          "sha256": "80b2f03fa309e484168add779ce35226bd599aca7f2b08825ca46b5dc70c2803"
+        },
+        {
+          "byte_size": 3696,
+          "path": "contracts/living-wiki-recent-changes-read.v1.schema.json",
+          "sha256": "75c9a76e2203c36e2c24e0bcf4d8c6eee657b67c8bc1336c1f52aa93aca78b63"
+        },
+        {
+          "byte_size": 8433,
+          "path": "contracts/living-wiki-resolver.v1.schema.json",
+          "sha256": "cc1d564af235875a32c9b0c7e9c2b9e6f514281a1ad11392a8074e5e446cfdb3"
+        },
+        {
+          "byte_size": 1729,
+          "path": "contracts/local-reranker-manifest.v1.schema.json",
+          "sha256": "747bf6dccf8966b72506978ed72e320afdcdf5acec9e9336ff44ecaa77bedbb8"
+        },
+        {
+          "byte_size": 3651,
+          "path": "contracts/manual-baseline-execution-plan.v1.schema.json",
+          "sha256": "e13edb9eb7b4aa27d8c22ec5d5398416f52a143ae6a7226cef3e8b6bfa10b297"
+        },
+        {
+          "byte_size": 3531,
+          "path": "contracts/manual-baseline-execution-receipt.v1.schema.json",
+          "sha256": "d0fa79243e6207ecb0e9e81f255d524f82a1f31b2a688f12035438ca42ca05ef"
+        },
+        {
+          "byte_size": 1243,
+          "path": "contracts/obsidian-bridge.v1.schema.json",
+          "sha256": "d9a6a969f7bba161a7a30df2c6983dfd26661d3bdfeef03461c6edc34cc57091"
+        },
+        {
+          "byte_size": 7344,
+          "path": "contracts/obsidian-desktop-qualification.v1.schema.json",
+          "sha256": "6c3a9dfe987917a2e6f0e04c74beb0b4a714d152f422b105882a72185d088cb9"
+        },
+        {
+          "byte_size": 3635,
+          "path": "contracts/obsidian-manual-run.v1.schema.json",
+          "sha256": "5edba7867d9631dff1846b7da5aedfddccd7b19fc7d6de6596ab89beaf0c3b77"
+        },
+        {
+          "byte_size": 7984,
+          "path": "contracts/official-baseline-execution-plan.v2.schema.json",
+          "sha256": "c201c56f3d0a3f16ec91a0c977ad45481da67ed27884b0b715af09462000f4cf"
+        },
+        {
+          "byte_size": 5872,
+          "path": "contracts/official-baseline-execution-receipt.v2.schema.json",
+          "sha256": "bea57dd450d6519f8350b05fc5452307ab2c437cd89a0793d199ed1dae3fe326"
+        },
+        {
+          "byte_size": 2805,
+          "path": "contracts/official-baseline-resource-record.v1.schema.json",
+          "sha256": "4144668b1e8eb3ab5b90eb76fefdd7ae3ad447013ef824b4c7ff4a7c79cafb99"
+        },
+        {
+          "byte_size": 2608,
+          "path": "contracts/official-catalog.v1.schema.json",
+          "sha256": "fa498721636131a1319893f2e6059b2eda5d76e86269ad2fce225978e5ced57b"
+        },
+        {
+          "byte_size": 3549,
+          "path": "contracts/opencode-continuity-evaluation.v1.schema.json",
+          "sha256": "dba728000db163a38fdd9bbf5a7b53a4f0920a4f03c4c5810443e9a2fbf3d31a"
+        },
+        {
+          "byte_size": 12487,
+          "path": "contracts/opencode-continuity-observation.v1.schema.json",
+          "sha256": "33819bd1335d4340e34e1dc3c9332204187dedd0cbb9a0c995518a57ecc37acc"
+        },
+        {
+          "byte_size": 3601,
+          "path": "contracts/platform-core-inventory-preflight.v1.schema.json",
+          "sha256": "6020ea214209ed330d96392aa4948a87bf73f8da52b6cf81d1fe5dc52f06ea52"
+        },
+        {
+          "byte_size": 4403,
+          "path": "contracts/platform-core-test-manifest.v1.schema.json",
+          "sha256": "e65dbe0ea8fa98d383b19be42400c7be733de1d0c748cc00a44f03584896a94e"
+        },
+        {
+          "byte_size": 4906,
+          "path": "contracts/platform-gate-binding-receipt.v1.schema.json",
+          "sha256": "7ddd3e87149b7cbafda4f978959ba5a2589e43c46ead01151717905664e551ca"
+        },
+        {
+          "byte_size": 2425,
+          "path": "contracts/private-library-state.v1.schema.json",
+          "sha256": "a65fa50c8e9dc0efca6a2eaabd2040336e6a9797a75f46199a2291f12e964565"
+        },
+        {
+          "byte_size": 5128,
+          "path": "contracts/product-surface-manifest.v1.schema.json",
+          "sha256": "ff37d495a9c4d7078a101abbacd0f8a225fc63223d9d6b0861333738940e2ca2"
+        },
+        {
+          "byte_size": 1308,
+          "path": "contracts/projection-profile.v1.schema.json",
+          "sha256": "8f281deb9443ef8974e8398274e6e0b74353302ed2c986d7e5a1612d4c64c0f9"
+        },
+        {
+          "byte_size": 11779,
+          "path": "contracts/provenance-bound-gate-result.v1.schema.json",
+          "sha256": "6568d815003bb7b9b687fe54dcc9c977dd836a47cb628b42145a2c91c8349f99"
+        },
+        {
+          "byte_size": 2953,
+          "path": "contracts/provider-knowledge-capsule.v1.schema.json",
+          "sha256": "383fe21d5a1c0999b22cb2d012d285e6fb9054e18cdc477ce65016db91a05179"
+        },
+        {
+          "byte_size": 6910,
+          "path": "contracts/provider-knowledge-capsule.v2.schema.json",
+          "sha256": "2374f1967d36ce50c0669412a9c3e8bd327f576d62b436aabbd7d69317807852"
+        },
+        {
+          "byte_size": 4200,
+          "path": "contracts/purpose-aware-retrieval.v1.schema.json",
+          "sha256": "483bc113c7858b1bb33e15de78e89b0d19d188d23bb4f9dc03850be23faa106d"
+        },
+        {
+          "byte_size": 3087,
+          "path": "contracts/purpose-aware-retrieval.v2.schema.json",
+          "sha256": "a8888ad0eac83fea9a24bb170b8c35fdbae866273cfb1f4cc5cdb7970b7cec2f"
+        },
+        {
+          "byte_size": 1882,
+          "path": "contracts/purpose-aware-retrieval.v3.schema.json",
+          "sha256": "44ca5b98011e75e8f21cc0f9f63389b00500bb77c754b22d0824dfec0cc1ee4a"
+        },
+        {
+          "byte_size": 13493,
+          "path": "contracts/query-ablation-report.v1.schema.json",
+          "sha256": "874d30a5923f64e578f229eed60e43a73ae5b5030fd43427e2865fca19f99491"
+        },
+        {
+          "byte_size": 5561,
+          "path": "contracts/query-audit-read.v1.schema.json",
+          "sha256": "ec25254d151238c5f597e05b21785f6ffcf39ee1f91636ed078236313a2d8440"
+        },
+        {
+          "byte_size": 1983,
+          "path": "contracts/query-audit-receipt.v1.schema.json",
+          "sha256": "29e753fefb67ae32744a6a17e57f43452dc962722a18cc5627cb1ba52f3d22d1"
+        },
+        {
+          "byte_size": 1547,
+          "path": "contracts/query-expansion-profile.v2.schema.json",
+          "sha256": "40163b3ba969a04e22fd5b0d49d7339a1dbb267a4160d01a33f9ee144501f3b5"
+        },
+        {
+          "byte_size": 835,
+          "path": "contracts/real-host-compile-command.v1.schema.json",
+          "sha256": "c483b28a2f47ec3e8e5a8fec52270ef53db7ba06fadc80b485e51445fcf56043"
+        },
+        {
+          "byte_size": 3381,
+          "path": "contracts/real-host-compile-report.v1.schema.json",
+          "sha256": "97ea8deb2b6aae2ca6529dcfa23ec26fcf16c336e3ea2ee346b41e439c030f61"
+        },
+        {
+          "byte_size": 4959,
+          "path": "contracts/real-semantic-host-report.v1.schema.json",
+          "sha256": "e9602140ec8d56c7681d640cbb752aa6611e6d4e8803064a7cee2117ec347f2b"
+        },
+        {
+          "byte_size": 11757,
+          "path": "contracts/real-semantic-host-report.v2.schema.json",
+          "sha256": "9bba9bb4f01e5493531180bb2e47c831a614d42e9eb8d9886d6c2d37ad7cb1bd"
+        },
+        {
+          "byte_size": 10991,
+          "path": "contracts/relation-carry-forward.v1.schema.json",
+          "sha256": "0bd838255a9712e741473ffa5b141950009a858f8430dd4049391c625576f9bb"
+        },
+        {
+          "byte_size": 1252,
+          "path": "contracts/release-capability-migration.v1.schema.json",
+          "sha256": "09f6117334ca241fa93b02e6acb3b107be3635e6272cc21312b87aa94c778c18"
+        },
+        {
+          "byte_size": 683,
+          "path": "contracts/release-capability-rollback.v1.schema.json",
+          "sha256": "e97e3fbee55f1aa7e00fc4009d20b7f5843ee24962b78a06b9cded07e53037a4"
+        },
+        {
+          "byte_size": 6866,
+          "path": "contracts/repository-gold-report.v1.schema.json",
+          "sha256": "61623f830d458bae054b4ebe5290416d46c5e1d3c70b63efb72065c027c41486"
+        },
+        {
+          "byte_size": 4127,
+          "path": "contracts/repository-gold-report.v2.schema.json",
+          "sha256": "d721a7bad08b690e4f1619d77859c6e3de75f5ec18148d593129b378eb7747c8"
+        },
+        {
+          "byte_size": 7756,
+          "path": "contracts/repository-gold-report.v3.schema.json",
+          "sha256": "735ab8f2e27d006ab4b199b3186ae152d9cc7e5a5c74cedec8d32cf229139057"
+        },
+        {
+          "byte_size": 3442,
+          "path": "contracts/repository-gold-set.v1.schema.json",
+          "sha256": "62eb6e749181926f1ee1d67c41f8525022719247adce2417eef52d7eaf8fa9d2"
+        },
+        {
+          "byte_size": 4541,
+          "path": "contracts/repository-gold-set.v2.schema.json",
+          "sha256": "e69d3586870ade74dbd7989f897cafc16798aff7c6fcb9690c389a353da7b563"
+        },
+        {
+          "byte_size": 4313,
+          "path": "contracts/repository-gold-set.v3.schema.json",
+          "sha256": "089564cdc1afdf5efd85d8ab34b72bb30f4bdcfbe303e24f6cddb314551629ea"
+        },
+        {
+          "byte_size": 2377,
+          "path": "contracts/reproducible-build-report.v1.schema.json",
+          "sha256": "9bdee4de3bc226126a4f09e0b31c79188592d39154d52cf1e84d1210e90e950e"
+        },
+        {
+          "byte_size": 2592,
+          "path": "contracts/reproducible-build-report.v2.schema.json",
+          "sha256": "82f2bfe7bf0defbd4913027da47a0442db75196578d5960171ad2ff61cebf241"
+        },
+        {
+          "byte_size": 10163,
+          "path": "contracts/retrieval-fabric-scale-diagnostic.v1.schema.json",
+          "sha256": "12ed8d53593cfd1b71f4f24371f42fef7bfa90d1ef73a81fa108740bcf5822b4"
+        },
+        {
+          "byte_size": 2881,
+          "path": "contracts/retrieval-profile.v1.schema.json",
+          "sha256": "5f756e61d40354c74f000c36195e69ff42db1101f2948e11da3e2a2fe4e8fa93"
+        },
+        {
+          "byte_size": 1899,
+          "path": "contracts/retrieval-regression-suite.v1.schema.json",
+          "sha256": "f4be2380762b093603ba3f6914f10062eb51553aab0e789af422cbe0f12f3410"
+        },
+        {
+          "byte_size": 5114,
+          "path": "contracts/review-overlay.v1.schema.json",
+          "sha256": "77cb8db67ae438e4aac5aac1d346ff117c2141ebf7673de03a0baa5ec86a3230"
+        },
+        {
+          "byte_size": 1895,
+          "path": "contracts/run-semantic-inventory.v1.schema.json",
+          "sha256": "b5b1d039936f3e4217a5eff9dc8d9b15531d55cbf2cd01f4dd9177fa6ff71a17"
+        },
+        {
+          "byte_size": 651,
+          "path": "contracts/segment-evidence-capabilities.v1.schema.json",
+          "sha256": "8c0ce5873a114b9cabfa4c952ee400cce41160e71bc8db21c5c2f7328a9e0c2e"
+        },
+        {
+          "byte_size": 2215,
+          "path": "contracts/semantic-compilation-duty-report.v1.schema.json",
+          "sha256": "62c0264dc2939e0ef0148bef8e1debcce434ef5ba4580ab07989cc932b380837"
+        },
+        {
+          "byte_size": 5427,
+          "path": "contracts/semantic-compilation-duty-report.v2.schema.json",
+          "sha256": "41a0264c831bae8be81051956d3b9c1112c3dfd940325f67c174c6a4fb37c9ee"
+        },
+        {
+          "byte_size": 2123,
+          "path": "contracts/semantic-compilation-profile.v2.schema.json",
+          "sha256": "496d680e8a99a767502cfba25766c6e662c616c226d2551f0c34f0e2d3359379"
+        },
+        {
+          "byte_size": 2579,
+          "path": "contracts/semantic-compilation-profile.v3.schema.json",
+          "sha256": "1517cf9035d9150708f8eec1028b9c9e516eee8fdf27d6babb36ff26fcb4503e"
+        },
+        {
+          "byte_size": 1541,
+          "path": "contracts/semantic-compilation-quality-receipt.v1.schema.json",
+          "sha256": "2abb934bcb5dc9db28c1991213a3aa48d13375745b477580c731bb807d76bb40"
+        },
+        {
+          "byte_size": 14222,
+          "path": "contracts/semantic-context-outcome.v2.schema.json",
+          "sha256": "0276fae590f2163ac5d3d4933afce742efb2e3533d26ee18a3fc8538a5133059"
+        },
+        {
+          "byte_size": 1837,
+          "path": "contracts/semantic-finalization-packet.v1.schema.json",
+          "sha256": "9a74e3ba44bdba883240d271348094eddfada9166cf1be3a48c633c8363f3fe1"
+        },
+        {
+          "byte_size": 6956,
+          "path": "contracts/semantic-finalization-packet.v2.schema.json",
+          "sha256": "4e0243e18bce6ae3bba8ec95732f986d5e2b052709cbf642d23c81d3c9d431af"
+        },
+        {
+          "byte_size": 3963,
+          "path": "contracts/semantic-gold-freeze.v1.schema.json",
+          "sha256": "212cd0b3962d1b2687cce304bb1f162132a476f97e52c8cd92c9841186ebc44e"
+        },
+        {
+          "byte_size": 20253,
+          "path": "contracts/semantic-gold.v1.schema.json",
+          "sha256": "729f2f95a567952fa8cdca79284d2cb3bb013ee080d0c13872f1fce5d9ba309a"
+        },
+        {
+          "byte_size": 1023,
+          "path": "contracts/semantic-host-corpus.v1.schema.json",
+          "sha256": "e07cde5f27b97b61c26c4f7b3f028393cbf13bb7b21d8f6837e26d4c73d73c63"
+        },
+        {
+          "byte_size": 2877,
+          "path": "contracts/semantic-host-corpus.v2.schema.json",
+          "sha256": "842b2936c9202b6631eddb8d9c9268e5b5d7f571a11ded5186c5d49e3d65a796"
+        },
+        {
+          "byte_size": 5523,
+          "path": "contracts/semantic-human-review-packet.v1.schema.json",
+          "sha256": "51f808c154688bdb692d8bebdbf4458b678819088bac57c8147a9eb5ac531eaa"
+        },
+        {
+          "byte_size": 3644,
+          "path": "contracts/semantic-machine-review-consensus.v1.schema.json",
+          "sha256": "8ba7846ad878871b010d9ff2d910d8d3e317e3d91297b0f21e18b8811f73b767"
+        },
+        {
+          "byte_size": 6774,
+          "path": "contracts/semantic-machine-review-packet.v1.schema.json",
+          "sha256": "d83e3c97cfe8230319ef39bce7b7d0947f941eb40fb8d8017572ad0a6037f20b"
+        },
+        {
+          "byte_size": 3247,
+          "path": "contracts/semantic-owner-review-packet.v1.schema.json",
+          "sha256": "98cda269ed20ade431cef4c43f02bdf5abae72a481e305e1bb2160e0b235aa03"
+        },
+        {
+          "byte_size": 2025,
+          "path": "contracts/semantic-publication-plan.v2.schema.json",
+          "sha256": "7c1073228c8ef1e9bd311f30c9920b401359c57e83b84cbb31a0314518a48277"
+        },
+        {
+          "byte_size": 9944,
+          "path": "contracts/semantic-publication-plan.v3.schema.json",
+          "sha256": "b0b70ba44b956c06c2825faaf125888092b0711fef29468bfdc7280ac07f0471"
+        },
+        {
+          "byte_size": 9405,
+          "path": "contracts/semantic-quality-report.v1.schema.json",
+          "sha256": "19ca5d91750bca3229a6e1b5b7e8ef1430a4c12b5fc346180f748a6bb061f650"
+        },
+        {
+          "byte_size": 3280,
+          "path": "contracts/semantic-query-comparison.v1.schema.json",
+          "sha256": "f4220bb3e02594e00b4e6b3468a2854f33079a1b804dcd4909580e9d4efeb20c"
+        },
+        {
+          "byte_size": 1908,
+          "path": "contracts/semantic-query-cost.v1.schema.json",
+          "sha256": "ed60a1dda3668012b44fdd984ac6bb018a5f0f1e3c2be17d9f2c7d77c1bdf192"
+        },
+        {
+          "byte_size": 3166,
+          "path": "contracts/semantic-query-cost.v2.schema.json",
+          "sha256": "9d573ea45192295cacc1d6fbaf0c5cbc6136b85217b740798a0d72c55135b16c"
+        },
+        {
+          "byte_size": 6611,
+          "path": "contracts/semantic-query-replicate-comparison.v1.schema.json",
+          "sha256": "ce853e8947aac21f97220c7449e73c691f8a28eb0bedde1f509f890869492772"
+        },
+        {
+          "byte_size": 37425,
+          "path": "contracts/semantic-query-run.v1.schema.json",
+          "sha256": "6238caa147c4f9d7c7e57c5014417aea18df241ab450165d342194dc88c358a0"
+        },
+        {
+          "byte_size": 5152,
+          "path": "contracts/skill-bundle.v1.schema.json",
+          "sha256": "c5a8cab37b69ffa007b20a5f0857efc87207aa6eababa90ebb05bb53d92b2b73"
+        },
+        {
+          "byte_size": 622,
+          "path": "contracts/source-compilation-abort.v1.schema.json",
+          "sha256": "4ecb076c8240390b3544a42d512066a8b1bb42dd851eb0aab3ef87783501db4c"
+        },
+        {
+          "byte_size": 995,
+          "path": "contracts/source-compilation-artifact-bundle.v1.schema.json",
+          "sha256": "d5e45f92606904aaf6b4aff027ce9e5d847b01ae45291cf867c176da17c87ac8"
+        },
+        {
+          "byte_size": 1207,
+          "path": "contracts/source-compilation-batch.v1.schema.json",
+          "sha256": "2b597239eaeeef904fd79591a888053a57aa9f4cb7032b683db25308868e2824"
+        },
+        {
+          "byte_size": 1820,
+          "path": "contracts/source-compilation-explanation.v1.schema.json",
+          "sha256": "8b4843dcedfd458efb01dc631ee46d59978acca6e676f418f2fd5374b41bc6e8"
+        },
+        {
+          "byte_size": 952,
+          "path": "contracts/source-compilation-explanation.v2.schema.json",
+          "sha256": "eea861343e4cd11de8f8a4df080f963e6be3706e7b1f09b62e93e8ccfcfdd984"
+        },
+        {
+          "byte_size": 5833,
+          "path": "contracts/source-compilation-observation-plan.v2.schema.json",
+          "sha256": "764718128c34463c09f94a775345d4b703a9c8613ea4a8c073dae2bf9866993b"
+        },
+        {
+          "byte_size": 561,
+          "path": "contracts/source-compilation-packet-end.v1.schema.json",
+          "sha256": "4d8cfb6d22d3cacf5593898ea04ccdee6953ae0553a222506f9d51faa8463a2d"
+        },
+        {
+          "byte_size": 6810,
+          "path": "contracts/source-compilation-packet.v1.schema.json",
+          "sha256": "4f5860d27eb108ddf3120ed415757de070ee62c92060c274bf4a0afd4c87188f"
+        },
+        {
+          "byte_size": 11687,
+          "path": "contracts/source-compilation-plan.v1.schema.json",
+          "sha256": "f8dc692df3c4ad0dd9b68c6939100987d6fe553797d1bd55813f77c735c80f28"
+        },
+        {
+          "byte_size": 2161,
+          "path": "contracts/source-compilation-projection.v1.schema.json",
+          "sha256": "86aee5928d6ff595bc402e4f1fe0cdcdd07f6c245091f38d1fcab47cb1abf129"
+        },
+        {
+          "byte_size": 2473,
+          "path": "contracts/source-compilation-projection.v2.schema.json",
+          "sha256": "84e1ce06b04b4961eef5a016f81a68a123a6a591dbf34ff51ab152cb224034d5"
+        },
+        {
+          "byte_size": 1839,
+          "path": "contracts/source-compilation-receipt.v1.schema.json",
+          "sha256": "2079754248bcb414a8a8dcb1564ab264c80debb40b06417f5a90b6f9743d7c17"
+        },
+        {
+          "byte_size": 5153,
+          "path": "contracts/source-compilation-run.v1.schema.json",
+          "sha256": "cb2097c322000802afb205d657eb63c7cc6f71e30abbf93a7a6047455813e343"
+        },
+        {
+          "byte_size": 1732,
+          "path": "contracts/source-compilation-run.v2.schema.json",
+          "sha256": "afb260556f5a584c31dbeb365c1aba9b69adde127100fb6dd1023de694602d77"
+        },
+        {
+          "byte_size": 2948,
+          "path": "contracts/source-compilation-run.v3.schema.json",
+          "sha256": "2586ec6430f9e5d48861e447f88114e3bc9ffbe46244b22f52667a556924f3d4"
+        },
+        {
+          "byte_size": 2006,
+          "path": "contracts/source-compilation-status.v1.schema.json",
+          "sha256": "cdfada81a0e4c514f61088fd884a5bb2db0a0671a6a83c060b8ac65eb7da8022"
+        },
+        {
+          "byte_size": 1226,
+          "path": "contracts/source-compilation-validation.v1.schema.json",
+          "sha256": "13d63eeadbcdfe7f85ddefbe8224aa7cc342f9ad658923cd6d00eecf78662993"
+        },
+        {
+          "byte_size": 2467,
+          "path": "contracts/source-freshness-report.v1.schema.json",
+          "sha256": "842e6ebd7b9ec357294366b40f6a7dcc71cda8f905766d97e98f1c03c45b9ec8"
+        },
+        {
+          "byte_size": 1811,
+          "path": "contracts/source-ir.v1.schema.json",
+          "sha256": "b564f2e427b61be96df736c4269ac73224a206e405e2140f35d337180e3af032"
+        },
+        {
+          "byte_size": 2097,
+          "path": "contracts/source-snapshot.v1.schema.json",
+          "sha256": "6a74c6a84c90f4c3a084cdbed8d456f26c78ec3bae4a17fe5ac8f175b23ff5f5"
+        },
+        {
+          "byte_size": 3052,
+          "path": "contracts/statement-evidence-map.v1.schema.json",
+          "sha256": "482327d9553848aabd2287654a90ac2b9d89e3e2de0aeb7b44c52f37545afb96"
+        },
+        {
+          "byte_size": 3285,
+          "path": "contracts/statement-evidence-receipt.v1.schema.json",
+          "sha256": "c194b17d8c706d40d6318559bc82d6d15c6b247bbbd69e83686ba04efc9d2cd1"
+        },
+        {
+          "byte_size": 2113,
+          "path": "contracts/synthesis-query-evidence-receipt.v1.schema.json",
+          "sha256": "a5dc34b300d9eb8b90e7556d291810eca69855c77ebf4412343e27a81bee62f9"
+        },
+        {
+          "byte_size": 1305,
+          "path": "contracts/synthesis-refresh-plan.v1.schema.json",
+          "sha256": "33bca91a3b57a705c89fa6dbce0fc9e5866aba959de203a840e65004a0f851e5"
+        },
+        {
+          "byte_size": 1327,
+          "path": "contracts/synthesis-refresh-run.v1.schema.json",
+          "sha256": "5b8a60fd048b8eeff8f0095e495e68e553144d33899bfcae47f18390cafea6c8"
+        },
+        {
+          "byte_size": 1777,
+          "path": "contracts/synthesis-refresh-task.v1.schema.json",
+          "sha256": "359427c0f0361ed3a3eb05653c5f584baab2b77469c1bdae92e4d58ad3b6bd2e"
+        },
+        {
+          "byte_size": 2175,
+          "path": "contracts/task-context-binding.v1.schema.json",
+          "sha256": "73a95a92e898c3d707b44eb4dcadbc834e89f94de455881240a8f5f6f82be7d9"
+        },
+        {
+          "byte_size": 1072,
+          "path": "contracts/tolaria-bridge.v1.schema.json",
+          "sha256": "a68c8cce29c5e624bee3f84bb36e991aade443e93dc1e19f3bd1b32ed9b45524"
+        },
+        {
+          "byte_size": 6531,
+          "path": "contracts/tolaria-workspace-interop-report.v1.schema.json",
+          "sha256": "73e7e17b4f78225a4d7f6e2261ee2c4ba9bf7069c7cf17ca1102382d10f6ea9c"
+        },
+        {
+          "byte_size": 4335,
+          "path": "contracts/typed-compiler-benchmark-input.v1.schema.json",
+          "sha256": "b8fef07510e563b8fd23a5e80df5d7aac16ee76c52ac4b22feeb354d388f7aa5"
+        },
+        {
+          "byte_size": 4482,
+          "path": "contracts/typed-compiler-benchmark.v1.schema.json",
+          "sha256": "f3310a45d1ecdc7a8edf543937057594f6e44d94ce5f176d117761ba01e1a28d"
+        },
+        {
+          "byte_size": 1957,
+          "path": "contracts/typed-compiler-quality-report.v1.schema.json",
+          "sha256": "f7b6004e3d92c69fc29a47259bb27098d85ba956f2cc9597c62ad9a20d21c3e9"
+        },
+        {
+          "byte_size": 3694,
+          "path": "contracts/typed-compiler-quality-suite.v1.schema.json",
+          "sha256": "346a753f82e5200c7ac0fc50ab0edcb29f76336abf121af399471d4c0074473c"
+        },
+        {
+          "byte_size": 12924,
+          "path": "contracts/v013-product-outcome-package.v1.schema.json",
+          "sha256": "bb95fda595c2ef2a48ecf48241e39d8d29b532ce56c20c01aeea71d675f0d2f2"
+        },
+        {
+          "byte_size": 13458,
+          "path": "contracts/v013-qualification-protocol.v1.schema.json",
+          "sha256": "6410ad445c5d3d664bbf9ba51beb0cbf95d4064696c24af65961b321ae3015b8"
+        },
+        {
+          "byte_size": 6212,
+          "path": "contracts/v013-quality-metric-catalog.v1.schema.json",
+          "sha256": "d127453ce2660ed3ee85079bba7096232a8cf1696eca7908c2976b7038670ab8"
+        },
+        {
+          "byte_size": 20386,
+          "path": "contracts/v013-query-graph-scale-report.v1.schema.json",
+          "sha256": "06e8a54e488c92ee73f07a2b44ec0bc4f7d786e4c50563349478b539177f1cb3"
+        },
+        {
+          "byte_size": 3094,
+          "path": "contracts/v013-release-gate-classification.v1.schema.json",
+          "sha256": "f7b2a9d4015f41dd770dc1107adb26c8ba06485bb3aaa493d7c7077b1e9ed422"
+        },
+        {
+          "byte_size": 7477,
+          "path": "contracts/v013-release-gate-classification.v2.schema.json",
+          "sha256": "050ab23c714e65e8ffd0121de975c012e1ea4ff148f294c47f77f900c0c67ef9"
+        },
+        {
+          "byte_size": 12722,
+          "path": "contracts/v013-runtime-stability-report.v1.schema.json",
+          "sha256": "d5d1feb6f7689fa730152b5cc7de0aaa7318a24c5ee236a4f230dc00d95ab23b"
+        },
+        {
+          "byte_size": 18938,
+          "path": "contracts/v013-scale-performance-report.v1.schema.json",
+          "sha256": "bdb5acbe6c5bd19f379052832729c78a51ada4ecaa3d20f4eeb7f911e7ef7e4a"
+        }
+      ],
+      "inventory_sha256": "0d580e7379f8ff5ffd6c3700f9d8ddde866efc4f23e0464e0ccdb63499869eb4"
+    },
+    "lock_sha256": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082",
+    "migrations": {
+      "files": [
+        {
+          "byte_size": 377932,
+          "path": "src/deeplaw/knowledge_store.py",
+          "sha256": "299a4cbc8371853cac7a424df9bad898656f2818270ba5f85fe02dc9e8cde338"
+        },
+        {
+          "byte_size": 636710,
+          "path": "src/deeplaw/knowledge_autonomy.py",
+          "sha256": "6a03b22bdca72f22db380f03a7bd10d4e84de156230a21bf070712319adbf5d6"
+        },
+        {
+          "byte_size": 26144,
+          "path": "src/deeplaw/knowledge_maintenance.py",
+          "sha256": "5705e129876d0437b728f9ff82cc5787e0d64f088931caa4fe2018215b17a8b7"
+        },
+        {
+          "byte_size": 83853,
+          "path": "src/deeplaw/compilation/store.py",
+          "sha256": "e70c6e72b652ed4d2249a5273c690be17bef0fbb47ba9d270b1a6581328ac76c"
+        }
+      ],
+      "identities": [
+        "deeplaw.knowledge-vault/v1",
+        "deeplaw.knowledge-sqlite/v1",
+        "deeplaw.knowledge-control/v1",
+        "deeplaw.autonomous-knowledge-core/v1",
+        "deeplaw.autonomous-knowledge-core/v2",
+        "deeplaw.source-compilation-core/v1",
+        "deeplaw.semantic-compilation-core/v1",
+        "deeplaw.statement-evidence-core/v1"
+      ],
+      "inventory_sha256": "2dd1c16f8ebd96635c150f663deef4457d44b2dcbe9253d9b1aebd9208c78368"
+    },
+    "package_version": "0.12.0",
+    "pyproject_sha256": "85cf51bc7fdb51530c921b7fe7f12ff527974dcab9af089f98f3c51da0a5b94c",
+    "tree": "425d07324c22de051e2bf00fe04e7a9b80de9e2b",
+    "worktree_clean": true
+  },
+  "blocked": [],
+  "environment": {
+    "ci": false,
+    "github_actions": false,
+    "github_runner_arch": null,
+    "github_runner_os": null,
+    "machine": "arm64",
+    "platform_release": "25.5.0",
+    "platform_system": "Darwin",
+    "platform_version": "Darwin Kernel Version 25.5.0: Tue Jun  9 22:28:34 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6041",
+    "python_executable_name": "python3",
+    "python_implementation": "CPython",
+    "python_version": "3.11.15",
+    "uv_version": "uv 0.11.5 (95eaa68c8 2026-04-08 aarch64-apple-darwin)"
+  },
+  "package_count": 66,
+  "packages": [
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "annotated-types",
+      "normalized_name": "annotated-types",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.7.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "anyio",
+      "normalized_name": "anyio",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "4.14.2"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "attrs",
+      "normalized_name": "attrs",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "26.1.0"
+    },
+    {
+      "declared_license": "MPL-2.0",
+      "license_classifiers": [
+        "OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)"
+      ],
+      "license_expression": null,
+      "name": "certifi",
+      "normalized_name": "certifi",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2026.6.17"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT-0",
+      "name": "cffi",
+      "normalized_name": "cffi",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.1.0"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "charset-normalizer",
+      "normalized_name": "charset-normalizer",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "3.4.9"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-3-Clause",
+      "name": "click",
+      "normalized_name": "click",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "8.4.2"
+    },
+    {
+      "declared_license": "Apache-2.0",
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "coverage",
+      "normalized_name": "coverage",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "7.15.1"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "Apache-2.0 OR BSD-3-Clause",
+      "name": "cryptography",
+      "normalized_name": "cryptography",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "50.0.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: Apache Software License"
+      ],
+      "license_expression": "Apache-2.0",
+      "name": "deeplaw",
+      "normalized_name": "deeplaw",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.12.0"
+    },
+    {
+      "declared_license": "PSFL",
+      "license_classifiers": [
+        "OSI Approved :: Python Software Foundation License"
+      ],
+      "license_expression": null,
+      "name": "defusedxml",
+      "normalized_name": "defusedxml",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.7.1"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": "MIT",
+      "name": "filelock",
+      "normalized_name": "filelock",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "3.29.7"
+    },
+    {
+      "declared_license": "Apache 2.0",
+      "license_classifiers": [
+        "OSI Approved :: Apache Software License"
+      ],
+      "license_expression": null,
+      "name": "flatbuffers",
+      "normalized_name": "flatbuffers",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "25.12.19"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-3-Clause",
+      "name": "fsspec",
+      "normalized_name": "fsspec",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2026.4.0"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "h11",
+      "normalized_name": "h11",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.16.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "hatchling",
+      "normalized_name": "hatchling",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "1.31.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: Apache Software License"
+      ],
+      "license_expression": "Apache-2.0",
+      "name": "hf-xet",
+      "normalized_name": "hf-xet",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "1.5.1"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: BSD License"
+      ],
+      "license_expression": "BSD-3-Clause",
+      "name": "httpcore",
+      "normalized_name": "httpcore",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "1.0.9"
+    },
+    {
+      "declared_license": "BSD-3-Clause",
+      "license_classifiers": [
+        "OSI Approved :: BSD License"
+      ],
+      "license_expression": null,
+      "name": "httpx",
+      "normalized_name": "httpx",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.28.1"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "httpx-sse",
+      "normalized_name": "httpx-sse",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.4.3"
+    },
+    {
+      "declared_license": "Apache",
+      "license_classifiers": [
+        "OSI Approved :: Apache Software License"
+      ],
+      "license_expression": null,
+      "name": "huggingface_hub",
+      "normalized_name": "huggingface-hub",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.36.2"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-3-Clause",
+      "name": "idna",
+      "normalized_name": "idna",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "3.18"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "iniconfig",
+      "normalized_name": "iniconfig",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.3.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "jsonschema",
+      "normalized_name": "jsonschema",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "4.26.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "jsonschema-specifications",
+      "normalized_name": "jsonschema-specifications",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2025.9.1"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "mcp",
+      "normalized_name": "mcp",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "1.28.1"
+    },
+    {
+      "declared_license": "Copyright (c) 2005-2024, NumPy Developers.\n All rights reserved.\n\n Redistribution and use in source and binary forms, with or without\n modification, are permitted provided that the following conditions are\n met:\n\n     * Redistributions of source code must retain the above copyright\n        notice, this list of conditions and the following disclaimer.\n\n     * Redistributions in binary form must reproduce the above\n        copyright notice, this list of conditions and the following\n        disclaimer in the documentation and/or other materials provided\n        with the distribution.\n\n     * Neither the name of the NumPy Developers nor the names of any\n        contributors may be used to endorse or promote products derived\n        from this software without specific prior written permission.\n\n THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR\n A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\n OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT\n LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,\n DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY\n THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\n OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n\n ----\n\n The NumPy repository and source distributions bundle several libraries that are\n compatibly licensed.  We list these here.\n\n Name: lapack-lite\n Files: numpy/linalg/lapack_lite/*\n License: BSD-3-Clause\n   For details, see numpy/linalg/lapack_lite/LICENSE.txt\n\n Name: dragon4\n Files: numpy/_core/src/multiarray/dragon4.c\n License: MIT\n   For license text, see numpy/_core/src/multiarray/dragon4.c\n\n Name: libdivide\n Files: numpy/_core/include/numpy/libdivide/*\n License: Zlib\n   For license text, see numpy/_core/include/numpy/libdivide/LICENSE.txt\n\n\n Note that the following files are vendored in the repository and sdist but not\n installed in built numpy packages:\n\n Name: Meson\n Files: vendored-meson/meson/*\n License: Apache 2.0\n   For license text, see vendored-meson/meson/COPYING\n\n Name: spin\n Files: .spin/cmds.py\n License: BSD-3\n   For license text, see .spin/LICENSE\n\n Name: tempita\n Files: numpy/_build_utils/tempita/*\n License: MIT\n   For details, see numpy/_build_utils/tempita/LICENCE.txt\n\n ----\n\n This binary distribution of NumPy also bundles the following software:\n\n Name: OpenBLAS\n Files: numpy/.dylibs/libscipy_openblas*.so\n Description: bundled as a dynamically linked library\n Availability: https://github.com/OpenMathLib/OpenBLAS/\n License: BSD-3-Clause\n   Copyright (c) 2011-2014, The OpenBLAS Project\n   All rights reserved.\n\n   Redistribution and use in source and binary forms, with or without\n   modification, are permitted provided that the following conditions are\n   met:\n\n      1. Redistributions of source code must retain the above copyright\n         notice, this list of conditions and the following disclaimer.\n\n      2. Redistributions in binary form must reproduce the above copyright\n         notice, this list of conditions and the following disclaimer in\n         the documentation and/or other materials provided with the\n         distribution.\n      3. Neither the name of the OpenBLAS project nor the names of\n         its contributors may be used to endorse or promote products\n         derived from this software without specific prior written\n         permission.\n\n   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\"\n   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE\n   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE\n   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE\n   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL\n   DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR\n   SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER\n   CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,\n   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE\n   USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n\n\n Name: LAPACK\n Files: numpy/.dylibs/libscipy_openblas*.so\n Description: bundled in OpenBLAS\n Availability: https://github.com/OpenMathLib/OpenBLAS/\n License: BSD-3-Clause-Attribution\n   Copyright (c) 1992-2013 The University of Tennessee and The University\n                           of Tennessee Research Foundation.  All rights\n                           reserved.\n   Copyright (c) 2000-2013 The University of California Berkeley. All\n                           rights reserved.\n   Copyright (c) 2006-2013 The University of Colorado Denver.  All rights\n                           reserved.\n\n   $COPYRIGHT$\n\n   Additional copyrights may follow\n\n   $HEADER$\n\n   Redistribution and use in source and binary forms, with or without\n   modification, are permitted provided that the following conditions are\n   met:\n\n   - Redistributions of source code must retain the above copyright\n     notice, this list of conditions and the following disclaimer.\n\n   - Redistributions in binary form must reproduce the above copyright\n     notice, this list of conditions and the following disclaimer listed\n     in this license in the documentation and/or other materials\n     provided with the distribution.\n\n   - Neither the name of the copyright holders nor the names of its\n     contributors may be used to endorse or promote products derived from\n     this software without specific prior written permission.\n\n   The copyright holders provide no reassurances that the source code\n   provided does not infringe any patent, copyright, or any other\n   intellectual property rights of third parties.  The copyright holders\n   disclaim any liability to any recipient for claims brought against\n   recipient by any third party for infringement of that parties\n   intellectual property rights.\n\n   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n   \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR\n   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\n   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT\n   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,\n   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY\n   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\n   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n\n\n Name: GCC runtime library\n Files: numpy/.dylibs/libgfortran*, numpy/.dylibs/libgcc*\n Description: dynamically linked to files compiled with gcc\n Availability: https://gcc.gnu.org/git/?p=gcc.git;a=tree;f=libgfortran\n License: GPL-3.0-with-GCC-exception\n   Copyright (C) 2002-2017 Free Software Foundation, Inc.\n\n   Libgfortran is free software; you can redistribute it and/or modify\n   it under the terms of the GNU General Public License as published by\n   the Free Software Foundation; either version 3, or (at your option)\n   any later version.\n\n   Libgfortran is distributed in the hope that it will be useful,\n   but WITHOUT ANY WARRANTY; without even the implied warranty of\n   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n   GNU General Public License for more details.\n\n   Under Section 7 of GPL version 3, you are granted additional\n   permissions described in the GCC Runtime Library Exception, version\n   3.1, as published by the Free Software Foundation.\n\n   You should have received a copy of the GNU General Public License and\n   a copy of the GCC Runtime Library Exception along with this program;\n   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see\n   <http://www.gnu.org/licenses/>.\n\n ----\n\n Full text of license texts referred to above follows (that they are\n listed below does not necessarily imply the conditions apply to the\n present binary release):\n\n ----\n\n GCC RUNTIME LIBRARY EXCEPTION\n\n Version 3.1, 31 March 2009\n\n Copyright (C) 2009 Free Software Foundation, Inc. <http://fsf.org/>\n\n Everyone is permitted to copy and distribute verbatim copies of this\n license document, but changing it is not allowed.\n\n This GCC Runtime Library Exception (\"Exception\") is an additional\n permission under section 7 of the GNU General Public License, version\n 3 (\"GPLv3\"). It applies to a given file (the \"Runtime Library\") that\n bears a notice placed by the copyright holder of the file stating that\n the file is governed by GPLv3 along with this Exception.\n\n When you use GCC to compile a program, GCC may combine portions of\n certain GCC header files and runtime libraries with the compiled\n program. The purpose of this Exception is to allow compilation of\n non-GPL (including proprietary) programs to use, in this way, the\n header files and runtime libraries covered by this Exception.\n\n 0. Definitions.\n\n A file is an \"Independent Module\" if it either requires the Runtime\n Library for execution after a Compilation Process, or makes use of an\n interface provided by the Runtime Library, but is not otherwise based\n on the Runtime Library.\n\n \"GCC\" means a version of the GNU Compiler Collection, with or without\n modifications, governed by version 3 (or a specified later version) of\n the GNU General Public License (GPL) with the option of using any\n subsequent versions published by the FSF.\n\n \"GPL-compatible Software\" is software whose conditions of propagation,\n modification and use would permit combination with GCC in accord with\n the license of GCC.\n\n \"Target Code\" refers to output from any compiler for a real or virtual\n target processor architecture, in executable form or suitable for\n input to an assembler, loader, linker and/or execution\n phase. Notwithstanding that, Target Code does not include data in any\n format that is used as a compiler intermediate representation, or used\n for producing a compiler intermediate representation.\n\n The \"Compilation Process\" transforms code entirely represented in\n non-intermediate languages designed for human-written code, and/or in\n Java Virtual Machine byte code, into Target Code. Thus, for example,\n use of source code generators and preprocessors need not be considered\n part of the Compilation Process, since the Compilation Process can be\n understood as starting with the output of the generators or\n preprocessors.\n\n A Compilation Process is \"Eligible\" if it is done using GCC, alone or\n with other GPL-compatible software, or if it is done without using any\n work based on GCC. For example, using non-GPL-compatible Software to\n optimize any GCC intermediate representations would not qualify as an\n Eligible Compilation Process.\n\n 1. Grant of Additional Permission.\n\n You have permission to propagate a work of Target Code formed by\n combining the Runtime Library with Independent Modules, even if such\n propagation would otherwise violate the terms of GPLv3, provided that\n all Target Code was generated by Eligible Compilation Processes. You\n may then convey such a combination under terms of your choice,\n consistent with the licensing of the Independent Modules.\n\n 2. No Weakening of GCC Copyleft.\n\n The availability of this Exception does not imply any general\n presumption that third-party software is unaffected by the copyleft\n requirements of the license of GCC.\n\n ----\n\n                     GNU GENERAL PUBLIC LICENSE\n                        Version 3, 29 June 2007\n\n  Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>\n  Everyone is permitted to copy and distribute verbatim copies\n  of this license document, but changing it is not allowed.\n\n                             Preamble\n\n   The GNU General Public License is a free, copyleft license for\n software and other kinds of works.\n\n   The licenses for most software and other practical works are designed\n to take away your freedom to share and change the works.  By contrast,\n the GNU General Public License is intended to guarantee your freedom to\n share and change all versions of a program--to make sure it remains free\n software for all its users.  We, the Free Software Foundation, use the\n GNU General Public License for most of our software; it applies also to\n any other work released this way by its authors.  You can apply it to\n your programs, too.\n\n   When we speak of free software, we are referring to freedom, not\n price.  Our General Public Licenses are designed to make sure that you\n have the freedom to distribute copies of free software (and charge for\n them if you wish), that you receive source code or can get it if you\n want it, that you can change the software or use pieces of it in new\n free programs, and that you know you can do these things.\n\n   To protect your rights, we need to prevent others from denying you\n these rights or asking you to surrender the rights.  Therefore, you have\n certain responsibilities if you distribute copies of the software, or if\n you modify it: responsibilities to respect the freedom of others.\n\n   For example, if you distribute copies of such a program, whether\n gratis or for a fee, you must pass on to the recipients the same\n freedoms that you received.  You must make sure that they, too, receive\n or can get the source code.  And you must show them these terms so they\n know their rights.\n\n   Developers that use the GNU GPL protect your rights with two steps:\n (1) assert copyright on the software, and (2) offer you this License\n giving you legal permission to copy, distribute and/or modify it.\n\n   For the developers' and authors' protection, the GPL clearly explains\n that there is no warranty for this free software.  For both users' and\n authors' sake, the GPL requires that modified versions be marked as\n changed, so that their problems will not be attributed erroneously to\n authors of previous versions.\n\n   Some devices are designed to deny users access to install or run\n modified versions of the software inside them, although the manufacturer\n can do so.  This is fundamentally incompatible with the aim of\n protecting users' freedom to change the software.  The systematic\n pattern of such abuse occurs in the area of products for individuals to\n use, which is precisely where it is most unacceptable.  Therefore, we\n have designed this version of the GPL to prohibit the practice for those\n products.  If such problems arise substantially in other domains, we\n stand ready to extend this provision to those domains in future versions\n of the GPL, as needed to protect the freedom of users.\n\n   Finally, every program is threatened constantly by software patents.\n States should not allow patents to restrict development and use of\n software on general-purpose computers, but in those that do, we wish to\n avoid the special danger that patents applied to a free program could\n make it effectively proprietary.  To prevent this, the GPL assures that\n patents cannot be used to render the program non-free.\n\n   The precise terms and conditions for copying, distribution and\n modification follow.\n\n                        TERMS AND CONDITIONS\n\n   0. Definitions.\n\n   \"This License\" refers to version 3 of the GNU General Public License.\n\n   \"Copyright\" also means copyright-like laws that apply to other kinds of\n works, such as semiconductor masks.\n\n   \"The Program\" refers to any copyrightable work licensed under this\n License.  Each licensee is addressed as \"you\".  \"Licensees\" and\n \"recipients\" may be individuals or organizations.\n\n   To \"modify\" a work means to copy from or adapt all or part of the work\n in a fashion requiring copyright permission, other than the making of an\n exact copy.  The resulting work is called a \"modified version\" of the\n earlier work or a work \"based on\" the earlier work.\n\n   A \"covered work\" means either the unmodified Program or a work based\n on the Program.\n\n   To \"propagate\" a work means to do anything with it that, without\n permission, would make you directly or secondarily liable for\n infringement under applicable copyright law, except executing it on a\n computer or modifying a private copy.  Propagation includes copying,\n distribution (with or without modification), making available to the\n public, and in some countries other activities as well.\n\n   To \"convey\" a work means any kind of propagation that enables other\n parties to make or receive copies.  Mere interaction with a user through\n a computer network, with no transfer of a copy, is not conveying.\n\n   An interactive user interface displays \"Appropriate Legal Notices\"\n to the extent that it includes a convenient and prominently visible\n feature that (1) displays an appropriate copyright notice, and (2)\n tells the user that there is no warranty for the work (except to the\n extent that warranties are provided), that licensees may convey the\n work under this License, and how to view a copy of this License.  If\n the interface presents a list of user commands or options, such as a\n menu, a prominent item in the list meets this criterion.\n\n   1. Source Code.\n\n   The \"source code\" for a work means the preferred form of the work\n for making modifications to it.  \"Object code\" means any non-source\n form of a work.\n\n   A \"Standard Interface\" means an interface that either is an official\n standard defined by a recognized standards body, or, in the case of\n interfaces specified for a particular programming language, one that\n is widely used among developers working in that language.\n\n   The \"System Libraries\" of an executable work include anything, other\n than the work as a whole, that (a) is included in the normal form of\n packaging a Major Component, but which is not part of that Major\n Component, and (b) serves only to enable use of the work with that\n Major Component, or to implement a Standard Interface for which an\n implementation is available to the public in source code form.  A\n \"Major Component\", in this context, means a major essential component\n (kernel, window system, and so on) of the specific operating system\n (if any) on which the executable work runs, or a compiler used to\n produce the work, or an object code interpreter used to run it.\n\n   The \"Corresponding Source\" for a work in object code form means all\n the source code needed to generate, install, and (for an executable\n work) run the object code and to modify the work, including scripts to\n control those activities.  However, it does not include the work's\n System Libraries, or general-purpose tools or generally available free\n programs which are used unmodified in performing those activities but\n which are not part of the work.  For example, Corresponding Source\n includes interface definition files associated with source files for\n the work, and the source code for shared libraries and dynamically\n linked subprograms that the work is specifically designed to require,\n such as by intimate data communication or control flow between those\n subprograms and other parts of the work.\n\n   The Corresponding Source need not include anything that users\n can regenerate automatically from other parts of the Corresponding\n Source.\n\n   The Corresponding Source for a work in source code form is that\n same work.\n\n   2. Basic Permissions.\n\n   All rights granted under this License are granted for the term of\n copyright on the Program, and are irrevocable provided the stated\n conditions are met.  This License explicitly affirms your unlimited\n permission to run the unmodified Program.  The output from running a\n covered work is covered by this License only if the output, given its\n content, constitutes a covered work.  This License acknowledges your\n rights of fair use or other equivalent, as provided by copyright law.\n\n   You may make, run and propagate covered works that you do not\n convey, without conditions so long as your license otherwise remains\n in force.  You may convey covered works to others for the sole purpose\n of having them make modifications exclusively for you, or provide you\n with facilities for running those works, provided that you comply with\n the terms of this License in conveying all material for which you do\n not control copyright.  Those thus making or running the covered works\n for you must do so exclusively on your behalf, under your direction\n and control, on terms that prohibit them from making any copies of\n your copyrighted material outside their relationship with you.\n\n   Conveying under any other circumstances is permitted solely under\n the conditions stated below.  Sublicensing is not allowed; section 10\n makes it unnecessary.\n\n   3. Protecting Users' Legal Rights From Anti-Circumvention Law.\n\n   No covered work shall be deemed part of an effective technological\n measure under any applicable law fulfilling obligations under article\n 11 of the WIPO copyright treaty adopted on 20 December 1996, or\n similar laws prohibiting or restricting circumvention of such\n measures.\n\n   When you convey a covered work, you waive any legal power to forbid\n circumvention of technological measures to the extent such circumvention\n is effected by exercising rights under this License with respect to\n the covered work, and you disclaim any intention to limit operation or\n modification of the work as a means of enforcing, against the work's\n users, your or third parties' legal rights to forbid circumvention of\n technological measures.\n\n   4. Conveying Verbatim Copies.\n\n   You may convey verbatim copies of the Program's source code as you\n receive it, in any medium, provided that you conspicuously and\n appropriately publish on each copy an appropriate copyright notice;\n keep intact all notices stating that this License and any\n non-permissive terms added in accord with section 7 apply to the code;\n keep intact all notices of the absence of any warranty; and give all\n recipients a copy of this License along with the Program.\n\n   You may charge any price or no price for each copy that you convey,\n and you may offer support or warranty protection for a fee.\n\n   5. Conveying Modified Source Versions.\n\n   You may convey a work based on the Program, or the modifications to\n produce it from the Program, in the form of source code under the\n terms of section 4, provided that you also meet all of these conditions:\n\n     a) The work must carry prominent notices stating that you modified\n     it, and giving a relevant date.\n\n     b) The work must carry prominent notices stating that it is\n     released under this License and any conditions added under section\n     7.  This requirement modifies the requirement in section 4 to\n     \"keep intact all notices\".\n\n     c) You must license the entire work, as a whole, under this\n     License to anyone who comes into possession of a copy.  This\n     License will therefore apply, along with any applicable section 7\n     additional terms, to the whole of the work, and all its parts,\n     regardless of how they are packaged.  This License gives no\n     permission to license the work in any other way, but it does not\n     invalidate such permission if you have separately received it.\n\n     d) If the work has interactive user interfaces, each must display\n     Appropriate Legal Notices; however, if the Program has interactive\n     interfaces that do not display Appropriate Legal Notices, your\n     work need not make them do so.\n\n   A compilation of a covered work with other separate and independent\n works, which are not by their nature extensions of the covered work,\n and which are not combined with it such as to form a larger program,\n in or on a volume of a storage or distribution medium, is called an\n \"aggregate\" if the compilation and its resulting copyright are not\n used to limit the access or legal rights of the compilation's users\n beyond what the individual works permit.  Inclusion of a covered work\n in an aggregate does not cause this License to apply to the other\n parts of the aggregate.\n\n   6. Conveying Non-Source Forms.\n\n   You may convey a covered work in object code form under the terms\n of sections 4 and 5, provided that you also convey the\n machine-readable Corresponding Source under the terms of this License,\n in one of these ways:\n\n     a) Convey the object code in, or embodied in, a physical product\n     (including a physical distribution medium), accompanied by the\n     Corresponding Source fixed on a durable physical medium\n     customarily used for software interchange.\n\n     b) Convey the object code in, or embodied in, a physical product\n     (including a physical distribution medium), accompanied by a\n     written offer, valid for at least three years and valid for as\n     long as you offer spare parts or customer support for that product\n     model, to give anyone who possesses the object code either (1) a\n     copy of the Corresponding Source for all the software in the\n     product that is covered by this License, on a durable physical\n     medium customarily used for software interchange, for a price no\n     more than your reasonable cost of physically performing this\n     conveying of source, or (2) access to copy the\n     Corresponding Source from a network server at no charge.\n\n     c) Convey individual copies of the object code with a copy of the\n     written offer to provide the Corresponding Source.  This\n     alternative is allowed only occasionally and noncommercially, and\n     only if you received the object code with such an offer, in accord\n     with subsection 6b.\n\n     d) Convey the object code by offering access from a designated\n     place (gratis or for a charge), and offer equivalent access to the\n     Corresponding Source in the same way through the same place at no\n     further charge.  You need not require recipients to copy the\n     Corresponding Source along with the object code.  If the place to\n     copy the object code is a network server, the Corresponding Source\n     may be on a different server (operated by you or a third party)\n     that supports equivalent copying facilities, provided you maintain\n     clear directions next to the object code saying where to find the\n     Corresponding Source.  Regardless of what server hosts the\n     Corresponding Source, you remain obligated to ensure that it is\n     available for as long as needed to satisfy these requirements.\n\n     e) Convey the object code using peer-to-peer transmission, provided\n     you inform other peers where the object code and Corresponding\n     Source of the work are being offered to the general public at no\n     charge under subsection 6d.\n\n   A separable portion of the object code, whose source code is excluded\n from the Corresponding Source as a System Library, need not be\n included in conveying the object code work.\n\n   A \"User Product\" is either (1) a \"consumer product\", which means any\n tangible personal property which is normally used for personal, family,\n or household purposes, or (2) anything designed or sold for incorporation\n into a dwelling.  In determining whether a product is a consumer product,\n doubtful cases shall be resolved in favor of coverage.  For a particular\n product received by a particular user, \"normally used\" refers to a\n typical or common use of that class of product, regardless of the status\n of the particular user or of the way in which the particular user\n actually uses, or expects or is expected to use, the product.  A product\n is a consumer product regardless of whether the product has substantial\n commercial, industrial or non-consumer uses, unless such uses represent\n the only significant mode of use of the product.\n\n   \"Installation Information\" for a User Product means any methods,\n procedures, authorization keys, or other information required to install\n and execute modified versions of a covered work in that User Product from\n a modified version of its Corresponding Source.  The information must\n suffice to ensure that the continued functioning of the modified object\n code is in no case prevented or interfered with solely because\n modification has been made.\n\n   If you convey an object code work under this section in, or with, or\n specifically for use in, a User Product, and the conveying occurs as\n part of a transaction in which the right of possession and use of the\n User Product is transferred to the recipient in perpetuity or for a\n fixed term (regardless of how the transaction is characterized), the\n Corresponding Source conveyed under this section must be accompanied\n by the Installation Information.  But this requirement does not apply\n if neither you nor any third party retains the ability to install\n modified object code on the User Product (for example, the work has\n been installed in ROM).\n\n   The requirement to provide Installation Information does not include a\n requirement to continue to provide support service, warranty, or updates\n for a work that has been modified or installed by the recipient, or for\n the User Product in which it has been modified or installed.  Access to a\n network may be denied when the modification itself materially and\n adversely affects the operation of the network or violates the rules and\n protocols for communication across the network.\n\n   Corresponding Source conveyed, and Installation Information provided,\n in accord with this section must be in a format that is publicly\n documented (and with an implementation available to the public in\n source code form), and must require no special password or key for\n unpacking, reading or copying.\n\n   7. Additional Terms.\n\n   \"Additional permissions\" are terms that supplement the terms of this\n License by making exceptions from one or more of its conditions.\n Additional permissions that are applicable to the entire Program shall\n be treated as though they were included in this License, to the extent\n that they are valid under applicable law.  If additional permissions\n apply only to part of the Program, that part may be used separately\n under those permissions, but the entire Program remains governed by\n this License without regard to the additional permissions.\n\n   When you convey a copy of a covered work, you may at your option\n remove any additional permissions from that copy, or from any part of\n it.  (Additional permissions may be written to require their own\n removal in certain cases when you modify the work.)  You may place\n additional permissions on material, added by you to a covered work,\n for which you have or can give appropriate copyright permission.\n\n   Notwithstanding any other provision of this License, for material you\n add to a covered work, you may (if authorized by the copyright holders of\n that material) supplement the terms of this License with terms:\n\n     a) Disclaiming warranty or limiting liability differently from the\n     terms of sections 15 and 16 of this License; or\n\n     b) Requiring preservation of specified reasonable legal notices or\n     author attributions in that material or in the Appropriate Legal\n     Notices displayed by works containing it; or\n\n     c) Prohibiting misrepresentation of the origin of that material, or\n     requiring that modified versions of such material be marked in\n     reasonable ways as different from the original version; or\n\n     d) Limiting the use for publicity purposes of names of licensors or\n     authors of the material; or\n\n     e) Declining to grant rights under trademark law for use of some\n     trade names, trademarks, or service marks; or\n\n     f) Requiring indemnification of licensors and authors of that\n     material by anyone who conveys the material (or modified versions of\n     it) with contractual assumptions of liability to the recipient, for\n     any liability that these contractual assumptions directly impose on\n     those licensors and authors.\n\n   All other non-permissive additional terms are considered \"further\n restrictions\" within the meaning of section 10.  If the Program as you\n received it, or any part of it, contains a notice stating that it is\n governed by this License along with a term that is a further\n restriction, you may remove that term.  If a license document contains\n a further restriction but permits relicensing or conveying under this\n License, you may add to a covered work material governed by the terms\n of that license document, provided that the further restriction does\n not survive such relicensing or conveying.\n\n   If you add terms to a covered work in accord with this section, you\n must place, in the relevant source files, a statement of the\n additional terms that apply to those files, or a notice indicating\n where to find the applicable terms.\n\n   Additional terms, permissive or non-permissive, may be stated in the\n form of a separately written license, or stated as exceptions;\n the above requirements apply either way.\n\n   8. Termination.\n\n   You may not propagate or modify a covered work except as expressly\n provided under this License.  Any attempt otherwise to propagate or\n modify it is void, and will automatically terminate your rights under\n this License (including any patent licenses granted under the third\n paragraph of section 11).\n\n   However, if you cease all violation of this License, then your\n license from a particular copyright holder is reinstated (a)\n provisionally, unless and until the copyright holder explicitly and\n finally terminates your license, and (b) permanently, if the copyright\n holder fails to notify you of the violation by some reasonable means\n prior to 60 days after the cessation.\n\n   Moreover, your license from a particular copyright holder is\n reinstated permanently if the copyright holder notifies you of the\n violation by some reasonable means, this is the first time you have\n received notice of violation of this License (for any work) from that\n copyright holder, and you cure the violation prior to 30 days after\n your receipt of the notice.\n\n   Termination of your rights under this section does not terminate the\n licenses of parties who have received copies or rights from you under\n this License.  If your rights have been terminated and not permanently\n reinstated, you do not qualify to receive new licenses for the same\n material under section 10.\n\n   9. Acceptance Not Required for Having Copies.\n\n   You are not required to accept this License in order to receive or\n run a copy of the Program.  Ancillary propagation of a covered work\n occurring solely as a consequence of using peer-to-peer transmission\n to receive a copy likewise does not require acceptance.  However,\n nothing other than this License grants you permission to propagate or\n modify any covered work.  These actions infringe copyright if you do\n not accept this License.  Therefore, by modifying or propagating a\n covered work, you indicate your acceptance of this License to do so.\n\n   10. Automatic Licensing of Downstream Recipients.\n\n   Each time you convey a covered work, the recipient automatically\n receives a license from the original licensors, to run, modify and\n propagate that work, subject to this License.  You are not responsible\n for enforcing compliance by third parties with this License.\n\n   An \"entity transaction\" is a transaction transferring control of an\n organization, or substantially all assets of one, or subdividing an\n organization, or merging organizations.  If propagation of a covered\n work results from an entity transaction, each party to that\n transaction who receives a copy of the work also receives whatever\n licenses to the work the party's predecessor in interest had or could\n give under the previous paragraph, plus a right to possession of the\n Corresponding Source of the work from the predecessor in interest, if\n the predecessor has it or can get it with reasonable efforts.\n\n   You may not impose any further restrictions on the exercise of the\n rights granted or affirmed under this License.  For example, you may\n not impose a license fee, royalty, or other charge for exercise of\n rights granted under this License, and you may not initiate litigation\n (including a cross-claim or counterclaim in a lawsuit) alleging that\n any patent claim is infringed by making, using, selling, offering for\n sale, or importing the Program or any portion of it.\n\n   11. Patents.\n\n   A \"contributor\" is a copyright holder who authorizes use under this\n License of the Program or a work on which the Program is based.  The\n work thus licensed is called the contributor's \"contributor version\".\n\n   A contributor's \"essential patent claims\" are all patent claims\n owned or controlled by the contributor, whether already acquired or\n hereafter acquired, that would be infringed by some manner, permitted\n by this License, of making, using, or selling its contributor version,\n but do not include claims that would be infringed only as a\n consequence of further modification of the contributor version.  For\n purposes of this definition, \"control\" includes the right to grant\n patent sublicenses in a manner consistent with the requirements of\n this License.\n\n   Each contributor grants you a non-exclusive, worldwide, royalty-free\n patent license under the contributor's essential patent claims, to\n make, use, sell, offer for sale, import and otherwise run, modify and\n propagate the contents of its contributor version.\n\n   In the following three paragraphs, a \"patent license\" is any express\n agreement or commitment, however denominated, not to enforce a patent\n (such as an express permission to practice a patent or covenant not to\n sue for patent infringement).  To \"grant\" such a patent license to a\n party means to make such an agreement or commitment not to enforce a\n patent against the party.\n\n   If you convey a covered work, knowingly relying on a patent license,\n and the Corresponding Source of the work is not available for anyone\n to copy, free of charge and under the terms of this License, through a\n publicly available network server or other readily accessible means,\n then you must either (1) cause the Corresponding Source to be so\n available, or (2) arrange to deprive yourself of the benefit of the\n patent license for this particular work, or (3) arrange, in a manner\n consistent with the requirements of this License, to extend the patent\n license to downstream recipients.  \"Knowingly relying\" means you have\n actual knowledge that, but for the patent license, your conveying the\n covered work in a country, or your recipient's use of the covered work\n in a country, would infringe one or more identifiable patents in that\n country that you have reason to believe are valid.\n\n   If, pursuant to or in connection with a single transaction or\n arrangement, you convey, or propagate by procuring conveyance of, a\n covered work, and grant a patent license to some of the parties\n receiving the covered work authorizing them to use, propagate, modify\n or convey a specific copy of the covered work, then the patent license\n you grant is automatically extended to all recipients of the covered\n work and works based on it.\n\n   A patent license is \"discriminatory\" if it does not include within\n the scope of its coverage, prohibits the exercise of, or is\n conditioned on the non-exercise of one or more of the rights that are\n specifically granted under this License.  You may not convey a covered\n work if you are a party to an arrangement with a third party that is\n in the business of distributing software, under which you make payment\n to the third party based on the extent of your activity of conveying\n the work, and under which the third party grants, to any of the\n parties who would receive the covered work from you, a discriminatory\n patent license (a) in connection with copies of the covered work\n conveyed by you (or copies made from those copies), or (b) primarily\n for and in connection with specific products or compilations that\n contain the covered work, unless you entered into that arrangement,\n or that patent license was granted, prior to 28 March 2007.\n\n   Nothing in this License shall be construed as excluding or limiting\n any implied license or other defenses to infringement that may\n otherwise be available to you under applicable patent law.\n\n   12. No Surrender of Others' Freedom.\n\n   If conditions are imposed on you (whether by court order, agreement or\n otherwise) that contradict the conditions of this License, they do not\n excuse you from the conditions of this License.  If you cannot convey a\n covered work so as to satisfy simultaneously your obligations under this\n License and any other pertinent obligations, then as a consequence you may\n not convey it at all.  For example, if you agree to terms that obligate you\n to collect a royalty for further conveying from those to whom you convey\n the Program, the only way you could satisfy both those terms and this\n License would be to refrain entirely from conveying the Program.\n\n   13. Use with the GNU Affero General Public License.\n\n   Notwithstanding any other provision of this License, you have\n permission to link or combine any covered work with a work licensed\n under version 3 of the GNU Affero General Public License into a single\n combined work, and to convey the resulting work.  The terms of this\n License will continue to apply to the part which is the covered work,\n but the special requirements of the GNU Affero General Public License,\n section 13, concerning interaction through a network will apply to the\n combination as such.\n\n   14. Revised Versions of this License.\n\n   The Free Software Foundation may publish revised and/or new versions of\n the GNU General Public License from time to time.  Such new versions will\n be similar in spirit to the present version, but may differ in detail to\n address new problems or concerns.\n\n   Each version is given a distinguishing version number.  If the\n Program specifies that a certain numbered version of the GNU General\n Public License \"or any later version\" applies to it, you have the\n option of following the terms and conditions either of that numbered\n version or of any later version published by the Free Software\n Foundation.  If the Program does not specify a version number of the\n GNU General Public License, you may choose any version ever published\n by the Free Software Foundation.\n\n   If the Program specifies that a proxy can decide which future\n versions of the GNU General Public License can be used, that proxy's\n public statement of acceptance of a version permanently authorizes you\n to choose that version for the Program.\n\n   Later license versions may give you additional or different\n permissions.  However, no additional obligations are imposed on any\n author or copyright holder as a result of your choosing to follow a\n later version.\n\n   15. Disclaimer of Warranty.\n\n   THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY\n APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT\n HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM \"AS IS\" WITHOUT WARRANTY\n OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,\n THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR\n PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM\n IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF\n ALL NECESSARY SERVICING, REPAIR OR CORRECTION.\n\n   16. Limitation of Liability.\n\n   IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING\n WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS\n THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY\n GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE\n USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF\n DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD\n PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),\n EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF\n SUCH DAMAGES.\n\n   17. Interpretation of Sections 15 and 16.\n\n   If the disclaimer of warranty and limitation of liability provided\n above cannot be given local legal effect according to their terms,\n reviewing courts shall apply local law that most closely approximates\n an absolute waiver of all civil liability in connection with the\n Program, unless a warranty or assumption of liability accompanies a\n copy of the Program in return for a fee.\n\n                      END OF TERMS AND CONDITIONS\n\n             How to Apply These Terms to Your New Programs\n\n   If you develop a new program, and you want it to be of the greatest\n possible use to the public, the best way to achieve this is to make it\n free software which everyone can redistribute and change under these terms.\n\n   To do so, attach the following notices to the program.  It is safest\n to attach them to the start of each source file to most effectively\n state the exclusion of warranty; and each file should have at least\n the \"copyright\" line and a pointer to where the full notice is found.\n\n     <one line to give the program's name and a brief idea of what it does.>\n     Copyright (C) <year>  <name of author>\n\n     This program is free software: you can redistribute it and/or modify\n     it under the terms of the GNU General Public License as published by\n     the Free Software Foundation, either version 3 of the License, or\n     (at your option) any later version.\n\n     This program is distributed in the hope that it will be useful,\n     but WITHOUT ANY WARRANTY; without even the implied warranty of\n     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n     GNU General Public License for more details.\n\n     You should have received a copy of the GNU General Public License\n     along with this program.  If not, see <http://www.gnu.org/licenses/>.\n\n Also add information on how to contact you by electronic and paper mail.\n\n   If the program does terminal interaction, make it output a short\n notice like this when it starts in an interactive mode:\n\n     <program>  Copyright (C) <year>  <name of author>\n     This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.\n     This is free software, and you are welcome to redistribute it\n     under certain conditions; type `show c' for details.\n\n The hypothetical commands `show w' and `show c' should show the appropriate\n parts of the General Public License.  Of course, your program's commands\n might be different; for a GUI interface, you would use an \"about box\".\n\n   You should also get your employer (if you work as a programmer) or school,\n if any, to sign a \"copyright disclaimer\" for the program, if necessary.\n For more information on this, and how to apply and follow the GNU GPL, see\n <http://www.gnu.org/licenses/>.\n\n   The GNU General Public License does not permit incorporating your program\n into proprietary programs.  If your program is a subroutine library, you\n may consider it more useful to permit linking proprietary applications with\n the library.  If this is what you want to do, use the GNU Lesser General\n Public License instead of this License.  But first, please read\n <http://www.gnu.org/philosophy/why-not-lgpl.html>.\n\n Name: libquadmath\n Files: numpy/.dylibs/libquadmath*.so\n Description: dynamically linked to files compiled with gcc\n Availability: https://gcc.gnu.org/git/?p=gcc.git;a=tree;f=libquadmath\n License: LGPL-2.1-or-later\n\n     GCC Quad-Precision Math Library\n     Copyright (C) 2010-2019 Free Software Foundation, Inc.\n     Written by Francois-Xavier Coudert  <fxcoudert@gcc.gnu.org>\n\n     This file is part of the libquadmath library.\n     Libquadmath is free software; you can redistribute it and/or\n     modify it under the terms of the GNU Library General Public\n     License as published by the Free Software Foundation; either\n     version 2.1 of the License, or (at your option) any later version.\n\n     Libquadmath is distributed in the hope that it will be useful,\n     but WITHOUT ANY WARRANTY; without even the implied warranty of\n     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\n     Lesser General Public License for more details.\n     https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html\n",
+      "license_classifiers": [
+        "OSI Approved :: BSD License"
+      ],
+      "license_expression": null,
+      "name": "numpy",
+      "normalized_name": "numpy",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.2.6"
+    },
+    {
+      "declared_license": "MIT License",
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "onnxruntime",
+      "normalized_name": "onnxruntime",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "1.27.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "Apache-2.0 OR BSD-2-Clause",
+      "name": "packaging",
+      "normalized_name": "packaging",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "26.2"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)"
+      ],
+      "license_expression": null,
+      "name": "pathspec",
+      "normalized_name": "pathspec",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "1.1.1"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT-CMU",
+      "name": "pillow",
+      "normalized_name": "pillow",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "12.3.0"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "pluggy",
+      "normalized_name": "pluggy",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "1.6.0"
+    },
+    {
+      "declared_license": "3-Clause BSD License",
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "protobuf",
+      "normalized_name": "protobuf",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "7.35.1"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-3-Clause",
+      "name": "pycparser",
+      "normalized_name": "pycparser",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "3.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "pydantic",
+      "normalized_name": "pydantic",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.13.4"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "pydantic_core",
+      "normalized_name": "pydantic-core",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.46.4"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": "MIT",
+      "name": "pydantic-settings",
+      "normalized_name": "pydantic-settings",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.14.2"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-2-Clause",
+      "name": "Pygments",
+      "normalized_name": "pygments",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.20.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "PyJWT",
+      "normalized_name": "pyjwt",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.13.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-3-Clause",
+      "name": "pypdf",
+      "normalized_name": "pypdf",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "6.15.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "pytest",
+      "normalized_name": "pytest",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "9.1.1"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "pytest-cov",
+      "normalized_name": "pytest-cov",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "6.3.0"
+    },
+    {
+      "declared_license": "BSD-3-Clause",
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "python-dotenv",
+      "normalized_name": "python-dotenv",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "1.2.2"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: Apache Software License"
+      ],
+      "license_expression": "Apache-2.0",
+      "name": "python-multipart",
+      "normalized_name": "python-multipart",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.0.32"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "PyYAML",
+      "normalized_name": "pyyaml",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "6.0.3"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "referencing",
+      "normalized_name": "referencing",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.37.0"
+    },
+    {
+      "declared_license": "BSD license (see license.txt for details), Copyright (c) 2000-2025, ReportLab Inc.",
+      "license_classifiers": [
+        "OSI Approved :: BSD License"
+      ],
+      "license_expression": null,
+      "name": "reportlab",
+      "normalized_name": "reportlab",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "4.5.1"
+    },
+    {
+      "declared_license": "Apache-2.0",
+      "license_classifiers": [
+        "OSI Approved :: Apache Software License"
+      ],
+      "license_expression": null,
+      "name": "requests",
+      "normalized_name": "requests",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.34.2"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "rpds-py",
+      "normalized_name": "rpds-py",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2026.6.3"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "ruff",
+      "normalized_name": "ruff",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.15.21"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "sqlglot",
+      "normalized_name": "sqlglot",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "30.13.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-3-Clause",
+      "name": "sse-starlette",
+      "normalized_name": "sse-starlette",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "3.4.5"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-3-Clause",
+      "name": "starlette",
+      "normalized_name": "starlette",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "1.3.1"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: Apache Software License"
+      ],
+      "license_expression": null,
+      "name": "tokenizers",
+      "normalized_name": "tokenizers",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.22.2"
+    },
+    {
+      "declared_license": "MPL-2.0 AND MIT",
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "tqdm",
+      "normalized_name": "tqdm",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "4.68.4"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "tree-sitter",
+      "normalized_name": "tree-sitter",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.26.0"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "tree-sitter-go",
+      "normalized_name": "tree-sitter-go",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.25.0"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "tree-sitter-java",
+      "normalized_name": "tree-sitter-java",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.23.5"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "tree-sitter-javascript",
+      "normalized_name": "tree-sitter-javascript",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.25.0"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "tree-sitter-rust",
+      "normalized_name": "tree-sitter-rust",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.24.2"
+    },
+    {
+      "declared_license": "MIT",
+      "license_classifiers": [
+        "OSI Approved :: MIT License"
+      ],
+      "license_expression": null,
+      "name": "tree-sitter-typescript",
+      "normalized_name": "tree-sitter-typescript",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.23.2"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [
+        "OSI Approved :: Apache Software License"
+      ],
+      "license_expression": null,
+      "name": "trove-classifiers",
+      "normalized_name": "trove-classifiers",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2026.6.1.19"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "PSF-2.0",
+      "name": "typing_extensions",
+      "normalized_name": "typing-extensions",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "4.16.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "typing-inspection",
+      "normalized_name": "typing-inspection",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.4.2"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT",
+      "name": "urllib3",
+      "normalized_name": "urllib3",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "2.7.0"
+    },
+    {
+      "declared_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-3-Clause",
+      "name": "uvicorn",
+      "normalized_name": "uvicorn",
+      "reason": "approved_license_marker",
+      "status": "approved",
+      "version": "0.51.0"
+    }
+  ],
+  "policy_schema_version": "deeplaw.release-license-policy/v1",
+  "record_sha256": "67f467865ac6db53f8bf6d34809d68d572fe5b5816e93d3a49fa577c565e18e5",
+  "review_required": [],
+  "schema_version": "deeplaw.installed-license-inventory/v1",
+  "status": "passed"
+}

@@ -14,6 +14,8 @@ _ASCII_TOKEN = re.compile(r"[a-zA-Z0-9]+(?:[-_.][a-zA-Z0-9]+)*")
 _QUOTED_PHRASE = re.compile(r'"([^"\n]{2,200})"|“([^”\n]{2,200})”|`([^`\n]{2,200})`')
 _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 _ASCII_PART = re.compile(r"[A-Za-z]+|[0-9]+")
+_QUERY_ANCHOR_WORD = re.compile(r"[^\W_]+(?:['\u2019][^\W_]+)*", re.UNICODE)
+_QUERY_OPAQUE_ANCHOR = re.compile(r"[A-Z0-9]+(?:[-_:/.][A-Z0-9]+)+")
 _ARTICLE = re.compile(
     r"第\s*([〇零一二两三四五六七八九十百千万亿0-9]+)\s*条(?:\s*之\s*([〇零一二两三四五六七八九十百0-9]+))?"
 )
@@ -140,6 +142,54 @@ _STOP_TERMS = {
     "需要",
 }
 
+# These are query-grammar words, not an entity lexicon.  They prevent normal
+# sentence capitalization (for example ``Compare Current requirements``) from
+# becoming an identity anchor while leaving domain names such as ``Policy
+# Alpha`` eligible.
+_QUERY_ANCHOR_GRAMMAR_STOPWORDS = frozenset(
+    {
+        "about",
+        "and",
+        "are",
+        "can",
+        "compare",
+        "could",
+        "current",
+        "does",
+        "explain",
+        "find",
+        "for",
+        "from",
+        "give",
+        "has",
+        "have",
+        "how",
+        "in",
+        "is",
+        "latest",
+        "list",
+        "me",
+        "not",
+        "of",
+        "or",
+        "please",
+        "required",
+        "requirements",
+        "show",
+        "tell",
+        "the",
+        "to",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "with",
+        "would",
+        "you",
+    }
+)
+
 # This deliberately small compatibility table is a retrieval aid, not a text
 # conversion authority.  It covers high-frequency query vocabulary without
 # rewriting stored evidence or identities.
@@ -231,50 +281,72 @@ _QUERY_SYNONYMS = {
     "仓库": ("代码库",),
 }
 
-# Query-only lexical bridges are deliberately bounded and phrase based.  They
-# improve deterministic cross-language discovery without translating stored
-# evidence, changing source identity, or assigning Authority.  Index builders
-# continue to use ``search_terms`` so a profile change does not silently alter
-# durable derived-state inputs.
-QUERY_EXPANSION_PROFILE = "deeplaw-deterministic-query-expansion/1"
-_QUERY_CROSS_LANGUAGE_ALIASES = {
+# Query-only lexical bridges are deliberately bounded and query-only.  The v1
+# identity remains available for explicit compatibility requests, while v2 is
+# the default profile used by all current callers.  Index builders continue to
+# use ``search_terms`` so a profile change does not silently alter durable
+# derived-state inputs.
+QUERY_EXPANSION_PROFILE_V1 = "deeplaw-deterministic-query-expansion/1"
+QUERY_EXPANSION_PROFILE_V2 = "deeplaw-deterministic-query-expansion/2"
+QUERY_EXPANSION_PROFILE = QUERY_EXPANSION_PROFILE_V2
+_QUERY_CROSS_LANGUAGE_ALIASES_V1 = {
     "组织": ("organization",),
     "也称": ("known",),
     "别名": ("alias", "known"),
     "两位": ("two", "people"),
     "区分": ("distinguished",),
-    "指什么": ("refer",),
-    "证据准入": ("evidence", "admission"),
-    "证据接纳": ("evidence", "admission"),
-    "生产服务": ("production", "service"),
-    "全球": ("worldwide",),
-    "公共 API": ("public", "api"),
-    "公共API": ("public", "api"),
-    "诊断日志": ("diagnostic", "logs"),
-    "保留政策": ("retention", "policies"),
-    "保留期限": ("retention", "period"),
-    "保留期": ("retention", "period"),
-    "根据每项政策": ("according", "each", "policy"),
-    "摘要": ("summarize", "summary"),
+    "证据": ("evidence",),
+    "准入": ("admission",),
+    "生产": ("production",),
+    "全球": ("global",),
+    "公共": ("public",),
+    "日志": ("log",),
+    "政策": ("policy",),
+    "摘要": ("summary",),
     "来源": ("source",),
-    "有序步骤": ("ordered", "steps"),
-    "工作流": ("workflow",),
-    "时间线": ("timeline", "chronological"),
-    "发生": ("happened", "event"),
-    "协议修订": ("protocol", "revision"),
-    "使用哪个": ("use",),
-    "当前支持": ("currently", "support"),
+    "步骤": ("steps",),
+    "流程": ("workflow",),
+    "时间": ("timeline",),
+    "发生": ("event",),
+    "协议": ("protocol",),
     "当前": ("current",),
-    "发布概览": ("release", "overview"),
     "引用": ("quote",),
-    "精确颜色": ("exact", "color"),
-    "验证徽章": ("verification", "badge"),
-    "审阅完成": ("review", "completed"),
-    "计划发布": ("publication", "scheduled"),
-    "政策冲突": ("policy", "conflict"),
-    "之间的冲突": ("conflict",),
     "冲突": ("conflict",),
-    "比较": ("compare", "comparison"),
+    "比较": ("compare",),
+}
+
+_QUERY_CROSS_LANGUAGE_ALIASES_V2 = {
+    "诊断": ("diagnostic",),
+    "保留": ("retain", "retention"),
+    "期限": ("duration", "period"),
+    "支持": ("support",),
+    "验证": ("verify", "verification"),
+    "徽章": ("badge",),
+    "精确": ("exact",),
+    "颜色": ("color",),
+    "组织": ("organization",),
+    "也称": ("known",),
+    "别名": ("alias",),
+    "两位": ("two", "people"),
+    "区分": ("distinguish",),
+    "证据": ("evidence",),
+    "准入": ("admission",),
+    "生产": ("production",),
+    "全球": ("global",),
+    "公共": ("public",),
+    "日志": ("log",),
+    "政策": ("policy",),
+    "来源": ("source",),
+    "摘要": ("summary",),
+    "步骤": ("steps",),
+    "流程": ("workflow",),
+    "时间": ("timeline",),
+    "发生": ("event",),
+    "协议": ("protocol",),
+    "当前": ("current",),
+    "引用": ("quote",),
+    "冲突": ("conflict",),
+    "比较": ("compare",),
 }
 
 
@@ -298,6 +370,68 @@ def canonical_json(value: Any) -> str:
         separators=(",", ":"),
         allow_nan=False,
     )
+
+
+_QUERY_EXPANSION_MAX_TERMS_V2 = 24
+_QUERY_EXPANSION_MATCH_POLICY_V2 = "normalized-casefold-substring"
+QUERY_EXPANSION_PROFILE_V2_LEXICON_SHA256 = sha256_bytes(
+    canonical_json(_QUERY_CROSS_LANGUAGE_ALIASES_V2).encode("utf-8")
+)
+_QUERY_EXPANSION_PROFILE_V2_BODY = {
+    "schema_version": "deeplaw.query-expansion-profile/v2",
+    "profile_id": QUERY_EXPANSION_PROFILE_V2,
+    "compatibility_profile": QUERY_EXPANSION_PROFILE_V1,
+    "lexicon_sha256": QUERY_EXPANSION_PROFILE_V2_LEXICON_SHA256,
+    "max_terms": _QUERY_EXPANSION_MAX_TERMS_V2,
+    "match_policy": _QUERY_EXPANSION_MATCH_POLICY_V2,
+    "rules": [
+        {
+            "rule_id": "script-normalization-v1",
+            "rationale": "Normalize Traditional and Simplified query scripts before matching.",
+            "locale": "zh-Hans/zh-Hant",
+            "direction": "bidirectional",
+        },
+        {
+            "rule_id": "atomic-bilingual-concepts-v1",
+            "rationale": "Bridge bounded, generic atomic concepts to English discovery terms.",
+            "locale": "zh/en",
+            "direction": "zh-to-en",
+        },
+    ],
+}
+
+QUERY_EXPANSION_PROFILE_V2_SHA256 = sha256_bytes(
+    canonical_json(_QUERY_EXPANSION_PROFILE_V2_BODY).encode("utf-8")
+)
+QUERY_EXPANSION_PROFILE_V2_METADATA = {
+    **_QUERY_EXPANSION_PROFILE_V2_BODY,
+    "profile_sha256": QUERY_EXPANSION_PROFILE_V2_SHA256,
+}
+
+# Query discovery uses two bounded views: the normalized source query and an
+# additive ASCII/expansion view.  Fusion is deterministic max-score selection
+# across those views; the single-view reranker remains unchanged.
+QUERY_RERANKER_FUSION_POLICY = "max-score-across-source-and-expansion-views/1"
+
+# Query expansion configuration is a deterministic runtime binding rather than
+# caller-provided metadata.  Keep the normalizer and bounded matching controls
+# explicit so a Query Plan receipt can be reproduced without exposing the
+# expansion lexicon or accepting a caller-selected configuration.
+QUERY_EXPANSION_CONFIGURATION = {
+    "profile_id": QUERY_EXPANSION_PROFILE_V2_METADATA["profile_id"],
+    "profile_sha256": QUERY_EXPANSION_PROFILE_V2_METADATA["profile_sha256"],
+    "lexicon_sha256": QUERY_EXPANSION_PROFILE_V2_METADATA["lexicon_sha256"],
+    "max_terms": QUERY_EXPANSION_PROFILE_V2_METADATA["max_terms"],
+    "match_policy": QUERY_EXPANSION_PROFILE_V2_METADATA["match_policy"],
+    "normalization": "normalize_query_text-casefold-v1",
+    "reranker_fusion_policy": QUERY_RERANKER_FUSION_POLICY,
+}
+QUERY_EXPANSION_CONFIGURATION_SHA256 = sha256_bytes(
+    canonical_json(QUERY_EXPANSION_CONFIGURATION).encode("utf-8")
+)
+
+_QUERY_TARGET_ANCHOR_LIMIT = 8
+_QUERY_TARGET_ANCHOR_WORD_LIMIT = 8
 
 
 def has_instruction_risk(text: str) -> bool:
@@ -497,20 +631,71 @@ def search_terms(
     return [unique[index] for index in indexes]
 
 
-def query_expansion_terms(text: str) -> list[str]:
-    """Return bounded deterministic cross-language aliases for a query only."""
+def _query_expansion_profile(profile: str | None) -> tuple[str, dict[str, tuple[str, ...]]]:
+    selected = QUERY_EXPANSION_PROFILE_V2 if profile is None else profile
+    if selected == QUERY_EXPANSION_PROFILE_V2:
+        lexicon_digest = sha256_bytes(
+            canonical_json(_QUERY_CROSS_LANGUAGE_ALIASES_V2).encode("utf-8")
+        )
+        body = _QUERY_EXPANSION_PROFILE_V2_BODY
+        if (
+            lexicon_digest != body["lexicon_sha256"]
+            or body["max_terms"] != _QUERY_EXPANSION_MAX_TERMS_V2
+            or body["match_policy"] != _QUERY_EXPANSION_MATCH_POLICY_V2
+            or sha256_bytes(canonical_json(body).encode("utf-8"))
+            != QUERY_EXPANSION_PROFILE_V2_SHA256
+        ):
+            raise RuntimeError("query expansion profile integrity check failed")
+        return selected, _QUERY_CROSS_LANGUAGE_ALIASES_V2
+    if selected == QUERY_EXPANSION_PROFILE_V1:
+        return selected, _QUERY_CROSS_LANGUAGE_ALIASES_V1
+    raise ValueError("query expansion profile is unsupported")
 
+
+def query_expansion_terms(
+    text: str,
+    *,
+    profile: str | None = None,
+    explain: bool = False,
+) -> list[str] | dict[str, Any]:
+    """Return bounded generic query aliases, optionally with rule evidence.
+
+    The default is v2.  v1 remains available only when explicitly requested;
+    no Benchmark or Gold data is loaded or consulted by this function.
+    """
+
+    if not isinstance(text, str) or len(text) > 20_000:
+        raise ValueError("query text is invalid or exceeds its bound")
+    selected, aliases = _query_expansion_profile(profile)
     normalized = normalize_query_text(text).casefold()
-    terms: list[str] = []
-    seen: set[str] = set()
-    for phrase, aliases in _QUERY_CROSS_LANGUAGE_ALIASES.items():
-        if phrase not in normalized:
-            continue
-        for alias in aliases:
-            if alias not in seen:
-                seen.add(alias)
-                terms.append(alias)
-    return terms[:24]
+    unbounded_terms = sorted(
+        {
+            alias
+            for phrase, values in aliases.items()
+            if phrase in normalized
+            for alias in values
+        }
+    )
+    terms = unbounded_terms[:_QUERY_EXPANSION_MAX_TERMS_V2]
+    if not explain:
+        return terms
+    rule_ids = (
+        ["script-normalization-v1", "atomic-bilingual-concepts-v1"]
+        if selected == QUERY_EXPANSION_PROFILE_V2 and terms
+        else []
+    )
+    return {
+        "schema_version": "deeplaw.query-expansion-explanation/v1",
+        "profile_id": selected,
+        "profile_sha256": (
+            QUERY_EXPANSION_PROFILE_V2_SHA256
+            if selected == QUERY_EXPANSION_PROFILE_V2
+            else None
+        ),
+        "terms": terms,
+        "terms_truncated": len(unbounded_terms) > _QUERY_EXPANSION_MAX_TERMS_V2,
+        "rule_ids": rule_ids,
+    }
 
 
 def query_search_terms(
@@ -538,15 +723,167 @@ def query_search_terms(
 def query_discovery_text(text: str) -> str:
     """Build bounded reranker text without dropping mixed-language exact anchors."""
 
+    return " ".join(query_discovery_views(text))
+
+
+def query_discovery_views(text: str) -> tuple[str, ...]:
+    """Return bounded source and additive expansion views for reranking."""
+
     expansions = query_expansion_terms(text)
-    if not expansions:
-        return text
+    source_query = normalize_text(text)[:5_000]
     ascii_anchors = [
         term
         for term in search_terms(text, limit=64, cover_tail=True)
         if _ASCII_TOKEN.fullmatch(term)
     ]
-    return " ".join(dict.fromkeys((*ascii_anchors, *expansions)))
+    expansion_view = normalize_text(" ".join(dict.fromkeys((*ascii_anchors, *expansions))))[
+        :5_000
+    ]
+    views = [source_query]
+    if expansion_view and expansion_view != source_query:
+        views.append(expansion_view)
+    return tuple(views)
+
+
+def query_target_anchors(
+    text: str,
+    *,
+    limit: int = _QUERY_TARGET_ANCHOR_LIMIT,
+    word_limit: int = _QUERY_TARGET_ANCHOR_WORD_LIMIT,
+) -> tuple[tuple[str, ...], bool]:
+    """Extract bounded entity-lexicon-free Titlecase/uppercase query anchors.
+
+    This intentionally has no entity dictionary and identifies adjacent cased words
+    plus bounded singleton tokens in mixed/comparison queries.  A sentence-
+    initial singleton such as ``Mercury`` is not an anchor, preserving
+    same-form ambiguity until another admission signal disambiguates it.
+    """
+
+    if not isinstance(text, str) or not text:
+        return (), False
+    if limit <= 0 or word_limit < 2:
+        return (), bool(limit > 0)
+    normalized = normalize_query_text(text)
+    matches = list(_QUERY_ANCHOR_WORD.finditer(normalized))
+    if _QUERY_OPAQUE_ANCHOR.fullmatch(text.strip()):
+        words = tuple(match.group(0).casefold() for match in matches)
+        if not 2 <= len(words) <= word_limit:
+            return (), bool(words)
+        return (" ".join(words),), False
+    compound_runs: list[list[str]] = []
+    isolated_singletons: list[re.Match[str]] = []
+    current: list[re.Match[str]] = []
+    previous_end: int | None = None
+
+    def flush() -> None:
+        nonlocal current
+        if len(current) >= 2:
+            compound_runs.append([item.group(0) for item in current])
+        elif current:
+            isolated_singletons.append(current[0])
+        current = []
+
+    for match in matches:
+        word = match.group(0)
+        is_cased = any(character.isalpha() for character in word)
+        is_title_or_upper = (
+            is_cased
+            and word.casefold() not in _QUERY_ANCHOR_GRAMMAR_STOPWORDS
+            and (word.istitle() or word.isupper())
+        )
+        contiguous = previous_end is not None and normalized[previous_end : match.start()].isspace()
+        if is_title_or_upper and (not current or contiguous):
+            current.append(match)
+        else:
+            flush()
+            if is_title_or_upper:
+                current.append(match)
+        previous_end = match.end()
+    flush()
+
+    runs = list(compound_runs)
+    truncated = False
+    if runs:
+        has_cjk = any(
+            "\u3400" <= character <= "\u9fff"
+            for character in normalize_query_text(text)
+        )
+        singleton_counts: dict[str, int] = {}
+        for match in isolated_singletons:
+            key = match.group(0).casefold()
+            singleton_counts[key] = singleton_counts.get(key, 0) + 1
+        for match in isolated_singletons:
+            word = match.group(0)
+            sentence_initial = not normalized[: match.start()].strip()
+            if (
+                has_cjk
+                or singleton_counts[word.casefold()] > 1
+                or not sentence_initial
+                or word.isupper()
+            ):
+                runs.append([word])
+    else:
+        # A singleton Titlecase/uppercase word is useful only when it is not
+        # merely sentence-initial prose.  Mixed-script queries and explicit
+        # all-uppercase identifiers remain eligible; comparisons with two or
+        # more cased words retain each independent candidate.
+        searchable_terms = set(search_terms(text, limit=64, cover_tail=True))
+        singleton_matches = [
+            match
+            for match in matches
+            if (
+                any(character.isalpha() for character in match.group(0))
+                and match.group(0).casefold() not in _QUERY_ANCHOR_GRAMMAR_STOPWORDS
+                and (match.group(0).istitle() or match.group(0).isupper())
+                and match.group(0).casefold() in searchable_terms
+            )
+        ]
+        has_cjk = any(
+            "\u3400" <= character <= "\u9fff"
+            for character in normalize_query_text(text)
+        )
+        if len(singleton_matches) > 1 or has_cjk:
+            runs = [[match.group(0)] for match in singleton_matches]
+        elif singleton_matches:
+            match = singleton_matches[0]
+            sentence_initial = not normalized[: match.start()].strip()
+            if not sentence_initial or match.group(0).isupper():
+                runs = [[match.group(0)]]
+    anchors: list[str] = []
+    seen: set[str] = set()
+    for run in runs:
+        if len(run) > word_limit:
+            truncated = True
+            run = run[:word_limit]
+        anchor = " ".join(word.casefold() for word in run)
+        if anchor and anchor not in seen:
+            seen.add(anchor)
+            anchors.append(anchor)
+        if len(anchors) >= limit:
+            truncated = truncated or len(runs) > len(anchors)
+            break
+    if len(runs) > limit:
+        truncated = True
+    return tuple(anchors), truncated
+
+
+def query_identity_anchor_match(anchor: str, text: str) -> bool:
+    """Match a complete bounded anchor against complete Unicode word tokens."""
+
+    if not isinstance(anchor, str) or not isinstance(text, str):
+        return False
+    anchor_words = tuple(normalize_query_text(anchor).casefold().split())
+    if not anchor_words:
+        return False
+    candidate_words = tuple(
+        match.group(0).casefold()
+        for match in _QUERY_ANCHOR_WORD.finditer(normalize_query_text(text))
+    )
+    width = len(anchor_words)
+    return any(
+        candidate_words[index : index + width] == anchor_words
+        for index in range(len(candidate_words) - width + 1)
+    )
 
 
 def search_terms_v1(text: str) -> list[str]:

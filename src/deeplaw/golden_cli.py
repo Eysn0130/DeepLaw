@@ -25,12 +25,16 @@ from .knowledge_jobs import (
 from .knowledge_maintenance import knowledge_doctor
 from .knowledge_markdown import export_knowledge_markdown
 from .knowledge_models import Sensitivity
+from .knowledge_service import (
+    auto_aware_knowledge_vault,
+    initialize_default_knowledge_vault,
+    source_knowledge_status_for_result,
+)
 from .knowledge_store import (
     VAULT_SCOPES,
     KnowledgeVault,
     VaultScope,
     default_knowledge_vault,
-    initialize_knowledge_vault,
 )
 from .relation_workflow import (
     pending_relation_carry_forward,
@@ -711,7 +715,7 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
     command = args.command
     if command == "init":
         vault_path = args.vault.expanduser().absolute()
-        initialized = initialize_knowledge_vault(
+        initialized = initialize_default_knowledge_vault(
             vault_path,
             name=args.name or vault_path.name or "DeepLaw Knowledge",
             scope=cast(VaultScope, args.scope),
@@ -758,13 +762,16 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
                 or args.dry_run
             ):
                 raise ValueError("job resume, retry, or cancel cannot select a new source")
-            with KnowledgeVault(vault_path, read_only=False) as vault:
+            with auto_aware_knowledge_vault(vault_path, read_only=False) as vault:
                 if args.cancel:
                     return cancel_ingest_job(vault, args.cancel)
-                return run_ingest_job(
+                return source_knowledge_status_for_result(
                     vault,
-                    args.resume or args.retry,
-                    retry_failed=bool(args.retry),
+                    run_ingest_job(
+                        vault,
+                        args.resume or args.retry,
+                        retry_failed=bool(args.retry),
+                    ),
                 )
         selectors = (
             args.source is not None,
@@ -804,7 +811,7 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
                     maximum_bytes=maximum_bytes,
                     timeout_seconds=timeout_seconds,
                 )
-            with KnowledgeVault(vault_path, read_only=False) as vault:
+            with auto_aware_knowledge_vault(vault_path, read_only=False) as vault:
                 snapshot = capture_https_source(
                     vault,
                     args.url,
@@ -825,7 +832,10 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
                     confirm_external_disclosure=args.confirm_external_disclosure,
                     reference_proposals=not args.no_reference_proposals,
                 )
-                return run_ingest_job(vault, job["job_id"])
+                return source_knowledge_status_for_result(
+                    vault,
+                    run_ingest_job(vault, job["job_id"]),
+                )
         if args.git_repository is not None:
             if (
                 args.expected_sha256 is not None
@@ -849,7 +859,7 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
                     include=include,
                     exclude=exclude,
                 )
-            with KnowledgeVault(vault_path, read_only=False) as vault:
+            with auto_aware_knowledge_vault(vault_path, read_only=False) as vault:
                 snapshots = capture_git_sources(
                     vault,
                     args.git_repository,
@@ -871,14 +881,17 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
                     confirm_external_disclosure=args.confirm_external_disclosure,
                     reference_proposals=not args.no_reference_proposals,
                 )
-                return run_ingest_job(vault, job["job_id"])
+                return source_knowledge_status_for_result(
+                    vault,
+                    run_ingest_job(vault, job["job_id"]),
+                )
         if (
             any(value is not None for value in connector_options)
             or args.confirm_network
             or args.confirm_local_repository
         ):
             raise ValueError("local path ingestion received connector-only options")
-        with KnowledgeVault(vault_path, read_only=False) as vault:
+        with auto_aware_knowledge_vault(vault_path, read_only=False) as vault:
             job = create_ingest_job(
                 vault,
                 args.source,
@@ -894,7 +907,12 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
                 confirm_external_disclosure=args.confirm_external_disclosure,
                 reference_proposals=not args.no_reference_proposals,
             )
-            return job if args.dry_run else run_ingest_job(vault, job["job_id"])
+            if args.dry_run:
+                return job
+            return source_knowledge_status_for_result(
+                vault,
+                run_ingest_job(vault, job["job_id"]),
+            )
     if command == "sync":
         if args.interval < 0.25 or args.interval > 3600:
             raise ValueError("watch interval must be between 0.25 and 3600 seconds")
@@ -903,7 +921,10 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
         cycles: list[dict[str, Any]] = []
         cycle = 0
         while True:
-            with KnowledgeVault(vault_path, read_only=args.dry_run) as vault:
+            with auto_aware_knowledge_vault(
+                vault_path,
+                read_only=args.dry_run,
+            ) as vault:
                 result = (
                     plan_registered_sync(vault)
                     if args.dry_run
@@ -996,7 +1017,7 @@ def handle_golden_command(args: argparse.Namespace) -> dict[str, Any]:
     if command == "feedback":
         if not args.confirm_no_case_data:
             raise ValueError("feedback requires --confirm-no-case-data")
-        with KnowledgeVault(vault_path, read_only=False) as vault:
+        with auto_aware_knowledge_vault(vault_path, read_only=False) as vault:
             capsule_path = _last_capsule_path(vault)
             capsule = _read_sidecar(capsule_path, maximum=_MAX_LAST_CAPSULE_BYTES)
             run = create_run_receipt(

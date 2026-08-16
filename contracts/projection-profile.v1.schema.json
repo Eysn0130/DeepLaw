@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/projection-profile.v1.schema.json",
+  "title": "DeepLaw Projection Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "name", "version", "root_index", "overview",
+    "source_pages", "core_object_pages", "recent_changes", "gaps",
+    "kind_shards", "kind_indexes", "communities", "global_canvas",
+    "kind_canvas", "community_canvas", "per_object_canvas",
+    "local_canvas_per_object"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.projection-profile/v1"},
+    "name": {"enum": ["minimal", "standard", "full"]},
+    "version": {"const": "1"},
+    "root_index": {"type": "boolean"},
+    "overview": {"type": "boolean"},
+    "source_pages": {"type": "boolean"},
+    "core_object_pages": {"type": "boolean"},
+    "recent_changes": {"type": "boolean"},
+    "gaps": {"type": "boolean"},
+    "kind_shards": {"type": "boolean"},
+    "kind_indexes": {"type": "boolean"},
+    "communities": {"type": "boolean"},
+    "global_canvas": {"type": "boolean"},
+    "kind_canvas": {"type": "boolean"},
+    "community_canvas": {"type": "boolean"},
+    "per_object_canvas": {"type": "boolean"},
+    "local_canvas_per_object": {"type": "boolean"}
+  }
+}

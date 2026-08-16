@@ -44,7 +44,9 @@ SECURITY_COUNTERS = (
 
 
 class ComparisonError(RuntimeError):
-    pass
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        super().__init__(message)
 
 
 def _canonical_json(value: Any) -> str:
@@ -59,11 +61,17 @@ def _load_report(path: Path, schema: dict[str, Any]) -> dict[str, Any]:
     try:
         report = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise ComparisonError(f"quality report is unavailable or invalid: {path.name}") from error
+        raise ComparisonError(
+            "input_unavailable_or_invalid",
+            f"quality report is unavailable or invalid: {path.name}",
+        ) from error
     Draft202012Validator(schema).validate(report)
     body = {key: value for key, value in report.items() if key != "record_sha256"}
     if report.get("record_sha256") != _digest(body):
-        raise ComparisonError(f"quality report digest is invalid: {path.name}")
+        raise ComparisonError(
+            "input_digest_invalid",
+            f"quality report digest is invalid: {path.name}",
+        )
     return report
 
 
@@ -90,14 +98,20 @@ def _same_environment(
 def _source_bytes_inventory_sha256(report: dict[str, Any]) -> str:
     records = report.get("corpus", {}).get("records")
     if not isinstance(records, list) or not records:
-        raise ComparisonError("quality report has no source-byte inventory")
+        raise ComparisonError(
+            "source_inventory_missing",
+            "quality report has no source-byte inventory",
+        )
     bounded: list[dict[str, str]] = []
     for item in records:
         if not isinstance(item, dict) or not all(
             isinstance(item.get(field), str)
             for field in ("label", "immutable_bytes_sha256", "media_type")
         ):
-            raise ComparisonError("quality report source-byte inventory is invalid")
+            raise ComparisonError(
+                "source_inventory_invalid",
+                "quality report source-byte inventory is invalid",
+            )
         bounded.append(
             {
                 "label": item["label"],
@@ -119,7 +133,10 @@ def _higher_comparison(
 ) -> dict[str, Any]:
     passed = candidate >= baseline
     if not passed:
-        raise ComparisonError(f"functional quality regressed: {metric}")
+        raise ComparisonError(
+            "functional_quality_regression",
+            f"functional quality regressed: {metric}",
+        )
     return {
         "metric": metric,
         "baseline": baseline,
@@ -138,7 +155,10 @@ def _latency_comparison(
     tolerance = max(100.0, baseline * 0.20)
     passed = candidate <= baseline + tolerance
     if not passed:
-        raise ComparisonError(f"performance regressed beyond the frozen tolerance: {metric}")
+        raise ComparisonError(
+            "performance_regression",
+            f"performance regressed beyond the frozen tolerance: {metric}",
+        )
     return {
         "metric": metric,
         "baseline": baseline,
@@ -174,6 +194,7 @@ def compare(
         or not _same_environment(baseline, candidate)
     ):
         raise ComparisonError(
+            "frozen_experiment_mismatch",
             "baseline and candidate are not the same frozen quality experiment"
         )
     functional = [
@@ -203,7 +224,10 @@ def compare(
             .values()
         )
     ):
-        raise ComparisonError("candidate security or quality gate is incomplete")
+        raise ComparisonError(
+            "candidate_gate_incomplete",
+            "candidate security or quality gate is incomplete",
+        )
     report = {
         "schema_version": SCHEMA_VERSION,
         "suite": {
@@ -241,6 +265,84 @@ def compare(
     return report
 
 
+def _comparison_row(
+    metric: str,
+    baseline: float,
+    candidate: float,
+    *,
+    direction: str,
+) -> dict[str, Any]:
+    tolerance = 0.0 if direction == "higher_or_equal" else max(100.0, baseline * 0.20)
+    passed = (
+        candidate >= baseline
+        if direction == "higher_or_equal"
+        else candidate <= baseline + tolerance
+    )
+    return {
+        "metric": metric,
+        "baseline": baseline,
+        "candidate": candidate,
+        "direction": direction,
+        "tolerance": tolerance,
+        "passed": passed,
+    }
+
+
+def _failed_comparison_receipt(
+    *,
+    error: ComparisonError,
+    baseline_path: Path,
+    candidate_path: Path,
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    functional = [
+        _comparison_row(
+            metric,
+            float(baseline["retrieval"][metric]),
+            float(candidate["retrieval"][metric]),
+            direction="higher_or_equal",
+        )
+        for metric in FUNCTIONAL_METRICS
+    ]
+    performance = [
+        _comparison_row(
+            metric,
+            float(baseline[section][metric]),
+            float(candidate[section][metric]),
+            direction="lower_or_equal",
+        )
+        for section, metric in PERFORMANCE_METRICS
+    ]
+
+    def input_descriptor(role: str, path: Path, report: dict[str, Any]) -> dict[str, Any]:
+        payload = path.read_bytes()
+        return {
+            "role": role,
+            "relative_path": path.name,
+            "byte_size": len(payload),
+            "file_sha256": hashlib.sha256(payload).hexdigest(),
+            "report_record_sha256": report["record_sha256"],
+        }
+
+    receipt = {
+        "schema_version": "deeplaw.living-wiki-quality-comparison-failure/v1",
+        "failure_code": error.code,
+        "inputs": [
+            input_descriptor("baseline", baseline_path, baseline),
+            input_descriptor("candidate", candidate_path, candidate),
+        ],
+        "functional_comparisons": functional,
+        "performance_comparisons": performance,
+        "quality_regression": any(not row["passed"] for row in functional),
+        "performance_regression": any(not row["passed"] for row in performance),
+        "passed": False,
+        "competitive_claim_eligible": False,
+    }
+    receipt["record_sha256"] = _digest(receipt)
+    return receipt
+
+
 def main() -> int:
     repository = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(
@@ -251,6 +353,8 @@ def main() -> int:
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
+    baseline_report: dict[str, Any] | None = None
+    candidate_report: dict[str, Any] | None = None
     try:
         selected_repository = arguments.repository.resolve(strict=True)
         report_schema = json.loads(
@@ -267,18 +371,42 @@ def main() -> int:
         )
         Draft202012Validator.check_schema(report_schema)
         Draft202012Validator.check_schema(comparison_schema)
-        report = compare(
-            _load_report(arguments.baseline.resolve(strict=True), report_schema),
-            _load_report(arguments.candidate.resolve(strict=True), report_schema),
-        )
+        baseline_path = arguments.baseline.resolve(strict=True)
+        candidate_path = arguments.candidate.resolve(strict=True)
+        baseline_report = _load_report(baseline_path, report_schema)
+        candidate_report = _load_report(candidate_path, report_schema)
+        report = compare(baseline_report, candidate_report)
         Draft202012Validator(comparison_schema).validate(report)
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         arguments.output.write_text(
             json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+    except ComparisonError as error:
+        if baseline_report is not None and candidate_report is not None:
+            failure_schema = json.loads(
+                (
+                    selected_repository
+                    / "contracts/living-wiki-quality-comparison-failure.v1.schema.json"
+                ).read_text(encoding="utf-8")
+            )
+            Draft202012Validator.check_schema(failure_schema)
+            receipt = _failed_comparison_receipt(
+                error=error,
+                baseline_path=baseline_path,
+                candidate_path=candidate_path,
+                baseline=baseline_report,
+                candidate=candidate_report,
+            )
+            Draft202012Validator(failure_schema).validate(receipt)
+            arguments.output.parent.mkdir(parents=True, exist_ok=True)
+            arguments.output.write_text(
+                json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        print(str(error), file=sys.stderr)
+        return 1
     except (
-        ComparisonError,
         OSError,
         TypeError,
         ValueError,

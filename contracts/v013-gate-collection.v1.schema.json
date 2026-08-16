@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-gate-collection.v1.schema.json",
+  "title": "DeepLaw v0.13 provenance Gate Result collection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_kind",
+    "report_id",
+    "candidate_version",
+    "candidate_binding",
+    "active_qualification_sha256",
+    "classification_sha256",
+    "gate_results",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-gate-collection/v1"},
+    "report_kind": {"const": "v013_provenance_bound_gate_collection"},
+    "report_id": {"$ref": "#/$defs/identifier"},
+    "candidate_version": {"$ref": "#/$defs/semver"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "active_qualification_sha256": {"$ref": "#/$defs/sha256"},
+    "classification_sha256": {"$ref": "#/$defs/sha256"},
+    "gate_results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/gateResult"}
+    },
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "maxLength": 32
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]{1,512}$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "gateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "category",
+        "relative_path",
+        "byte_size",
+        "file_sha256",
+        "record_sha256",
+        "status"
+      ],
+      "properties": {
+        "gate_id": {"$ref": "#/$defs/identifier"},
+        "category": {"enum": ["Core", "Capability", "Competitive Claim"]},
+        "relative_path": {"$ref": "#/$defs/safePath"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "record_sha256": {"$ref": "#/$defs/sha256"},
+        "status": {"enum": ["passed", "failed", "not_executed", "not_claimed"]}
+      }
+    }
+  }
+}

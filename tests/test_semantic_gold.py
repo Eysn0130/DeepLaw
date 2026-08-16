@@ -47,6 +47,8 @@ from benchmarks.semantic.run_query_suite import (
     _case_result,
     _claim_evidence_checks,
     _compiled_hit_ratio,
+    _context_quality_measurement,
+    _context_rank_metrics,
     _evaluate_read_challenge,
     _execution_environment,
     _rank_metrics,
@@ -240,7 +242,14 @@ def test_cross_packet_fixture_produces_two_packets_and_one_stable_entity(
         "personal",
         "--max-sensitivity",
         "public",
+        "--max-request-bytes",
+        "131072",
     )
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        assert store.connection.execute(
+            "SELECT max_request_bytes FROM knowledge_sink_grants_v3 WHERE grant_id = ?",
+            (grant["grant_id"],),
+        ).fetchone()["max_request_bytes"] == 131072
     result = compile_gold_source(
         vault=vault,
         grant_id=grant["grant_id"],
@@ -280,6 +289,10 @@ def test_cross_packet_fixture_produces_two_packets_and_one_stable_entity(
         )
     assert result["packet_count"] >= 2
     assert len(set(result["packet_ids"])) >= 2
+    assert result["schema_version"] == "deeplaw.deterministic-semantic-source-run/v2"
+    assert result["compiler_profile_version"] == "3"
+    assert result["semantic_status"] == "partial"
+    assert result["unresolved_duties"]
     assert state["valid"] is True
     assert len(state["final_knowledge_ids"]) == 1
     assert tampered["valid"] is False
@@ -383,7 +396,14 @@ def test_cross_source_synthesis_binds_every_input_source_in_its_receipt(
         "personal",
         "--max-sensitivity",
         "public",
+        "--max-request-bytes",
+        "131072",
     )
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        assert store.connection.execute(
+            "SELECT max_request_bytes FROM knowledge_sink_grants_v3 WHERE grant_id = ?",
+            (grant["grant_id"],),
+        ).fetchone()["max_request_bytes"] == 131072
     first_run = compile_gold_source(
         vault=vault,
         grant_id=grant["grant_id"],
@@ -402,6 +422,27 @@ def test_cross_source_synthesis_binds_every_input_source_in_its_receipt(
                 "compilation_run_id": first_run["compilation_run_id"],
             }
         },
+    )
+
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        statement_rows = store.connection.execute(
+            """
+            SELECT statements.statement_text, statements.statement_sha256,
+                   statements.statement_json, maps.char_start, maps.char_end
+            FROM knowledge_statements_v1 AS statements
+            JOIN statement_evidence_maps_v1 AS maps
+              ON maps.statement_id = statements.statement_id
+            ORDER BY statements.statement_id
+            """
+        ).fetchall()
+    assert len(statement_rows) == 5
+    assert all(row["char_start"] == 0 for row in statement_rows)
+    assert all(
+        row["char_end"] == len(row["statement_text"])
+        and row["statement_sha256"]
+        == sha256_bytes(row["statement_text"].encode("utf-8"))
+        and json.loads(row["statement_json"])["source_refs"]
+        for row in statement_rows
     )
 
     result = PurposeAwareRetrievalService(vault).query(
@@ -469,6 +510,13 @@ def test_target_scoped_precision_excludes_valid_unlabelled_objects() -> None:
     )
     assert metrics["recall_at_k"] == 1.0
     assert metrics["target_scoped_precision_at_k"] == 1.0
+    context_metrics = _context_rank_metrics(
+        case=case,
+        value=value,
+        source_ids={"concept-procedure-events": target_source},
+    )
+    assert context_metrics["precision_at_k"] == 0.5
+    assert context_metrics["mrr"] == metrics["reciprocal_rank"]
 
 
 def test_freshness_check_does_not_expand_unrelated_graph_neighbors(
@@ -566,6 +614,129 @@ def test_target_scoped_precision_excludes_other_generic_source_summaries() -> No
     )
     assert metrics["matched_label_ids"] == ["label-source-summary"]
     assert metrics["target_scoped_precision_at_k"] == 1.0
+
+
+def test_context_quality_duplicate_evidence_uses_evidence_identity_only() -> None:
+    case = {
+        "expected_objects": [],
+        "expected_gap_codes": [],
+    }
+    source_revision_id = "sourcerev_" + "a" * 24
+    shared_reference = {
+        "source_revision_id": source_revision_id,
+        "fragment_id": "fragment_" + "b" * 24,
+        "locator": "section:1",
+        "quote_sha256": "c" * 64,
+    }
+
+    true_duplicate = _context_quality_measurement(
+        case=case,
+        retrieval_view={
+            "compiled": [
+                {"source_refs": [shared_reference], "content": "Statement citation"}
+            ],
+            "evidence": [
+                {"evidence_id": "queryevidence_same", **shared_reference},
+                {"evidence_id": "queryevidence_same", **shared_reference},
+            ],
+            "gaps": [],
+        },
+        source_ids={},
+        matched_label_ids=[],
+    )
+    assert true_duplicate["duplicate_evidence_rate"] == 0.5
+
+    distinct_fragments = _context_quality_measurement(
+        case=case,
+        retrieval_view={
+            "compiled": [],
+            "evidence": [
+                {"evidence_id": "queryevidence_a", **shared_reference},
+                {
+                    "evidence_id": "queryevidence_b",
+                    **{
+                        **shared_reference,
+                        "fragment_id": "fragment_" + "d" * 24,
+                    },
+                },
+            ],
+            "gaps": [],
+        },
+        source_ids={},
+        matched_label_ids=[],
+    )
+    assert distinct_fragments["duplicate_evidence_rate"] == 0.0
+
+    citation_overlap = _context_quality_measurement(
+        case=case,
+        retrieval_view={
+            "compiled": [
+                {"source_refs": [shared_reference], "content": "Statement citation"}
+            ],
+            "evidence": [{"evidence_id": "queryevidence_only", **shared_reference}],
+            "gaps": [],
+        },
+        source_ids={},
+        matched_label_ids=[],
+    )
+    assert citation_overlap["duplicate_evidence_rate"] == 0.0
+
+
+def test_context_quality_false_suppression_is_admission_scoped() -> None:
+    statement_id = "statement_" + "a" * 24
+    case = {
+        "source_keys": [],
+        "expected_objects": [
+            {
+                "label_id": "label-target",
+                "required": True,
+                "kind": "concept",
+                "canonical_label": "Target concept",
+                "content_assertions": [],
+            }
+        ],
+        "expected_gap_codes": [],
+    }
+    candidate = {
+        "statement_id": statement_id,
+        "kind": "concept",
+        "title": "Target concept",
+        "semantic_key": "concept:target",
+        "aliases": [],
+        "content": "Target concept body",
+        "source_refs": [],
+    }
+    retrieval_view = {
+        "compiled": [],
+        "evidence": [],
+        "gaps": [],
+        "query_plan": {},
+    }
+
+    suppressed = _context_quality_measurement(
+        case=case,
+        retrieval_view=retrieval_view,
+        source_ids={},
+        matched_label_ids=[],
+        local_audit={"suppressions": [{"statement_id": statement_id}]},
+        candidate_items=[candidate],
+    )
+    assert suppressed["false_suppressed_required_target_count"] == 1
+    assert suppressed["required_target_miss_without_suppression_count"] == 0
+    assert suppressed["false_suppression_rate"] == 1.0
+
+    rejected = _context_quality_measurement(
+        case=case,
+        retrieval_view=retrieval_view,
+        source_ids={},
+        matched_label_ids=[],
+        local_audit={"rejections": [{"statement_id": statement_id}]},
+        candidate_items=[candidate],
+    )
+    assert rejected["false_suppressed_required_target_count"] == 0
+    assert rejected["required_target_miss_without_suppression_count"] == 1
+    assert rejected["required_target_rejected_count"] == 1
+    assert rejected["false_suppression_rate"] == 0.0
 
 
 def test_compiled_hit_ratio_excludes_explicit_gap_only_cases() -> None:
@@ -1845,6 +2016,156 @@ def test_semantic_query_cost_is_closed_and_bound_to_the_host_run() -> None:
             gold_id=value["gold_id"],
             compiler_report_id="semantichostrun_aaaaaaaaaaaaaaaaaaaaaaaa",
         )
+
+
+def test_context_measurement_separates_local_provider_and_mcp_boundaries() -> None:
+    provider_content = {"statements": [{"statement_text": "bounded evidence"}]}
+    provider = {
+        "schema_version": "deeplaw.provider-knowledge-capsule/v2",
+        "capsule": provider_content,
+        "receipt": {"receipt_id": "receipt_0123456789abcdef01234567"},
+        "delivery": {
+            "provider_content_bytes": len(
+                canonical_json(provider_content).encode("utf-8")
+            )
+        },
+    }
+    local = {
+        "schema_version": "deeplaw.knowledge-capsule/v3",
+        "task": "owner-local task text",
+        "query_plan": {"schema_version": "deeplaw.knowledge-query-plan/v6"},
+        "provider_capsule": provider,
+    }
+    mcp = {
+        "schema_version": "deeplaw.knowledge-support-output/v6",
+        "operation": "context",
+        "authority_boundary": {"authority_from_ranking": False},
+        "result": provider,
+    }
+
+    measurement = semantic_query_suite._context_payload_measurement(
+        local_capsule=local,
+        provider_capsule=provider,
+        mcp_tool_result=mcp,
+    )
+
+    assert measurement == {
+        "local_capsule_bytes": len(canonical_json(local).encode("utf-8")),
+        "provider_capsule_bytes": len(canonical_json(provider).encode("utf-8")),
+        "mcp_tool_result_bytes": len(canonical_json(mcp).encode("utf-8")),
+        "provider_content_bytes": len(
+            canonical_json(provider["capsule"]).encode("utf-8")
+        ),
+        "transport_metadata_bytes": (
+            len(canonical_json(mcp).encode("utf-8"))
+            - len(canonical_json(provider["capsule"]).encode("utf-8"))
+        ),
+        "provider_token_estimate": None,
+        "token_measurement_method": "not_measured",
+        "provider_hard_limit_valid": True,
+    }
+
+
+def test_context_outcome_uses_context_bounds_and_variant_results_not_v5_status() -> None:
+    case = {
+        "case_id": "semantic-case-01",
+        "query_sha256": "1" * 64,
+        "provider_hard_limit_valid": False,
+        "context_semantic_valid": True,
+        "context_verification_valid": True,
+        "context_provider_hard_limit_valid": True,
+        "context_matched_label_ids": ["label-example"],
+        "context_gap_codes": [],
+        "context_local_capsule_bytes": 1_000,
+        "context_provider_capsule_bytes": 500,
+        "context_mcp_tool_result_bytes": 600,
+        "context_provider_content_bytes": 400,
+        "context_transport_metadata_bytes": 200,
+        "context_provider_token_estimate": 150,
+        "context_token_measurement_method": "utf8_bytes_div_4_estimate",
+        "context_useful_context_recall": 1.0,
+        "context_false_suppression_rate": 0.0,
+        "context_duty_coverage": 1.0,
+        "context_relevant_chars": 100,
+        "context_chars": 200,
+        "context_relevant_chars_ratio": 0.5,
+        "context_redundancy_rate": 0.0,
+        "context_duplicate_evidence_rate": 0.0,
+        "context_latency_ms": 10,
+        "context_mcp_latency_ms": 5,
+        "query_variant_checks": [
+            {
+                "status": "passed",
+                "context_semantic_valid": False,
+                "context_verification_valid": True,
+                "context_provider_hard_limit_valid": True,
+                "context_useful_context_recall": 0.0,
+            }
+        ],
+    }
+    report = semantic_query_suite._context_outcome_report(
+        gold={
+            "gold_id": "semanticgold_0123456789abcdef01234567",
+            "fixture_manifest_sha256": "2" * 64,
+        },
+        gold_sha256="3" * 64,
+        compiler_report_id="semanticdeterministic_0123456789abcdef01234567",
+        query_set_digest="4" * 64,
+        query_report={
+            "report_id": "semanticqueryrun_0123456789abcdef01234567",
+            "status": "passed",
+        },
+        cases=[case],
+        recorded_at="2026-08-10T00:00:00Z",
+    )
+
+    assert report["status"] == "failed"
+    assert report["cases"][0]["provider_hard_limit_valid"] is True
+    assert report["cases"][0]["variant_pass_count"] == 0
+
+
+def test_semantic_context_cost_v2_does_not_substitute_bytes_for_provider_tokens() -> None:
+    value = {
+        "schema_version": "deeplaw.semantic-query-cost/v2",
+        "gold_id": "semanticgold_0123456789abcdef01234567",
+        "compiler_report_id": "semantichostrun_0123456789abcdef01234567",
+        "query_set_sha256": "0" * 64,
+        "primary_agent_surface": "deeplaw knowledge context",
+        "query_count": 15,
+        "local_capsule_bytes": 9_000,
+        "provider_capsule_bytes": 4_800,
+        "mcp_tool_result_bytes": 5_200,
+        "provider_content_bytes": 3_900,
+        "transport_metadata_bytes": 1_300,
+        "provider_input_token_estimate": None,
+        "actual_provider_input_tokens": None,
+        "token_measurement_method": "not_measured",
+        "token_savings": {
+            "status": "not_executed",
+            "reason_code": "no_frozen_equal_duty_equal_budget_baseline",
+        },
+        "budget": {
+            "max_items": 8,
+            "max_sources": 12,
+            "max_chars": 8_000,
+            "max_tokens": 6_000,
+            "max_sensitivity": "public",
+            "cold_or_warm": "warm",
+        },
+        "measured_at": "2026-08-10T00:00:00Z",
+        "qualification_eligible": False,
+    }
+    assert (
+        _query_cost(
+            value,
+            gold_id=value["gold_id"],
+            compiler_report_id=value["compiler_report_id"],
+        )
+        == value
+    )
+    assert "total_query_tokens" not in value
+    assert value["provider_input_token_estimate"] is None
+    assert value["actual_provider_input_tokens"] is None
 
 
 def _query_output(

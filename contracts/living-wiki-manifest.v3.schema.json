@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-manifest.v3.schema.json",
+  "title": "DeepLaw Living Wiki additive index manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "input_audit_head", "legacy_audit_head", "generated_at",
+    "v2_manifest_sha256", "configuration", "configuration_sha256", "components",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-manifest/v3"},
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "v2_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "generator", "generator_version", "shard_record_limit", "shard_byte_limit"],
+      "properties": {
+        "profile": {"type": "string", "minLength": 1, "maxLength": 128},
+        "generator": {"const": "deeplaw.living-wiki-indexer/3"},
+        "generator_version": {"const": "3"},
+        "shard_record_limit": {"const": 2000},
+        "shard_byte_limit": {"const": 262144}
+      }
+    },
+    "configuration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "components": {
+      "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "component", "manifest_path", "schema_version", "manifest_sha256", "manifest_byte_size",
+          "shard_count", "record_count", "registry_or_index_sha256"
+        ],
+        "properties": {
+          "component": {"enum": ["page_registry", "link_index", "resolver"]},
+          "manifest_path": {
+            "type": "string", "pattern": "^\\.deeplaw/derived/wiki/v3/(registry|links|resolver)/manifest\\.json$"
+          },
+          "schema_version": {
+            "enum": [
+              "deeplaw.living-wiki-page-registry/v1",
+              "deeplaw.living-wiki-link-index/v1",
+              "deeplaw.living-wiki-resolver/v1"
+            ]
+          },
+          "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "manifest_byte_size": {"type": "integer", "minimum": 1, "maximum": 1048576},
+          "shard_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+          "record_count": {"type": "integer", "minimum": 0, "maximum": 2000000},
+          "page_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+          "path_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+          "anchor_count": {"type": "integer", "minimum": 0, "maximum": 51200000},
+          "anchors_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "page_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "paths_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "edge_count": {"type": "integer", "minimum": 0, "maximum": 2000000},
+          "edge_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "edges_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "coverage_record_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+          "coverage_shard_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+          "coverage_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "registry_page_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "candidate_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+          "candidate_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "registry_or_index_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

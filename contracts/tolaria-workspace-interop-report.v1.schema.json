@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/tolaria-workspace-interop-report.v1.schema.json",
+  "title": "DeepLaw Tolaria Workspace Interoperability Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "status",
+    "tolaria",
+    "deeplaw",
+    "functional_status",
+    "allowed_note",
+    "protected_targets",
+    "protected_denial_status",
+    "protected_hash_status",
+    "write_performed",
+    "canonical_ledger_write_performed",
+    "dependency_security_status",
+    "high_count",
+    "formal_release_evidence_ready",
+    "qualification_eligible",
+    "rights_basis_status",
+    "rights_basis",
+    "no_absolute_paths",
+    "no_absolute_path_leaks",
+    "no_secrets",
+    "no_secret_leaks",
+    "os_sandbox_proven",
+    "limitations",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.tolaria-workspace-interop-report/v1"},
+    "report_id": {"type": "string", "pattern": "^tolaria_interop_[0-9a-f]{24}$"},
+    "status": {"enum": ["passed", "failed"]},
+    "tolaria": {"$ref": "#/$defs/tolaria"},
+    "deeplaw": {"$ref": "#/$defs/deeplaw"},
+    "functional_status": {"enum": ["passed", "failed"]},
+    "allowed_note": {"$ref": "#/$defs/allowedNote"},
+    "protected_targets": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {"$ref": "#/$defs/protectedTarget"}
+    },
+    "protected_denial_status": {"enum": ["passed", "failed"]},
+    "protected_hash_status": {"enum": ["passed", "failed"]},
+    "write_performed": {"const": true},
+    "canonical_ledger_write_performed": {"const": false},
+    "dependency_security_status": {
+      "const": "known_high_findings_external_not_redistributed"
+    },
+    "high_count": {"const": 6},
+    "formal_release_evidence_ready": {"const": false},
+    "qualification_eligible": {"const": false},
+    "rights_basis_status": {"const": "owner_declared"},
+    "rights_basis": {"$ref": "#/$defs/rightsBasis"},
+    "no_absolute_paths": {"const": true},
+    "no_absolute_path_leaks": {"const": true},
+    "no_secrets": {"const": true},
+    "no_secret_leaks": {"const": true},
+    "os_sandbox_proven": {"const": false},
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "tolaria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "license",
+        "license_sha256",
+        "package_lock_sha256",
+        "tool_service_sha256",
+        "tracked_worktree_clean",
+        "exact_commit_verified",
+        "exact_files_verified"
+      ],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "license": {"const": "AGPL-3.0-or-later"},
+        "license_sha256": {"$ref": "#/$defs/sha256"},
+        "package_lock_sha256": {"$ref": "#/$defs/sha256"},
+        "tool_service_sha256": {"$ref": "#/$defs/sha256"},
+        "tracked_worktree_clean": {"const": true},
+        "exact_commit_verified": {"const": true},
+        "exact_files_verified": {"const": true}
+      }
+    },
+    "deeplaw": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_sha256",
+        "observed_version",
+        "version_verified",
+        "editable_runtime_provenance"
+      ],
+      "properties": {
+        "command_sha256": {"$ref": "#/$defs/sha256"},
+        "observed_version": {"type": "string", "minLength": 1, "maxLength": 200},
+        "version_verified": {"const": true},
+        "editable_runtime_provenance": {"const": "not_verified"}
+      }
+    },
+    "allowedNote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "policy_status",
+        "node_probe_status",
+        "read_count",
+        "open_count",
+        "update_count",
+        "table_count",
+        "alias_count",
+        "fenced_block_count",
+        "cjk_count",
+        "before_sha256",
+        "after_sha256",
+        "write_performed"
+      ],
+      "properties": {
+        "relative_path": {"const": "notes/roundtrip.md"},
+        "policy_status": {"const": "passed"},
+        "node_probe_status": {"const": "passed"},
+        "read_count": {"const": 2},
+        "open_count": {"const": 1},
+        "update_count": {"const": 1},
+        "table_count": {"type": "integer", "minimum": 2},
+        "alias_count": {"type": "integer", "minimum": 2},
+        "fenced_block_count": {"type": "integer", "minimum": 1},
+        "cjk_count": {"type": "integer", "minimum": 1},
+        "before_sha256": {"$ref": "#/$defs/sha256"},
+        "after_sha256": {"$ref": "#/$defs/sha256"},
+        "write_performed": {"const": true}
+      }
+    },
+    "protectedTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "policy_denied",
+        "before_sha256",
+        "after_sha256",
+        "unchanged",
+        "probe_invoked"
+      ],
+      "properties": {
+        "relative_path": {
+          "enum": [
+            ".deeplaw/ledger.sqlite3",
+            "sources/tolaria-read-only.md",
+            "knowledge/tolaria-read-only.md",
+            "memory/tolaria-read-only.md",
+            "wiki/tolaria-read-only.md",
+            "canvas/tolaria-read-only.canvas"
+          ]
+        },
+        "policy_denied": {"const": true},
+        "before_sha256": {"$ref": "#/$defs/sha256"},
+        "after_sha256": {"$ref": "#/$defs/sha256"},
+        "unchanged": {"type": "boolean"},
+        "probe_invoked": {"const": false}
+      }
+    },
+    "rightsBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "owner_authorization",
+        "release_file_confirmation",
+        "contributor_confirmation",
+        "summary"
+      ],
+      "properties": {
+        "status": {"const": "owner_declared"},
+        "owner_authorization": {
+          "const": "Owner-declared same-team authorization"
+        },
+        "release_file_confirmation": {"const": "pending"},
+        "contributor_confirmation": {"const": "pending"},
+        "summary": {
+          "const": "Owner-declared; release file/contributor confirmation pending"
+        }
+      }
+    }
+  }
+}

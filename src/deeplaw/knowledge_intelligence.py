@@ -25,6 +25,9 @@ _MAX_RECORD_BYTES = 256 * 1024 * 1024
 _MAX_MANIFEST_BYTES = 256 * 1024
 _KNOWLEDGE_ID = re.compile(r"^knowledge_[0-9a-f]{24}$")
 _REVISION_ID = re.compile(r"^knowledgerev_[0-9a-f]{24}$")
+_OPAQUE_CANONICAL_ID = re.compile(
+    r"(?<![A-Za-z0-9])[a-z][a-z0-9-]*_[0-9a-f]{24,64}(?![A-Za-z0-9])"
+)
 _CANONICAL_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 _TOKEN = re.compile(r"[\w.+#/-]+", re.UNICODE)
 _SCOPES = frozenset({"personal", "project", "domain"})
@@ -78,6 +81,14 @@ def estimate_tokens(value: str) -> int:
     )
     non_cjk = len(value) - cjk
     return cjk + max(0, math.ceil(non_cjk / 4))
+
+
+def _retrieval_semantic_key(value: Any) -> str:
+    """Keep readable semantic-key parts while excluding opaque ID entropy."""
+
+    if not isinstance(value, str):
+        return ""
+    return _OPAQUE_CANONICAL_ID.sub(" ", value)
 
 
 def _features(value: str) -> Counter[str]:
@@ -464,7 +475,12 @@ def rerank_candidates(
     ranked: list[tuple[float, str, dict[str, Any]]] = []
     for candidate in candidates:
         text = " ".join(
-            str(candidate.get(field, "")) for field in ("title", "body", "semantic_key")
+            (
+                _retrieval_semantic_key(candidate.get("semantic_key"))
+                if field == "semantic_key"
+                else str(candidate.get(field, ""))
+            )
+            for field in ("title", "body", "semantic_key")
         )
         terms = set(search_terms(text))
         coverage = len(query_terms & terms) / max(1, len(query_terms))
@@ -486,6 +502,47 @@ def rerank_candidates(
             }
         )
     return output
+
+
+def rerank_candidate_views(
+    views: Iterable[str],
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fuse bounded query views by each candidate's highest real score."""
+
+    selected_views = tuple(
+        dict.fromkeys(
+            view
+            for view in views
+            if isinstance(view, str) and view
+        )
+    )
+    if not selected_views:
+        return []
+    best: dict[str, tuple[float, int, dict[str, Any]]] = {}
+    for view_index, view in enumerate(selected_views):
+        ranked = rerank_candidates(view, candidates)
+        for candidate in ranked:
+            identity = str(candidate.get("knowledge_id", ""))
+            score = float(candidate.get("reranker_score", 0.0))
+            previous = best.get(identity)
+            if previous is None or score > previous[0] or (
+                score == previous[0] and view_index < previous[1]
+            ):
+                best[identity] = (score, view_index, candidate)
+    ordered = sorted(
+        best.values(),
+        key=lambda item: (-item[0], str(item[2].get("knowledge_id", ""))),
+    )
+    return [
+        {
+            **candidate,
+            "reranker_rank": rank,
+            "reranker_score": round(score, 6),
+            "reranker_profile": LOCAL_RERANKER_MODEL,
+        }
+        for rank, (score, _view_index, candidate) in enumerate(ordered, start=1)
+    ]
 
 
 def detect_communities(

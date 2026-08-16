@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-query-cost.v2.schema.json",
+  "title": "DeepLaw Context Outcome Cost v2",
+  "description": "Development-only Context boundary measurements. Bytes are not tokens; actual token usage requires a real Host receipt, and token savings cannot pass without a frozen equal-duty, equal-budget baseline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "gold_id", "compiler_report_id", "query_set_sha256",
+    "primary_agent_surface", "query_count", "local_capsule_bytes",
+    "provider_capsule_bytes", "mcp_tool_result_bytes", "provider_content_bytes",
+    "transport_metadata_bytes", "provider_input_token_estimate",
+    "actual_provider_input_tokens", "token_measurement_method", "token_savings",
+    "budget", "measured_at", "qualification_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-query-cost/v2"},
+    "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+    "compiler_report_id": {"type": "string", "pattern": "^(semantichostrun|semanticdeterministic)_[0-9a-f]{24}$"},
+    "query_set_sha256": {"$ref": "#/$defs/sha256"},
+    "primary_agent_surface": {"const": "deeplaw knowledge context"},
+    "query_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "local_capsule_bytes": {"type": "integer", "minimum": 0},
+    "provider_capsule_bytes": {"type": "integer", "minimum": 0},
+    "mcp_tool_result_bytes": {"type": "integer", "minimum": 0},
+    "provider_content_bytes": {"type": "integer", "minimum": 0},
+    "transport_metadata_bytes": {"type": "integer", "minimum": 0},
+    "provider_input_token_estimate": {"type": ["integer", "null"], "minimum": 0},
+    "actual_provider_input_tokens": {"type": ["integer", "null"], "minimum": 0},
+    "token_measurement_method": {"enum": ["not_measured", "utf8_bytes_div_4_estimate", "tokenizer_exact", "provider_reported"]},
+    "token_savings": {"$ref": "#/$defs/notExecutedMeasurement"},
+    "budget": {"$ref": "#/$defs/budget"},
+    "measured_at": {"type": "string", "format": "date-time"},
+    "qualification_eligible": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "notExecutedMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason_code"],
+      "properties": {
+        "status": {"const": "not_executed"},
+        "reason_code": {"const": "no_frozen_equal_duty_equal_budget_baseline"}
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_items", "max_sources", "max_chars", "max_tokens", "max_sensitivity", "cold_or_warm"],
+      "properties": {
+        "max_items": {"type": "integer", "minimum": 1},
+        "max_sources": {"type": "integer", "minimum": 1},
+        "max_chars": {"type": "integer", "minimum": 1},
+        "max_tokens": {"type": "integer", "minimum": 1},
+        "max_sensitivity": {"enum": ["public", "private", "restricted"]},
+        "cold_or_warm": {"enum": ["cold", "warm"]}
+      }
+    }
+  }
+}

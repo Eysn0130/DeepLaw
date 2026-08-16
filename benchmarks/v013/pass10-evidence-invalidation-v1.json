@@ -1,0 +1,58 @@
+{
+  "schema_version": "deeplaw.pass10-evidence-invalidation/v1",
+  "observed_on": "2026-08-11",
+  "baseline": {
+    "commit": "977ddd314e6d1e0a2615d98416a72463001d0ac9",
+    "tree": "a96749b2bbc891a9b5e85df6da6e530a8f2e68e6",
+    "package_version": "0.12.0"
+  },
+  "statement": {
+    "status": "historical_candidate_evidence",
+    "artifact_relative_path": "output/pass10-evidence-b14c90e/pass10-statement-bundle-evidence/pass10-statement-scale.json",
+    "artifact_sha256": "fa4eca61ac78b503c50e6284dde75f3a57538c8fb7995f3636ea32bbf510a01c",
+    "verification_valid": false,
+    "verification_errors": [
+      "Gold byte binding mismatch"
+    ]
+  },
+  "codex": {
+    "status": "historical_candidate_evidence",
+    "candidate_commit": "b14c90e4cf3b2d4954461306dc8cc77f434891d9",
+    "candidate_tree": "9fa784c671f71c63a7c33730338b27858c3257cf",
+    "report_relative_path": "benchmarks/hosts/evidence/codex-continuity-qualification-2026-08-11/codex-continuity-qualification-report.json",
+    "fixture_relative_path": "benchmarks/v013/continuity-real-host-candidate-v1.json",
+    "fixture_sha256": "61f746b369236610924364fad369f99f72c99f692e907a96801c88867b0abde4",
+    "environment_receipt_relative_path": "benchmarks/hosts/evidence/codex-continuity-qualification-2026-08-11/mcp-environment-receipt.json",
+    "environment_receipt_sha256": "ffdabb6234b5ece88583be534a4415b358ee5f50e72d674d5e0714433bc84162",
+    "observed_child_argv": [
+      "runtime/bin/deeplaw",
+      "knowledge",
+      "mcp",
+      "--stdio",
+      "--vault",
+      "vault"
+    ],
+    "current_environment_verifier_accepted": false,
+    "prompt_contamination": {
+      "expected_first_action_scoring_instruction": true,
+      "expected_first_action_literal": false,
+      "confirmed_decision_scoring_instruction": true,
+      "confirmed_decision_literal": false,
+      "expected_marker_value": true,
+      "exact_knowledge_id": true
+    }
+  },
+  "obsidian": {
+    "status": "historical_candidate_evidence",
+    "candidate_commit": "b14c90e4cf3b2d4954461306dc8cc77f434891d9",
+    "candidate_tree": "9fa784c671f71c63a7c33730338b27858c3257cf",
+    "report_relative_path": "benchmarks/hosts/evidence/obsidian-desktop-qualification-2026-08-11/obsidian-desktop-qualification.json",
+    "disposition": "one_seam_executed_broader_and_exact_head_qualification_pending"
+  },
+  "qualification": {
+    "claim_eligible": false,
+    "release_ready": false,
+    "version_change_allowed": false,
+    "real_model_runs_allowed_before_harness_freeze": false
+  }
+}

@@ -1,6 +1,6 @@
 # Third-Party Notices And Research References
 
-Reviewed: 2026-07-28
+Reviewed: 2026-08-11
 
 DeepLaw is licensed separately under the license declared by this repository.
 This document records upstream systems reviewed during architecture work and
@@ -10,11 +10,41 @@ required for a particular release artifact.
 
 ## Current Source-Reuse Status
 
-No source file or substantial code fragment from the research projects listed
-below has been copied, modified, vendored, or redistributed in the current
-DeepLaw source tree. Their algorithms and architecture informed design
-decisions documented in the
+No source file or substantial code fragment from OpenWiki, Tolaria, or the
+other research projects listed below has been copied, modified, vendored, or
+redistributed in the current DeepLaw source tree. Pass 8 does exercise
+Owner-authorized focused `behavioral` and `reference` reuse for OpenWiki and
+Tolaria. Their algorithms, fixtures, and architecture informed independently
+authored DeepLaw tests and development probes documented in the
 [upstream reuse audit](https://github.com/Eysn0130/DeepLaw/blob/main/docs/UPSTREAM_REUSE.md).
+
+The actual Pass 8 inventory is:
+
+- independently re-authored DeepLaw behavior tests for Wikilink tables, code
+  fences, aliases, and Traditional Chinese text, informed by Tolaria's exact
+  frozen test files;
+- independently authored comparison documentation for OpenWiki link
+  validation, snapshot/no-op, and managed-content behavior;
+- an independently authored, development-only interoperability probe that
+  imports Tolaria's own tool service from a separate exact AGPL checkout to
+  open, read, and update one synthetic allowed note.
+
+The external Tolaria checkout, Node dependencies, and tool-service source are
+not included in DeepLaw's source distribution, wheel, sdist, runtime dependency
+graph, or SBOM. Its dependency audit reported six known high findings; those
+dependencies are external and not redistributed by DeepLaw. Because no MIT or
+AGPL source/substantial fragment is incorporated, this repository does not add
+an incorporated-code MIT or AGPL license notice for these rows. If a future
+artifact copies or derives from upstream source, the exact copyright and
+license/NOTICE obligations must be added before distribution.
+
+Owner authorization is frozen to the individually named files/symbols and target
+paths in that audit's unified reuse manifest. Whole-repository vendor trees,
+large upstream runtimes, and product-control-plane code remain out of scope.
+Only when code is actually copied into a release artifact must this file add the
+MIT, AGPL-3.0-or-later, or separate-grant notice required for that exact code;
+behavioral/reference review and separate external execution are not by
+themselves incorporated-code license notices.
 
 If that status changes, this file must be updated in the same change with:
 
@@ -25,8 +55,9 @@ If that status changes, this file must be updated in the same change with:
 - tests and an SBOM entry.
 
 Claims of separate permission are not relied upon for repository distribution
-unless the grant and its scope have been verified through the project's
-release process.
+unless the grant and its scope have been verified through the project's release
+process. An unrecorded oral authorization is not a sufficient sole basis for a
+commercial artifact.
 
 ## Safe OOXML XML Parser
 
@@ -234,9 +265,15 @@ not a substitute for a security sandbox.
 The following projects were reviewed but are not current DeepLaw dependencies
 and have not contributed copied source code:
 
+The current v0.13 Kernel compatibility baseline binds OpenWiki released v0.3.1
+to peeled commit `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc`. The reviewed
+coordinate retained in this notice is `7531d615216e8cbccf464f66cfbbae3668871c84`,
+solely as a package-version-0.3.1 review snapshot.
+
 | Project | Commit reviewed | Published license at review | Use in DeepLaw |
 | --- | --- | --- | --- |
 | [oomol-lab/wiki-graph](https://github.com/oomol-lab/wiki-graph) | `7f916f63cfb9` | Apache-2.0 | Source hierarchy, URI, public-entity grounding, job-control, and schema-upgrade reference |
+| [langchain-ai/openwiki](https://github.com/langchain-ai/openwiki) | `7531d615216e8cbccf464f66cfbbae3668871c84` (package-version-0.3.1 review snapshot) | MIT | Owner-authorized behavioral/reference review under frozen manifest; no source copied or redistributed |
 | [garrytan/gbrain](https://github.com/garrytan/gbrain) | `5008b287e47b` | MIT | Hybrid retrieval, evidence, result-budget, and evaluation reference |
 | [Open-Source-Legal/OpenContracts](https://github.com/Open-Source-Legal/OpenContracts) | `4896de1ef4fb` | MIT | Authority-source, annotation-coordinate, and bounded-MCP reference |
 | [QuantLaw/legal-data-preprocessing](https://github.com/QuantLaw/legal-data-preprocessing) | `d0952593ce0b` | BSD-2-Clause | Statute hierarchy and snapshot-lineage reference |
@@ -256,13 +293,16 @@ and have not contributed copied source code:
 | [obsidianmd/jsoncanvas](https://github.com/obsidianmd/jsoncanvas) | `456f843cb293` | MIT | Public JSON Canvas format |
 | [obsidianmd/obsidian-api](https://github.com/obsidianmd/obsidian-api) | `cc1744324150` | MIT | Plugin lifecycle, command, workspace, and event API reference |
 | [obsidianmd/obsidian-sample-plugin](https://github.com/obsidianmd/obsidian-sample-plugin) | `23c165fd362d` | 0BSD | Official build layout and external API bundling reference |
-| [refactoringhq/tolaria](https://github.com/refactoringhq/tolaria) | `b00fefef3fd5` (`v2026-06-23`) | AGPL-3.0-or-later | MCP configuration, active-vault resolution, editor context, and open-note boundary research only; no code copied |
+| [refactoringhq/tolaria](https://github.com/refactoringhq/tolaria) | `ab01faa6773136a58285d04cb81e2587c11bac85` | AGPL-3.0-or-later | Owner-authorized behavioral/reference reuse and separate external-source probe; no source copied or redistributed |
 | [zeroentropy-ai/legalbenchrag](https://github.com/zeroentropy-ai/legalbenchrag) | `431bc8f2488a` | MIT | Character-span retrieval metric reference |
 | [hoorangyee/LRAGE](https://github.com/hoorangyee/LRAGE) | `a3c6d06db347` | MIT | External legal retrieval benchmark reference |
 
 Published licenses are identified only to explain the reuse review. Because no
 code from these projects is currently distributed by DeepLaw, this table does
-not assert that their full license texts are incorporated into DeepLaw.
+not assert that their full license texts are incorporated into DeepLaw. If a
+future release includes actual copied code, the exact file inventory, preserved
+headers, applicable MIT/AGPL/separate-grant notices, tests, and SBOM entry must
+be added before distribution.
 
 ## Benchmark And Marketing Notice
 

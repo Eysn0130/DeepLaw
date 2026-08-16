@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-context-outcome.v2.schema.json",
+  "title": "DeepLaw Development Semantic Context Outcome v2",
+  "description": "Tuning-used development evidence that separates the recommended Query Plan v6 Context surface from the Query Plan v5 operator diagnostic and measures local, provider, and MCP delivery boundaries independently.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id", "schema_version", "status", "evidence_role",
+    "qualification_eligible", "gold_id", "gold_sha256",
+    "fixture_manifest_sha256", "compiler_report_id", "query_set_sha256",
+    "primary_agent_surface", "context_query_plan_schema_version",
+    "operator_diagnostic", "budget", "cases", "metrics", "recorded_at",
+    "competitive_claim_eligible"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^semanticcontextoutcome_[0-9a-f]{24}$"},
+    "schema_version": {"const": "deeplaw.semantic-context-outcome/v2"},
+    "status": {"enum": ["passed", "failed"]},
+    "evidence_role": {"const": "tuning_used_development"},
+    "qualification_eligible": {"const": false},
+    "gold_id": {"type": "string", "pattern": "^semanticgold_[0-9a-f]{24}$"},
+    "gold_sha256": {"$ref": "#/$defs/sha256"},
+    "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "compiler_report_id": {"type": "string", "pattern": "^(semantichostrun|semanticdeterministic)_[0-9a-f]{24}$"},
+    "query_set_sha256": {"$ref": "#/$defs/sha256"},
+    "primary_agent_surface": {"const": "deeplaw knowledge context"},
+    "context_query_plan_schema_version": {"const": "deeplaw.knowledge-query-plan/v6"},
+    "operator_diagnostic": {"$ref": "#/$defs/operatorDiagnostic"},
+    "budget": {"$ref": "#/$defs/budget"},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/case"}
+    },
+    "metrics": {"$ref": "#/$defs/metrics"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "competitive_claim_eligible": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ratio": {"type": "number", "minimum": 0, "maximum": 1},
+    "operatorDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "surface", "query_plan_schema_version", "report_id", "report_sha256",
+        "status", "qualification_eligible"
+      ],
+      "properties": {
+        "surface": {"const": "deeplaw knowledge query --query-plan-version 5"},
+        "query_plan_schema_version": {"const": "deeplaw.knowledge-query-plan/v5"},
+        "report_id": {"type": "string", "pattern": "^semanticqueryrun_[0-9a-f]{24}$"},
+        "report_sha256": {"$ref": "#/$defs/sha256"},
+        "status": {"enum": ["passed", "failed"]},
+        "qualification_eligible": {"const": false}
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_items", "max_sources", "max_chars", "max_tokens", "max_sensitivity"],
+      "properties": {
+        "max_items": {"type": "integer", "minimum": 1},
+        "max_sources": {"type": "integer", "minimum": 1},
+        "max_chars": {"type": "integer", "minimum": 1},
+        "max_tokens": {"type": "integer", "minimum": 1},
+        "max_sensitivity": {"enum": ["public", "private", "restricted"]}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id", "status", "query_sha256", "query_plan_schema_version",
+        "matched_label_ids", "gap_codes", "local_capsule_bytes",
+        "provider_capsule_bytes", "mcp_tool_result_bytes", "provider_content_bytes",
+        "transport_metadata_bytes", "provider_token_estimate",
+        "token_measurement_method", "useful_context_recall",
+        "false_suppression_rate", "required_target_count",
+        "false_suppressed_required_target_count",
+        "required_target_miss_without_suppression_count",
+        "required_target_not_discovered_count", "required_target_uncompiled_count",
+        "required_target_rejected_count", "required_target_gap_count",
+        "recall_at_k", "precision_at_k", "target_scoped_precision_at_k", "mrr", "ndcg_at_k",
+        "surface_identity_parity_valid", "request_parameter_parity_valid",
+        "receipt_explain_valid",
+        "duty_coverage", "relevant_chars",
+        "context_chars", "relevant_chars_ratio", "redundancy_rate",
+        "duplicate_evidence_rate", "context_latency_ms", "mcp_latency_ms",
+        "provider_hard_limit_valid", "variant_count", "variant_pass_count",
+        "query_variant_recall_delta", "query_variant_rank_deltas",
+        "variant_rank_metrics"
+      ],
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^semantic-case-[0-9]{2}$"},
+        "status": {"enum": ["passed", "failed"]},
+        "query_sha256": {"$ref": "#/$defs/sha256"},
+        "query_plan_schema_version": {"const": "deeplaw.knowledge-query-plan/v6"},
+        "matched_label_ids": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "pattern": "^label-[a-z0-9-]+$"}},
+        "gap_codes": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+        "local_capsule_bytes": {"type": "integer", "minimum": 0, "maximum": 262144},
+        "provider_capsule_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "mcp_tool_result_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "provider_content_bytes": {"type": "integer", "minimum": 0, "maximum": 65536},
+        "transport_metadata_bytes": {
+          "description": "Canonical JSON MCP envelope overhead beyond the provider-visible capsule content.",
+          "type": "integer", "minimum": 0, "maximum": 65536
+        },
+        "provider_token_estimate": {"type": ["integer", "null"], "minimum": 0},
+        "token_measurement_method": {
+          "enum": ["not_measured", "utf8_bytes_div_4_estimate"]
+        },
+        "useful_context_recall": {"$ref": "#/$defs/ratio"},
+        "false_suppression_rate": {"$ref": "#/$defs/ratio"},
+        "required_target_count": {"type": "integer", "minimum": 0},
+        "false_suppressed_required_target_count": {"type": "integer", "minimum": 0},
+        "required_target_miss_without_suppression_count": {"type": "integer", "minimum": 0},
+        "required_target_not_discovered_count": {"type": "integer", "minimum": 0},
+        "required_target_uncompiled_count": {"type": "integer", "minimum": 0},
+        "required_target_rejected_count": {"type": "integer", "minimum": 0},
+        "required_target_gap_count": {"type": "integer", "minimum": 0},
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "precision_at_k": {"$ref": "#/$defs/ratio"},
+        "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
+        "mrr": {"$ref": "#/$defs/ratio"},
+        "ndcg_at_k": {"$ref": "#/$defs/ratio"},
+        "surface_identity_parity_valid": {"type": "boolean"},
+        "request_parameter_parity_valid": {"type": "boolean"},
+        "receipt_explain_valid": {"type": "boolean"},
+        "duty_coverage": {"$ref": "#/$defs/ratio"},
+        "relevant_chars": {"type": "integer", "minimum": 0},
+        "context_chars": {"type": "integer", "minimum": 0},
+        "relevant_chars_ratio": {"$ref": "#/$defs/ratio"},
+        "redundancy_rate": {"$ref": "#/$defs/ratio"},
+        "duplicate_evidence_rate": {"$ref": "#/$defs/ratio"},
+        "context_latency_ms": {"type": "integer", "minimum": 0},
+        "mcp_latency_ms": {"type": "integer", "minimum": 0},
+        "provider_hard_limit_valid": {"type": "boolean"},
+        "variant_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "variant_pass_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "query_variant_recall_delta": {"$ref": "#/$defs/ratio"},
+        "query_variant_rank_deltas": {"$ref": "#/$defs/rankDeltas"},
+        "variant_rank_metrics": {
+          "type": "array", "maxItems": 12,
+          "items": {"$ref": "#/$defs/variantRankMetric"}
+        }
+      }
+    },
+    "rankDeltas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recall_at_k", "precision_at_k", "target_scoped_precision_at_k", "mrr", "ndcg_at_k"],
+      "properties": {
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "precision_at_k": {"$ref": "#/$defs/ratio"},
+        "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
+        "mrr": {"$ref": "#/$defs/ratio"},
+        "ndcg_at_k": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "variantRankMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant_id", "recall_at_k", "precision_at_k", "target_scoped_precision_at_k", "mrr", "ndcg_at_k"
+      ],
+      "properties": {
+        "variant_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "precision_at_k": {"$ref": "#/$defs/ratio"},
+        "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
+        "mrr": {"$ref": "#/$defs/ratio"},
+        "ndcg_at_k": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "notExecutedMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason_code"],
+      "properties": {
+        "status": {"const": "not_executed"},
+        "reason_code": {
+          "enum": [
+            "no_frozen_equal_budget_distractor_pair",
+            "no_frozen_equal_duty_equal_budget_baseline"
+          ]
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_count", "query_variant_count", "useful_context_recall",
+        "false_suppression_rate", "required_target_count",
+        "false_suppressed_required_target_count",
+        "required_target_miss_without_suppression_count",
+        "required_target_not_discovered_count", "required_target_uncompiled_count",
+        "required_target_rejected_count", "required_target_gap_count",
+        "recall_at_k", "precision_at_k", "target_scoped_precision_at_k", "mrr", "ndcg_at_k",
+        "duty_coverage", "relevant_chars",
+        "context_chars", "relevant_chars_ratio", "redundancy_rate",
+        "duplicate_evidence_rate", "local_capsule_bytes", "provider_capsule_bytes",
+        "mcp_tool_result_bytes", "provider_content_bytes", "transport_metadata_bytes",
+        "transport_overhead_ratio", "provider_token_estimate",
+        "token_measurement_method", "actual_provider_input_tokens",
+        "context_latency_p50_ms", "context_latency_p95_ms", "mcp_latency_p50_ms",
+        "mcp_latency_p95_ms", "query_variant_recall_delta",
+        "query_variant_rank_deltas", "surface_identity_parity_failures",
+        "request_parameter_parity_failures", "receipt_explain_failures",
+        "distractor_induced_answer_delta", "token_savings",
+        "provider_hard_limit_violations"
+      ],
+      "properties": {
+        "query_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "query_variant_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "useful_context_recall": {"$ref": "#/$defs/ratio"},
+        "false_suppression_rate": {"$ref": "#/$defs/ratio"},
+        "required_target_count": {"type": "integer", "minimum": 0},
+        "false_suppressed_required_target_count": {"type": "integer", "minimum": 0},
+        "required_target_miss_without_suppression_count": {"type": "integer", "minimum": 0},
+        "required_target_not_discovered_count": {"type": "integer", "minimum": 0},
+        "required_target_uncompiled_count": {"type": "integer", "minimum": 0},
+        "required_target_rejected_count": {"type": "integer", "minimum": 0},
+        "required_target_gap_count": {"type": "integer", "minimum": 0},
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "precision_at_k": {"$ref": "#/$defs/ratio"},
+        "target_scoped_precision_at_k": {"$ref": "#/$defs/ratio"},
+        "mrr": {"$ref": "#/$defs/ratio"},
+        "ndcg_at_k": {"$ref": "#/$defs/ratio"},
+        "duty_coverage": {"$ref": "#/$defs/ratio"},
+        "relevant_chars": {"type": "integer", "minimum": 0},
+        "context_chars": {"type": "integer", "minimum": 0},
+        "relevant_chars_ratio": {"$ref": "#/$defs/ratio"},
+        "redundancy_rate": {"$ref": "#/$defs/ratio"},
+        "duplicate_evidence_rate": {"$ref": "#/$defs/ratio"},
+        "local_capsule_bytes": {"type": "integer", "minimum": 0},
+        "provider_capsule_bytes": {"type": "integer", "minimum": 0},
+        "mcp_tool_result_bytes": {"type": "integer", "minimum": 0},
+        "provider_content_bytes": {"type": "integer", "minimum": 0},
+        "transport_metadata_bytes": {
+          "description": "Canonical JSON MCP envelope overhead beyond the provider-visible capsule content.",
+          "type": "integer", "minimum": 0
+        },
+        "transport_overhead_ratio": {"$ref": "#/$defs/ratio"},
+        "provider_token_estimate": {"type": ["integer", "null"], "minimum": 0},
+        "token_measurement_method": {
+          "enum": ["not_measured", "utf8_bytes_div_4_estimate"]
+        },
+        "actual_provider_input_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "context_latency_p50_ms": {"type": "integer", "minimum": 0},
+        "context_latency_p95_ms": {"type": "integer", "minimum": 0},
+        "mcp_latency_p50_ms": {"type": "integer", "minimum": 0},
+        "mcp_latency_p95_ms": {"type": "integer", "minimum": 0},
+        "query_variant_recall_delta": {"$ref": "#/$defs/ratio"},
+        "query_variant_rank_deltas": {"$ref": "#/$defs/rankDeltas"},
+        "surface_identity_parity_failures": {"type": "integer", "minimum": 0},
+        "request_parameter_parity_failures": {"type": "integer", "minimum": 0},
+        "receipt_explain_failures": {"type": "integer", "minimum": 0},
+        "distractor_induced_answer_delta": {"$ref": "#/$defs/notExecutedMetric"},
+        "token_savings": {"$ref": "#/$defs/notExecutedMetric"},
+        "provider_hard_limit_violations": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

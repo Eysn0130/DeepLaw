@@ -1,0 +1,44 @@
+{
+  "schema_version": "deeplaw.v013-active-qualification/v1",
+  "qualification_id": "deeplaw-v013-active-commercial-candidate",
+  "status": "construction_candidate",
+  "candidate_version": "0.12.0",
+  "protocol_binding": {
+    "protocol_id": "deeplaw-v013-source-candidate-qualification",
+    "schema_version": "deeplaw.v013-qualification-protocol/v1",
+    "relative_path": "benchmarks/v013/qualification-protocol-v1.json",
+    "sha256": "95283e2d1fdd60a429941c6ab718cebd739ad414ddc38d58b3f2fcc14f4cffb5"
+  },
+  "candidate_binding": {
+    "source_commit": null,
+    "source_tree": null,
+    "lock_sha256": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082",
+    "wheel_filename": null,
+    "wheel_sha256": null,
+    "sdist_filename": null,
+    "sdist_sha256": null,
+    "artifact_manifest_sha256": null,
+    "source_date_epoch": null
+  },
+  "external_inputs": {
+    "human_gold_manifest_sha256": null,
+    "qualification_holdout_sha256": null,
+    "final_blind_holdout_sha256": null,
+    "compiler_scorer_isolation_sha256": null
+  },
+  "host_constraints": {
+    "codex": {
+      "tool_version": "0.147.0-alpha.1.2",
+      "model_id": "gpt-5.6-luna",
+      "reasoning_effort": "max"
+    },
+    "opencode": {
+      "tool_version": "1.18.16",
+      "model_id": "deepseek/deepseek-v4-flash",
+      "reasoning_effort": null
+    }
+  },
+  "blocker": "release_version_binding_deadlock",
+  "release_ready": false,
+  "claim_eligible": false
+}

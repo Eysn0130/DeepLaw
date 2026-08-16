@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/living-wiki-link-index.v1.schema.json",
+  "title": "DeepLaw Living Wiki governed link index v1",
+  "type": "object", "additionalProperties": false,
+  "required": [
+    "schema_version", "registry_sha256", "v2_manifest_sha256", "input_audit_head",
+    "legacy_audit_head", "generated_at", "page_count", "edge_count", "edge_ids_sha256",
+    "edges_sha256", "coverage_sha256", "registry_page_ids_sha256", "coverage_record_count", "coverage_shard_count", "coverage_shards", "shard_count", "shards", "index_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.living-wiki-link-index/v1"},
+    "registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "v2_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "page_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "edge_count": {"type": "integer", "minimum": 0, "maximum": 2000000},
+    "edge_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "edges_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "coverage_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "registry_page_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "coverage_record_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "coverage_shard_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "coverage_shards": {"type": "array", "maxItems": 200000, "items": {"$ref": "#/$defs/coverage_shard"}},
+    "shard_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+    "shards": {"type": "array", "maxItems": 200000, "items": {"$ref": "#/$defs/shard"}},
+    "index_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "shard": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "byte_size", "sha256", "record_count", "records_sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^\\.deeplaw/derived/wiki/v3/links/link-[0-9]{5}\\.json$"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "record_count": {"type": "integer", "minimum": 1, "maximum": 2000},
+        "records_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["page_id", "canonical_page_path", "link_count", "edge_ids_sha256"],
+      "properties": {
+        "page_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "canonical_page_path": {"type": "string", "minLength": 1, "maxLength": 2000, "pattern": "^[^/][^\\x00]*\\.md$"},
+        "link_count": {"type": "integer", "minimum": 0, "maximum": 2000000},
+        "edge_ids_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "edge": {
+      "type": "object", "additionalProperties": false,
+      "required": ["edge_id", "source_page_id", "source_page_revision", "audit_head", "ordinal", "target_raw", "lookup_key", "status", "candidate_count", "candidates_truncated", "truncation_reason", "target_page_ids", "candidate_reasons", "link_type"],
+      "properties": {
+        "edge_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "source_page_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"},
+        "source_page_revision": {"oneOf": [{"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}, {"type": "object", "additionalProperties": false, "required": ["source_revision_id"], "properties": {"source_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}, "fragment_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}, "fragment_revision_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}}, "oneOf": [{"required": ["fragment_id"], "not": {"required": ["fragment_revision_id"]}}, {"required": ["fragment_revision_id"], "not": {"required": ["fragment_id"]}}]}]},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "ordinal": {"type": "integer", "minimum": 0, "maximum": 2000000},
+        "target_raw": {"type": "string", "minLength": 1, "maxLength": 2048, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+        "lookup_key": {"type": "string", "maxLength": 2048, "pattern": "^[^\\x00-\\x1f\\x7f]*$"},
+        "status": {"enum": ["resolved", "ambiguous", "unresolved", "out_of_scope", "stale"]},
+        "candidate_count": {"type": "integer", "minimum": 0, "maximum": 200000},
+        "candidates_truncated": {"type": "boolean"},
+        "truncation_reason": {"type": ["string", "null"], "enum": ["candidate_limit", null]},
+        "target_page_ids": {"type": "array", "maxItems": 10000, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}},
+        "candidate_reasons": {"type": "array", "maxItems": 10000, "items": {"type": "object", "additionalProperties": false, "required": ["page_id", "reason"], "properties": {"page_id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,255}$"}, "reason": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\x00-\\x1f\\x7f]*$"}}}},
+        "link_type": {"enum": ["wikilink", "relation"]}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "resolved"}}}, "then": {"properties": {"candidate_count": {"const": 1}, "target_page_ids": {"minItems": 1, "maxItems": 1}, "candidate_reasons": {"minItems": 1, "maxItems": 1}, "candidates_truncated": {"const": false}, "truncation_reason": {"const": null}}}},
+        {"if": {"properties": {"status": {"const": "unresolved"}}}, "then": {"properties": {"candidate_count": {"const": 0}, "target_page_ids": {"maxItems": 0}, "candidate_reasons": {"maxItems": 0}, "candidates_truncated": {"const": false}, "truncation_reason": {"const": null}}}},
+        {"if": {"properties": {"status": {"const": "ambiguous"}}}, "then": {"properties": {"candidate_count": {"minimum": 2}, "target_page_ids": {"minItems": 1}, "candidate_reasons": {"minItems": 1}}}}
+      ]
+    },
+    "shard_document": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "records"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.living-wiki-link-index/v1"},
+        "records": {"type": "array", "minItems": 1, "maxItems": 2000, "items": {"$ref": "#/$defs/edge"}}
+      }
+    },
+    "coverage_shard": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "byte_size", "sha256", "record_count", "records_sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^\\.deeplaw/derived/wiki/v3/coverage/coverage-[0-9]{5}\\.json$"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "record_count": {"type": "integer", "minimum": 1, "maximum": 2000},
+        "records_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "coverage_shard_document": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "coverage"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.living-wiki-link-index/v1"},
+        "coverage": {"type": "array", "minItems": 1, "maxItems": 2000, "items": {"$ref": "#/$defs/coverage"}}
+      }
+    }
+  }
+}

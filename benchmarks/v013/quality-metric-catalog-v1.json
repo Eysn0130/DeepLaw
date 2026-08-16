@@ -1,0 +1,1055 @@
+{
+  "schema_version": "deeplaw.v013-quality-metric-catalog/v1",
+  "catalogue_id": "deeplaw-v013-quality-metric-catalog-v1",
+  "status": "definition_only",
+  "source_free": true,
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "This catalogue defines metric contracts only. It contains no candidate run, Gold labels, environment receipt, or numerical result and cannot support a quality or comparative claim.",
+  "competitive_claim_eligible": false,
+  "metric_count": 44,
+  "category_order": [
+    "retrieval",
+    "grounding",
+    "living_wiki",
+    "context",
+    "agent",
+    "authoritative"
+  ],
+  "category_counts": {
+    "retrieval": 8,
+    "grounding": 5,
+    "living_wiki": 8,
+    "context": 8,
+    "agent": 7,
+    "authoritative": 8
+  },
+  "measurement_policy": {
+    "allowed_measurement_statuses": [
+      "not_executed",
+      "review_pending"
+    ],
+    "zero_denominator_rule": "A zero or undefined denominator is recorded as not_executed for that metric; it is never converted into a numerical result or a success state.",
+    "result_binding_requirement": "A later measurement report must bind the exact candidate bytes, frozen corpus and Gold identity, host/model, projection and Authority plane, environment, run configuration, and reproducible run receipt before reporting an observation."
+  },
+  "metrics": [
+    {
+      "metric_id": "retrieval_recall_at_k",
+      "category": "retrieval",
+      "display_name": "Recall@K",
+      "definition": "Recall@K is defined over the declared retrieval scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Recall@K observations in the declared scope.",
+      "denominator": {
+        "unit": "labelled relevant target identities",
+        "definition": "Unique relevant target identities in the query's frozen relevance set.",
+        "zero_denominator_semantics": "No query with a non-empty relevance set exists; retain not_executed rather than treating recall as complete or zero."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query fixture only; no private or external corpus.",
+        "task": "answer, verify, quote, historical, and freshness retrieval cases with a frozen relevance set.",
+        "host": "Host-neutral CLI/MCP retrieval seam; exact host and model binding is required for a later run.",
+        "projection": "Retrieval result list and bounded Knowledge Capsule before provider delivery.",
+        "authority_plane": "Knowledge discovery and admission plane; ranking cannot create Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "retrieval_user_visible_precision_at_k",
+      "category": "retrieval",
+      "display_name": "User-visible Precision@K",
+      "definition": "User-visible Precision@K is defined over the declared retrieval scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying User-visible Precision@K observations in the declared scope.",
+      "denominator": {
+        "unit": "provider-visible result items",
+        "definition": "min(K, unique provider-visible result items) for each labelled query.",
+        "zero_denominator_semantics": "No provider-visible result item exists; retain not_executed rather than assigning an empty-list result."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query fixture only; no private or external corpus.",
+        "task": "answer, verify, quote, historical, and freshness retrieval cases with a frozen relevance set.",
+        "host": "Host-neutral CLI/MCP retrieval seam; exact host and model binding is required for a later run.",
+        "projection": "Retrieval result list and bounded Knowledge Capsule before provider delivery.",
+        "authority_plane": "Knowledge discovery and admission plane; ranking cannot create Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "retrieval_target_identity_precision",
+      "category": "retrieval",
+      "display_name": "Target Identity Precision",
+      "definition": "Target Identity Precision is defined over the declared retrieval scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Target Identity Precision observations in the declared scope.",
+      "denominator": {
+        "unit": "identity-bearing retrieved items",
+        "definition": "Unique retrieved items carrying a target identity in the query scope.",
+        "zero_denominator_semantics": "No identity-bearing retrieved item exists; target identity precision is not instantiated."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query fixture only; no private or external corpus.",
+        "task": "answer, verify, quote, historical, and freshness retrieval cases with a frozen relevance set.",
+        "host": "Host-neutral CLI/MCP retrieval seam; exact host and model binding is required for a later run.",
+        "projection": "Retrieval result list and bounded Knowledge Capsule before provider delivery.",
+        "authority_plane": "Knowledge discovery and admission plane; ranking cannot create Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "retrieval_mrr",
+      "category": "retrieval",
+      "display_name": "MRR",
+      "definition": "MRR is defined over the declared retrieval scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying MRR observations in the declared scope.",
+      "denominator": {
+        "unit": "eligible queries",
+        "definition": "Queries with a non-empty frozen relevance set and a defined ranked result list.",
+        "zero_denominator_semantics": "No eligible query exists; do not average an empty set."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query fixture only; no private or external corpus.",
+        "task": "answer, verify, quote, historical, and freshness retrieval cases with a frozen relevance set.",
+        "host": "Host-neutral CLI/MCP retrieval seam; exact host and model binding is required for a later run.",
+        "projection": "Retrieval result list and bounded Knowledge Capsule before provider delivery.",
+        "authority_plane": "Knowledge discovery and admission plane; ranking cannot create Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "retrieval_ndcg",
+      "category": "retrieval",
+      "display_name": "nDCG",
+      "definition": "nDCG is defined over the declared retrieval scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying nDCG observations in the declared scope.",
+      "denominator": {
+        "unit": "ideal DCG-bearing queries",
+        "definition": "Queries whose frozen graded relevance set has a non-zero ideal DCG at K.",
+        "zero_denominator_semantics": "No query has a non-zero ideal DCG; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query fixture only; no private or external corpus.",
+        "task": "answer, verify, quote, historical, and freshness retrieval cases with a frozen relevance set.",
+        "host": "Host-neutral CLI/MCP retrieval seam; exact host and model binding is required for a later run.",
+        "projection": "Retrieval result list and bounded Knowledge Capsule before provider delivery.",
+        "authority_plane": "Knowledge discovery and admission plane; ranking cannot create Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "retrieval_redundancy",
+      "category": "retrieval",
+      "display_name": "Redundancy",
+      "definition": "Redundancy is defined over the declared retrieval scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Redundancy observations in the declared scope.",
+      "denominator": {
+        "unit": "selected evidence items",
+        "definition": "Evidence items selected for a provider-visible capsule before deduplication.",
+        "zero_denominator_semantics": "No evidence item is selected; no redundancy rate is formed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query fixture only; no private or external corpus.",
+        "task": "answer, verify, quote, historical, and freshness retrieval cases with a frozen relevance set.",
+        "host": "Host-neutral CLI/MCP retrieval seam; exact host and model binding is required for a later run.",
+        "projection": "Retrieval result list and bounded Knowledge Capsule before provider delivery.",
+        "authority_plane": "Knowledge discovery and admission plane; ranking cannot create Authority."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "retrieval_context_coverage",
+      "category": "retrieval",
+      "display_name": "Context Coverage",
+      "definition": "Context Coverage is defined over the declared retrieval scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Context Coverage observations in the declared scope.",
+      "denominator": {
+        "unit": "applicable required evidence units",
+        "definition": "All task duties with a known evidence requirement in the frozen query plan.",
+        "zero_denominator_semantics": "No applicable evidence duty exists; retain not_executed, not full coverage."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query fixture only; no private or external corpus.",
+        "task": "answer, verify, quote, historical, and freshness retrieval cases with a frozen relevance set.",
+        "host": "Host-neutral CLI/MCP retrieval seam; exact host and model binding is required for a later run.",
+        "projection": "Retrieval result list and bounded Knowledge Capsule before provider delivery.",
+        "authority_plane": "Knowledge discovery and admission plane; ranking cannot create Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "retrieval_duty_coverage",
+      "category": "retrieval",
+      "display_name": "Duty Coverage",
+      "definition": "Duty Coverage is defined over the declared retrieval scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Duty Coverage observations in the declared scope.",
+      "denominator": {
+        "unit": "applicable duties",
+        "definition": "Duties whose applicability is known and whose task plan includes them.",
+        "zero_denominator_semantics": "No applicable duty exists; unknown or not_applicable is not converted into coverage."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query fixture only; no private or external corpus.",
+        "task": "answer, verify, quote, historical, and freshness retrieval cases with a frozen relevance set.",
+        "host": "Host-neutral CLI/MCP retrieval seam; exact host and model binding is required for a later run.",
+        "projection": "Retrieval result list and bounded Knowledge Capsule before provider delivery.",
+        "authority_plane": "Knowledge discovery and admission plane; ranking cannot create Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "grounding_statement_evidence_binding",
+      "category": "grounding",
+      "display_name": "Statement Evidence Binding",
+      "definition": "Statement Evidence Binding is defined over the declared grounding scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Statement Evidence Binding observations in the declared scope.",
+      "denominator": {
+        "unit": "factual statements requiring evidence",
+        "definition": "Factual statements in the evaluated response that the statement policy marks as evidence-required.",
+        "zero_denominator_semantics": "No evidence-required factual statement exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic statement-and-evidence fixture only; no private or external source.",
+        "task": "statement-level grounding cases with a registered evidence map.",
+        "host": "Host-neutral grounding/evidence seam; exact host and model binding is required for a later run.",
+        "projection": "Statement Evidence Map, citation receipt, and bounded grounded response.",
+        "authority_plane": "Knowledge grounding plane; evidence identity remains independent from derived prose."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "grounding_citation_validity",
+      "category": "grounding",
+      "display_name": "Citation Validity",
+      "definition": "Citation Validity is defined over the declared grounding scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Citation Validity observations in the declared scope.",
+      "denominator": {
+        "unit": "emitted citations",
+        "definition": "All citations emitted in the evaluated provider-visible response.",
+        "zero_denominator_semantics": "No citation is emitted; no validity rate is assigned."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic statement-and-evidence fixture only; no private or external source.",
+        "task": "statement-level grounding cases with a registered evidence map.",
+        "host": "Host-neutral grounding/evidence seam; exact host and model binding is required for a later run.",
+        "projection": "Statement Evidence Map, citation receipt, and bounded grounded response.",
+        "authority_plane": "Knowledge grounding plane; evidence identity remains independent from derived prose."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "grounding_unsupported_statement_rate",
+      "category": "grounding",
+      "display_name": "Unsupported Statement Rate",
+      "definition": "Unsupported Statement Rate is defined over the declared grounding scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Unsupported Statement Rate observations in the declared scope.",
+      "denominator": {
+        "unit": "assessed factual statements",
+        "definition": "All factual statements assessed by the statement policy, including statements later rejected.",
+        "zero_denominator_semantics": "No factual statement is assessed; retain not_executed rather than zero unsupported rate."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic statement-and-evidence fixture only; no private or external source.",
+        "task": "statement-level grounding cases with a registered evidence map.",
+        "host": "Host-neutral grounding/evidence seam; exact host and model binding is required for a later run.",
+        "projection": "Statement Evidence Map, citation receipt, and bounded grounded response.",
+        "authority_plane": "Knowledge grounding plane; evidence identity remains independent from derived prose."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "grounding_source_coverage",
+      "category": "grounding",
+      "display_name": "Source Coverage",
+      "definition": "Source Coverage is defined over the declared grounding scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Source Coverage observations in the declared scope.",
+      "denominator": {
+        "unit": "source-required evidence units",
+        "definition": "All applicable evidence units whose duty requires a source binding.",
+        "zero_denominator_semantics": "No source-required evidence unit exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic statement-and-evidence fixture only; no private or external source.",
+        "task": "statement-level grounding cases with a registered evidence map.",
+        "host": "Host-neutral grounding/evidence seam; exact host and model binding is required for a later run.",
+        "projection": "Statement Evidence Map, citation receipt, and bounded grounded response.",
+        "authority_plane": "Knowledge grounding plane; evidence identity remains independent from derived prose."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "grounding_exact_quote_validity",
+      "category": "grounding",
+      "display_name": "Exact Quote Validity",
+      "definition": "Exact Quote Validity is defined over the declared grounding scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Exact Quote Validity observations in the declared scope.",
+      "denominator": {
+        "unit": "emitted exact quotes",
+        "definition": "All exact quotes emitted by the evaluated response.",
+        "zero_denominator_semantics": "No exact quote is emitted; no quote validity rate is formed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic statement-and-evidence fixture only; no private or external source.",
+        "task": "statement-level grounding cases with a registered evidence map.",
+        "host": "Host-neutral grounding/evidence seam; exact host and model binding is required for a later run.",
+        "projection": "Statement Evidence Map, citation receipt, and bounded grounded response.",
+        "authority_plane": "Knowledge grounding plane; evidence identity remains independent from derived prose."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "living_wiki_page_coverage",
+      "category": "living_wiki",
+      "display_name": "Page Coverage",
+      "definition": "Page Coverage is defined over the declared living_wiki scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Page Coverage observations in the declared scope.",
+      "denominator": {
+        "unit": "applicable required pages",
+        "definition": "All pages made applicable by the frozen projection profile, topics, duties, and scope.",
+        "zero_denominator_semantics": "No page is applicable under the frozen specification; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Knowledge/Wiki fixture only; no private or external source.",
+        "task": "a named Living Wiki projection profile and coverage specification.",
+        "host": "Host-neutral projection CLI/API seam; exact host binding is required for a later run.",
+        "projection": "Registered Living Wiki pages, link index, manifest, and rebuild outputs.",
+        "authority_plane": "Living Wiki projection plane; generated pages are disposable projections."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "living_wiki_link_completeness",
+      "category": "living_wiki",
+      "display_name": "Link Completeness",
+      "definition": "Link Completeness is defined over the declared living_wiki scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Link Completeness observations in the declared scope.",
+      "denominator": {
+        "unit": "declared outgoing links",
+        "definition": "All outgoing links declared by generated page content and its projection metadata.",
+        "zero_denominator_semantics": "No outgoing link is declared; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Knowledge/Wiki fixture only; no private or external source.",
+        "task": "a named Living Wiki projection profile and coverage specification.",
+        "host": "Host-neutral projection CLI/API seam; exact host binding is required for a later run.",
+        "projection": "Registered Living Wiki pages, link index, manifest, and rebuild outputs.",
+        "authority_plane": "Living Wiki projection plane; generated pages are disposable projections."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "living_wiki_backlink_completeness",
+      "category": "living_wiki",
+      "display_name": "Backlink Completeness",
+      "definition": "Backlink Completeness is defined over the declared living_wiki scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Backlink Completeness observations in the declared scope.",
+      "denominator": {
+        "unit": "expected inbound links",
+        "definition": "All inbound links implied by the frozen generated-page link set.",
+        "zero_denominator_semantics": "No inbound link is expected; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Knowledge/Wiki fixture only; no private or external source.",
+        "task": "a named Living Wiki projection profile and coverage specification.",
+        "host": "Host-neutral projection CLI/API seam; exact host binding is required for a later run.",
+        "projection": "Registered Living Wiki pages, link index, manifest, and rebuild outputs.",
+        "authority_plane": "Living Wiki projection plane; generated pages are disposable projections."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "living_wiki_orphan_rate",
+      "category": "living_wiki",
+      "display_name": "Orphan Rate",
+      "definition": "Orphan Rate is defined over the declared living_wiki scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Orphan Rate observations in the declared scope.",
+      "denominator": {
+        "unit": "generated non-root pages",
+        "definition": "All generated pages excluding explicitly designated root/index pages.",
+        "zero_denominator_semantics": "No generated non-root page exists; retain not_executed rather than zero orphan rate."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Knowledge/Wiki fixture only; no private or external source.",
+        "task": "a named Living Wiki projection profile and coverage specification.",
+        "host": "Host-neutral projection CLI/API seam; exact host binding is required for a later run.",
+        "projection": "Registered Living Wiki pages, link index, manifest, and rebuild outputs.",
+        "authority_plane": "Living Wiki projection plane; generated pages are disposable projections."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "living_wiki_gap_accuracy",
+      "category": "living_wiki",
+      "display_name": "Gap Accuracy",
+      "definition": "Gap Accuracy is defined over the declared living_wiki scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Gap Accuracy observations in the declared scope.",
+      "denominator": {
+        "unit": "reviewed Gap cases",
+        "definition": "All Gap cases included in the frozen review fixture.",
+        "zero_denominator_semantics": "No Gap case is reviewed; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Knowledge/Wiki fixture only; no private or external source.",
+        "task": "a named Living Wiki projection profile and coverage specification.",
+        "host": "Host-neutral projection CLI/API seam; exact host binding is required for a later run.",
+        "projection": "Registered Living Wiki pages, link index, manifest, and rebuild outputs.",
+        "authority_plane": "Living Wiki projection plane; generated pages are disposable projections."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "living_wiki_freshness_accuracy",
+      "category": "living_wiki",
+      "display_name": "Freshness Accuracy",
+      "definition": "Freshness Accuracy is defined over the declared living_wiki scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Freshness Accuracy observations in the declared scope.",
+      "denominator": {
+        "unit": "reviewed freshness cases",
+        "definition": "All freshness-labelled pages or objects in the review fixture.",
+        "zero_denominator_semantics": "No freshness case is reviewed; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Knowledge/Wiki fixture only; no private or external source.",
+        "task": "a named Living Wiki projection profile and coverage specification.",
+        "host": "Host-neutral projection CLI/API seam; exact host binding is required for a later run.",
+        "projection": "Registered Living Wiki pages, link index, manifest, and rebuild outputs.",
+        "authority_plane": "Living Wiki projection plane; generated pages are disposable projections."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "living_wiki_incremental_update_correctness",
+      "category": "living_wiki",
+      "display_name": "Incremental Update Correctness",
+      "definition": "Incremental Update Correctness is defined over the declared living_wiki scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Incremental Update Correctness observations in the declared scope.",
+      "denominator": {
+        "unit": "change assertions",
+        "definition": "All declared source/knowledge revision change assertions in the incremental fixture.",
+        "zero_denominator_semantics": "No change assertion exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Knowledge/Wiki fixture only; no private or external source.",
+        "task": "a named Living Wiki projection profile and coverage specification.",
+        "host": "Host-neutral projection CLI/API seam; exact host binding is required for a later run.",
+        "projection": "Registered Living Wiki pages, link index, manifest, and rebuild outputs.",
+        "authority_plane": "Living Wiki projection plane; generated pages are disposable projections."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "living_wiki_projection_reproducibility",
+      "category": "living_wiki",
+      "display_name": "Projection Reproducibility",
+      "definition": "Projection Reproducibility is defined over the declared living_wiki scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Projection Reproducibility observations in the declared scope.",
+      "denominator": {
+        "unit": "rebuild attempts",
+        "definition": "Independent rebuild attempts with the same input revisions, profile, generator, and configuration.",
+        "zero_denominator_semantics": "No repeated rebuild attempt exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Knowledge/Wiki fixture only; no private or external source.",
+        "task": "a named Living Wiki projection profile and coverage specification.",
+        "host": "Host-neutral projection CLI/API seam; exact host binding is required for a later run.",
+        "projection": "Registered Living Wiki pages, link index, manifest, and rebuild outputs.",
+        "authority_plane": "Living Wiki projection plane; generated pages are disposable projections."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "context_compiled_hit",
+      "category": "context",
+      "display_name": "Compiled Hit",
+      "definition": "Compiled Hit is defined over the declared context scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Compiled Hit observations in the declared scope.",
+      "denominator": {
+        "unit": "eligible compiled-first queries",
+        "definition": "Queries whose purpose and duties permit compiled-first selection in the frozen plan.",
+        "zero_denominator_semantics": "No eligible compiled-first query exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query/context fixture only; no private or external source.",
+        "task": "purpose-aware context plans with bounded fallback and provider projection.",
+        "host": "Host-neutral context API and provider-envelope seam; exact host binding is required for a later run.",
+        "projection": "Query Plan, Knowledge Capsule, provider projection, and local receipts.",
+        "authority_plane": "Context admission plane; hard payload limits and provenance remain enforced."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "context_targeted_fallback",
+      "category": "context",
+      "display_name": "Targeted Fallback",
+      "definition": "Targeted Fallback is defined over the declared context scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Targeted Fallback observations in the declared scope.",
+      "denominator": {
+        "unit": "fallback-required queries",
+        "definition": "Queries for which the plan declares a compiled-evidence gap and a bounded targeted fallback.",
+        "zero_denominator_semantics": "No fallback-required query exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query/context fixture only; no private or external source.",
+        "task": "purpose-aware context plans with bounded fallback and provider projection.",
+        "host": "Host-neutral context API and provider-envelope seam; exact host binding is required for a later run.",
+        "projection": "Query Plan, Knowledge Capsule, provider projection, and local receipts.",
+        "authority_plane": "Context admission plane; hard payload limits and provenance remain enforced."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "context_raw_fallback",
+      "category": "context",
+      "display_name": "Raw Fallback",
+      "definition": "Raw Fallback is defined over the declared context scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Raw Fallback observations in the declared scope.",
+      "denominator": {
+        "unit": "fallback-invoking queries",
+        "definition": "Queries that invoke any fallback path in the frozen context plan.",
+        "zero_denominator_semantics": "No query invokes fallback; retain not_executed, not zero raw fallback."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query/context fixture only; no private or external source.",
+        "task": "purpose-aware context plans with bounded fallback and provider projection.",
+        "host": "Host-neutral context API and provider-envelope seam; exact host binding is required for a later run.",
+        "projection": "Query Plan, Knowledge Capsule, provider projection, and local receipts.",
+        "authority_plane": "Context admission plane; hard payload limits and provenance remain enforced."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "context_duplicate_evidence",
+      "category": "context",
+      "display_name": "Duplicate Evidence",
+      "definition": "Duplicate Evidence is defined over the declared context scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Duplicate Evidence observations in the declared scope.",
+      "denominator": {
+        "unit": "pre-dedup selected evidence units",
+        "definition": "All evidence units selected before identity-aware deduplication.",
+        "zero_denominator_semantics": "No pre-dedup evidence unit exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query/context fixture only; no private or external source.",
+        "task": "purpose-aware context plans with bounded fallback and provider projection.",
+        "host": "Host-neutral context API and provider-envelope seam; exact host binding is required for a later run.",
+        "projection": "Query Plan, Knowledge Capsule, provider projection, and local receipts.",
+        "authority_plane": "Context admission plane; hard payload limits and provenance remain enforced."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "context_relevant_chars_context_chars",
+      "category": "context",
+      "display_name": "RelevantChars/ContextChars",
+      "definition": "RelevantChars/ContextChars is defined over the declared context scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying RelevantChars/ContextChars observations in the declared scope.",
+      "denominator": {
+        "unit": "provider context characters",
+        "definition": "All characters in the provider-visible context payload under the frozen character rule.",
+        "zero_denominator_semantics": "No provider context character exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query/context fixture only; no private or external source.",
+        "task": "purpose-aware context plans with bounded fallback and provider projection.",
+        "host": "Host-neutral context API and provider-envelope seam; exact host binding is required for a later run.",
+        "projection": "Query Plan, Knowledge Capsule, provider projection, and local receipts.",
+        "authority_plane": "Context admission plane; hard payload limits and provenance remain enforced."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "context_provider_payload",
+      "category": "context",
+      "display_name": "Provider Payload",
+      "definition": "Provider Payload is defined over the declared context scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Provider Payload observations in the declared scope.",
+      "denominator": {
+        "unit": "delivered provider responses",
+        "definition": "Responses actually delivered to the provider projection in the evaluated run.",
+        "zero_denominator_semantics": "No provider response is delivered; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query/context fixture only; no private or external source.",
+        "task": "purpose-aware context plans with bounded fallback and provider projection.",
+        "host": "Host-neutral context API and provider-envelope seam; exact host binding is required for a later run.",
+        "projection": "Query Plan, Knowledge Capsule, provider projection, and local receipts.",
+        "authority_plane": "Context admission plane; hard payload limits and provenance remain enforced."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "context_token_savings",
+      "category": "context",
+      "display_name": "Token Savings",
+      "definition": "Token Savings is defined over the declared context scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Token Savings observations in the declared scope.",
+      "denominator": {
+        "unit": "baseline token units",
+        "definition": "Token units in the predeclared baseline context for the same eligible query set.",
+        "zero_denominator_semantics": "No baseline token unit exists; retain not_executed rather than claiming savings."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query/context fixture only; no private or external source.",
+        "task": "purpose-aware context plans with bounded fallback and provider projection.",
+        "host": "Host-neutral context API and provider-envelope seam; exact host binding is required for a later run.",
+        "projection": "Query Plan, Knowledge Capsule, provider projection, and local receipts.",
+        "authority_plane": "Context admission plane; hard payload limits and provenance remain enforced."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "context_repeated_query_reuse",
+      "category": "context",
+      "display_name": "Repeated-query Reuse",
+      "definition": "Repeated-query Reuse is defined over the declared context scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Repeated-query Reuse observations in the declared scope.",
+      "denominator": {
+        "unit": "eligible repeated queries",
+        "definition": "Repeated query cases whose input, admission policy, and state identities permit reuse.",
+        "zero_denominator_semantics": "No eligible repeated query exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic query/context fixture only; no private or external source.",
+        "task": "purpose-aware context plans with bounded fallback and provider projection.",
+        "host": "Host-neutral context API and provider-envelope seam; exact host binding is required for a later run.",
+        "projection": "Query Plan, Knowledge Capsule, provider projection, and local receipts.",
+        "authority_plane": "Context admission plane; hard payload limits and provenance remain enforced."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "agent_task_accuracy",
+      "category": "agent",
+      "display_name": "Task Accuracy",
+      "definition": "Task Accuracy is defined over the declared agent scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Task Accuracy observations in the declared scope.",
+      "denominator": {
+        "unit": "evaluated tasks",
+        "definition": "All tasks in the frozen source-free task fixture that reach an evaluable terminal state.",
+        "zero_denominator_semantics": "No task reaches an evaluable terminal state; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic task/session fixture only; no private or case material.",
+        "task": "host-neutral Agent task/session runs with declared labels and bounded traces.",
+        "host": "Host-neutral Agent envelope; any later run must name the exact host, model, and tool policy.",
+        "projection": "Ephemeral task envelope and recorded tool/recovery trace; no durable model memory.",
+        "authority_plane": "Agent integration plane; task outcomes cannot elevate evidence Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "agent_manual_correction",
+      "category": "agent",
+      "display_name": "Manual Correction",
+      "definition": "Manual Correction is defined over the declared agent scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Manual Correction observations in the declared scope.",
+      "denominator": {
+        "unit": "reviewed outputs",
+        "definition": "Outputs reviewed for correction in the frozen task fixture.",
+        "zero_denominator_semantics": "No output is reviewed; retain not_executed rather than zero correction."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic task/session fixture only; no private or case material.",
+        "task": "host-neutral Agent task/session runs with declared labels and bounded traces.",
+        "host": "Host-neutral Agent envelope; any later run must name the exact host, model, and tool policy.",
+        "projection": "Ephemeral task envelope and recorded tool/recovery trace; no durable model memory.",
+        "authority_plane": "Agent integration plane; task outcomes cannot elevate evidence Authority."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "agent_tool_calls",
+      "category": "agent",
+      "display_name": "Tool Calls",
+      "definition": "Tool Calls is defined over the declared agent scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Tool Calls observations in the declared scope.",
+      "denominator": {
+        "unit": "successful evaluated tasks",
+        "definition": "Tasks that satisfy the predeclared success labels and have a complete tool trace.",
+        "zero_denominator_semantics": "No successful evaluated task exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic task/session fixture only; no private or case material.",
+        "task": "host-neutral Agent task/session runs with declared labels and bounded traces.",
+        "host": "Host-neutral Agent envelope; any later run must name the exact host, model, and tool policy.",
+        "projection": "Ephemeral task envelope and recorded tool/recovery trace; no durable model memory.",
+        "authority_plane": "Agent integration plane; task outcomes cannot elevate evidence Authority."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "agent_time",
+      "category": "agent",
+      "display_name": "Time",
+      "definition": "Time is defined over the declared agent scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Time observations in the declared scope.",
+      "denominator": {
+        "unit": "completed evaluated tasks",
+        "definition": "Tasks with a complete start/end trace and a declared timing environment.",
+        "zero_denominator_semantics": "No completed task has a timing trace; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic task/session fixture only; no private or case material.",
+        "task": "host-neutral Agent task/session runs with declared labels and bounded traces.",
+        "host": "Host-neutral Agent envelope; any later run must name the exact host, model, and tool policy.",
+        "projection": "Ephemeral task envelope and recorded tool/recovery trace; no durable model memory.",
+        "authority_plane": "Agent integration plane; task outcomes cannot elevate evidence Authority."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "agent_tokens",
+      "category": "agent",
+      "display_name": "Tokens",
+      "definition": "Tokens is defined over the declared agent scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Tokens observations in the declared scope.",
+      "denominator": {
+        "unit": "completed evaluated tasks",
+        "definition": "Tasks with complete token accounting and a declared tokenizer/profile.",
+        "zero_denominator_semantics": "No completed task has token accounting; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic task/session fixture only; no private or case material.",
+        "task": "host-neutral Agent task/session runs with declared labels and bounded traces.",
+        "host": "Host-neutral Agent envelope; any later run must name the exact host, model, and tool policy.",
+        "projection": "Ephemeral task envelope and recorded tool/recovery trace; no durable model memory.",
+        "authority_plane": "Agent integration plane; task outcomes cannot elevate evidence Authority."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "agent_failure_recovery",
+      "category": "agent",
+      "display_name": "Failure/Recovery",
+      "definition": "Failure/Recovery is defined over the declared agent scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Failure/Recovery observations in the declared scope.",
+      "denominator": {
+        "unit": "recoverable failures",
+        "definition": "Failures classified as recoverable by the frozen lifecycle protocol and given a recovery opportunity.",
+        "zero_denominator_semantics": "No recoverable failure occurs; retain not_executed rather than full recovery."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic task/session fixture only; no private or case material.",
+        "task": "host-neutral Agent task/session runs with declared labels and bounded traces.",
+        "host": "Host-neutral Agent envelope; any later run must name the exact host, model, and tool policy.",
+        "projection": "Ephemeral task envelope and recorded tool/recovery trace; no durable model memory.",
+        "authority_plane": "Agent integration plane; task outcomes cannot elevate evidence Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "agent_cross_session_reuse",
+      "category": "agent",
+      "display_name": "Cross-session Reuse",
+      "definition": "Cross-session Reuse is defined over the declared agent scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Cross-session Reuse observations in the declared scope.",
+      "denominator": {
+        "unit": "eligible cross-session reuse cases",
+        "definition": "Cases with an explicitly bound prior session, current session, and reuse expectation.",
+        "zero_denominator_semantics": "No eligible cross-session case exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic task/session fixture only; no private or case material.",
+        "task": "host-neutral Agent task/session runs with declared labels and bounded traces.",
+        "host": "Host-neutral Agent envelope; any later run must name the exact host, model, and tool policy.",
+        "projection": "Ephemeral task envelope and recorded tool/recovery trace; no durable model memory.",
+        "authority_plane": "Agent integration plane; task outcomes cannot elevate evidence Authority."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "authoritative_definition",
+      "category": "authoritative",
+      "display_name": "Definition",
+      "definition": "Definition is defined over the declared authoritative scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Definition observations in the declared scope.",
+      "denominator": {
+        "unit": "applicable definition duties",
+        "definition": "All applicable definition duties in the frozen authoritative navigator fixture.",
+        "zero_denominator_semantics": "No definition duty is applicable; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Authoritative-Pack shape fixture only; no official source bytes.",
+        "task": "read-only Authoritative navigation with exact version, segment, and Gap expectations.",
+        "host": "Host-neutral read-only navigator seam; exact host binding is required for a later run.",
+        "projection": "Document/version/segment navigator, evidence receipt, and explicit Gap projection.",
+        "authority_plane": "Read-only Authoritative Pack plane; derived interpretation remains legal_authority=false."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "authoritative_exception",
+      "category": "authoritative",
+      "display_name": "Exception",
+      "definition": "Exception is defined over the declared authoritative scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Exception observations in the declared scope.",
+      "denominator": {
+        "unit": "applicable exception duties",
+        "definition": "All applicable exception duties in the frozen authoritative navigator fixture.",
+        "zero_denominator_semantics": "No exception duty is applicable; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Authoritative-Pack shape fixture only; no official source bytes.",
+        "task": "read-only Authoritative navigation with exact version, segment, and Gap expectations.",
+        "host": "Host-neutral read-only navigator seam; exact host binding is required for a later run.",
+        "projection": "Document/version/segment navigator, evidence receipt, and explicit Gap projection.",
+        "authority_plane": "Read-only Authoritative Pack plane; derived interpretation remains legal_authority=false."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "authoritative_proviso",
+      "category": "authoritative",
+      "display_name": "Proviso",
+      "definition": "Proviso is defined over the declared authoritative scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Proviso observations in the declared scope.",
+      "denominator": {
+        "unit": "applicable proviso duties",
+        "definition": "All applicable proviso duties in the frozen authoritative navigator fixture.",
+        "zero_denominator_semantics": "No proviso duty is applicable; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Authoritative-Pack shape fixture only; no official source bytes.",
+        "task": "read-only Authoritative navigation with exact version, segment, and Gap expectations.",
+        "host": "Host-neutral read-only navigator seam; exact host binding is required for a later run.",
+        "projection": "Document/version/segment navigator, evidence receipt, and explicit Gap projection.",
+        "authority_plane": "Read-only Authoritative Pack plane; derived interpretation remains legal_authority=false."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "authoritative_temporal",
+      "category": "authoritative",
+      "display_name": "Temporal",
+      "definition": "Temporal is defined over the declared authoritative scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Temporal observations in the declared scope.",
+      "denominator": {
+        "unit": "applicable temporal duties",
+        "definition": "All applicable temporal duties in the frozen authoritative navigator fixture.",
+        "zero_denominator_semantics": "No temporal duty is applicable; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Authoritative-Pack shape fixture only; no official source bytes.",
+        "task": "read-only Authoritative navigation with exact version, segment, and Gap expectations.",
+        "host": "Host-neutral read-only navigator seam; exact host binding is required for a later run.",
+        "projection": "Document/version/segment navigator, evidence receipt, and explicit Gap projection.",
+        "authority_plane": "Read-only Authoritative Pack plane; derived interpretation remains legal_authority=false."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "authoritative_cross_reference",
+      "category": "authoritative",
+      "display_name": "Cross-reference",
+      "definition": "Cross-reference is defined over the declared authoritative scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Cross-reference observations in the declared scope.",
+      "denominator": {
+        "unit": "applicable cross-reference duties",
+        "definition": "All applicable cross-reference duties in the frozen authoritative navigator fixture.",
+        "zero_denominator_semantics": "No cross-reference duty is applicable; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Authoritative-Pack shape fixture only; no official source bytes.",
+        "task": "read-only Authoritative navigation with exact version, segment, and Gap expectations.",
+        "host": "Host-neutral read-only navigator seam; exact host binding is required for a later run.",
+        "projection": "Document/version/segment navigator, evidence receipt, and explicit Gap projection.",
+        "authority_plane": "Read-only Authoritative Pack plane; derived interpretation remains legal_authority=false."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "authoritative_wrong_version",
+      "category": "authoritative",
+      "display_name": "Wrong Version",
+      "definition": "Wrong Version is defined over the declared authoritative scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Wrong Version observations in the declared scope.",
+      "denominator": {
+        "unit": "authoritative version-selection attempts",
+        "definition": "All attempts that make a version selection in the frozen authoritative fixture.",
+        "zero_denominator_semantics": "No version-selection attempt exists; retain not_executed rather than zero wrong versions."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Authoritative-Pack shape fixture only; no official source bytes.",
+        "task": "read-only Authoritative navigation with exact version, segment, and Gap expectations.",
+        "host": "Host-neutral read-only navigator seam; exact host binding is required for a later run.",
+        "projection": "Document/version/segment navigator, evidence receipt, and explicit Gap projection.",
+        "authority_plane": "Read-only Authoritative Pack plane; derived interpretation remains legal_authority=false."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "authoritative_correct_gap",
+      "category": "authoritative",
+      "display_name": "Correct Gap",
+      "definition": "Correct Gap is defined over the declared authoritative scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying Correct Gap observations in the declared scope.",
+      "denominator": {
+        "unit": "authoritative Gap cases",
+        "definition": "All frozen authoritative cases whose required evidence is intentionally unavailable or unverifiable.",
+        "zero_denominator_semantics": "No authoritative Gap case exists; retain not_executed."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Authoritative-Pack shape fixture only; no official source bytes.",
+        "task": "read-only Authoritative navigation with exact version, segment, and Gap expectations.",
+        "host": "Host-neutral read-only navigator seam; exact host binding is required for a later run.",
+        "projection": "Document/version/segment navigator, evidence receipt, and explicit Gap projection.",
+        "authority_plane": "Read-only Authoritative Pack plane; derived interpretation remains legal_authority=false."
+      },
+      "gold_status": "absent",
+      "direction": "higher",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    },
+    {
+      "metric_id": "authoritative_false_authority_admission",
+      "category": "authoritative",
+      "display_name": "False Authority Admission",
+      "definition": "False Authority Admission is defined over the declared authoritative scope; only observations satisfying the frozen task labels are eligible.",
+      "numerator_definition": "Count qualifying False Authority Admission observations in the declared scope.",
+      "denominator": {
+        "unit": "authority-admission attempts",
+        "definition": "All admission attempts that evaluate an Authority label in the frozen authoritative fixture.",
+        "zero_denominator_semantics": "No Authority-admission attempt exists; retain not_executed rather than zero false admission."
+      },
+      "scope": {
+        "corpus": "A frozen source-free synthetic Authoritative-Pack shape fixture only; no official source bytes.",
+        "task": "read-only Authoritative navigation with exact version, segment, and Gap expectations.",
+        "host": "Host-neutral read-only navigator seam; exact host binding is required for a later run.",
+        "projection": "Document/version/segment navigator, evidence receipt, and explicit Gap projection.",
+        "authority_plane": "Read-only Authoritative Pack plane; derived interpretation remains legal_authority=false."
+      },
+      "gold_status": "absent",
+      "direction": "lower",
+      "measurement_status": "not_executed",
+      "not_executed_semantics": "No candidate execution, labelled Gold, numerator, or denominator instance is attached. Keep measurement_status as not_executed; a zero denominator is not converted into an outcome."
+    }
+  ],
+  "limitations": [
+    "The inventory is source-free and definition-only; no user Vault, private legal material, case data, external corpus, model call, or network acquisition is used.",
+    "Every metric currently has gold_status=absent and measurement_status=not_executed. No status in this catalogue represents a measured outcome.",
+    "A formal measurement report is a separate artifact and must bind exact candidate and Gold bytes, environment, host/model, configuration, and run identity.",
+    "The six closed category counts are 8 retrieval, 5 grounding, 8 Living Wiki, 8 context, 7 Agent, and 8 Authoritative metrics: 44 total.",
+    "competitive_claim_eligible remains false until named same-condition comparative runs and all required external evidence gates exist."
+  ]
+}

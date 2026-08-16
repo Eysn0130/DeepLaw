@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/workspace-snapshot-receipt.v1.schema.json",
+  "title": "DeepLaw bounded workspace snapshot receipt v1",
+  "oneOf": [
+    {"$ref": "#/$defs/ready"},
+    {"$ref": "#/$defs/gap"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "status",
+        "repository_sha256",
+        "worktree_sha256",
+        "base_revision",
+        "dirty_state_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.workspace-snapshot-receipt/v1"},
+        "status": {"const": "ready"},
+        "repository_sha256": {"$ref": "#/$defs/sha256"},
+        "worktree_sha256": {"$ref": "#/$defs/sha256"},
+        "base_revision": {"$ref": "#/$defs/git"},
+        "dirty_state_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "status", "gap"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.workspace-snapshot-receipt/v1"},
+        "status": {"const": "gap"},
+        "gap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code"],
+          "properties": {
+            "code": {
+              "enum": ["workspace_secret_unverifiable", "workspace_snapshot_bound"]
+            },
+        "candidate_count": {"type": "integer", "minimum": 0, "maximum": 1000000}
+          }
+        }
+      }
+    }
+  }
+}

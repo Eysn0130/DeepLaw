@@ -1,0 +1,7 @@
+{"thread_id":"019fefd2-1d43-7822-a4ce-4ab2305d6ab1","type":"thread.started"}
+{"type":"turn.started"}
+{"item":{"id":"item_0","text":"{\"checkpoint_marker\":\"PASS10-FEATURE-RECEIPT\",\"confirmed_decision\":\"\",\"first_correct_action\":\"\",\"wrong_state_seen\":false}","type":"agent_message"},"type":"item.completed"}
+{"item":{"arguments_sha256":"db1cfc612fa09654e22e301a1087b81629ae298c3c5f92eab426d8ab2c64283e","id":"item_1","result_bytes":4,"result_sha256":"74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b","status":"in_progress","tool":"knowledge_support","type":"mcp_tool_call"},"type":"item.started"}
+{"item":{"arguments_sha256":"db1cfc612fa09654e22e301a1087b81629ae298c3c5f92eab426d8ab2c64283e","id":"item_1","result_bytes":3687,"result_sha256":"bac9ff38b4f3b80b116aa5eaf37899051474c1222882aac6d77ca5af4def331e","status":"completed","tool":"knowledge_support","type":"mcp_tool_call"},"type":"item.completed"}
+{"item":{"id":"item_2","text":"{\"checkpoint_marker\":\"PASS10-FEATURE-RECEIPT\",\"confirmed_decision\":\"Continue only from PASS10-FEATURE.\",\"first_correct_action\":\"Verify deployment receipt PASS10-FEATURE-RECEIPT.\",\"wrong_state_seen\":false}","type":"agent_message"},"type":"item.completed"}
+{"type":"turn.completed","usage":{"cache_write_input_tokens":0,"cached_input_tokens":0,"input_tokens":27027,"output_tokens":1445,"reasoning_output_tokens":742}}

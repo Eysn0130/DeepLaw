@@ -13,15 +13,18 @@ import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import median
+from threading import RLock
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.hosts.run_living_wiki_host_harness import _safe_command
 from benchmarks.semantic.review_gold import query_set_sha256, validate_candidate
+from deeplaw.api import KnowledgeOS
 from deeplaw.compilation.coordinator import _decoded_artifact
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
 from deeplaw.knowledge_intelligence import LOCAL_DENSE_MODEL, LOCAL_RERANKER_MODEL
+from deeplaw.knowledge_mcp_server import _KnowledgeRuntime, handle_knowledge_support
 from deeplaw.util import canonical_json, sha256_bytes, stable_id, strict_json_loads
 
 BUDGET = {
@@ -48,6 +51,39 @@ def _validate(name: str, value: dict[str, Any]) -> None:
     schema = _load(_repository() / "contracts" / name)
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(value)
+
+
+_DETERMINISTIC_SEMANTIC_STATUS_PRIORITY = ("blocked", "unknown", "partial", "complete")
+
+
+def _validate_deterministic_compiler_report(compiler_report: dict[str, Any]) -> None:
+    """Validate the development v2 lifecycle without weakening historical v1 gates."""
+
+    version = compiler_report.get("schema_version")
+    if version == "deeplaw.deterministic-semantic-lifecycle/v1":
+        _validate("deterministic-semantic-lifecycle.v1.schema.json", compiler_report)
+        if any(item.get("semantic_status") != "complete" for item in compiler_report["runs"]):
+            raise ValueError("deterministic semantic lifecycle v1 cannot admit partial runs")
+        return
+    if version != "deeplaw.deterministic-semantic-lifecycle/v2":
+        raise ValueError("unsupported deterministic semantic lifecycle compiler evidence")
+    _validate("deterministic-semantic-lifecycle.v2.schema.json", compiler_report)
+    if compiler_report.get("status") != "passed":
+        raise ValueError("semantic query suite requires passed compiler evidence")
+    if compiler_report.get("compiler_profile_version") != "3":
+        raise ValueError("deterministic semantic lifecycle v2 requires compiler profile 3")
+    statuses = [item["semantic_status"] for item in compiler_report["runs"]]
+    counts = {status: statuses.count(status) for status in _DETERMINISTIC_SEMANTIC_STATUS_PRIORITY}
+    counts["total"] = len(statuses)
+    aggregate = next(
+        status for status in _DETERMINISTIC_SEMANTIC_STATUS_PRIORITY if counts[status]
+    )
+    if compiler_report["semantic_status_counts"] != counts:
+        raise ValueError("deterministic semantic lifecycle v2 status counts do not match runs")
+    if compiler_report["semantic_status"] != aggregate:
+        raise ValueError("deterministic semantic lifecycle v2 aggregate status is invalid")
+    if aggregate not in {"complete", "partial"}:
+        raise ValueError("deterministic semantic lifecycle v2 is not admissible for query scoring")
 
 
 def _timestamp() -> str:
@@ -602,6 +638,560 @@ def _selected(value: dict[str, Any]) -> tuple[list[str], list[str]]:
     return sorted(revisions), sorted(source_revisions)
 
 
+def _v3_context_retrieval_view(capsule: dict[str, Any]) -> dict[str, Any]:
+    """Project the owner-local v3 Capsule onto the deterministic scorer view."""
+
+    if capsule.get("schema_version") != "deeplaw.knowledge-capsule/v3":
+        raise ValueError("semantic context must use the knowledge Capsule v3 schema")
+    statements = capsule.get("statements")
+    evidence = capsule.get("evidence")
+    gaps = capsule.get("gaps")
+    if not isinstance(statements, list):
+        raise ValueError("knowledge Capsule v3 statements must be an array")
+    if not isinstance(evidence, list):
+        raise ValueError("knowledge Capsule v3 evidence must be an array")
+    if not isinstance(gaps, list):
+        raise ValueError("knowledge Capsule v3 gaps must be an array")
+
+    compiled: list[dict[str, Any]] = []
+    for ordinal, statement in enumerate(statements):
+        if not isinstance(statement, dict):
+            raise ValueError(f"knowledge Capsule v3 statement {ordinal} must be an object")
+        object_summary = statement.get("object_summary")
+        knowledge_revision_id = statement.get("knowledge_revision_id")
+        statement_text = statement.get("statement_text")
+        source_refs = statement.get("source_refs")
+        if not isinstance(object_summary, dict):
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} object_summary must be an object"
+            )
+        knowledge_id = object_summary.get("knowledge_id")
+        if not isinstance(knowledge_id, str) or not knowledge_id:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} object_summary has no knowledge_id"
+            )
+        if not isinstance(knowledge_revision_id, str) or not knowledge_revision_id:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} has no knowledge_revision_id"
+            )
+        summary_revision_id = object_summary.get("revision_id")
+        if summary_revision_id is not None and summary_revision_id != knowledge_revision_id:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} revision identity is inconsistent"
+            )
+        statement_knowledge_id = statement.get("knowledge_id")
+        if statement_knowledge_id is not None and statement_knowledge_id != knowledge_id:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} knowledge identity is inconsistent"
+            )
+        if not isinstance(statement_text, str) or not statement_text:
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} statement_text must be non-empty"
+            )
+        if not isinstance(source_refs, list) or any(
+            not isinstance(reference, dict) for reference in source_refs
+        ):
+            raise ValueError(
+                f"knowledge Capsule v3 statement {ordinal} source_refs must be an object array"
+            )
+
+        item = {
+            **object_summary,
+            "knowledge_id": knowledge_id,
+            "revision_id": knowledge_revision_id,
+            "content": statement_text,
+            "source_refs": [dict(reference) for reference in source_refs],
+        }
+        statement_id = statement.get("statement_id")
+        if isinstance(statement_id, str) and statement_id:
+            item["statement_id"] = statement_id
+        for field in ("valid_from", "valid_to", "limitation"):
+            if field in statement:
+                item[field] = statement[field]
+        compiled.append(item)
+
+    projected_evidence: list[dict[str, Any]] = []
+    for ordinal, item in enumerate(evidence):
+        if not isinstance(item, dict):
+            raise ValueError(f"knowledge Capsule v3 evidence {ordinal} must be an object")
+        projected_evidence.append(dict(item))
+
+    gap_codes: set[str] = set()
+    for ordinal, gap in enumerate(gaps):
+        if not isinstance(gap, dict):
+            raise ValueError(f"knowledge Capsule v3 gap {ordinal} must be an object")
+        code = gap.get("code")
+        if not isinstance(code, str) or not code:
+            raise ValueError(f"knowledge Capsule v3 gap {ordinal} has no code")
+        gap_codes.add(code)
+    return {
+        "compiled": compiled,
+        "evidence": projected_evidence,
+        "gaps": [{"code": code} for code in sorted(gap_codes)],
+        "query_plan": capsule.get("query_plan", {}),
+    }
+
+
+def _context_payload_measurement(
+    *,
+    local_capsule: dict[str, Any],
+    provider_capsule: dict[str, Any],
+    mcp_tool_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Measure the three real Context delivery boundaries without renaming bytes as tokens."""
+
+    provider_content = provider_capsule.get("capsule")
+    if not isinstance(provider_content, dict):
+        raise ValueError("provider Context Capsule has no bounded content object")
+    local_capsule_bytes = len(canonical_json(local_capsule).encode("utf-8"))
+    provider_capsule_bytes = len(canonical_json(provider_capsule).encode("utf-8"))
+    mcp_tool_result_bytes = len(canonical_json(mcp_tool_result).encode("utf-8"))
+    provider_content_bytes = len(canonical_json(provider_content).encode("utf-8"))
+    delivery = provider_capsule.get("delivery")
+    declared_content_bytes = (
+        delivery.get("provider_content_bytes") if isinstance(delivery, dict) else None
+    )
+    provider_hard_limit_valid = bool(
+        provider_capsule_bytes <= 65_536
+        and mcp_tool_result_bytes <= 65_536
+        and declared_content_bytes == provider_content_bytes
+    )
+    return {
+        "local_capsule_bytes": local_capsule_bytes,
+        "provider_capsule_bytes": provider_capsule_bytes,
+        "mcp_tool_result_bytes": mcp_tool_result_bytes,
+        "provider_content_bytes": provider_content_bytes,
+        "transport_metadata_bytes": max(0, mcp_tool_result_bytes - provider_content_bytes),
+        # Bytes remain an independent transport measurement. Provider tokens
+        # are unavailable until a real Host returns its usage receipt.
+        "provider_token_estimate": None,
+        "token_measurement_method": "not_measured",
+        "provider_hard_limit_valid": provider_hard_limit_valid,
+    }
+
+
+def _context_surface_identity(value: dict[str, Any], *, provider: bool = False) -> dict[str, Any]:
+    """Project one v6 Context surface onto identities and provider-visible semantics."""
+
+    body = value.get("capsule") if provider else value
+    if not isinstance(body, dict):
+        return {
+            "statement_ids": [],
+            "knowledge_revision_ids": [],
+            "source_revision_ids": [],
+            "gap_codes": [],
+            "statements": [],
+            "evidence": [],
+        }
+
+    statements = body.get("statements", [])
+    evidence = body.get("evidence", [])
+    gaps = body.get("gaps", [])
+    if not isinstance(statements, list):
+        statements = []
+    if not isinstance(evidence, list):
+        evidence = []
+    if not isinstance(gaps, list):
+        gaps = []
+
+    def _source_ids(item: dict[str, Any]) -> list[str]:
+        values: list[str] = []
+        direct = item.get("source_revision_id")
+        if isinstance(direct, str) and direct:
+            values.append(direct)
+        references = item.get("source_refs", [])
+        if isinstance(references, list):
+            for reference in references:
+                if not isinstance(reference, dict):
+                    continue
+                source_revision_id = reference.get("source_revision_id")
+                if isinstance(source_revision_id, str) and source_revision_id:
+                    values.append(source_revision_id)
+        return values
+
+    statement_semantics = [
+        {
+            key: item.get(key)
+            for key in (
+                "statement_id",
+                "statement_text",
+                "statement_type",
+                "support_status",
+                "current_supported",
+                "freshness",
+                "origin",
+                "authority",
+                "verification",
+                "legal_authority",
+                "knowledge_revision_id",
+                "knowledge_id",
+                "source_refs",
+            )
+        }
+        for item in statements
+        if isinstance(item, dict)
+    ]
+    evidence_semantics = [
+        {
+            key: item.get(key)
+            for key in (
+                "evidence_id",
+                "source_revision_id",
+                "fragment_id",
+                "excerpt",
+                "content_sha256",
+                "source_refs",
+                "selection_reason",
+                "verification",
+            )
+        }
+        for item in evidence
+        if isinstance(item, dict)
+    ]
+    return {
+        "statement_ids": [
+            str(item["statement_id"])
+            for item in statements
+            if isinstance(item, dict) and isinstance(item.get("statement_id"), str)
+        ],
+        "knowledge_revision_ids": sorted(
+            {
+                str(item["knowledge_revision_id"])
+                for item in statements
+                if isinstance(item, dict)
+                and isinstance(item.get("knowledge_revision_id"), str)
+            }
+        ),
+        "source_revision_ids": sorted(
+            {
+                source_revision_id
+                for item in [*statements, *evidence]
+                if isinstance(item, dict)
+                for source_revision_id in _source_ids(item)
+            }
+        ),
+        "gap_codes": sorted(
+            {
+                str(item.get("code"))
+                for item in gaps
+                if isinstance(item, dict) and isinstance(item.get("code"), str)
+            }
+        ),
+        "statements": statement_semantics,
+        "evidence": evidence_semantics,
+    }
+
+
+def _statement_candidate_items(
+    vault: Path,
+    *,
+    local_audit: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Read only the canonical statement rows named by a local audit receipt."""
+
+    if not isinstance(local_audit, dict):
+        return []
+    candidate_ids = {
+        str(item.get("statement_id") or item.get("candidate_id"))
+        for item in local_audit.get("candidates", [])
+        if isinstance(item, dict)
+        and isinstance(item.get("statement_id") or item.get("candidate_id"), str)
+    }
+    candidate_ids.update(
+        str(item.get("statement_id") or item.get("candidate_id"))
+        for field in ("suppressions", "rejections")
+        for item in local_audit.get(field, [])
+        if isinstance(item, dict)
+        and isinstance(item.get("statement_id") or item.get("candidate_id"), str)
+    )
+    statement_ids = sorted(
+        item for item in candidate_ids if item.startswith("statement_")
+    )
+    if not statement_ids:
+        return []
+    placeholders = ",".join("?" for _ in statement_ids)
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        rows = store.connection.execute(
+            f"""
+            SELECT statements.statement_id, statements.statement_text,
+                   statements.statement_json, revisions.knowledge_id,
+                   revisions.title, revisions.semantic_key, revisions.kind,
+                   revisions.metadata_json
+            FROM knowledge_statements_v1 AS statements
+            JOIN knowledge_revisions_v3 AS revisions
+              ON revisions.revision_id = statements.knowledge_revision_id
+            WHERE statements.statement_id IN ({placeholders})
+            """,
+            tuple(statement_ids),
+        ).fetchall()
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            statement = strict_json_loads(row["statement_json"])
+            metadata = strict_json_loads(row["metadata_json"])
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(statement, dict):
+            continue
+        if not isinstance(metadata, dict):
+            metadata = {}
+        aliases = metadata.get("aliases", [])
+        result.append(
+            {
+                "statement_id": row["statement_id"],
+                "knowledge_id": row["knowledge_id"],
+                "kind": row["kind"],
+                "title": row["title"],
+                "semantic_key": row["semantic_key"],
+                "aliases": aliases if isinstance(aliases, list) else [],
+                "metadata": metadata,
+                "content": row["statement_text"],
+                "statement_text": row["statement_text"],
+                "source_refs": statement.get("source_refs", []),
+            }
+        )
+    return result
+
+
+def _required_target_suppression_measurement(
+    *,
+    case: dict[str, Any],
+    retrieval_view: dict[str, Any],
+    source_ids: dict[str, str],
+    matched_label_ids: list[str],
+    local_audit: dict[str, Any] | None,
+    candidate_items: list[dict[str, Any]],
+) -> dict[str, int | float]:
+    """Count only discovered/admitted Gold candidates suppressed after admission."""
+
+    required = [item for item in case["expected_objects"] if item["required"]]
+    required_count = len(required)
+    selected_labels = set(matched_label_ids)
+    candidate_by_id = {
+        str(item["statement_id"]): item
+        for item in candidate_items
+        if isinstance(item.get("statement_id"), str)
+    }
+    audit_suppressions = (
+        local_audit.get("suppressions", []) if isinstance(local_audit, dict) else []
+    )
+    suppression_ids = {
+        str(item.get("statement_id") or item.get("candidate_id"))
+        for item in audit_suppressions
+        if isinstance(item, dict)
+        and isinstance(item.get("statement_id") or item.get("candidate_id"), str)
+    }
+    audit_rejections = (
+        local_audit.get("rejections", []) if isinstance(local_audit, dict) else []
+    )
+    rejection_ids = {
+        str(item.get("statement_id") or item.get("candidate_id"))
+        for item in audit_rejections
+        if isinstance(item, dict)
+        and isinstance(item.get("statement_id") or item.get("candidate_id"), str)
+    }
+    uncompiled_source_count = int(
+        retrieval_view.get("query_plan", {}).get("uncompiled_source_count", 0)
+    ) if isinstance(retrieval_view.get("query_plan"), dict) else 0
+    gap_codes = {
+        str(item.get("code"))
+        for item in retrieval_view.get("gaps", [])
+        if isinstance(item, dict) and isinstance(item.get("code"), str)
+    }
+    false_suppressed = 0
+    missed = 0
+    not_discovered = 0
+    uncompiled = 0
+    rejected = 0
+    gap = 0
+    for expected in required:
+        label_id = str(expected["label_id"])
+        if label_id in selected_labels:
+            continue
+        matches = [
+            item
+            for item in candidate_by_id.values()
+            if _target_matches(
+                case=case,
+                item=item,
+                expected=expected,
+                source_ids=source_ids,
+            )
+        ]
+        match_ids = {str(item["statement_id"]) for item in matches}
+        if match_ids & suppression_ids:
+            false_suppressed += 1
+            continue
+        missed += 1
+        if match_ids & rejection_ids:
+            rejected += 1
+        elif not matches and uncompiled_source_count:
+            uncompiled += 1
+        elif not matches and gap_codes:
+            gap += 1
+        elif not matches:
+            not_discovered += 1
+    return {
+        "required_target_count": required_count,
+        "false_suppressed_required_target_count": false_suppressed,
+        "required_target_miss_without_suppression_count": missed,
+        "required_target_not_discovered_count": not_discovered,
+        "required_target_uncompiled_count": uncompiled,
+        "required_target_rejected_count": rejected,
+        "required_target_gap_count": gap,
+        "false_suppression_rate": round(false_suppressed / required_count, 6)
+        if required_count
+        else 0.0,
+    }
+
+
+def _context_quality_measurement(
+    *,
+    case: dict[str, Any],
+    retrieval_view: dict[str, Any],
+    source_ids: dict[str, str],
+    matched_label_ids: list[str],
+    local_audit: dict[str, Any] | None = None,
+    candidate_items: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    required = [item for item in case["expected_objects"] if item["required"]]
+    compiled = [
+        item for item in retrieval_view.get("compiled", []) if isinstance(item, dict)
+    ]
+    relevant_compiled = [
+        item
+        for item in compiled
+        if any(
+            _target_matches(
+                case=case,
+                item=item,
+                expected=expected,
+                source_ids=source_ids,
+            )
+            for expected in required
+        )
+    ]
+
+    def _text(item: dict[str, Any]) -> str:
+        return str(
+            item.get("content")
+            or item.get("statement_text")
+            or item.get("quote")
+            or item.get("excerpt")
+            or ""
+        )
+
+    evidence = [
+        item
+        for item in retrieval_view.get("evidence", [])
+        if isinstance(item, dict)
+    ]
+    relevant_source_references = {
+        (
+            str(reference.get("source_revision_id") or ""),
+            str(reference.get("fragment_revision_id") or ""),
+            str(reference.get("locator") or ""),
+        )
+        for item in relevant_compiled
+        for reference in item.get("source_refs", [])
+        if isinstance(reference, dict)
+        and isinstance(reference.get("source_revision_id"), str)
+        and reference["source_revision_id"]
+    }
+    relevant_evidence = [
+        item
+        for item in evidence
+        if isinstance(item.get("source_revision_id"), str)
+        and item["source_revision_id"]
+        and (
+            str(item.get("source_revision_id") or ""),
+            str(item.get("fragment_revision_id") or ""),
+            str(item.get("locator") or ""),
+        )
+        in relevant_source_references
+    ]
+    relevant_items = [*relevant_compiled, *relevant_evidence]
+    context_items = [*compiled, *evidence]
+    context_texts = [_text(item) for item in context_items if _text(item)]
+    normalized_texts = [_normalize(text) for text in context_texts]
+    duplicate_count = len(normalized_texts) - len(set(normalized_texts))
+    evidence_keys: list[tuple[str, ...]] = []
+    for item in evidence:
+        evidence_id = item.get("evidence_id")
+        if isinstance(evidence_id, str) and evidence_id:
+            evidence_keys.append(("evidence_id", evidence_id))
+            continue
+        references = item.get("source_refs")
+        if not isinstance(references, list):
+            references = [item] if item.get("source_revision_id") else []
+        for reference in references:
+            if not isinstance(reference, dict):
+                continue
+            source_revision_id = reference.get("source_revision_id")
+            fragment_identity = reference.get("fragment_id") or reference.get(
+                "fragment_revision_id"
+            )
+            if not isinstance(source_revision_id, str) or not isinstance(
+                fragment_identity, str
+            ):
+                continue
+            evidence_keys.append(
+                (
+                    "source_key",
+                    source_revision_id,
+                    fragment_identity,
+                    str(reference.get("locator") or ""),
+                    str(
+                        reference.get("quote_sha256")
+                        or reference.get("content_sha256")
+                        or ""
+                    ),
+                )
+            )
+    duplicate_evidence_count = len(evidence_keys) - len(set(evidence_keys))
+    relevant_chars = sum(len(_text(item)) for item in relevant_items)
+    context_chars = sum(len(text) for text in context_texts)
+    expected_gap_codes = set(case.get("expected_gap_codes", []))
+    actual_gap_codes = {
+        str(item.get("code"))
+        for item in retrieval_view.get("gaps", [])
+        if isinstance(item, dict) and isinstance(item.get("code"), str)
+    }
+    duty_total = len(required) + len(expected_gap_codes)
+    duty_matched = len(set(matched_label_ids)) + len(
+        expected_gap_codes.intersection(actual_gap_codes)
+    )
+    useful_context_recall = (
+        round(len(set(matched_label_ids)) / len(required), 6) if required else 1.0
+    )
+    suppression_measurement = _required_target_suppression_measurement(
+        case=case,
+        retrieval_view=retrieval_view,
+        source_ids=source_ids,
+        matched_label_ids=matched_label_ids,
+        local_audit=local_audit,
+        candidate_items=candidate_items or [],
+    )
+    return {
+        "useful_context_recall": useful_context_recall,
+        **suppression_measurement,
+        "duty_coverage": round(duty_matched / duty_total, 6) if duty_total else 1.0,
+        "relevant_chars": relevant_chars,
+        "context_chars": context_chars,
+        "relevant_chars_ratio": round(relevant_chars / context_chars, 6)
+        if context_chars
+        else (1.0 if not required else 0.0),
+        "redundancy_rate": round(duplicate_count / len(normalized_texts), 6)
+        if normalized_texts
+        else 0.0,
+        "duplicate_evidence_rate": round(
+            duplicate_evidence_count / len(evidence_keys), 6
+        )
+        if evidence_keys
+        else 0.0,
+    }
+
+
 def _rank_metrics(
     *,
     case: dict[str, Any],
@@ -649,14 +1239,48 @@ def _rank_metrics(
     ideal_count = min(len(required), len(ranked))
     ideal_dcg = sum(1 / math.log2(index + 2) for index in range(ideal_count))
     dcg = sum(gain / math.log2(index + 2) for index, gain in enumerate(gains))
+    mrr = round(1 / first_rank, 6) if first_rank else (1.0 if not required else 0.0)
     return {
         "matched_label_ids": sorted(matched_labels),
         "recall_at_k": recall,
         "target_scoped_precision_at_k": precision,
-        "reciprocal_rank": (
-            round(1 / first_rank, 6) if first_rank else (1.0 if not required else 0.0)
-        ),
+        "reciprocal_rank": mrr,
         "ndcg_at_k": round(dcg / ideal_dcg, 6) if ideal_dcg else 1.0,
+    }
+
+
+def _context_rank_metrics(
+    *,
+    case: dict[str, Any],
+    value: dict[str, Any],
+    source_ids: dict[str, str],
+) -> dict[str, Any]:
+    """Add provider-visible Precision@K and the Context MRR name to v6 ranking."""
+
+    ranking = _rank_metrics(case=case, value=value, source_ids=source_ids)
+    required = [item for item in case["expected_objects"] if item["required"]]
+    ranked = [item for item in value.get("compiled", []) if isinstance(item, dict)]
+    relevant_item_count = sum(
+        any(
+            _target_matches(
+                case=case,
+                item=item,
+                expected=expected,
+                source_ids=source_ids,
+            )
+            for expected in required
+        )
+        for item in ranked
+    )
+    precision_at_k = (
+        round(relevant_item_count / len(ranked), 6)
+        if ranked
+        else (1.0 if not required else 0.0)
+    )
+    return {
+        **ranking,
+        "precision_at_k": precision_at_k,
+        "mrr": ranking["reciprocal_rank"],
     }
 
 
@@ -1381,9 +2005,11 @@ def _context_verification(
     source_ids: dict[str, str],
 ) -> dict[str, Any]:
     query = str(case["query"])
+    with AutonomousKnowledgeStore(vault, read_only=True) as scope_store:
+        context_scope = str(scope_store.vault_scope)
+    context_started = time.monotonic()
     capsule, _, _stdout, _ = _run_json(
         prefix,
-        "autonomy",
         "context",
         "--vault",
         str(vault),
@@ -1392,10 +2018,10 @@ def _context_verification(
         "--purpose",
         str(case["purpose"]),
         "--scope",
-        "personal",
+        context_scope,
         "--max-sensitivity",
-        "public",
-        "--limit",
+        BUDGET["max_sensitivity"],
+        "--max-items",
         str(BUDGET["max_items"]),
         "--max-chars",
         str(BUDGET["max_chars"]),
@@ -1407,6 +2033,10 @@ def _context_verification(
         "1",
         "--retrieval-mode",
         "hybrid",
+        "--query-plan-version",
+        "6",
+        "--capsule-projection",
+        "standard",
         *(
             ["--as-of", str(case["as_of"])]
             if isinstance(case.get("as_of"), str)
@@ -1415,47 +2045,151 @@ def _context_verification(
         "--confirm-no-case-data",
     )
     assert capsule is not None
-    sections = capsule.get("sections", {})
-    source_derived = [
-        item
-        for item in sections.get("source_derived_knowledge", [])
-        if isinstance(item, dict)
-    ]
-    compiled = [
-        item
-        for name in (
-            "agent_derived_knowledge",
-            "agent_memory",
+    context_latency_ms = round((time.monotonic() - context_started) * 1000)
+    provider_capsule = capsule.get("provider_capsule")
+    if not isinstance(provider_capsule, dict):
+        raise ValueError("knowledge Capsule v3 does not expose its provider projection")
+    # Exercise the public Python facade with the same bounded request.  The
+    # audit projection is local-only and is never handed to the Provider.
+    python_context: dict[str, Any]
+    audit_query: dict[str, Any]
+    with KnowledgeOS.open(vault) as knowledge_os:
+        python_context = knowledge_os.context.compile(
+            task=query,
+            purpose=str(case["purpose"]),
+            scope=context_scope,
+            max_sensitivity=BUDGET["max_sensitivity"],
+            limit=BUDGET["max_items"],
+            max_chars=BUDGET["max_chars"],
+            max_tokens=BUDGET["max_tokens"],
+            max_sources=BUDGET["max_sources"],
+            graph_hops=1,
+            retrieval_mode="hybrid",
+            as_of=str(case["as_of"]) if isinstance(case.get("as_of"), str) else None,
+            query_plan_version="6",
+            projection="standard",
+            confirm_no_case_data=True,
         )
-        for item in sections.get(name, [])
-        if isinstance(item, dict)
-    ]
-    evidence = [
-        item
-        for name in ("official_evidence", "user_private_evidence")
-        for item in sections.get(name, [])
-        if isinstance(item, dict)
-    ] + [item for item in source_derived if "knowledge_id" not in item]
-    compiled = [
-        *[item for item in source_derived if "knowledge_id" in item],
-        *compiled,
-    ]
-    gap_codes = sorted(
-        {
-            gap.split(":", 1)[0]
-            for gap in sections.get("gaps", [])
-            if isinstance(gap, str) and ":" in gap
-        }
+        force_canonical_lexical = bool(
+            capsule.get("query_plan", {})
+            .get("retrieval_controls", {})
+            .get("force_canonical_lexical", False)
+        )
+        audit_query = knowledge_os.retrieval.query(
+            query,
+            purpose=str(case["purpose"]),
+            scope=context_scope,
+            max_sensitivity=BUDGET["max_sensitivity"],
+            limit=BUDGET["max_items"],
+            max_chars=BUDGET["max_chars"],
+            max_tokens=BUDGET["max_tokens"],
+            max_sources=BUDGET["max_sources"],
+            graph_hops=1,
+            retrieval_mode="hybrid",
+            as_of=str(case["as_of"]) if isinstance(case.get("as_of"), str) else None,
+            query_plan_version="6",
+            force_canonical_lexical=force_canonical_lexical,
+            projection="audit",
+        )
+    local_audit = audit_query.get("local_audit")
+    if not isinstance(local_audit, dict):
+        raise ValueError("v6 audit projection did not expose a local audit receipt")
+    candidate_items = _statement_candidate_items(vault, local_audit=local_audit)
+    mcp_runtime = _KnowledgeRuntime(vault_path=vault, lock=RLock())
+    mcp_started = time.monotonic()
+    mcp_tool_result = handle_knowledge_support(
+        operation="context",
+        task=query,
+        purpose=str(case["purpose"]),
+        query_plan_version="6",
+        scope=context_scope,
+        max_sensitivity=BUDGET["max_sensitivity"],
+        limit=BUDGET["max_items"],
+        max_chars=BUDGET["max_chars"],
+        max_tokens=BUDGET["max_tokens"],
+        max_sources=BUDGET["max_sources"],
+        graph_hops=1,
+        retrieval_mode="hybrid",
+        as_of=str(case["as_of"]) if isinstance(case.get("as_of"), str) else None,
+        confirm_no_case_data=True,
+        vault_path=vault,
+        _runtime=mcp_runtime,
     )
-    retrieval_view = {
-        "compiled": compiled,
-        "evidence": evidence,
-        "gaps": [{"code": code} for code in gap_codes],
-    }
+    mcp_latency_ms = round((time.monotonic() - mcp_started) * 1000)
+    mcp_provider_capsule = mcp_tool_result.get("result")
+    if not isinstance(mcp_provider_capsule, dict):
+        mcp_provider_capsule = {}
+    mcp_receipt = mcp_provider_capsule.get("receipt", {})
+    mcp_receipt_id = (
+        mcp_receipt.get("receipt_id") if isinstance(mcp_receipt, dict) else None
+    )
+    receipt_explain = (
+        handle_knowledge_support(
+            operation="explain",
+            receipt_id=mcp_receipt_id,
+            vault_path=vault,
+            _runtime=mcp_runtime,
+        )
+        if isinstance(mcp_receipt_id, str)
+        else {}
+    )
+    explain_result = receipt_explain.get("result", {})
+    explain_audit = (
+        explain_result.get("audit") if isinstance(explain_result, dict) else None
+    )
+    receipt_explain_valid = bool(
+        receipt_explain.get("schema_version") == "deeplaw.knowledge-support-output/v6"
+        and receipt_explain.get("operation") == "explain"
+        and isinstance(explain_result, dict)
+        and explain_result.get("schema_version") == "deeplaw.query-audit-read/v1"
+        and explain_result.get("receipt_id") == mcp_receipt_id
+        and explain_result.get("write_performed") is False
+        and isinstance(explain_audit, dict)
+        and explain_audit.get("receipt_id") == mcp_receipt_id
+        and explain_audit.get("write_performed") is False
+        and "candidates" not in explain_audit
+        and "score" not in canonical_json(explain_audit)
+        and query not in canonical_json(explain_audit)
+        and len(canonical_json(receipt_explain).encode("utf-8")) <= 65_536
+    )
+    surface_identity_parity_valid = bool(
+        provider_capsule == python_context.get("provider_capsule")
+        and provider_capsule == mcp_provider_capsule
+        and _context_surface_identity(capsule)
+        == _context_surface_identity(python_context)
+        == _context_surface_identity(mcp_provider_capsule, provider=True)
+    )
+    cli_plan = capsule.get("query_plan", {})
+    context_request_parameter_parity_valid = bool(
+        isinstance(cli_plan, dict)
+        and cli_plan.get("scope") == context_scope
+        and cli_plan.get("max_sensitivity") == BUDGET["max_sensitivity"]
+    )
+    payload_measurement = _context_payload_measurement(
+        local_capsule=capsule,
+        provider_capsule=provider_capsule,
+        mcp_tool_result=mcp_tool_result,
+    )
+    retrieval_view = _v3_context_retrieval_view(capsule)
+    compiled = retrieval_view["compiled"]
+    evidence = retrieval_view["evidence"]
+    gap_codes = [gap["code"] for gap in retrieval_view["gaps"]]
     compiled_revision_ids, selected_source_revision_ids = _selected(
         retrieval_view
     )
-    ranking = _rank_metrics(case=case, value=retrieval_view, source_ids=source_ids)
+    ranking = _context_rank_metrics(
+        case=case,
+        value=retrieval_view,
+        source_ids=source_ids,
+    )
+    quality_measurement = _context_quality_measurement(
+        case=case,
+        retrieval_view=retrieval_view,
+        source_ids=source_ids,
+        matched_label_ids=ranking["matched_label_ids"],
+        local_audit=local_audit,
+        candidate_items=candidate_items,
+    )
     required_label_ids = {
         item["label_id"] for item in case["expected_objects"] if item["required"]
     }
@@ -1463,9 +2197,18 @@ def _context_verification(
     semantic_valid = bool(
         set(ranking["matched_label_ids"]) == required_label_ids
         and expected_gap_codes.issubset(set(gap_codes))
+        and surface_identity_parity_valid
+        and context_request_parameter_parity_valid
+        and receipt_explain_valid
     )
     explicit_gap = bool(
-        {"evidence_gap", "retrieval_gap", "uncompiled_source", "stale_knowledge"}
+        {
+            "evidence_gap",
+            "no_answer",
+            "retrieval_gap",
+            "uncompiled_source",
+            "stale_knowledge",
+        }
         & set(gap_codes)
     )
     fallback_used = bool(
@@ -1484,7 +2227,6 @@ def _context_verification(
             and not fallback_used
             and source_ids["retention-a"] not in selected_source_revision_ids
         )
-    provider_payload_bytes = len(canonical_json(capsule).encode("utf-8"))
     with tempfile.TemporaryDirectory(prefix="deeplaw-semantic-capsule-") as temporary:
         capsule_path = Path(temporary) / "capsule.json"
         capsule_path.write_text(canonical_json(capsule) + "\n", encoding="utf-8")
@@ -1500,14 +2242,21 @@ def _context_verification(
     return {
         "capsule_id": capsule["capsule_id"],
         "capsule_sha256": sha256_bytes(canonical_json(capsule).encode("utf-8")),
-        "provider_payload_bytes": provider_payload_bytes,
-        "provider_hard_limit_valid": provider_payload_bytes <= 65_536,
+        **payload_measurement,
+        **quality_measurement,
+        "context_latency_ms": context_latency_ms,
+        "mcp_latency_ms": mcp_latency_ms,
         "verification_valid": bool(verification and verification.get("valid")),
         "semantic_valid": semantic_valid,
+        "surface_identity_parity_valid": surface_identity_parity_valid,
+        "context_request_parameter_parity_valid": context_request_parameter_parity_valid,
+        "receipt_explain_valid": receipt_explain_valid,
         "knowledge_ids": sorted(
-            str(item["knowledge_id"])
-            for item in compiled
-            if isinstance(item.get("knowledge_id"), str)
+            {
+                str(item["knowledge_id"])
+                for item in compiled
+                if isinstance(item.get("knowledge_id"), str)
+            }
         ),
         "compiled_revision_ids": compiled_revision_ids,
         "selected_source_revision_ids": selected_source_revision_ids,
@@ -1515,6 +2264,11 @@ def _context_verification(
         "query_plan": capsule.get("query_plan", {}),
         "query_plan_sha256": capsule.get("query_plan_sha256"),
         "matched_label_ids": ranking["matched_label_ids"],
+        "recall_at_k": ranking["recall_at_k"],
+        "precision_at_k": ranking["precision_at_k"],
+        "target_scoped_precision_at_k": ranking["target_scoped_precision_at_k"],
+        "mrr": ranking["mrr"],
+        "ndcg_at_k": ranking["ndcg_at_k"],
     }
 
 
@@ -1662,7 +2416,13 @@ def _case_result(
         {str(item["code"]) for item in gaps if isinstance(item.get("code"), str)}
     )
     explicit_gap = bool(
-        {"evidence_gap", "retrieval_gap", "uncompiled_source", "stale_knowledge"}
+        {
+            "evidence_gap",
+            "no_answer",
+            "retrieval_gap",
+            "uncompiled_source",
+            "stale_knowledge",
+        }
         & set(gap_codes)
     )
     fallback_used = bool(warm.get("query_plan", {}).get("fallback", {}).get("used"))
@@ -1797,6 +2557,7 @@ def _case_result(
         and context["provider_hard_limit_valid"]
         and context["verification_valid"]
         and context["semantic_valid"]
+        and context.get("surface_identity_parity_valid", True)
         and evidence_binding_valid
         and exact_get_valid
     )
@@ -1866,7 +2627,54 @@ def _case_result(
             for item in [*warm.get("compiled", []), *warm.get("evidence", [])]
             if isinstance(item, dict)
         ),
-        "context_provider_payload_bytes": context["provider_payload_bytes"],
+        # v1 keeps this legacy field for compatibility.  Its value is now the
+        # complete Agent-facing MCP tool result, never the owner-local v3 Capsule.
+        "context_provider_payload_bytes": context.get(
+            "mcp_tool_result_bytes", context.get("provider_payload_bytes", 0)
+        ),
+        "context_local_capsule_bytes": context.get("local_capsule_bytes", 0),
+        "context_provider_capsule_bytes": context.get(
+            "provider_capsule_bytes", context.get("provider_payload_bytes", 0)
+        ),
+        "context_mcp_tool_result_bytes": context.get(
+            "mcp_tool_result_bytes", context.get("provider_payload_bytes", 0)
+        ),
+        "context_provider_content_bytes": context.get("provider_content_bytes", 0),
+        "context_transport_metadata_bytes": context.get("transport_metadata_bytes", 0),
+        "context_provider_token_estimate": context.get("provider_token_estimate", 0),
+        "context_token_measurement_method": context.get(
+            "token_measurement_method", "not_measured"
+        ),
+        "context_useful_context_recall": context.get("useful_context_recall", 0.0),
+        "context_false_suppression_rate": context.get("false_suppression_rate", 0.0),
+        "context_required_target_count": context.get("required_target_count", 0),
+        "context_false_suppressed_required_target_count": context.get(
+            "false_suppressed_required_target_count", 0
+        ),
+        "context_required_target_miss_without_suppression_count": context.get(
+            "required_target_miss_without_suppression_count", 0
+        ),
+        "context_required_target_not_discovered_count": context.get(
+            "required_target_not_discovered_count", 0
+        ),
+        "context_required_target_uncompiled_count": context.get(
+            "required_target_uncompiled_count", 0
+        ),
+        "context_required_target_rejected_count": context.get(
+            "required_target_rejected_count", 0
+        ),
+        "context_required_target_gap_count": context.get(
+            "required_target_gap_count", 0
+        ),
+        "context_duty_coverage": context.get("duty_coverage", 0.0),
+        "context_relevant_chars": context.get("relevant_chars", 0),
+        "context_chars": context.get("context_chars", 0),
+        "context_relevant_chars_ratio": context.get("relevant_chars_ratio", 0.0),
+        "context_redundancy_rate": context.get("redundancy_rate", 0.0),
+        "context_duplicate_evidence_rate": context.get("duplicate_evidence_rate", 0.0),
+        "context_latency_ms": context.get("context_latency_ms", 0),
+        "context_mcp_latency_ms": context.get("mcp_latency_ms", 0),
+        "context_provider_hard_limit_valid": context["provider_hard_limit_valid"],
         "context_capsule_id": context["capsule_id"],
         "context_capsule_sha256": context["capsule_sha256"],
         "context_verification_valid": context["verification_valid"],
@@ -1880,6 +2688,20 @@ def _case_result(
         "context_query_plan": context["query_plan"],
         "context_query_plan_sha256": context["query_plan_sha256"],
         "context_matched_label_ids": context["matched_label_ids"],
+        "context_recall_at_k": context.get("recall_at_k", 0.0),
+        "context_precision_at_k": context.get("precision_at_k", 0.0),
+        "context_target_scoped_precision_at_k": context.get(
+            "target_scoped_precision_at_k", 0.0
+        ),
+        "context_mrr": context.get("mrr", 0.0),
+        "context_ndcg_at_k": context.get("ndcg_at_k", 0.0),
+        "context_surface_identity_parity_valid": context.get(
+            "surface_identity_parity_valid", True
+        ),
+        "context_request_parameter_parity_valid": context.get(
+            "context_request_parameter_parity_valid", False
+        ),
+        "context_receipt_explain_valid": context.get("receipt_explain_valid", False),
         "compiled_revision_ids": compiled_ids,
         "selected_source_revision_ids": selected_sources,
         "gap_codes": gap_codes,
@@ -1901,6 +2723,421 @@ def _case_result(
     }
 
 
+_CONTEXT_MEASUREMENT_FIELDS = frozenset(
+    {
+        "context_local_capsule_bytes",
+        "context_provider_capsule_bytes",
+        "context_mcp_tool_result_bytes",
+        "context_provider_content_bytes",
+        "context_transport_metadata_bytes",
+        "context_provider_token_estimate",
+        "context_token_measurement_method",
+        "context_useful_context_recall",
+        "context_false_suppression_rate",
+        "context_required_target_count",
+        "context_false_suppressed_required_target_count",
+        "context_required_target_miss_without_suppression_count",
+        "context_required_target_not_discovered_count",
+        "context_required_target_uncompiled_count",
+        "context_required_target_rejected_count",
+        "context_required_target_gap_count",
+        "context_duty_coverage",
+        "context_relevant_chars",
+        "context_chars",
+        "context_relevant_chars_ratio",
+        "context_redundancy_rate",
+        "context_duplicate_evidence_rate",
+        "context_latency_ms",
+        "context_mcp_latency_ms",
+        "context_provider_hard_limit_valid",
+        "context_recall_at_k",
+        "context_precision_at_k",
+        "context_target_scoped_precision_at_k",
+        "context_mrr",
+        "context_ndcg_at_k",
+        "context_surface_identity_parity_valid",
+        "context_request_parameter_parity_valid",
+        "context_receipt_explain_valid",
+    }
+)
+
+
+def _legacy_v1_case(value: dict[str, Any]) -> dict[str, Any]:
+    """Keep the historical v1 diagnostic contract byte-compatible and closed."""
+
+    result = {
+        key: item for key, item in value.items() if key not in _CONTEXT_MEASUREMENT_FIELDS
+    }
+    result["query_variant_checks"] = [
+        {
+            key: item
+            for key, item in variant.items()
+            if key not in _CONTEXT_MEASUREMENT_FIELDS
+        }
+        for variant in value["query_variant_checks"]
+    ]
+    return result
+
+
+def _context_outcome_report(
+    *,
+    gold: dict[str, Any],
+    gold_sha256: str,
+    compiler_report_id: str,
+    query_set_digest: str,
+    query_report: dict[str, Any],
+    cases: list[dict[str, Any]],
+    recorded_at: str,
+) -> dict[str, Any]:
+    context_cases: list[dict[str, Any]] = []
+    variant_deltas: list[float] = []
+    variant_rank_deltas: list[dict[str, float]] = []
+    for case in cases:
+        variants = case["query_variant_checks"]
+        parity_valid = bool(case.get("context_surface_identity_parity_valid", True))
+        request_parity_valid = bool(
+            case.get("context_request_parameter_parity_valid", False)
+        )
+        receipt_explain_valid = bool(case.get("context_receipt_explain_valid", False))
+        variant_context_passes = [
+            bool(
+                item.get("context_semantic_valid", False)
+                and item.get("context_verification_valid", False)
+                and item.get("context_provider_hard_limit_valid", True)
+                and item.get("context_surface_identity_parity_valid", True)
+                and item.get("context_request_parameter_parity_valid", False)
+                and item.get("context_receipt_explain_valid", False)
+            )
+            for item in variants
+        ]
+        variant_recalls = [
+            float(item.get("context_recall_at_k", item.get("context_useful_context_recall", 0.0)))
+            for item in variants
+        ]
+        base_rank = {
+            "recall_at_k": float(
+                case.get("context_recall_at_k", case.get("context_useful_context_recall", 0.0))
+            ),
+            "precision_at_k": float(case.get("context_precision_at_k", 0.0)),
+            "target_scoped_precision_at_k": float(
+                case.get("context_target_scoped_precision_at_k", 0.0)
+            ),
+            "mrr": float(case.get("context_mrr", 0.0)),
+            "ndcg_at_k": float(case.get("context_ndcg_at_k", 0.0)),
+        }
+        variant_rank_metrics = [
+            {
+                "variant_id": item.get("variant_id", f"variant-{index}"),
+                "recall_at_k": float(
+                    item.get("context_recall_at_k", item.get("context_useful_context_recall", 0.0))
+                ),
+                "precision_at_k": float(item.get("context_precision_at_k", 0.0)),
+                "target_scoped_precision_at_k": float(
+                    item.get("context_target_scoped_precision_at_k", 0.0)
+                ),
+                "mrr": float(item.get("context_mrr", 0.0)),
+                "ndcg_at_k": float(item.get("context_ndcg_at_k", 0.0)),
+            }
+            for index, item in enumerate(variants, start=1)
+        ]
+        rank_deltas = {
+            metric: round(
+                max(
+                    (
+                        abs(base_rank[metric] - float(item[metric]))
+                        for item in variant_rank_metrics
+                    ),
+                    default=0.0,
+                ),
+                6,
+            )
+            for metric in base_rank
+        }
+        variant_delta = max(
+            (
+                abs(float(case["context_useful_context_recall"]) - value)
+                for value in variant_recalls
+            ),
+            default=0.0,
+        )
+        variant_deltas.append(variant_delta)
+        variant_rank_deltas.append(rank_deltas)
+        context_case = {
+            "case_id": case["case_id"],
+            "status": "passed"
+            if case["context_semantic_valid"]
+            and case["context_verification_valid"]
+            and case["context_provider_hard_limit_valid"]
+            and parity_valid
+            and request_parity_valid
+            and receipt_explain_valid
+            and all(variant_context_passes)
+            else "failed",
+            "query_sha256": case["query_sha256"],
+            "query_plan_schema_version": "deeplaw.knowledge-query-plan/v6",
+            "matched_label_ids": case["context_matched_label_ids"],
+            "gap_codes": case["context_gap_codes"],
+            "local_capsule_bytes": case["context_local_capsule_bytes"],
+            "provider_capsule_bytes": case["context_provider_capsule_bytes"],
+            "mcp_tool_result_bytes": case["context_mcp_tool_result_bytes"],
+            "provider_content_bytes": case["context_provider_content_bytes"],
+            "transport_metadata_bytes": case["context_transport_metadata_bytes"],
+            "provider_token_estimate": case["context_provider_token_estimate"],
+            "token_measurement_method": case["context_token_measurement_method"],
+            "useful_context_recall": case["context_useful_context_recall"],
+            "false_suppression_rate": case["context_false_suppression_rate"],
+            "required_target_count": case.get("context_required_target_count", 0),
+            "false_suppressed_required_target_count": case.get(
+                "context_false_suppressed_required_target_count", 0
+            ),
+            "required_target_miss_without_suppression_count": case.get(
+                "context_required_target_miss_without_suppression_count", 0
+            ),
+            "required_target_not_discovered_count": case.get(
+                "context_required_target_not_discovered_count", 0
+            ),
+            "required_target_uncompiled_count": case.get(
+                "context_required_target_uncompiled_count", 0
+            ),
+            "required_target_rejected_count": case.get(
+                "context_required_target_rejected_count", 0
+            ),
+            "required_target_gap_count": case.get("context_required_target_gap_count", 0),
+            "recall_at_k": base_rank["recall_at_k"],
+            "precision_at_k": base_rank["precision_at_k"],
+            "target_scoped_precision_at_k": base_rank["target_scoped_precision_at_k"],
+            "mrr": base_rank["mrr"],
+            "ndcg_at_k": base_rank["ndcg_at_k"],
+            "duty_coverage": case["context_duty_coverage"],
+            "relevant_chars": case["context_relevant_chars"],
+            "context_chars": case["context_chars"],
+            "relevant_chars_ratio": case["context_relevant_chars_ratio"],
+            "redundancy_rate": case["context_redundancy_rate"],
+            "duplicate_evidence_rate": case["context_duplicate_evidence_rate"],
+            "context_latency_ms": case["context_latency_ms"],
+            "mcp_latency_ms": case["context_mcp_latency_ms"],
+            "provider_hard_limit_valid": case[
+                "context_provider_hard_limit_valid"
+            ],
+            "variant_count": len(variants),
+            "variant_pass_count": sum(variant_context_passes),
+            "query_variant_recall_delta": round(variant_delta, 6),
+            "query_variant_rank_deltas": rank_deltas,
+            "variant_rank_metrics": variant_rank_metrics,
+            "surface_identity_parity_valid": parity_valid,
+            "request_parameter_parity_valid": request_parity_valid,
+            "receipt_explain_valid": receipt_explain_valid,
+        }
+        context_cases.append(context_case)
+
+    relevant_chars = sum(int(item["context_relevant_chars"]) for item in cases)
+    context_chars = sum(int(item["context_chars"]) for item in cases)
+    provider_capsule_bytes = sum(
+        int(item["context_provider_capsule_bytes"]) for item in cases
+    )
+    mcp_tool_result_bytes = sum(
+        int(item["context_mcp_tool_result_bytes"]) for item in cases
+    )
+    provider_content_bytes = sum(
+        int(item["context_provider_content_bytes"]) for item in cases
+    )
+    transport_metadata_bytes = sum(
+        int(item["context_transport_metadata_bytes"]) for item in cases
+    )
+    context_latencies = [int(item["context_latency_ms"]) for item in cases]
+    mcp_latencies = [int(item["context_mcp_latency_ms"]) for item in cases]
+    required_target_count = sum(
+        int(item.get("context_required_target_count", 0)) for item in cases
+    )
+    false_suppressed_required_target_count = sum(
+        int(item.get("context_false_suppressed_required_target_count", 0))
+        for item in cases
+    )
+    required_target_miss_without_suppression_count = sum(
+        int(item.get("context_required_target_miss_without_suppression_count", 0))
+        for item in cases
+    )
+    required_target_not_discovered_count = sum(
+        int(item.get("context_required_target_not_discovered_count", 0))
+        for item in cases
+    )
+    required_target_uncompiled_count = sum(
+        int(item.get("context_required_target_uncompiled_count", 0)) for item in cases
+    )
+    required_target_rejected_count = sum(
+        int(item.get("context_required_target_rejected_count", 0)) for item in cases
+    )
+    required_target_gap_count = sum(
+        int(item.get("context_required_target_gap_count", 0)) for item in cases
+    )
+    context_rank_metrics = {
+        metric: round(
+            sum(
+                float(
+                    item.get(
+                        f"context_{metric}",
+                        item.get("context_useful_context_recall", 0.0)
+                        if metric == "recall_at_k"
+                        else 0.0,
+                    )
+                )
+                for item in cases
+            )
+            / len(cases),
+            6,
+        )
+        for metric in (
+            "recall_at_k",
+            "precision_at_k",
+            "target_scoped_precision_at_k",
+            "mrr",
+            "ndcg_at_k",
+        )
+    }
+    query_variant_rank_deltas = {
+        metric: round(
+            max(
+                (float(deltas.get(metric, 0.0)) for deltas in variant_rank_deltas),
+                default=0.0,
+            ),
+            6,
+        )
+        for metric in (
+            "recall_at_k",
+            "precision_at_k",
+            "target_scoped_precision_at_k",
+            "mrr",
+            "ndcg_at_k",
+        )
+    }
+    surface_identity_parity_failures = sum(
+        not bool(item.get("context_surface_identity_parity_valid", True))
+        for item in cases
+    )
+    request_parameter_parity_failures = sum(
+        not bool(item.get("context_request_parameter_parity_valid", False))
+        for item in cases
+    )
+    receipt_explain_failures = sum(
+        not bool(item.get("context_receipt_explain_valid", False)) for item in cases
+    )
+    metrics = {
+        "query_count": len(context_cases),
+        "query_variant_count": sum(item["variant_count"] for item in context_cases),
+        "useful_context_recall": round(
+            sum(float(item["context_useful_context_recall"]) for item in cases)
+            / len(cases),
+            6,
+        ),
+        "false_suppression_rate": round(
+            false_suppressed_required_target_count / required_target_count, 6
+        )
+        if required_target_count
+        else 0.0,
+        "required_target_count": required_target_count,
+        "false_suppressed_required_target_count": false_suppressed_required_target_count,
+        "required_target_miss_without_suppression_count": (
+            required_target_miss_without_suppression_count
+        ),
+        "required_target_not_discovered_count": required_target_not_discovered_count,
+        "required_target_uncompiled_count": required_target_uncompiled_count,
+        "required_target_rejected_count": required_target_rejected_count,
+        "required_target_gap_count": required_target_gap_count,
+        **context_rank_metrics,
+        "duty_coverage": round(
+            sum(float(item["context_duty_coverage"]) for item in cases) / len(cases),
+            6,
+        ),
+        "relevant_chars": relevant_chars,
+        "context_chars": context_chars,
+        "relevant_chars_ratio": round(relevant_chars / context_chars, 6)
+        if context_chars
+        else 1.0,
+        "redundancy_rate": round(
+            sum(float(item["context_redundancy_rate"]) for item in cases) / len(cases),
+            6,
+        ),
+        "duplicate_evidence_rate": round(
+            sum(float(item["context_duplicate_evidence_rate"]) for item in cases)
+            / len(cases),
+            6,
+        ),
+        "local_capsule_bytes": sum(int(item["context_local_capsule_bytes"]) for item in cases),
+        "provider_capsule_bytes": provider_capsule_bytes,
+        "mcp_tool_result_bytes": mcp_tool_result_bytes,
+        "provider_content_bytes": provider_content_bytes,
+        "transport_metadata_bytes": transport_metadata_bytes,
+        # This is the canonical JSON MCP envelope overhead beyond the
+        # provider-visible capsule content, not a second token estimate.
+        "transport_overhead_ratio": round(
+            transport_metadata_bytes / mcp_tool_result_bytes, 6
+        )
+        if mcp_tool_result_bytes
+        else 0.0,
+        "provider_token_estimate": None,
+        "token_measurement_method": "not_measured",
+        "actual_provider_input_tokens": None,
+        "context_latency_p50_ms": round(median(context_latencies)),
+        "context_latency_p95_ms": _percentile(context_latencies, 0.95),
+        "mcp_latency_p50_ms": round(median(mcp_latencies)),
+        "mcp_latency_p95_ms": _percentile(mcp_latencies, 0.95),
+        "query_variant_recall_delta": round(max(variant_deltas, default=0.0), 6),
+        "query_variant_rank_deltas": query_variant_rank_deltas,
+        "surface_identity_parity_failures": surface_identity_parity_failures,
+        "request_parameter_parity_failures": request_parameter_parity_failures,
+        "receipt_explain_failures": receipt_explain_failures,
+        "distractor_induced_answer_delta": {
+            "status": "not_executed",
+            "reason_code": "no_frozen_equal_budget_distractor_pair",
+        },
+        "token_savings": {
+            "status": "not_executed",
+            "reason_code": "no_frozen_equal_duty_equal_budget_baseline",
+        },
+        "provider_hard_limit_violations": sum(
+            not item["provider_hard_limit_valid"] for item in context_cases
+        ),
+    }
+    context_status = "passed" if all(
+        item["status"] == "passed" for item in context_cases
+    ) and metrics["provider_hard_limit_violations"] == 0 else "failed"
+    body = {
+        "schema_version": "deeplaw.semantic-context-outcome/v2",
+        "status": context_status,
+        "evidence_role": "tuning_used_development",
+        "qualification_eligible": False,
+        "gold_id": gold["gold_id"],
+        "gold_sha256": gold_sha256,
+        "fixture_manifest_sha256": gold["fixture_manifest_sha256"],
+        "compiler_report_id": compiler_report_id,
+        "query_set_sha256": query_set_digest,
+        "primary_agent_surface": "deeplaw knowledge context",
+        "context_query_plan_schema_version": "deeplaw.knowledge-query-plan/v6",
+        "operator_diagnostic": {
+            "surface": "deeplaw knowledge query --query-plan-version 5",
+            "query_plan_schema_version": "deeplaw.knowledge-query-plan/v5",
+            "report_id": query_report["report_id"],
+            "report_sha256": sha256_bytes(canonical_json(query_report).encode("utf-8")),
+            "status": query_report["status"],
+            "qualification_eligible": False,
+        },
+        "budget": BUDGET,
+        "cases": context_cases,
+        "metrics": metrics,
+        "recorded_at": recorded_at,
+        "competitive_claim_eligible": False,
+    }
+    return {
+        "report_id": stable_id(
+            "semanticcontextoutcome",
+            compiler_report_id,
+            query_set_digest,
+            recorded_at,
+        ),
+        **body,
+    }
+
+
 def run(
     *,
     gold: dict[str, Any],
@@ -1909,17 +3146,23 @@ def run(
     vault: Path,
     baseline_vault: Path,
     command: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     gold_sha256 = validate_candidate(gold, repository=_repository())
     supported_compiler_reports = {
         "deeplaw.real-semantic-host-report/v1",
         "deeplaw.real-semantic-host-report/v2",
         "deeplaw.deterministic-semantic-lifecycle/v1",
+        "deeplaw.deterministic-semantic-lifecycle/v2",
     }
-    if (
-        compiler_report.get("schema_version") not in supported_compiler_reports
-        or compiler_report.get("status") != "passed"
-    ):
+    compiler_schema_version = compiler_report.get("schema_version")
+    if compiler_schema_version not in supported_compiler_reports:
+        raise ValueError("unsupported semantic compiler evidence")
+    if compiler_schema_version in {
+        "deeplaw.deterministic-semantic-lifecycle/v1",
+        "deeplaw.deterministic-semantic-lifecycle/v2",
+    }:
+        _validate_deterministic_compiler_report(compiler_report)
+    if compiler_report.get("status") != "passed":
         raise ValueError("semantic query suite requires passed compiler evidence")
     if compiler_report.get("gold_id") != gold["gold_id"]:
         raise ValueError("semantic query suite compiler evidence does not bind Gold")
@@ -2064,6 +3307,72 @@ def run(
                     "context_provider_payload_bytes": variant_result[
                         "context_provider_payload_bytes"
                     ],
+                    "context_local_capsule_bytes": variant_result[
+                        "context_local_capsule_bytes"
+                    ],
+                    "context_provider_capsule_bytes": variant_result[
+                        "context_provider_capsule_bytes"
+                    ],
+                    "context_mcp_tool_result_bytes": variant_result[
+                        "context_mcp_tool_result_bytes"
+                    ],
+                    "context_provider_content_bytes": variant_result[
+                        "context_provider_content_bytes"
+                    ],
+                    "context_transport_metadata_bytes": variant_result[
+                        "context_transport_metadata_bytes"
+                    ],
+                    "context_provider_token_estimate": variant_result[
+                        "context_provider_token_estimate"
+                    ],
+                    "context_useful_context_recall": variant_result[
+                        "context_useful_context_recall"
+                    ],
+                    "context_false_suppression_rate": variant_result[
+                        "context_false_suppression_rate"
+                    ],
+                    "context_required_target_count": variant_result[
+                        "context_required_target_count"
+                    ],
+                    "context_false_suppressed_required_target_count": variant_result[
+                        "context_false_suppressed_required_target_count"
+                    ],
+                    "context_required_target_miss_without_suppression_count": variant_result[
+                        "context_required_target_miss_without_suppression_count"
+                    ],
+                    "context_recall_at_k": variant_result["context_recall_at_k"],
+                    "context_precision_at_k": variant_result["context_precision_at_k"],
+                    "context_target_scoped_precision_at_k": variant_result[
+                        "context_target_scoped_precision_at_k"
+                    ],
+                    "context_mrr": variant_result["context_mrr"],
+                    "context_ndcg_at_k": variant_result["context_ndcg_at_k"],
+                    "context_surface_identity_parity_valid": variant_result[
+                        "context_surface_identity_parity_valid"
+                    ],
+                    "context_request_parameter_parity_valid": variant_result[
+                        "context_request_parameter_parity_valid"
+                    ],
+                    "context_receipt_explain_valid": variant_result[
+                        "context_receipt_explain_valid"
+                    ],
+                    "context_duty_coverage": variant_result["context_duty_coverage"],
+                    "context_relevant_chars": variant_result["context_relevant_chars"],
+                    "context_chars": variant_result["context_chars"],
+                    "context_relevant_chars_ratio": variant_result[
+                        "context_relevant_chars_ratio"
+                    ],
+                    "context_redundancy_rate": variant_result[
+                        "context_redundancy_rate"
+                    ],
+                    "context_duplicate_evidence_rate": variant_result[
+                        "context_duplicate_evidence_rate"
+                    ],
+                    "context_latency_ms": variant_result["context_latency_ms"],
+                    "context_mcp_latency_ms": variant_result["context_mcp_latency_ms"],
+                    "context_provider_hard_limit_valid": variant_result[
+                        "context_provider_hard_limit_valid"
+                    ],
                     "cold_latency_ms": variant_cold_latency,
                     "warm_latency_ms": variant_warm_latency,
                     "cold_peak_rss_bytes": variant_cold_peak_rss,
@@ -2201,7 +3510,7 @@ def run(
     ]
     metrics = {
         "query_count": len(cases),
-        "execution_count": (len(cases) + len(variant_checks)) * 3,
+        "execution_count": (len(cases) + len(variant_checks)) * 4,
         "query_variant_count": len(variant_checks),
         "query_variant_pass_rate": round(
             sum(item["status"] == "passed" for item in variant_checks)
@@ -2228,7 +3537,7 @@ def run(
         ) if matched_required_target_count else 0.0,
         "raw_fragment_baseline_bytes": raw_fragment_baseline_bytes,
         "bytes_saved_ratio": round(
-            1 - provider_content_bytes / raw_fragment_baseline_bytes, 6
+            1 - provider_bytes / raw_fragment_baseline_bytes, 6
         ) if raw_fragment_baseline_bytes else 0.0,
         "cold_latency_p50_ms": round(median(cold_latencies)),
         "cold_latency_p95_ms": _percentile(cold_latencies, 0.95),
@@ -2425,29 +3734,46 @@ def run(
         "source_ir_coverage": source_ir_coverage,
         "continuation_probe": continuation_probe,
         "cross_packet_identity": cross_packet_identity,
-        "cases": cases,
+        "cases": [_legacy_v1_case(item) for item in cases],
         "challenges": challenges,
         "metrics": metrics,
         "recorded_at": recorded_at,
         "competitive_claim_eligible": False,
     }
+    context_outcome = _context_outcome_report(
+        gold=gold,
+        gold_sha256=gold_sha256,
+        compiler_report_id=compiler_report["report_id"],
+        query_set_digest=frozen_query_set_sha256,
+        query_report=report,
+        cases=cases,
+        recorded_at=recorded_at,
+    )
+    context_metrics = context_outcome["metrics"]
     cost = {
-        "schema_version": "deeplaw.semantic-query-cost/v1",
+        "schema_version": "deeplaw.semantic-query-cost/v2",
         "gold_id": gold["gold_id"],
         "compiler_report_id": compiler_report["report_id"],
         "query_set_sha256": frozen_query_set_sha256,
-        "first_party_command": "deeplaw knowledge query",
+        "primary_agent_surface": "deeplaw knowledge context",
         "query_count": len(cases),
-        "total_query_tokens": provider_bytes,
-        "total_context_bytes": provider_bytes,
-        "raw_fragment_baseline_bytes": raw_fragment_baseline_bytes,
-        "measurement_method": "utf8_bytes_proxy",
+        "local_capsule_bytes": context_metrics["local_capsule_bytes"],
+        "provider_capsule_bytes": context_metrics["provider_capsule_bytes"],
+        "mcp_tool_result_bytes": context_metrics["mcp_tool_result_bytes"],
+        "provider_content_bytes": context_metrics["provider_content_bytes"],
+        "transport_metadata_bytes": context_metrics["transport_metadata_bytes"],
+        "provider_input_token_estimate": None,
+        "actual_provider_input_tokens": None,
+        "token_measurement_method": "not_measured",
+        "token_savings": context_metrics["token_savings"],
         "budget": {**BUDGET, "cold_or_warm": "warm"},
         "measured_at": recorded_at,
+        "qualification_eligible": False,
     }
     _validate("semantic-query-run.v1.schema.json", report)
-    _validate("semantic-query-cost.v1.schema.json", cost)
-    return report, cost
+    _validate("semantic-context-outcome.v2.schema.json", context_outcome)
+    _validate("semantic-query-cost.v2.schema.json", cost)
+    return report, cost, context_outcome
 
 
 def main() -> int:
@@ -2462,8 +3788,9 @@ def main() -> int:
     parser.add_argument("--deeplaw-command", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cost-output", type=Path, required=True)
+    parser.add_argument("--context-output", type=Path, required=True)
     arguments = parser.parse_args()
-    report, cost = run(
+    report, cost, context_outcome = run(
         gold=_load(arguments.gold),
         compiler_report=_load(arguments.compiler_report),
         corpus=_load(arguments.corpus),
@@ -2473,9 +3800,13 @@ def main() -> int:
     )
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.cost_output.parent.mkdir(parents=True, exist_ok=True)
+    arguments.context_output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(canonical_json(report) + "\n", encoding="utf-8")
     arguments.cost_output.write_text(canonical_json(cost) + "\n", encoding="utf-8")
-    return 0 if report["status"] == "passed" else 1
+    arguments.context_output.write_text(
+        canonical_json(context_outcome) + "\n", encoding="utf-8"
+    )
+    return 0 if report["status"] == context_outcome["status"] == "passed" else 1
 
 
 if __name__ == "__main__":

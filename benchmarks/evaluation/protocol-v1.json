@@ -3,7 +3,7 @@
   "protocol_id": "deeplaw-evaluation-v1",
   "protocol_version": 1,
   "status": "active",
-  "frozen_at": "2026-07-30T12:00:00Z",
+  "frozen_at": "2026-08-07T21:33:27Z",
   "objective": "Reproducibly evaluate DeepLaw quality, safety, provenance, lifecycle, and bounded local retrieval without relying on external institutional certification.",
   "execution_policy": {
     "network_policy": "offline",

@@ -1,0 +1,63 @@
+"""Additive Living Wiki v3 registry, link-index, and stable-resolver seams."""
+
+from .link_index import (
+    LINK_INDEX_SCHEMA,
+    ValidatedLinkIndex,
+    build_link_index,
+    load_link_index,
+    query_links,
+    validate_link_index_component,
+)
+from .registry import (
+    LIVING_WIKI_MANIFEST_V3_SCHEMA,
+    MANIFEST_BYTE_LIMIT,
+    PAGE_REGISTRY_SCHEMA,
+    PUBLIC_EDGE_LIMIT,
+    PUBLIC_RECORD_LIMIT,
+    PUBLIC_SHARD_COUNT_LIMIT,
+    SHARD_BYTE_LIMIT,
+    SHARD_RECORD_LIMIT,
+    RegistryError,
+    build_living_wiki_manifest_v3,
+    build_page_registry,
+    load_page_registry,
+    validate_living_wiki_manifest_v3,
+    validate_page_record,
+    validate_page_registry_component,
+)
+from .resolver import (
+    RESOLVER_SCHEMA,
+    StableResolver,
+    build_resolver_index,
+    load_resolver,
+    validate_resolver_component,
+)
+
+__all__ = [
+    "LINK_INDEX_SCHEMA",
+    "LIVING_WIKI_MANIFEST_V3_SCHEMA",
+    "MANIFEST_BYTE_LIMIT",
+    "PAGE_REGISTRY_SCHEMA",
+    "PUBLIC_EDGE_LIMIT",
+    "PUBLIC_RECORD_LIMIT",
+    "PUBLIC_SHARD_COUNT_LIMIT",
+    "RESOLVER_SCHEMA",
+    "SHARD_BYTE_LIMIT",
+    "SHARD_RECORD_LIMIT",
+    "RegistryError",
+    "StableResolver",
+    "ValidatedLinkIndex",
+    "build_link_index",
+    "build_living_wiki_manifest_v3",
+    "build_page_registry",
+    "build_resolver_index",
+    "load_link_index",
+    "load_page_registry",
+    "load_resolver",
+    "query_links",
+    "validate_link_index_component",
+    "validate_living_wiki_manifest_v3",
+    "validate_page_record",
+    "validate_page_registry_component",
+    "validate_resolver_component",
+]

@@ -1,0 +1,3132 @@
+{
+  "candidate": {
+    "package_version": "0.12.0",
+    "runner": "benchmarks/v013/scale_performance.py",
+    "runner_sha256": "3660b45b1c46fa58d0384dd109279ea160eb4a3140c8ad92d9ecb502bd69bf1e"
+  },
+  "claim_eligible": false,
+  "claim_ineligibility_reason": "Deterministic synthetic temporary Vault construction diagnostic; it is not real-user quality evidence, a competitor run, or a release claim.",
+  "configuration": {
+    "execute_expensive": false,
+    "max_latency_samples": 1000,
+    "projection_profile": "standard",
+    "query_plan_version": "6",
+    "query_runs": 10,
+    "rss_requests": 10000,
+    "scales": [
+      1000,
+      10000,
+      100000
+    ],
+    "semantic_profile": "not_executed",
+    "warmup_runs": 2
+  },
+  "environment": {
+    "cpu": {
+      "logical_count": 12,
+      "model": "arm"
+    },
+    "filesystem": {
+      "block_size": 4096,
+      "kind": "unknown",
+      "reason": "Python statvfs does not expose a portable filesystem type"
+    },
+    "git_commit": "2bee4039dd63fa10c805e94ef57c82b919851f36",
+    "git_reason": null,
+    "os": {
+      "machine": "arm64",
+      "name": "Darwin",
+      "release": "25.5.0"
+    },
+    "python": "3.12.13",
+    "ram": {
+      "reason": null,
+      "total_bytes": 25769803776
+    },
+    "working_tree_dirty": false
+  },
+  "generated_at_utc": "2026-08-07T21:46:14Z",
+  "limitations": [
+    "No network, model, Gold/scorer, user Vault, legal source, or case data is read.",
+    "Deterministic synthetic identifiers measure mechanics only and are claim-ineligible.",
+    "Scale counts are synthetic source-derived Asset records; autonomous probes are bounded separately and do not represent real-user knowledge quality.",
+    "not_executed, degraded, and fail outcomes are retained and never converted to pass.",
+    "10k/100k reruns require --execute-expensive; no smaller substitute is used."
+  ],
+  "operation_inventory": [
+    "exact_get",
+    "wiki_page",
+    "backlinks",
+    "outlinks",
+    "compiled_first",
+    "evidence_first",
+    "context",
+    "verify",
+    "source_update",
+    "incremental_projection",
+    "full_rebuild",
+    "mcp_cold",
+    "mcp_warm",
+    "concurrent_read",
+    "rss_stability_10000_requests",
+    "cache_invalidation_after_source_update",
+    "storage_sqlite_bytes",
+    "storage_file_count",
+    "storage_canvas_count",
+    "provider_payload_bytes"
+  ],
+  "overall": {
+    "degraded_count": 0,
+    "executed_count": 17,
+    "fail_count": 0,
+    "limitations": [
+      "This construction diagnostic cannot satisfy the v0.13 release gate.",
+      "Any not_executed operation remains an unmet gate and is never counted as pass."
+    ],
+    "not_executed": [
+      {
+        "operation": "source_update",
+        "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+        "scale": 1000
+      },
+      {
+        "operation": "rss_stability_10000_requests",
+        "reason": "RSS stability requires a dedicated child-process harness; this construction runner does not claim a substitute measurement",
+        "scale": 1000
+      },
+      {
+        "operation": "cache_invalidation_after_source_update",
+        "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+        "scale": 1000
+      },
+      {
+        "operation": "exact_get",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "wiki_page",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "backlinks",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "outlinks",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "compiled_first",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "evidence_first",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "context",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "verify",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "source_update",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "incremental_projection",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "full_rebuild",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "mcp_cold",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "mcp_warm",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "concurrent_read",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "rss_stability_10000_requests",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "cache_invalidation_after_source_update",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "storage_sqlite_bytes",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "storage_file_count",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "storage_canvas_count",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "provider_payload_bytes",
+        "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 10000
+      },
+      {
+        "operation": "exact_get",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "wiki_page",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "backlinks",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "outlinks",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "compiled_first",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "evidence_first",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "context",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "verify",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "source_update",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "incremental_projection",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "full_rebuild",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "mcp_cold",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "mcp_warm",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "concurrent_read",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "rss_stability_10000_requests",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "cache_invalidation_after_source_update",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "storage_sqlite_bytes",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "storage_file_count",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "storage_canvas_count",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      },
+      {
+        "operation": "provider_payload_bytes",
+        "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+        "scale": 100000
+      }
+    ],
+    "not_executed_count": 43,
+    "operation_count": 60,
+    "pass_count": 5,
+    "release_gate_passed": false,
+    "status": "not_released"
+  },
+  "profile": "construction_diagnostic",
+  "reference_targets": {
+    "cache_invalidation_after_source_update": {
+      "stale_cache_served": {
+        "operator": "==",
+        "unit": "boolean",
+        "value": false
+      }
+    },
+    "concurrent_readers": {
+      "successful_readers": {
+        "operator": ">=",
+        "unit": "readers",
+        "value": 8
+      }
+    },
+    "provider_hard_limit_violations": {
+      "violations": {
+        "operator": "==",
+        "unit": "count",
+        "value": 0
+      }
+    },
+    "rss_stability_10000_requests": {
+      "rss_growth_percent": {
+        "operator": "<=",
+        "unit": "%",
+        "value": 10
+      }
+    },
+    "scale_1000": {
+      "backlinks_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 150
+      },
+      "compiled_first_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 500
+      },
+      "wiki_page_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 150
+      }
+    },
+    "scale_10000": {
+      "compiled_first_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 1000
+      },
+      "context_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 1200
+      },
+      "exact_get_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 100
+      }
+    },
+    "scale_100000": {
+      "compiled_first_p95_ms": {
+        "operator": "<=",
+        "unit": "ms",
+        "value": 2000
+      },
+      "no_full_filesystem_scan": {
+        "operator": "==",
+        "unit": "boolean",
+        "value": false
+      },
+      "no_per_request_full_verify": {
+        "operator": "==",
+        "unit": "boolean",
+        "value": false
+      }
+    }
+  },
+  "release_gate_passed": false,
+  "report_sha256": "36dd5eb7638459a4e67bedca6be8f6fce8354e3c5471e7c1b863e93082a0df9c",
+  "rerun_commands": [
+    "uv run python -m benchmarks.v013.scale_performance --output REPORT.json --scale 1000 --query-runs 10 --warmup-runs 2 --rss-requests 10000",
+    "uv run python -m benchmarks.v013.scale_performance --output REPORT.json --scale 10000 --query-runs 10 --warmup-runs 2 --rss-requests 10000 --execute-expensive",
+    "uv run python -m benchmarks.v013.scale_performance --output REPORT.json --scale 100000 --query-runs 10 --warmup-runs 2 --rss-requests 10000 --execute-expensive"
+  ],
+  "scale_reports": [
+    {
+      "fixture_reason": "real temporary synthetic Vault created and torn down by the harness",
+      "fixture_status": "executed",
+      "object_count": 1000,
+      "operations": [
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 1.106167,
+            "p50": 0.934209,
+            "p95": 1.106167,
+            "p99": 1.106167,
+            "samples": [
+              1.106167,
+              0.934209,
+              0.971916,
+              1.0115,
+              0.922167,
+              1.097583,
+              1.096208,
+              0.880542,
+              0.8645,
+              0.842958
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "exact_get",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 103.656959,
+            "p50": 90.776416,
+            "p95": 103.656959,
+            "p99": 103.656959,
+            "samples": [
+              90.776416,
+              91.36125,
+              103.656959,
+              90.899333,
+              89.474291,
+              90.218792,
+              100.804875,
+              90.0625,
+              90.468917,
+              101.718959
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 103.656959,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "wiki_page",
+          "reason": "",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_1000.wiki_page_p95_ms",
+            "unit": "ms",
+            "value": 150
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 101.084584,
+            "p50": 90.619625,
+            "p95": 101.084584,
+            "p99": 101.084584,
+            "samples": [
+              90.576375,
+              100.792833,
+              91.022792,
+              90.973667,
+              100.167,
+              90.619625,
+              89.206917,
+              90.210709,
+              101.084584,
+              89.377833
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 101.084584,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "backlinks",
+          "reason": "",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_1000.backlinks_p95_ms",
+            "unit": "ms",
+            "value": 150
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 101.244584,
+            "p50": 90.427458,
+            "p95": 101.244584,
+            "p99": 101.244584,
+            "samples": [
+              90.781209,
+              90.427458,
+              89.46575,
+              100.54,
+              91.611375,
+              89.9905,
+              101.244584,
+              90.117125,
+              90.092833,
+              90.572
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "outlinks",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 110.295125,
+            "p50": 100.62125,
+            "p95": 110.295125,
+            "p99": 110.295125,
+            "samples": [
+              110.295125,
+              100.62125,
+              99.720125,
+              99.503042,
+              102.662083,
+              101.987333,
+              99.796916,
+              100.811167,
+              101.334,
+              99.757292
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 110.295125,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "compiled_first",
+          "reason": "",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_1000.compiled_first_p95_ms",
+            "unit": "ms",
+            "value": 500
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 103.803959,
+            "p50": 101.897708,
+            "p95": 103.803959,
+            "p99": 103.803959,
+            "samples": [
+              101.149083,
+              100.688708,
+              101.025708,
+              102.033709,
+              103.803959,
+              102.006417,
+              102.095459,
+              101.897708,
+              101.925625,
+              100.789041
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "evidence_first",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 104.542834,
+            "p50": 101.718583,
+            "p95": 104.542834,
+            "p99": 104.542834,
+            "samples": [
+              101.246291,
+              101.169625,
+              103.339083,
+              104.542834,
+              102.175,
+              101.540167,
+              101.827334,
+              101.718708,
+              100.910166,
+              101.718583
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "context",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 139.0585,
+            "p50": 134.1995,
+            "p95": 139.0585,
+            "p99": 139.0585,
+            "samples": [
+              134.050458,
+              134.696625,
+              133.588917,
+              133.753417,
+              134.84475,
+              134.1995,
+              133.877708,
+              136.702708,
+              139.0585,
+              136.727
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": true,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": true,
+            "value": 1
+          },
+          "operation": "verify",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "source_update",
+          "reason": "source update mutates the canonical legacy read plane; this fixture keeps its evidence and autonomous audit heads stable",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 1000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 1192.37325,
+            "p50": 1138.057458,
+            "p95": 1192.37325,
+            "p99": 1192.37325,
+            "samples": [
+              1192.37325,
+              1138.933167,
+              1144.30175,
+              1137.791833,
+              1135.237625,
+              1135.275125,
+              1137.548792,
+              1142.419834,
+              1145.784834,
+              1138.057458
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "incremental_projection",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 1083.843375,
+            "p50": 1058.86825,
+            "p95": 1083.843375,
+            "p99": 1083.843375,
+            "samples": [
+              1058.86825,
+              1063.742875,
+              1063.616125,
+              1056.385875,
+              1057.750792,
+              1061.534625,
+              1054.518917,
+              1055.524125,
+              1083.843375,
+              1065.563667
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": true,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "boolean",
+            "valid": null,
+            "value": null
+          },
+          "operation": "full_rebuild",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 192.055041,
+            "p50": 177.993417,
+            "p95": 192.055041,
+            "p99": 192.055041,
+            "samples": [
+              189.726417,
+              179.733416,
+              176.714708,
+              192.055041,
+              177.993417,
+              177.028083,
+              177.306083,
+              189.176542,
+              179.572125,
+              177.728209
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_cold",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 33.8815,
+            "p50": 33.162458,
+            "p95": 33.8815,
+            "p99": 33.8815,
+            "samples": [
+              33.162458,
+              33.143334,
+              32.390209,
+              32.930292,
+              33.390708,
+              33.532416,
+              33.856125,
+              33.8815,
+              33.771958,
+              32.848875
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_warm",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 584.853416,
+            "p50": 533.9785,
+            "p95": 584.853416,
+            "p99": 584.853416,
+            "samples": [
+              557.792167,
+              584.853416,
+              527.601916,
+              533.9785,
+              552.54575,
+              535.28775,
+              509.542917,
+              551.945625,
+              518.609875,
+              515.574083
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 8,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": 8,
+            "unit": "readers",
+            "valid": null,
+            "value": 8
+          },
+          "operation": "concurrent_read",
+          "reason": "",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "successful_readers",
+            "operator": ">=",
+            "reason": null,
+            "reference": "concurrent_readers.successful_readers",
+            "unit": "readers",
+            "value": 8
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "rss_stability_10000_requests",
+          "reason": "RSS stability requires a dedicated child-process harness; this construction runner does not claim a substitute measurement",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 1000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "rss_growth_percent",
+            "operator": "<=",
+            "reason": "RSS target is frozen for the 10k scale report",
+            "reference": "rss_stability_10000_requests.rss_growth_percent",
+            "unit": "%",
+            "value": 10
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "cache_invalidation_after_source_update",
+          "reason": "source_update was not executed, so stale-cache invalidation is not inferred",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 1000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "stale_cache_served",
+            "operator": "==",
+            "reason": null,
+            "reference": "cache_invalidation_after_source_update.stale_cache_served",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.012417,
+            "p50": 0.011583,
+            "p95": 0.012417,
+            "p99": 0.012417,
+            "samples": [
+              0.012125,
+              0.0115,
+              0.011083,
+              0.011,
+              0.010667,
+              0.011583,
+              0.011916,
+              0.011667,
+              0.012084,
+              0.012417
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 8429568
+          },
+          "operation": "storage_sqlite_bytes",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 3.249167,
+            "p50": 2.870666,
+            "p95": 3.249167,
+            "p99": 3.249167,
+            "samples": [
+              2.71125,
+              3.249167,
+              2.859292,
+              2.88875,
+              2.958,
+              2.757291,
+              2.782084,
+              2.971042,
+              2.997583,
+              2.870666
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": 113,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "files",
+            "valid": null,
+            "value": 113
+          },
+          "operation": "storage_file_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "not_applicable",
+          "latency_ms": {
+            "max": 0.037541,
+            "p50": 0.033875,
+            "p95": 0.037541,
+            "p99": 0.037541,
+            "samples": [
+              0.037541,
+              0.033875,
+              0.034625,
+              0.033167,
+              0.033291,
+              0.034583,
+              0.032541,
+              0.034458,
+              0.032,
+              0.033875
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": 5,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "canvas_files",
+            "valid": null,
+            "value": 5
+          },
+          "operation": "storage_canvas_count",
+          "reason": "no frozen reference target is defined for this scale/operation pair",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 2
+        },
+        {
+          "judgment": "pass",
+          "latency_ms": {
+            "max": 181.900459,
+            "p50": 171.4815,
+            "p95": 181.900459,
+            "p99": 181.900459,
+            "samples": [
+              171.4815,
+              171.694459,
+              174.095125,
+              181.900459,
+              169.719958,
+              170.272375,
+              171.115833,
+              172.746875,
+              172.458208,
+              169.644542
+            ]
+          },
+          "limitation": "Synthetic construction diagnostic only; timing is host-local and claim-ineligible.",
+          "measured_value": 0,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": 0,
+            "provider_payload_bytes": 7825,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": "bytes",
+            "valid": null,
+            "value": 7825
+          },
+          "operation": "provider_payload_bytes",
+          "reason": "",
+          "run_count": 10,
+          "sample_count": 10,
+          "scale": 1000,
+          "status": "pass",
+          "threshold": {
+            "applies": true,
+            "metric": "violations",
+            "operator": "==",
+            "reason": null,
+            "reference": "provider_hard_limit_violations.violations",
+            "unit": "count",
+            "value": 0
+          },
+          "warmup_count": 2
+        }
+      ],
+      "scale": 1000
+    },
+    {
+      "fixture_reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+      "fixture_status": "not_executed",
+      "object_count": 10000,
+      "operations": [
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "exact_get",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_10000.exact_get_p95_ms",
+            "unit": "ms",
+            "value": 100
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "wiki_page",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "backlinks",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "outlinks",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "compiled_first",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_10000.compiled_first_p95_ms",
+            "unit": "ms",
+            "value": 1000
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "evidence_first",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "context",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_10000.context_p95_ms",
+            "unit": "ms",
+            "value": 1200
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "verify",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "source_update",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "incremental_projection",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "full_rebuild",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_cold",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_warm",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "concurrent_read",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "successful_readers",
+            "operator": ">=",
+            "reason": null,
+            "reference": "concurrent_readers.successful_readers",
+            "unit": "readers",
+            "value": 8
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "rss_stability_10000_requests",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "rss_growth_percent",
+            "operator": "<=",
+            "reason": null,
+            "reference": "rss_stability_10000_requests.rss_growth_percent",
+            "unit": "%",
+            "value": 10
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "cache_invalidation_after_source_update",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "stale_cache_served",
+            "operator": "==",
+            "reason": null,
+            "reference": "cache_invalidation_after_source_update.stale_cache_served",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "storage_sqlite_bytes",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "storage_file_count",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "storage_canvas_count",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "provider_payload_bytes",
+          "reason": "scale 10000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 10000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "violations",
+            "operator": "==",
+            "reason": null,
+            "reference": "provider_hard_limit_violations.violations",
+            "unit": "count",
+            "value": 0
+          },
+          "warmup_count": 0
+        }
+      ],
+      "scale": 10000
+    },
+    {
+      "fixture_reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+      "fixture_status": "not_executed",
+      "object_count": 100000,
+      "operations": [
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "exact_get",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "wiki_page",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "backlinks",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "outlinks",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "compiled_first",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "p95",
+            "operator": "<=",
+            "reason": null,
+            "reference": "scale_100000.compiled_first_p95_ms",
+            "unit": "ms",
+            "value": 2000
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "evidence_first",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "context",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "verify",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "per_request_full_verify",
+            "operator": "==",
+            "reason": null,
+            "reference": "scale_100000.per_request_full_verify",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "source_update",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "incremental_projection",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "full_rebuild",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "full_filesystem_scan",
+            "operator": "==",
+            "reason": null,
+            "reference": "scale_100000.full_filesystem_scan",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_cold",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "mcp_warm",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "concurrent_read",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "successful_readers",
+            "operator": ">=",
+            "reason": null,
+            "reference": "concurrent_readers.successful_readers",
+            "unit": "readers",
+            "value": 8
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "rss_stability_10000_requests",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "rss_growth_percent",
+            "operator": "<=",
+            "reason": "RSS target is frozen for the 10k scale report",
+            "reference": "rss_stability_10000_requests.rss_growth_percent",
+            "unit": "%",
+            "value": 10
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "cache_invalidation_after_source_update",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "stale_cache_served",
+            "operator": "==",
+            "reason": null,
+            "reference": "cache_invalidation_after_source_update.stale_cache_served",
+            "unit": "boolean",
+            "value": false
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "storage_sqlite_bytes",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "storage_file_count",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "storage_canvas_count",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": false,
+            "metric": "not_applicable",
+            "operator": "none",
+            "reason": "no frozen reference target is defined for this scale/operation pair",
+            "reference": null,
+            "unit": "none",
+            "value": null
+          },
+          "warmup_count": 0
+        },
+        {
+          "judgment": "not_executed",
+          "latency_ms": {
+            "max": null,
+            "p50": null,
+            "p95": null,
+            "p99": null,
+            "samples": []
+          },
+          "limitation": "No timing claim is made because this operation was not executed.",
+          "measured_value": null,
+          "measurement": {
+            "canvas_count": null,
+            "file_count": null,
+            "full_filesystem_scan": null,
+            "per_request_full_verify": null,
+            "provider_hard_limit_violations": null,
+            "provider_payload_bytes": null,
+            "rss_growth_percent": null,
+            "stale_cache_served": null,
+            "successful_readers": null,
+            "unit": null,
+            "valid": null,
+            "value": null
+          },
+          "operation": "provider_payload_bytes",
+          "reason": "scale 100000 is an expensive frozen workload; rerun with --execute-expensive to execute this scale. The harness did not substitute a smaller fixture.",
+          "run_count": 0,
+          "sample_count": 0,
+          "scale": 100000,
+          "status": "not_executed",
+          "threshold": {
+            "applies": true,
+            "metric": "violations",
+            "operator": "==",
+            "reason": null,
+            "reference": "provider_hard_limit_violations.violations",
+            "unit": "count",
+            "value": 0
+          },
+          "warmup_count": 0
+        }
+      ],
+      "scale": 100000
+    }
+  ],
+  "schema_version": "deeplaw.v013-scale-performance-report/v1"
+}
