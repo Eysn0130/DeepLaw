@@ -526,7 +526,7 @@ def test_historical_v1_receipt_bytes_are_frozen_and_currently_invalidated() -> N
     assert "deeplaw.host-continuity-qualification/v2" in protocol
 
 
-def test_retained_pass17_diagnostics_are_current_v2_and_claim_ineligible() -> None:
+def test_retained_pass17_diagnostics_are_immutable_and_stale_for_provider_v7() -> None:
     expected = {
         "codex-development-diagnostic.json": (
             "67525ea327a8a031c1895ac2501aea9ec25e2c1f436720efd454d240f21e566f",
@@ -541,7 +541,11 @@ def test_retained_pass17_diagnostics_are_current_v2_and_claim_ineligible() -> No
         path = DIAGNOSTIC_EVIDENCE / name
         assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
         report = json.loads(path.read_text(encoding="utf-8"))
-        pass13_evidence.validate_host_report_consistency(report)
+        with pytest.raises(
+            pass13_evidence.EvidenceValidationError,
+            match="tools/list measurement",
+        ):
+            pass13_evidence.validate_host_report_consistency(report)
         assert report["status"] == "executed"
         assert report["qualification_status"] == "not_applicable"
         assert report["evidence_class"] == "development_diagnostic"
