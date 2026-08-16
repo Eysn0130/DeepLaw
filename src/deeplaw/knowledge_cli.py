@@ -155,6 +155,24 @@ _BASIC_KNOWLEDGE_COMMANDS = (
     "snapshot",
     "forget",
 )
+# Keep the historical subparser metavar stable while making the existing
+# read-only query seam visible beside context in the default journey.  Query
+# remains the parser and handler already defined below; this list only
+# controls which existing choices are shown in default help.
+_DEFAULT_KNOWLEDGE_HELP_COMMANDS = (
+    "init",
+    "doctor",
+    "source",
+    "compile",
+    "reconcile",
+    "query",
+    "context",
+    "wiki",
+    "snapshot",
+    "forget",
+    "host",
+    "task",
+)
 _KNOWLEDGE_HELP_TIERS = {
     "advanced": (
         "agent-context",
@@ -237,7 +255,7 @@ def _curate_default_help(
 ) -> None:
     by_name = {choice.dest: choice for choice in action._choices_actions}
     action._choices_actions[:] = [
-        by_name[name] for name in _BASIC_KNOWLEDGE_COMMANDS
+        by_name[name] for name in _DEFAULT_KNOWLEDGE_HELP_COMMANDS
     ]
 
 
@@ -272,7 +290,8 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
         help="Operate the local Markdown-native Agent Knowledge OS",
         description=(
             "Basic journey: init -> doctor -> source add -> compile -> reconcile -> "
-            "task start -> host context -> wiki/source drill-down -> checkpoint/snapshot/forget"
+            "query/context -> task start -> host connect -> wiki/source drill-down -> "
+            "checkpoint/snapshot/forget"
         ),
         epilog=(
             "Use --help-advanced, --help-admin, or --help-compatibility for the "
