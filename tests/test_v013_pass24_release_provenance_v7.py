@@ -393,6 +393,17 @@ def _seed(tmp_path: Path) -> dict[str, Path]:
         "input_record_sha256": input_receipt["record_sha256"],
         "gate_id": classification["categories"][0]["gate_ids"][0],
     }
+    candidate["candidate_full_sha256"] = _digest(
+        json.dumps(
+            {
+                key: candidate[key]
+                for key in ("commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256")
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    )
     candidate_gold = {
         "schema_version": "deeplaw.candidate-gold-binding-receipt/v1",
         "status": "post_build_candidate_gold_bound",
@@ -723,6 +734,7 @@ def _seed(tmp_path: Path) -> dict[str, Path]:
         "release_ready": True,
         "public_release_verified": False,
         "post_public_verification": None,
+        "claim_eligible": True,
         "commercial_release_eligible": True,
         "quality_protocol_eligible": True,
         "competitive_claim_eligible": False,

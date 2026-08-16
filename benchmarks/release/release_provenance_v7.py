@@ -26,8 +26,7 @@ CONTRACTS = REPOSITORY / "contracts"
 _CURRENT_CLASSIFICATION_PATH = REPOSITORY / "benchmarks/release/v013-gate-classification-v7.json"
 _CURRENT_CLASSIFICATION_SCHEMA_VERSION = "deeplaw.v013-release-gate-classification/v7"
 _CURRENT_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v7"
-# Keep the future external-bundle contract at one explicit seam.  v3 is intentionally not
-# accepted until its contract and workflow are landed by the main Agent.
+# Keep the current external-bundle contract at one explicit seam.
 _EXTERNAL_BUNDLE_V3_SCHEMA_VERSION = "deeplaw.external-qualification-bundle-manifest/v3"
 _EXTERNAL_BUNDLE_ROOT_NAME = "external-evidence"
 MAX_FILE_BYTES = 64 * 1024 * 1024
@@ -239,6 +238,16 @@ def _canonical_json(value: Any) -> str:
         )
     except (TypeError, ValueError) as error:
         raise ReleaseProvenanceV7Error("provenance JSON is not canonicalizable") from error
+
+
+def _candidate_corpus_sha256(candidate: Mapping[str, Any]) -> str:
+    projection = {
+        field: candidate.get(field)
+        for field in ("commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256")
+    }
+    if any(not isinstance(value, str) or not value for value in projection.values()):
+        _fail("Candidate Full corpus binding is incomplete")
+    return _sha256_bytes(_canonical_json(projection).encode("utf-8"))
 
 
 def _canonical_digest(value: Mapping[str, Any], *, excluded: str) -> str:
@@ -1192,6 +1201,11 @@ def _validate_semantic_report(
             _fail("Gate result corpus role is not allowed by the current classification")
         if candidate_domain:
             expected_corpus_role = "candidate_full"
+            _assert_equal(
+                "Gate result Candidate Full corpus",
+                result_corpus.get("sha256"),
+                _candidate_corpus_sha256(candidate),
+            )
         else:
             expected_corpus_role = result_corpus_role
             expected_external_corpus = {
@@ -1476,6 +1490,8 @@ def validate_release_provenance(
         _fail("pre-public authorization requires release_ready and public verification separation")
     if release.get("post_public_verification") is not None:
         _fail("post-public verification must be absent during pre-public authorization")
+    if release.get("claim_eligible") is not True:
+        _fail("pre-public authorization requires claim_eligible")
     if release.get("competitive_claim_eligible") is not False:
         _fail("competitive claims are not part of this authorization")
 
@@ -1733,14 +1749,8 @@ def validate_release_provenance(
             expected_size=retained["byte_size"],
             label=f"retained {kind}",
         )
-        _require_bundle_ref(
-            bundle_index,
-            relative_path=retained_selected.relative_to(root).as_posix(),
-            expected_sha=retained["sha256"],
-            expected_size=retained["byte_size"],
-            label=f"retained {kind}",
-            expected_evidence_kind=f"retained_{kind}",
-        )
+        if retained_selected.relative_to(root).as_posix() != retained.get("retained_path"):
+            _fail(f"retained {kind} path is not canonical")
         _read_asset(
             root,
             release_artifact.get("path"),
@@ -1748,12 +1758,14 @@ def validate_release_provenance(
             expected_size=release_artifact["byte_size"],
             label=f"release {kind}",
         )
-        _index_raw(
+        _bundle_name, _bundle_path, bundle_raw, _bundle_ref = _index_raw(
             bundle_index,
             retained["sha256"],
             label=f"bundle retained {kind}",
             expected_evidence_kind=f"retained_{kind}",
         )
+        if len(bundle_raw) != retained["byte_size"]:
+            _fail(f"bundle retained {kind} byte size differs")
         build_first = _mapping(
             _mapping(pre_publish.get("builds"), label="pre-publish builds").get("first"),
             label="first reproducible build",
@@ -1782,20 +1794,14 @@ def validate_release_provenance(
         if selected.suffix == ".json":
             value, _ = _strict_json_file(selected, label=f"{kind} artifact")
             _projection(value)
-        _require_bundle_ref(
-            bundle_index,
-            relative_path=selected.relative_to(root).as_posix(),
-            expected_sha=item["sha256"],
-            expected_size=len(raw),
-            label=f"{kind} artifact",
-            expected_evidence_kind=kind,
-        )
-        _index_raw(
+        _bundle_name, _bundle_path, bundle_raw, _bundle_ref = _index_raw(
             bundle_index,
             item["sha256"],
             label=f"bundle {kind}",
             expected_evidence_kind=kind,
         )
+        if len(bundle_raw) != len(raw):
+            _fail(f"bundle {kind} byte size differs")
 
     protocol = _mapping(active.get("protocol_binding"), label="active protocol binding")
     _read_asset(
@@ -1876,6 +1882,7 @@ def validate_release_provenance(
             "byte_reopened": True,
         },
         "release_ready": True,
+        "claim_eligible": True,
         "public_release_verified": False,
         "post_public_verification": None,
     }

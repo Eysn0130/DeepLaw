@@ -287,6 +287,7 @@ def _release_manifest() -> dict[str, Any]:
         "release_ready": True,
         "public_release_verified": False,
         "post_public_verification": None,
+        "claim_eligible": True,
         "commercial_release_eligible": True,
         "quality_protocol_eligible": True,
         "competitive_claim_eligible": False,
@@ -431,6 +432,8 @@ def test_v7_separates_release_ready_from_public_release_verified() -> None:
     pre_public = _release_manifest()
     _assert_valid("commercial-release-manifest.v7.schema.json", pre_public)
     assert pre_public["release_ready"] is True
+    assert pre_public["claim_eligible"] is True
+    assert pre_public["competitive_claim_eligible"] is False
     assert pre_public["public_release_verified"] is False
     assert pre_public["post_public_verification"] is None
 
