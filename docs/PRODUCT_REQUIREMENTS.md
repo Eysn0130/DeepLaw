@@ -1,6 +1,6 @@
 # DeepLaw Product Requirements
 
-Status: **normative product-direction baseline**  
+Status: **normative product-direction baseline**
 PRD revision: **1.3.1**
 Reviewed: **2026-08-13**
 

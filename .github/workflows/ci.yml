@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install uv
@@ -39,6 +40,9 @@ jobs:
           uv sync --frozen --extra dev --extra discovery
           uv run --frozen ruff check .
           git diff --check
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
+          fi
 
       - name: Run focused public contracts
         run: >-

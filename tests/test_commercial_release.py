@@ -317,6 +317,8 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "uv lock --check" in ci
     assert "ruff check ." in ci
     assert "git diff --check" in ci
+    assert 'git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"' in ci
+    assert "fetch-depth: 0" in ci
 
     assert "runs-on: ${{ matrix.os }}" in candidate
     assert all(
