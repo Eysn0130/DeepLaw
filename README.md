@@ -81,16 +81,18 @@ deeplaw knowledge task locate --vault ./vault \
 deeplaw knowledge host connect --host codex --vault ./vault
 ```
 
-首次 session 绑定是显式 owner mutation，要求现有 Sink grant、幂等键、当前 workspace 和已经安全计算
-的 session SHA-256。raw official session ID 不得出现在 argv、Ledger、日志、receipt 或 Provider。
+首次 session 绑定是显式 owner mutation，要求现有 Sink grant、幂等键和当前 workspace。首选入口只从
+stdin 读取一次 raw official session ID，并立即绑定它的 SHA-256；raw ID 不得出现在 argv、Ledger、
+日志、receipt 或 Provider。`bind-host-session` 仅保留给已经由 owner 安全计算 SHA-256 的调用方。
 
 ```bash
-deeplaw knowledge task bind-host-session --vault ./vault \
-  --host codex --session-sha256 SESSION_SHA256 \
+deeplaw knowledge task enroll-host-session --vault ./vault \
+  --host codex \
   --task-handle TASK_HANDLE --workspace . --grant-id GRANT_ID \
-  --idempotency-key BIND_IDEMPOTENCY_KEY --confirm-no-case-data
+  --idempotency-key BIND_IDEMPOTENCY_KEY --confirm-no-case-data \
+  < OWNER_ONLY_OFFICIAL_SESSION_ID
 deeplaw knowledge task resolve-host-continuity --vault ./vault \
-  --host codex --session-sha256 SESSION_SHA256 --workspace .
+  --host codex --session-sha256 SESSION_SHA256_FROM_ENROLLMENT_RESULT --workspace .
 deeplaw knowledge task resume --vault ./vault \
   --project DeepLaw --task 'Finish the selected task.' --workspace .
 ```

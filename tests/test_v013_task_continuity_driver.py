@@ -120,11 +120,18 @@ def test_task_handle_drives_restart_fork_compaction_checkpoint_and_forget(
     assert started["write_performed"] is False
     assert str(repository) not in handle
     assert "Finish the bounded task driver" not in handle
-    with pytest.raises(ValueError, match="static Host configuration"):
+    with pytest.raises(ValueError, match="task-neutral"):
         build_host_connect_plan(
             host="codex",
             vault_path=vault,
             task_handle=handle,
+            owner_home=tmp_path / "owner-home",
+        )
+    with pytest.raises(ValueError, match="task-neutral"):
+        build_host_connect_plan(
+            host="codex",
+            vault_path=vault,
+            task_binding={"binding_sha256": "a" * 64},
             owner_home=tmp_path / "owner-home",
         )
     plan = build_host_connect_plan(

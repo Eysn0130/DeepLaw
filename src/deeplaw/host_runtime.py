@@ -8,9 +8,13 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from . import __version__
 from .knowledge_autonomy import _atomic_owner_write
-from .knowledge_maintenance import knowledge_vault_permission_report
-from .knowledge_store import _load_manifest, default_knowledge_vault
+from .knowledge_store import (
+    _load_manifest,
+    default_knowledge_vault,
+    knowledge_vault_permission_report,
+)
 from .store import default_home
 from .task_context import normalize_task_context_binding
 from .util import canonical_json, sha256_bytes, strict_json_loads
@@ -24,6 +28,110 @@ _BINDINGS_SCHEMA = "deeplaw.owner-host-vault-bindings/v1"
 _BINDINGS_FILENAME = "vault-bindings.v1.json"
 _MAX_BINDINGS = 128
 _MAX_BINDINGS_BYTES = 64 * 1024
+
+_HOST_READINESS_PROFILES: dict[str, dict[str, Any]] = {
+    "codex": {
+        "plugin_id": "deeplaw-knowledge-os@deeplaw",
+        "load_options": ["direct_mcp_config", "codex_plugin"],
+        "host_version_for_current_qualification": "codex-cli 0.148.0-alpha.9",
+        "verification_command": ["codex", "mcp", "list"],
+    },
+    "claude-code": {
+        "plugin_id": "deeplaw-knowledge-os@deeplaw",
+        "load_options": ["project_mcp_config", "claude_plugin"],
+        "host_version_for_current_qualification": None,
+        "verification_command": ["claude", "mcp", "list"],
+    },
+    "opencode": {
+        "plugin_id": "deeplaw-native",
+        "load_options": ["project_mcp_config", "project_native_plugin"],
+        "host_version_for_current_qualification": "1.18.16",
+        "verification_command": ["opencode", "mcp", "list"],
+    },
+}
+
+
+def host_product_readiness(
+    *,
+    autonomous_vault_ready: bool,
+    host: str | None = None,
+) -> dict[str, Any]:
+    """Describe exact current Host/MCP prerequisites without claiming observation."""
+
+    if host is not None and host not in _HOST_READINESS_PROFILES:
+        raise ValueError("host must be codex, claude-code, or opencode")
+    selected_hosts = (host,) if host is not None else tuple(_HOST_READINESS_PROFILES)
+    profiles: list[dict[str, Any]] = []
+    for selected in selected_hosts:
+        profile = _HOST_READINESS_PROFILES[selected]
+        gaps: list[dict[str, str]] = []
+        if not autonomous_vault_ready:
+            gaps.append(
+                {
+                    "code": "autonomous_vault_not_ready",
+                    "action": "repair knowledge doctor failures before Host connection",
+                }
+            )
+        gaps.extend(
+            (
+                {
+                    "code": "host_plugin_load_unverified",
+                    "action": (
+                        f"load {profile['plugin_id']} version {__version__} or merge the "
+                        "generated direct MCP configuration"
+                    ),
+                },
+                {
+                    "code": "mcp_registration_unverified",
+                    "action": "run " + " ".join(profile["verification_command"]),
+                },
+                {
+                    "code": "closed_environment_unverified",
+                    "action": (
+                        "verify the knowledge_support child receives only the closed "
+                        "DeepLaw allowlist"
+                    ),
+                },
+            )
+        )
+        profiles.append(
+            {
+                "host": selected,
+                "status": (
+                    "owner_verification_required"
+                    if autonomous_vault_ready
+                    else "blocked"
+                ),
+                "plugin_id": profile["plugin_id"],
+                "plugin_version": __version__,
+                "load_options": list(profile["load_options"]),
+                "host_version_for_current_qualification": profile[
+                    "host_version_for_current_qualification"
+                ],
+                "required_child_environment": ["DEEPLAW_KNOWLEDGE_VAULT"],
+                "forbidden_child_environment": [
+                    "CODEX_HOME",
+                    "DEEPLAW_OPENCODE_DOTENV",
+                    "OPENAI_API_KEY",
+                    "DEEPSEEK_API_KEY",
+                ],
+                "verification_command": list(profile["verification_command"]),
+                "gaps": gaps,
+            }
+        )
+    return {
+        "schema_version": "deeplaw.host-product-readiness/v1",
+        "autonomous_vault_ready": autonomous_vault_ready,
+        "mcp": {
+            "mode": "compact_current_with_internal_compatibility",
+            "input_schema": "deeplaw.knowledge-support-input/v7",
+            "output_schema": "deeplaw.knowledge-support-output/v6",
+            "advertised_operations": ["query", "context", "explain"],
+            "compatibility_inputs": ["v1", "v2", "v3", "v4", "v5", "v6"],
+            "compatibility_outputs": ["v1", "v2", "v3", "v4", "v5"],
+        },
+        "hosts": profiles,
+    }
 
 
 def closed_mcp_surface(value: str) -> HostMCPSurface:

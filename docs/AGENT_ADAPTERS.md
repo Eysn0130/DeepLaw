@@ -431,16 +431,28 @@ MCP command array for `opencode.json`/`opencode.jsonc`, wildcard deny, and the e
 authentication or runtime state, or enable the separate `knowledge_sink` process. It does perform
 one narrowly scoped owner-local DeepLaw configuration write that binds the opaque Vault ID to the
 selected path; the plan reports that write explicitly. The plan itself is path-free, binds
-`--expected-vault-id`, and uses the fixed closed launcher. Static configuration cannot embed a task
-handle. At Host lifecycle time, a Host-local official session event supplies its current cwd plus
-an optional Host session/fork hint; the adapter passes the explicit workspace and DeepLaw
+`--expected-vault-id`, and uses the fixed closed launcher. It also reports autonomous-vault
+readiness, current compact MCP input v7/output v6 mode, the internal compatibility range, and exact
+Host/plugin/version/environment preconditions as actionable Gaps; those owner checks are not a real
+Host attestation. Static configuration cannot embed a task handle or task binding. Hidden legacy
+`host connect --task-handle/--task-binding` parsing returns a migration error and never builds a
+task-bound plan. At Host lifecycle time, a Host-local official session event supplies its current
+cwd plus an optional Host session/fork hint; the adapter passes the explicit workspace and DeepLaw
 re-resolves the Vault/project/task/workspace binding. Host route result v2 separates the stable
 project/repository/worktree/task-lineage/session route from the mutable base revision and dirty-state
 snapshot. A normal edit therefore preserves the route, while checkpoint admission independently
 returns `workspace_diverged` or `stale_checkpoint` and withholds the old checkpoint. The frozen v1
 result contract remains valid for retained receipts. The launcher never falls back to ambient
-`Path.cwd()`. The compatibility `--task-binding` form remains available for existing callers. A
-configured launcher binding is a fixed read boundary: a call cannot replace it with another line.
+`Path.cwd()`. A configured lifecycle launcher binding remains a fixed read boundary: a call cannot
+replace it with another line.
+
+First-session enrollment is an explicit owner mutation through the existing Sink grant and
+Coordinator. `deeplaw knowledge task enroll-host-session` reads exactly one bounded UTF-8 official
+session ID from stdin, computes SHA-256 immediately, and passes only that digest to the existing
+`bind_host_session` seam. The raw ID is never accepted in argv and is not written to the Ledger,
+logs, receipts, Provider output, or Host configuration. `bind-host-session --session-sha256` remains
+available when the owner already has a safely computed digest. Neither seam reads prompts,
+transcripts, reasoning, authentication state, or ambient Host configuration.
 
 Owner-side direct verification remains explicit:
 

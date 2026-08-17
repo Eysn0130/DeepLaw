@@ -244,7 +244,7 @@ def test_closed_environment_maps_windows_home_without_codex_home(
     assert "CODEX_HOME" not in environment
 
 
-def test_generated_host_config_is_path_free_and_carries_task_binding(
+def test_generated_host_config_is_path_free_and_task_neutral(
     tmp_path: Path,
 ) -> None:
     from deeplaw.host_connect import build_host_connect_plan
@@ -258,7 +258,6 @@ def test_generated_host_config_is_path_free_and_carries_task_binding(
     plan = build_host_connect_plan(
         host="codex",
         vault_path=vault,
-        task_binding=_binding(),
         owner_home=tmp_path / "owner-home",
     )
 
@@ -269,12 +268,23 @@ def test_generated_host_config_is_path_free_and_carries_task_binding(
         "expected_vault_id": plan["vault_id"],
         "value_included": False,
     }
-    assert plan["task_binding_configured"] is True
-    assert plan["task_binding_sha256"] == _binding()["binding_sha256"]
+    assert plan["task_binding_configured"] is False
+    assert plan["task_binding_sha256"] is None
+    assert plan["task_handle_configured"] is False
+    assert plan["task_handle_sha256"] is None
     assert "--closed-environment" in rendered
     assert "--expected-vault-id" in rendered
-    assert "--task-binding" in rendered
+    assert "--task-binding" not in rendered
+    assert "--task-handle" not in rendered
     assert str(vault.resolve()) not in rendered
+
+    with pytest.raises(ValueError, match="task-neutral"):
+        build_host_connect_plan(
+            host="codex",
+            vault_path=vault,
+            task_binding=_binding(),
+            owner_home=tmp_path / "owner-home",
+        )
 
 
 def test_closed_launcher_revalidates_expected_vault_identity_in_child(

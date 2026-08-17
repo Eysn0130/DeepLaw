@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import secrets
@@ -141,6 +142,8 @@ from .skill_factory import (
 )
 from .task_context import normalize_task_context_binding
 from .util import canonical_json, excerpt, strict_json_loads
+
+_MAX_HOST_SESSION_ID_BYTES = 4096
 
 _BASIC_KNOWLEDGE_COMMANDS = (
     "init",
@@ -2061,6 +2064,21 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     task_bind_host.add_argument("--grant-id", required=True)
     task_bind_host.add_argument("--idempotency-key", required=True)
     task_bind_host.add_argument("--confirm-no-case-data", action="store_true")
+    task_enroll_host = task_commands.add_parser(
+        "enroll-host-session",
+        help="Read one raw official Host session ID from stdin and bind only its SHA-256",
+    )
+    task_enroll_host.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    task_enroll_host.add_argument(
+        "--host", choices=("codex", "opencode"), required=True
+    )
+    task_enroll_host.add_argument("--task-handle", required=True)
+    task_enroll_host.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_enroll_host.add_argument("--grant-id", required=True)
+    task_enroll_host.add_argument("--idempotency-key", required=True)
+    task_enroll_host.add_argument("--confirm-no-case-data", action="store_true")
     task_resolve_host = task_commands.add_parser("resolve-host-session")
     task_resolve_host.add_argument(
         "--vault", type=Path, default=default_knowledge_vault()
@@ -2108,11 +2126,11 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     host_task = host_connect.add_mutually_exclusive_group()
     host_task.add_argument(
         "--task-binding",
-        help="Canonical opaque task-context binding embedded in the generated launcher",
+        help=argparse.SUPPRESS,
     )
     host_task.add_argument(
         "--task-handle",
-        help="Stable opaque task handle resolved by the launcher at Host start",
+        help=argparse.SUPPRESS,
     )
 
     mcp = subcommands.add_parser(
@@ -2428,6 +2446,30 @@ def _parse_task_binding_argument(value: str | None) -> dict[str, Any] | None:
     return normalize_task_context_binding(parsed, allow_none=False)
 
 
+def _host_session_sha256_from_stdin() -> str:
+    stream = getattr(sys.stdin, "buffer", sys.stdin)
+    raw = stream.read(_MAX_HOST_SESSION_ID_BYTES + 3)
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8")
+    if len(raw) > _MAX_HOST_SESSION_ID_BYTES + 2:
+        raise ValueError("Host session ID from stdin exceeds its byte bound")
+    if raw.endswith(b"\r\n"):
+        raw = raw[:-2]
+    elif raw.endswith(b"\n"):
+        raw = raw[:-1]
+    if not raw or len(raw) > _MAX_HOST_SESSION_ID_BYTES:
+        raise ValueError("Host session ID from stdin is empty or exceeds its byte bound")
+    session_sha256 = hashlib.sha256(raw).hexdigest()
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeError:
+        raise ValueError("Host session ID from stdin must be UTF-8") from None
+    if "\x00" in text or "\r" in text or "\n" in text or text.strip() != text:
+        raise ValueError("Host session ID from stdin has invalid framing")
+    del raw, text
+    return session_sha256
+
+
 def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
     command = args.knowledge_command
     if command == "task":
@@ -2510,6 +2552,21 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 idempotency_key=args.idempotency_key,
                 confirm_no_case_data=args.confirm_no_case_data,
             )
+        if args.task_command == "enroll-host-session":
+            if args.confirm_no_case_data is not True:
+                raise PermissionError(
+                    "Host route binding requires explicit no-case-data confirmation"
+                )
+            return bind_host_session(
+                vault_path=args.vault,
+                host=args.host,
+                session_sha256=_host_session_sha256_from_stdin(),
+                task_handle=args.task_handle,
+                workspace=args.workspace,
+                grant_id=args.grant_id,
+                idempotency_key=args.idempotency_key,
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
         if args.task_command == "resolve-host-session":
             return resolve_host_session(
                 vault_path=args.vault,
@@ -2540,12 +2597,12 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
 
         if args.host_command != "connect":
             raise ValueError(f"unsupported Host action: {args.host_command}")
-        return build_host_connect_plan(
-            host=args.host,
-            vault_path=args.vault,
-            task_binding=_parse_task_binding_argument(args.task_binding),
-            task_handle=args.task_handle,
-        )
+        if args.task_binding is not None or args.task_handle is not None:
+            raise ValueError(
+                "static Host Connect is task-neutral; use task start/locate, then the "
+                "explicit bind-host-session or enroll-host-session lifecycle seam"
+            )
+        return build_host_connect_plan(host=args.host, vault_path=args.vault)
     if command == "reconcile":
         args.autonomy_command = "reconcile"
         command = "autonomy"

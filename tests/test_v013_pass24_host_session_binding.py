@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import re
 import subprocess
@@ -570,6 +571,27 @@ def test_host_session_route_commands_are_explicit_cli_seams() -> None:
     assert bind.host == "codex"
     assert bind.confirm_no_case_data is True
 
+    enroll = parser.parse_args(
+        [
+            "knowledge",
+            "task",
+            "enroll-host-session",
+            "--vault",
+            "vault",
+            "--host",
+            "codex",
+            "--task-handle",
+            "taskh_opaque",
+            "--grant-id",
+            "grant-owner",
+            "--idempotency-key",
+            "enroll-route",
+            "--confirm-no-case-data",
+        ]
+    )
+    assert enroll.task_command == "enroll-host-session"
+    assert not hasattr(enroll, "session_sha256")
+
     resolve = parser.parse_args(
         [
             "knowledge",
@@ -602,6 +624,110 @@ def test_host_session_route_commands_are_explicit_cli_seams() -> None:
     )
     assert continuity.task_command == "resolve-host-continuity"
     assert not hasattr(continuity, "grant_id")
+
+
+def test_public_cli_enrolls_raw_session_from_stdin_without_retaining_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repository = _repository(tmp_path)
+    vault, grant_id = _vault(tmp_path)
+    task = start_task(
+        vault_path=vault,
+        project="DeepLaw",
+        task="Owner stdin Host enrollment",
+        workspace=repository,
+    )
+    raw_session_id = "official-host-session-raw-canary"
+    expected_sha256 = sha256_bytes(raw_session_id.encode("utf-8"))
+    monkeypatch.setattr("sys.stdin", io.StringIO(raw_session_id + "\n"))
+
+    cli.main(
+        [
+            "knowledge",
+            "task",
+            "enroll-host-session",
+            "--vault",
+            str(vault),
+            "--host",
+            "codex",
+            "--task-handle",
+            str(task["task_handle"]),
+            "--workspace",
+            str(repository),
+            "--grant-id",
+            grant_id,
+            "--idempotency-key",
+            "owner-stdin-enrollment",
+            "--confirm-no-case-data",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert raw_session_id not in captured.out
+    assert raw_session_id not in captured.err
+    result = json.loads(captured.out)
+    assert result["status"] == "bound"
+    assert result["session_sha256"] == expected_sha256
+    assert result["transcript_copied"] is False
+    resolved = resolve_host_session(
+        vault_path=vault,
+        host="codex",
+        session_sha256=expected_sha256,
+        workspace=repository,
+    )
+    assert resolved["status"] == "exact"
+    raw_canary = raw_session_id.encode("utf-8")
+    assert all(
+        raw_canary not in path.read_bytes()
+        for path in vault.rglob("*")
+        if path.is_file()
+    )
+
+
+@pytest.mark.parametrize(
+    "raw_session_id",
+    ["", " leading-space", "two\nlines", "x" * 4097],
+)
+def test_stdin_host_session_enrollment_rejects_invalid_framing(
+    raw_session_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from deeplaw.knowledge_cli import _host_session_sha256_from_stdin
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(raw_session_id))
+    with pytest.raises(ValueError, match="Host session ID from stdin"):
+        _host_session_sha256_from_stdin()
+
+
+def test_public_enrollment_requires_confirmation_before_consuming_stdin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class UnreadableInput(io.StringIO):
+        def read(self, *args: object, **kwargs: object) -> str:
+            raise AssertionError("stdin must not be consumed before owner confirmation")
+
+    monkeypatch.setattr("sys.stdin", UnreadableInput("official-session"))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(
+            [
+                "knowledge",
+                "task",
+                "enroll-host-session",
+                "--vault",
+                "missing-vault",
+                "--host",
+                "codex",
+                "--task-handle",
+                "taskh_opaque",
+                "--grant-id",
+                "grant-owner",
+                "--idempotency-key",
+                "unconfirmed-enrollment",
+            ]
+        )
+    assert exited.value.code == 2
 
 
 def test_provider_host_route_recomputes_binding_or_returns_gap(tmp_path: Path) -> None:

@@ -85,16 +85,19 @@ deeplaw knowledge host connect --host codex --vault ./vault
 ```
 
 First-session binding is an explicit owner mutation requiring an existing Sink grant, an
-idempotency key, the current workspace, and a safely computed session SHA-256. A raw official
-session ID must never enter argv, the Ledger, logs, receipts, or Provider output.
+idempotency key, and the current workspace. The preferred seam reads one raw official session ID
+from stdin and immediately binds its SHA-256. The raw ID must never enter argv, the Ledger, logs,
+receipts, or Provider output. `bind-host-session` remains only for callers that have already
+computed the SHA-256 safely under owner control.
 
 ```bash
-deeplaw knowledge task bind-host-session --vault ./vault \
-  --host codex --session-sha256 SESSION_SHA256 \
+deeplaw knowledge task enroll-host-session --vault ./vault \
+  --host codex \
   --task-handle TASK_HANDLE --workspace . --grant-id GRANT_ID \
-  --idempotency-key BIND_IDEMPOTENCY_KEY --confirm-no-case-data
+  --idempotency-key BIND_IDEMPOTENCY_KEY --confirm-no-case-data \
+  < OWNER_ONLY_OFFICIAL_SESSION_ID
 deeplaw knowledge task resolve-host-continuity --vault ./vault \
-  --host codex --session-sha256 SESSION_SHA256 --workspace .
+  --host codex --session-sha256 SESSION_SHA256_FROM_ENROLLMENT_RESULT --workspace .
 deeplaw knowledge task resume --vault ./vault \
   --project DeepLaw --task 'Finish the selected task.' --workspace .
 ```

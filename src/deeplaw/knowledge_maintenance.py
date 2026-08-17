@@ -9,6 +9,7 @@ from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .host_runtime import host_product_readiness
 from .knowledge_inbox import list_inbox_artifacts, verify_inbox_artifact
 from .knowledge_jobs import list_ingest_jobs
 from .knowledge_store import (
@@ -20,7 +21,7 @@ from .source_adapters import validate_source_ir_database
 from .util import canonical_json, sha256_bytes, sha256_file, strict_json_loads
 
 KNOWLEDGE_SNAPSHOT_SCHEMA = "deeplaw.knowledge-snapshot/v1"
-KNOWLEDGE_DOCTOR_SCHEMA = "deeplaw.knowledge-doctor/v2"
+KNOWLEDGE_DOCTOR_SCHEMA = "deeplaw.knowledge-doctor/v3"
 
 _MAX_SNAPSHOT_FILES = 300_000
 _MAX_MANIFEST_BYTES = 64 * 1024 * 1024
@@ -649,6 +650,9 @@ def knowledge_doctor(
         and checks.get("job_records_valid", False)
         and not checks.get("invalid_inbox_artifact_ids", [])
     )
+    autonomous_vault_ready = bool(
+        ready and checks.get("autonomous_core", {}).get("installed") is True
+    )
     return {
         "schema_version": KNOWLEDGE_DOCTOR_SCHEMA,
         "path": str(Path(vault_path).expanduser().absolute()),
@@ -658,4 +662,7 @@ def knowledge_doctor(
         "errors": errors,
         "canonical_valid": canonical_valid,
         "ready": ready,
+        "product_readiness": host_product_readiness(
+            autonomous_vault_ready=autonomous_vault_ready
+        ),
     }

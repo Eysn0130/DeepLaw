@@ -1037,7 +1037,14 @@ def knowledge_tool_definition(*, autonomous: bool = False) -> types.Tool:
             "verifiable DeepLaw Knowledge Capsules."
         )
         input_schema = _v7_input_schema()
-        output_schema = _load_contract("knowledge-support.output.v6.schema.json")
+        output_schema = deepcopy(
+            _load_contract("knowledge-support.output.v6.schema.json")
+        )
+        # v6 remains the internal response contract for compatibility, while the
+        # autonomous Provider surface advertises only its three read operations.
+        output_schema["properties"]["operation"] = {
+            "enum": ["query", "context", "explain"]
+        }
     else:
         description = _DESCRIPTION
         input_schema = _load_contract("knowledge-support.input.v1.schema.json")
