@@ -151,6 +151,25 @@ def test_dry_run_is_no_write_and_does_not_disclose_external_paths_or_content(
     assert "synthetic owner input" not in serialized
 
 
+def test_repository_root_is_canonicalized_before_containment_checks(
+    tmp_path: Path,
+) -> None:
+    repository = _seed_repository(tmp_path)
+    alias = tmp_path / "repository-alias"
+    alias.symlink_to(repository, target_is_directory=True)
+    inputs, hashes = _inputs(tmp_path)
+
+    result = prep.prepare_candidate(
+        repository=alias,
+        integration_commit=_commit(repository),
+        external_inputs=inputs,
+        expected_hashes=hashes,
+    )
+
+    assert result["mode"] == "dry-run"
+    assert result["write_performed"] is False
+
+
 @pytest.mark.parametrize("failure", ["dirty", "wrong_head"])
 def test_preflight_rejects_dirty_or_wrong_exact_integration(
     tmp_path: Path, failure: str

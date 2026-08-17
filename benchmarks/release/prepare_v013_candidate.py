@@ -513,7 +513,10 @@ def prepare_candidate(
 ) -> dict[str, Any]:
     """Validate and optionally apply the exact construction-candidate transition."""
 
-    repository = Path(repository)
+    try:
+        repository = Path(repository).expanduser().resolve(strict=True)
+    except OSError as error:
+        raise CandidatePrepError("repository is unavailable") from error
     head, tree, branch = _assert_git_identity(repository, integration_commit, apply=apply)
     original: dict[str, bytes] = {}
     for relative in CURRENT_SURFACE_FILES:
