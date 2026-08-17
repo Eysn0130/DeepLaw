@@ -33,6 +33,31 @@ def test_external_dispatch_requires_one_candidate_full_run_id() -> None:
     assert ".github/workflows/candidate-full.yml" in workflow
 
 
+def test_candidate_runner_temp_paths_are_scoped_to_steps() -> None:
+    candidate = _parsed()["jobs"]["candidate"]
+    assert "env" not in candidate
+    expected = {
+        "CANDIDATE_INPUT_ROOT": "${{ runner.temp }}/candidate-inputs",
+        "DIST_ROOT": "${{ runner.temp }}/candidate-dist",
+        "EXACT_WHEEL_RECEIPT": "${{ runner.temp }}/exact-wheel-receipt.json",
+        "EXACT_WHEEL_VENV": "${{ runner.temp }}/exact-wheel-venv",
+    }
+    observed = {name: 0 for name in expected}
+    for step in candidate["steps"]:
+        run = step.get("run", "")
+        env = step.get("env", {})
+        for name, value in expected.items():
+            if name in run:
+                assert env.get(name) == value
+                observed[name] += 1
+    assert observed == {
+        "CANDIDATE_INPUT_ROOT": 5,
+        "DIST_ROOT": 2,
+        "EXACT_WHEEL_RECEIPT": 4,
+        "EXACT_WHEEL_VENV": 2,
+    }
+
+
 def test_external_downloads_and_rebinds_both_candidate_full_artifacts() -> None:
     parsed = _parsed()
     jobs = parsed["jobs"]

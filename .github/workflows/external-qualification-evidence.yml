@@ -25,11 +25,6 @@ jobs:
     name: Candidate Host domain (exact downloaded artifact)
     runs-on: [self-hosted, macOS, deeplaw-qualification-candidate]
     timeout-minutes: 360
-    env:
-      CANDIDATE_INPUT_ROOT: ${{ runner.temp }}/candidate-inputs
-      DIST_ROOT: ${{ runner.temp }}/candidate-dist
-      EXACT_WHEEL_RECEIPT: ${{ runner.temp }}/exact-wheel-receipt.json
-      EXACT_WHEEL_VENV: ${{ runner.temp }}/exact-wheel-venv
     steps:
       - name: Check out the exact requested candidate verifier
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -72,6 +67,7 @@ jobs:
 
       - name: Verify Candidate Full artifact and raw-evidence closure
         env:
+          CANDIDATE_INPUT_ROOT: ${{ runner.temp }}/candidate-inputs
           CANDIDATE_HEAD_SHA: ${{ github.sha }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
         shell: bash
@@ -173,6 +169,7 @@ jobs:
 
       - name: Execute the exact downloaded wheel in a repository-external venv
         env:
+          CANDIDATE_INPUT_ROOT: ${{ runner.temp }}/candidate-inputs
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
           DIST_ROOT: ${{ runner.temp }}/candidate-dist
           EXACT_WHEEL_RECEIPT: ${{ runner.temp }}/exact-wheel-receipt.json
@@ -205,6 +202,7 @@ jobs:
 
       - name: Execute exact Host runs through the candidate-only credential broker
         env:
+          CANDIDATE_INPUT_ROOT: ${{ runner.temp }}/candidate-inputs
           DIST_ROOT: ${{ runner.temp }}/candidate-dist
           EXACT_WHEEL_RECEIPT: ${{ runner.temp }}/exact-wheel-receipt.json
           EXACT_WHEEL_VENV: ${{ runner.temp }}/exact-wheel-venv
@@ -380,6 +378,9 @@ jobs:
           test -z "${forbidden_path}"
 
       - name: Export only sanitized candidate output for downstream scorers
+        env:
+          CANDIDATE_INPUT_ROOT: ${{ runner.temp }}/candidate-inputs
+          EXACT_WHEEL_RECEIPT: ${{ runner.temp }}/exact-wheel-receipt.json
         shell: bash
         run: |
           set -euo pipefail
@@ -405,6 +406,7 @@ jobs:
 
       - name: Export exact Candidate Full inputs for assembly only
         env:
+          CANDIDATE_INPUT_ROOT: ${{ runner.temp }}/candidate-inputs
           DIST_ROOT: ${{ runner.temp }}/candidate-dist
           EXACT_WHEEL_RECEIPT: ${{ runner.temp }}/exact-wheel-receipt.json
         shell: bash

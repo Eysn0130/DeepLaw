@@ -10695,6 +10695,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_external_workflow_v3",
+            "name": "test_candidate_runner_temp_paths_are_scoped_to_steps"
+          },
+          "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_candidate_runner_temp_paths_are_scoped_to_steps"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_external_workflow_v3",
             "name": "test_current_v4_bundle_validator_is_loaded_without_making_a_gate_decision"
           },
           "node_id": "tests/test_v013_pass24_external_workflow_v3.py::test_current_v4_bundle_validator_is_loaded_without_making_a_gate_decision"
@@ -15061,9 +15068,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2136,
+      "count": 2137,
       "selection": "not qualification and not windows_native",
-      "sha256": "3e059ebd93c675528b125afb8f67ab43692b75716361331dab7557024cfaee33"
+      "sha256": "a363b07c3f59f4ce19bb9e6a660013f4003a4d84586f6d5ccea3d4c90a8c8de3"
     },
     "windows": {
       "additional_cases": [
@@ -15096,13 +15103,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2140,
+      "count": 2141,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "54c35c4f09cd77db6105ef4cea3588cd961c839c19124c6d77fa479b0025bcc7"
+      "sha256": "07f25bc62e8929e3b5bccf66c4ccb3beda5d941c2cb11f8306ae25282d374259"
     }
   },
-  "manifest_sha256": "f4d93c2a7a5fe181b9aaa95eed3e6ea5d2cd52e3faa018a03b595a99c6472185",
+  "manifest_sha256": "c8264df23e7528eea72f1f0017337a84c225f7e7b71d484bc4a61cc303b6da30",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
