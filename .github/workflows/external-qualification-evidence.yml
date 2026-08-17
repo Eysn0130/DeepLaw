@@ -93,8 +93,6 @@ jobs:
             python - <<'PY'
           import hashlib
           import json
-          import hashlib
-          import json
           import os
           from pathlib import Path
 
@@ -231,6 +229,8 @@ jobs:
           test ! -e "${CANDIDATE_INPUT_ROOT}/scorer-b"
           test ! -e "${CANDIDATE_INPUT_ROOT}/arbiter"
           python - <<'PY'
+          import hashlib
+          import json
           import os
           import stat
           from pathlib import Path

@@ -94,15 +94,25 @@ stdin 读取一次 raw official session ID，并立即绑定它的 SHA-256；raw
 日志、receipt 或 Provider。`bind-host-session` 仅保留给已经由 owner 安全计算 SHA-256 的调用方。
 
 ```bash
+deeplaw knowledge sink enable --vault ./vault \
+  --writer-id owner-host-continuity --scope project --max-sensitivity private \
+  --operation record_run --operation remember --operation forget
 deeplaw knowledge task enroll-host-session --vault ./vault \
   --host codex \
   --task-handle TASK_HANDLE --workspace . --grant-id GRANT_ID \
   --idempotency-key BIND_IDEMPOTENCY_KEY --confirm-no-case-data \
   < OWNER_ONLY_OFFICIAL_SESSION_ID
+deeplaw knowledge task checkpoint --vault ./vault \
+  --task-handle TASK_HANDLE --workspace . --grant-id GRANT_ID \
+  --idempotency-key CHECKPOINT_IDEMPOTENCY_KEY \
+  --summary 'Bounded verified progress.' --next-action 'Continue the selected task.' \
+  --expires-at '2099-01-01T00:00:00Z' --confirm-no-case-data
 deeplaw knowledge task resolve-host-continuity --vault ./vault \
   --host codex --session-sha256 SESSION_SHA256_FROM_ENROLLMENT_RESULT --workspace .
 deeplaw knowledge task resume --vault ./vault \
   --project DeepLaw --task 'Finish the selected task.' --workspace .
+deeplaw knowledge task timeline --vault ./vault \
+  --task-handle TASK_HANDLE --workspace .
 ```
 
 普通恢复不要求 task handle。fork、compaction、stale checkpoint、wrong task/worktree、ambiguous

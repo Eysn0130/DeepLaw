@@ -99,15 +99,25 @@ receipts, or Provider output. `bind-host-session` remains only for callers that 
 computed the SHA-256 safely under owner control.
 
 ```bash
+deeplaw knowledge sink enable --vault ./vault \
+  --writer-id owner-host-continuity --scope project --max-sensitivity private \
+  --operation record_run --operation remember --operation forget
 deeplaw knowledge task enroll-host-session --vault ./vault \
   --host codex \
   --task-handle TASK_HANDLE --workspace . --grant-id GRANT_ID \
   --idempotency-key BIND_IDEMPOTENCY_KEY --confirm-no-case-data \
   < OWNER_ONLY_OFFICIAL_SESSION_ID
+deeplaw knowledge task checkpoint --vault ./vault \
+  --task-handle TASK_HANDLE --workspace . --grant-id GRANT_ID \
+  --idempotency-key CHECKPOINT_IDEMPOTENCY_KEY \
+  --summary 'Bounded verified progress.' --next-action 'Continue the selected task.' \
+  --expires-at '2099-01-01T00:00:00Z' --confirm-no-case-data
 deeplaw knowledge task resolve-host-continuity --vault ./vault \
   --host codex --session-sha256 SESSION_SHA256_FROM_ENROLLMENT_RESULT --workspace .
 deeplaw knowledge task resume --vault ./vault \
   --project DeepLaw --task 'Finish the selected task.' --workspace .
+deeplaw knowledge task timeline --vault ./vault \
+  --task-handle TASK_HANDLE --workspace .
 ```
 
 Ordinary recovery does not require a task handle. Fork, compaction, stale checkpoint, wrong

@@ -33,9 +33,6 @@ machine-state sources. This navigation page intentionally does not restate their
 - [Living Wiki compiler](LIVING_WIKI_COMPILER.md)
 - [Legal Pack and evidence policy](DEEPLAW_2.md)
 - [Agent adapters and Host boundary](AGENT_ADAPTERS.md)
-- [External qualification details](EXTERNAL_BENCHMARK_PROTOCOL.md)
-- [Upstream reuse policy](UPSTREAM_REUSE.md)
-- [Upstream research](V0_13_UPSTREAM_RESEARCH.md)
 
 ## Research
 

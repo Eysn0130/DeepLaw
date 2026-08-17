@@ -92,6 +92,11 @@ def test_external_executes_only_the_unique_downloaded_wheel() -> None:
 
 def test_host_preflight_uses_exact_pins_and_never_reads_auth_material() -> None:
     workflow = _workflow()
+    candidate = workflow[
+        workflow.index("  candidate:") : workflow.index("  reference_freezer:")
+    ]
+    assert candidate.count("\n          import hashlib\n") == 2
+    assert candidate.count("\n          import json\n") == 2
     assert "codex-cli 0.148.0-alpha.9" in workflow
     assert "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f" in workflow
     assert "gpt-5.6-luna" in workflow

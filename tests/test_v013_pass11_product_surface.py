@@ -423,4 +423,8 @@ def test_current_documented_product_truth_cannot_drift_to_historical_state() -> 
         assert "V0_13_PASS" not in readme
         assert "host connect --host codex --vault ./vault" in readme
         assert "host connect --host codex --vault ./vault --task" not in readme
+        assert "knowledge sink enable --vault ./vault" in readme
+        assert "--operation record_run --operation remember --operation forget" in readme
+        assert "knowledge task checkpoint --vault ./vault" in readme
+        assert "knowledge task timeline --vault ./vault" in readme
         assert "knowledge-support input v7 / output v6" in readme
