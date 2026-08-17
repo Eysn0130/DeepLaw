@@ -15,7 +15,6 @@ effects.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import os
@@ -24,7 +23,7 @@ import re
 import sys
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -32,6 +31,30 @@ from jsonschema import Draft202012Validator, FormatChecker
 from benchmarks.release.external_qualification_bundle_v3 import (
     ExternalQualificationBundleV3Error,
     validate_external_bundle,
+)
+from benchmarks.release.qualification_evidence_core import (
+    canonical_json_bytes as _core_canonical_json_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    digest_without as _core_digest_without,
+)
+from benchmarks.release.qualification_evidence_core import (
+    regular_file_bytes as _core_regular_file_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_asset_file as _core_safe_asset_file,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_relative_posix as _core_safe_relative_posix,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_root_directory as _core_safe_root_directory,
+)
+from benchmarks.release.qualification_evidence_core import (
+    sha256_bytes as _core_sha256_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    strict_json_bytes as _core_strict_json_bytes,
 )
 from benchmarks.release.release_provenance_v7 import (
     _CANDIDATE_WORKFLOW_KINDS,
@@ -124,23 +147,13 @@ def _reject_constant(value: str) -> Any:
 
 
 def _strict_json(raw: bytes, *, label: str) -> dict[str, Any]:
-    if not raw:
-        _fail(f"{label} is empty")
-    try:
-        value = json.loads(
-            raw.decode("utf-8", errors="strict"),
-            object_pairs_hook=_reject_pairs,
-            parse_constant=_reject_constant,
-            parse_float=_finite_float,
-        )
-    except (UnicodeError, ValueError, json.JSONDecodeError) as error:
-        raise CommercialQualificationAssemblerError(
-            f"{label} must be strict UTF-8 JSON"
-        ) from error
-    if not isinstance(value, dict):
-        _fail(f"{label} must be a JSON object")
-    _projection(value, label=label)
-    return value
+    return _core_strict_json_bytes(
+        raw,
+        label=label,
+        error_type=CommercialQualificationAssemblerError,
+        projection=lambda value: _projection(value, label=label),
+        require_object=True,
+    )
 
 
 def _finite_float(value: str) -> float:
@@ -175,27 +188,23 @@ def _projection(value: Any, *, label: str, depth: int = 0) -> None:
 
 
 def _canonical(value: Any) -> bytes:
-    try:
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode("utf-8")
-    except (TypeError, ValueError, UnicodeError) as error:
-        raise CommercialQualificationAssemblerError(
-            "qualification value is not canonical JSON"
-        ) from error
+    return _core_canonical_json_bytes(
+        value,
+        error_type=CommercialQualificationAssemblerError,
+        message="qualification value is not canonical JSON",
+    )
 
 
 def _sha256(raw: bytes) -> str:
-    return hashlib.sha256(raw).hexdigest()
+    return _core_sha256_bytes(raw)
 
 
 def _record_digest(value: Mapping[str, Any], *, field: str = "record_sha256") -> str:
-    body = {key: item for key, item in value.items() if key != field}
-    return _sha256(_canonical(body))
+    return _core_digest_without(
+        value,
+        field=field,
+        error_type=CommercialQualificationAssemblerError,
+    )
 
 
 def _derived_digest(value: Mapping[str, Any]) -> str:
@@ -203,15 +212,12 @@ def _derived_digest(value: Mapping[str, Any]) -> str:
 
 
 def _regular_file(path: Path, *, label: str, max_bytes: int = MAX_FILE_BYTES) -> bytes:
-    if path.is_symlink() or not path.is_file():
-        _fail(f"{label} must be a regular non-symlink file")
-    try:
-        raw = path.read_bytes()
-        size = path.stat().st_size
-    except OSError as error:
-        raise CommercialQualificationAssemblerError(f"{label} is unavailable") from error
-    if not 1 <= size <= max_bytes or len(raw) != size:
-        _fail(f"{label} exceeds its byte bound")
+    _resolved, raw = _core_regular_file_bytes(
+        path,
+        label=label,
+        max_bytes=max_bytes,
+        error_type=CommercialQualificationAssemblerError,
+    )
     return raw
 
 
@@ -221,43 +227,28 @@ def _read_json(path: Path, *, label: str) -> tuple[dict[str, Any], bytes]:
 
 
 def _safe_relative(value: Any, *, label: str) -> str:
-    if not isinstance(value, str) or not value or "\\" in value or "\x00" in value:
-        _fail(f"{label} is not a safe relative path")
-    path = PurePosixPath(value)
-    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
-        _fail(f"{label} is not a safe relative path")
-    if ":" in path.parts[0] or len(value) > 512:
-        _fail(f"{label} is not a safe relative path")
-    return path.as_posix()
+    return _core_safe_relative_posix(
+        value,
+        label=label,
+        error_type=CommercialQualificationAssemblerError,
+    )
 
 
 def _safe_asset(root: Path, relative: Any, *, label: str) -> Path:
-    name = _safe_relative(relative, label=label)
-    selected = root.joinpath(*name.split("/"))
-    cursor = root
-    try:
-        for part in name.split("/"):
-            cursor = cursor / part
-            if cursor.is_symlink():
-                _fail(f"{label} resolves through a symbolic link")
-        resolved = selected.resolve(strict=True)
-    except OSError as error:
-        raise CommercialQualificationAssemblerError(f"{label} is unavailable") from error
-    if selected.is_symlink() or not selected.is_file() or not resolved.is_relative_to(root):
-        _fail(f"{label} is outside the asset root")
-    return selected
+    return _core_safe_asset_file(
+        root,
+        relative,
+        label=label,
+        error_type=CommercialQualificationAssemblerError,
+    )
 
 
 def _safe_root(path: Path, *, label: str) -> Path:
-    if path.is_symlink() or not path.is_dir():
-        _fail(f"{label} must be a regular non-symlink directory")
-    try:
-        resolved = path.resolve(strict=True)
-    except OSError as error:
-        raise CommercialQualificationAssemblerError(f"{label} is unavailable") from error
-    if resolved.is_symlink() or not resolved.is_dir():
-        _fail(f"{label} must be a regular non-symlink directory")
-    return resolved
+    return _core_safe_root_directory(
+        path,
+        label=label,
+        error_type=CommercialQualificationAssemblerError,
+    )
 
 
 def _validate_schema(value: Mapping[str, Any], filename: str, *, label: str) -> None:

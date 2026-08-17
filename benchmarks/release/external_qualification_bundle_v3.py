@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import hashlib
-import json
 import math
 import os
 import re
@@ -18,11 +16,33 @@ import stat
 import sys
 from collections import Counter
 from collections.abc import Mapping
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from defusedxml import ElementTree as DefusedET
 from jsonschema import Draft202012Validator
+
+from benchmarks.release.qualification_evidence_core import (
+    canonical_json_bytes as _core_canonical_json_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    digest_without as _core_digest_without,
+)
+from benchmarks.release.qualification_evidence_core import (
+    regular_file_bytes as _core_regular_file_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_relative_posix as _core_safe_relative_posix,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_root_directory as _core_safe_root_directory,
+)
+from benchmarks.release.qualification_evidence_core import (
+    sha256_bytes as _core_sha256_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    strict_json_bytes as _core_strict_json_bytes,
+)
 
 MAX_FILES = 10_000
 MAX_FILE_BYTES = 64 * 1024 * 1024
@@ -158,25 +178,22 @@ def _error(message: str) -> None:
 
 
 def _sha256_bytes(raw: bytes) -> str:
-    return hashlib.sha256(raw).hexdigest()
+    return _core_sha256_bytes(raw)
 
 
 def _canonical_json(value: Any) -> str:
-    try:
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        )
-    except (TypeError, ValueError, UnicodeError) as error:
-        raise ExternalQualificationBundleV3Error("value is not canonical JSON") from error
+    return _core_canonical_json_bytes(
+        value,
+        error_type=ExternalQualificationBundleV3Error,
+    ).decode("utf-8")
 
 
 def _record_sha256(value: Mapping[str, Any]) -> str:
-    body = {key: item for key, item in value.items() if key != "record_sha256"}
-    return _sha256_bytes(_canonical_json(body).encode("utf-8"))
+    return _core_digest_without(
+        value,
+        field="record_sha256",
+        error_type=ExternalQualificationBundleV3Error,
+    )
 
 
 def _reject_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -237,23 +254,12 @@ def _check_json_projection(value: Any, *, depth: int = 0) -> None:
 
 
 def _strict_json_bytes(raw: bytes, *, label: str = "JSON") -> Any:
-    if not isinstance(raw, bytes) or not raw:
-        _error(f"{label} is empty")
-    try:
-        text = raw.decode("utf-8", errors="strict")
-        value = json.loads(
-            text,
-            object_pairs_hook=_reject_pairs,
-            parse_constant=_reject_constant,
-        )
-    except ExternalQualificationBundleV3Error:
-        raise
-    except (UnicodeError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise ExternalQualificationBundleV3Error(
-            f"{label} must be strict UTF-8 JSON"
-        ) from error
-    _check_json_projection(value)
-    return value
+    return _core_strict_json_bytes(
+        raw,
+        label=label,
+        error_type=ExternalQualificationBundleV3Error,
+        projection=_check_json_projection,
+    )
 
 
 def _strict_json(path: Path, *, label: str = "JSON") -> Any:
@@ -281,25 +287,12 @@ def _has_symlink_component(path: Path) -> bool:
 
 
 def _regular_path(path: Path, *, label: str, max_bytes: int) -> tuple[Path, bytes]:
-    selected = path.expanduser()
-    if _has_symlink_component(selected) or selected.is_symlink():
-        _error(f"{label} must be a regular non-symlink file")
-    try:
-        resolved = selected.resolve(strict=True)
-        mode = os.lstat(resolved).st_mode
-        if not stat.S_ISREG(mode):
-            _error(f"{label} must be a regular non-symlink file")
-        size = os.stat(resolved).st_size
-        if not 1 <= size <= max_bytes:
-            _error(f"{label} exceeds its byte bound")
-        raw = resolved.read_bytes()
-    except ExternalQualificationBundleV3Error:
-        raise
-    except OSError as error:
-        raise ExternalQualificationBundleV3Error(f"{label} is unavailable") from error
-    if len(raw) != size:
-        _error(f"{label} changed while it was read")
-    return resolved, raw
+    return _core_regular_file_bytes(
+        path,
+        label=label,
+        max_bytes=max_bytes,
+        error_type=ExternalQualificationBundleV3Error,
+    )
 
 
 def _read_regular_file(path: Path, *, max_bytes: int, label: str) -> bytes:
@@ -310,18 +303,16 @@ def _read_regular_file(path: Path, *, max_bytes: int, label: str) -> bytes:
 def _safe_relative_path(value: Any) -> str:
     if not isinstance(value, str) or not _SAFE_PATH.fullmatch(value):
         _error("file reference path is not a safe relative POSIX path")
-    if "\\" in value or "//" in value or "\x00" in value:
-        _error("file reference path is not a safe relative POSIX path")
-    if value.startswith("/") or re.match(r"^[A-Za-z]:", value):
-        _error("file reference path is not a safe relative POSIX path")
-    parts = value.split("/")
-    if not parts or any(part in {"", ".", ".."} for part in parts):
-        _error("file reference path is not a safe relative POSIX path")
-    # Exercise the POSIX parser as an additional guard against platform paths.
-    parsed = PurePosixPath(value)
-    if parsed.is_absolute() or parsed.parts != tuple(parts):
-        _error("file reference path is not a safe relative POSIX path")
-    return value
+    try:
+        return _core_safe_relative_posix(
+            value,
+            label="file reference path",
+            error_type=ExternalQualificationBundleV3Error,
+        )
+    except ExternalQualificationBundleV3Error as error:
+        raise ExternalQualificationBundleV3Error(
+            "file reference path is not a safe relative POSIX path"
+        ) from error
 
 
 def _forbidden_filename(relative_path: str) -> None:
@@ -331,19 +322,16 @@ def _forbidden_filename(relative_path: str) -> None:
 
 
 def _safe_root(root: Path) -> Path:
-    selected = root.expanduser()
-    if _has_symlink_component(selected) or selected.is_symlink():
-        _error("external bundle root must be a regular non-symlink directory")
     try:
-        resolved = selected.resolve(strict=True)
-        mode = os.lstat(resolved).st_mode
-    except OSError as error:
+        return _core_safe_root_directory(
+            root,
+            label="external bundle root",
+            error_type=ExternalQualificationBundleV3Error,
+        )
+    except ExternalQualificationBundleV3Error as error:
         raise ExternalQualificationBundleV3Error(
             "external bundle root is unavailable"
         ) from error
-    if not stat.S_ISDIR(mode):
-        _error("external bundle root must be a regular non-symlink directory")
-    return resolved
 
 
 def _scan_root(root: Path) -> tuple[Path, dict[str, bytes], int]:

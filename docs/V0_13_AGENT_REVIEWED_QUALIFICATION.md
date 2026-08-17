@@ -1,9 +1,9 @@
 # DeepLaw v0.13 machine-evaluated qualification
 
 Status: **protocol frozen; machine-evaluation inputs pending**. This document defines the new
-machine-only profile and does not alter the historical v1 protocol or the existing v1 active
-qualification record. The tracked package remains `0.12.0`; no candidate artifact is bound and
-no release decision is enabled.
+machine-only profile while preserving the historical v1 contracts and fixtures. The current
+active qualification record is v2. The tracked package remains `0.12.0`; no candidate artifact is
+bound and no release decision is enabled.
 
 The machine-readable contract is
 [`contracts/v013-qualification-protocol.v2.schema.json`](../contracts/v013-qualification-protocol.v2.schema.json).
@@ -26,28 +26,23 @@ This profile does not remove the need for a current Owner decision before an imm
 public release. The active record therefore fixes `release_ready=false`,
 `claim_eligible=false`, and `machine_qualification_claim_eligible=false`.
 
-## Isolated roles
+## Isolated execution domains
 
-The frozen configuration contains thirteen logical roles, including at least three independent
-semantic reviewers:
+The formal run uses a small set of real security domains rather than treating every logical role
+as an isolation boundary: three mutually invisible machine-reviewer sessions, a sealed
+reference/freezer, the exact candidate and Host runner, owner-controlled Codex and OpenCode
+credential brokers, scorer A, and scorer B plus deterministic arbitration/provenance. Reviewers
+are always labelled machine reviewers. When they use the same model, the evidence says
+`same-model-process-separated`; it does not imply independent human review.
 
-1. protocol freezer;
-2. semantic reviewers A, B, and C;
-3. adversarial reviewer;
-4. deterministic reconciler;
-5. corpus packager;
-6. reference vault;
-7. exact candidate runner;
-8. independent scorers A and B;
-9. deterministic arbitrator;
-10. provenance auditor.
-
-Every role is a separate process boundary with no Secret visibility. Reviewers cannot see one
-another, a candidate, a runner, or a scorer. The exact candidate runner receives only the exact
-artifact and selected source corpus; it cannot see reference labels. Scorers receive compiled
-output and evaluator-only references, but cannot see candidate source, runner processes, or the
-other scorer. Shared filesystems, IPC, and raw transcript sharing are forbidden; input mounts are
-read-only.
+Reviewers cannot see one another, a candidate, a runner, or a scorer. The exact candidate runner
+receives only the exact artifact and selected source corpus; it cannot see reference labels,
+scorer source, or a dotenv path. Scorers receive retained candidate output and evaluator-only
+references, but cannot see candidate source, runner processes, or the other scorer. Process
+receipts bind executable and process-tree hashes, PID lineage, input/output hashes, environment
+key allowlists, read-only mounts, timestamps, and exit codes. Those receipts must be produced or
+corroborated by the isolation launcher; a process-authored JSON statement alone is not proof of
+isolation.
 
 The reconciler may produce a machine proposal, not a Human Gold manifest. Reviewer disagreement
 is a failure; it is not resolved by model majority or a fabricated approval. The arbitrator is a
@@ -89,16 +84,21 @@ The Candidate Full inventory embedded in External evidence must be byte-identica
 independently downloaded Candidate Full inventory. Candidate Full's public journey explicitly uses
 the historical candidate-only v1 receipt and cannot claim or invent a future evidence run or
 holdout. External Qualification exclusively uses the current v2 receipt, which binds the candidate
-commit/tree/lock/wheel, Candidate Full run, External evidence run, qualification-holdout hash, and
-the exact runner source. The workflow hashes that receipt before handing it to the
+commit/tree/lock/wheel, Candidate Full run, External evidence run, Candidate Full raw-inventory
+hash, and the exact runner source. This proves that the public wheel journey ran against the exact
+candidate; it does not claim that the qualification holdout was executed. The workflow hashes that
+receipt before handing it to the
 repository-external runner and requires the retained bundle bytes to be identical afterward.
 Commercial and Release also compare the active candidate's retained-manifest hash and the typed
 SBOM/OpenVEX/license/provenance digests with the exact files selected for publication.
 
 Scorers recompute case identity, expected/observed values, duties, hard failures, and false
-authority from raw rows. Caller-authored `passed`, `count`, `facts`, or aggregate fields are not
-accepted. Missing or duplicate cases fail. Hard failures and false-authority observations have a
-maximum of zero.
+authority from retained candidate raw output. Candidate execution binds the raw-output hash, and
+replacing that output invalidates existing scorer evidence. Caller-authored `passed`, `count`,
+`facts`, or aggregate fields are not accepted. Missing or duplicate cases fail. Hard failures and
+false-authority observations have a maximum of zero. Commercial scale additionally requires one
+actual-candidate process receipt for each 1k/10k/100k row; periodic synthetic diagnostics remain
+development evidence and are claim-ineligible.
 
 The post-public receipt is versioned separately from the historical v1 contract. The current
 release workflow emits and validates
@@ -118,15 +118,22 @@ asset is deleted.
 
 Codex is pinned to `codex-cli 0.148.0-alpha.9`, binary SHA-256
 `6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f`, request model
-`gpt-5.6-luna`, and `reasoning=max`. Authentication is checked only through `codex login status`;
-authentication material is not read.
+`gpt-5.6-luna`, and `reasoning=max`. An owner-controlled credential broker uses the locally
+authenticated Codex Host without giving `HOME`, `CODEX_HOME`, auth files, or credential values to
+the DeepLaw runner, scorer, or evidence assembler. The returned response model identifier is
+recorded separately from the request pin.
 
 OpenCode is pinned to `1.18.16`, source commit
 `a3647eb025c7615159d417dcc49fc39fdaeba65b`, executable SHA-256
 `a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f`, package SHA-256
 `d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722`, selector
 `deepseek/deepseek-v4-flash`, and expected response model `deepseek-v4-flash`. It uses the Host
-provided Bun runtime and an owner-only external dotenv parsed without shell evaluation.
+provided Bun runtime and an owner-only external dotenv parsed without shell evaluation. Only the
+OpenCode Host process receives the required provider variable. The context-bridge and compaction
+hook are experimental, exact-version-only integration surfaces, not cross-version stable APIs.
+
+The request-model values identify requests, not immutable model weights. Formal evidence records
+the observed binary/package hashes, execution date, and returned model identifier.
 
 These pins identify future evidence inputs; they are not Host qualification results. Until the
 machine evidence is actually executed and revalidated, all gates remain `not_executed`.

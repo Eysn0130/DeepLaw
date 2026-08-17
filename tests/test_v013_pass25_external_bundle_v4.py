@@ -24,6 +24,7 @@ SCORER_A = "6" * 64
 SCORER_B = "7" * 64
 ARBITER = "8" * 64
 RUNNER = "9" * 64
+REFERENCE_ID = "semanticref_0123456789abcdef01234567"
 REPOSITORY = Path(__file__).resolve().parents[1]
 EXACT_WHEEL_RUNNER = hashlib.sha256(
     (REPOSITORY / "benchmarks/release/exact_wheel_runner.py").read_bytes()
@@ -99,7 +100,7 @@ def _semantic_reference(
             "reference_provenance": "agent_consensus",
             "human_authenticity": "not_claimed",
             "frozen_at": "2026-08-17T00:00:00Z",
-            "reference_id": "semanticref_0123456789abcdef01234567",
+            "reference_id": REFERENCE_ID,
             "model_outputs_seen_before_freeze": True,
             "candidate_visible_when_frozen": False,
             "human_claim_eligible": False,
@@ -155,7 +156,21 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
         output_raw = _write_json(
             root,
             f"reference/reviewer-{index + 1}-output.json",
-            {"agent_id": f"agent:reviewer-{index + 1}", "decision": "approved"},
+            _record(
+                {
+                    "schema_version": "deeplaw.machine-reviewer-output/v1",
+                    "profile": "machine_evaluated_no_human_attestation",
+                    "human_authenticity": "not_claimed",
+                    "reference_id": REFERENCE_ID,
+                    "agent_id": f"agent:reviewer-{index + 1}",
+                    "model_id": f"model:reviewer-{index + 1}",
+                    "rubric_sha256": RUNNER,
+                    "source_corpus_sha256": holdout_sha,
+                    "process_identity_sha256": _digest(process_raw),
+                    "decision": "approved",
+                    "disagreements": [],
+                }
+            ),
         )
         reviewers.append(
             {
@@ -382,10 +397,65 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
     ):
         _write_json(root, relative, {"kind": relative})
 
-    def machine_payload(tag: str) -> dict[str, Any]:
+    def machine_payload(tag: str, typed: dict[str, Any]) -> dict[str, Any]:
         a_path = f"rows/{tag}-a.json"
         b_path = f"rows/{tag}-b.json"
         arb_path = f"rows/{tag}-arbiter.json"
+        output_path = f"candidate/{tag}-output.json"
+        execution_path = f"candidate/{tag}-execution.json"
+        output_raw = _write_json(
+            root,
+            output_path,
+            _record(
+                {
+                    "schema_version": "deeplaw.machine-candidate-output/v1",
+                    "profile": "machine_evaluated_no_human_attestation",
+                    "candidate": typed["candidate_binding"],
+                    "run": typed["run_binding"],
+                    "corpus": typed["corpus"],
+                    "runner": typed["runner"],
+                    "rows": [
+                        {
+                            "case_id": f"goldcase_{suffix}",
+                            "observed": {"include": ["include_answer"], "exclude": []},
+                            "duties": ["exact_citation"],
+                            "hard_failures": [],
+                            "false_authority": False,
+                        }
+                        for suffix in ("cold", "resume", "compact")
+                    ],
+                }
+            ),
+        )
+        _write_json(
+            root,
+            execution_path,
+            _record(
+                {
+                    "schema_version": "deeplaw.machine-candidate-execution/v1",
+                    "profile": "machine_evaluated_no_human_attestation",
+                    "candidate": typed["candidate_binding"],
+                    "run": typed["run_binding"],
+                    "corpus": typed["corpus"],
+                    "runner": typed["runner"],
+                    "executable_sha256": typed["runner"]["sha256"],
+                    "process": {
+                        "pid": 101,
+                        "parent_pid": 100,
+                        "process_tree_sha256": "e" * 64,
+                        "environment_key_allowlist": ["PATH"],
+                        "read_only_input_sha256s": [
+                            typed["candidate_binding"]["wheel_sha256"],
+                            typed["corpus"]["sha256"],
+                        ],
+                        "started_at": "2026-08-17T02:00:00Z",
+                        "finished_at": "2026-08-17T02:01:00Z",
+                        "exit_code": 0,
+                    },
+                    "output_sha256": _digest(output_raw),
+                }
+            ),
+        )
         _write_json(
             root,
             a_path,
@@ -406,6 +476,8 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
             {"adjudications": [{"case_id": "goldcase_cold", "agreement": True}]},
         )
         return {
+            "candidate_output_source": source(output_path),
+            "candidate_execution_source": source(execution_path),
             "semantic_reference_source": source("reference/semantic.json"),
             "candidate_binding_source": source("reference/candidate-binding.json"),
             "agent_roster_source": source("reference/roster.json"),
@@ -440,7 +512,7 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
                 "role": role,
             },
         )
-        typed["payload"] = machine_payload(tag)
+        typed["payload"] = machine_payload(tag, typed)
         relative = f"typed/machine-{tag}.json"
         _write_json(root, relative, _record(typed))
         machine_files.append(relative)
@@ -500,7 +572,7 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
         "exact_wheel_execution",
         run_id="evidence-run-202",
         workflow=202,
-        corpus={"sha256": holdout_sha, "role": "qualification_holdout"},
+        corpus={"sha256": holdout_sha, "role": "candidate_full"},
     )
     exact["runner"] = {
         "identity": "exact-wheel-runner:v2",
@@ -617,12 +689,23 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
         elif relative == "reference/isolation.json":
             media = "application/json"
             kind = "agent_isolation"
+        elif relative.startswith("reference/reviewer-") and relative.endswith(
+            "-output.json"
+        ):
+            media = "application/json"
+            kind = "machine_reviewer_output"
         elif relative == "candidate/candidate-full-raw-inventory.json":
             media = "application/json"
             kind = "candidate_full_raw_inventory"
         elif relative.startswith("typed/machine-"):
             media = "application/json"
             kind = "machine_reference_scorer"
+        elif relative.startswith("candidate/") and relative.endswith("-output.json"):
+            media = "application/json"
+            kind = "machine_candidate_output"
+        elif relative.startswith("candidate/") and relative.endswith("-execution.json"):
+            media = "application/json"
+            kind = "machine_candidate_execution"
         elif relative.startswith("typed/"):
             media = "application/json"
             kind = next(kind for path_value, _value, kind in typed_files if path_value == relative)
@@ -674,6 +757,15 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
             "evidence_kind": "candidate_full_raw_inventory",
         }
     )
+    exact_path = root / "typed/exact-wheel.json"
+    exact_typed = json.loads(exact_path.read_text(encoding="utf-8"))
+    exact_typed["corpus"]["sha256"] = _digest(inventory_raw)
+    exact_raw = _json_bytes(_record(exact_typed))
+    exact_path.write_bytes(exact_raw)
+    for item in files:
+        if item["relative_path"] == "typed/exact-wheel.json":
+            item.update({"byte_size": len(exact_raw), "sha256": _digest(exact_raw)})
+            break
     manifest = {
         "schema_version": "deeplaw.external-qualification-bundle-manifest/v4",
         "profile": "machine_evaluated_no_human_attestation",
@@ -704,6 +796,83 @@ def _validate(paths: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _refresh_reference_chain(paths: dict[str, Any], *, reviewer_index: int) -> None:
+    root = paths["root"]
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+    output_relative = f"reference/reviewer-{reviewer_index}-output.json"
+    output_raw = (root / output_relative).read_bytes()
+
+    semantic_path = root / "reference/semantic.json"
+    semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
+    semantic["agent_review"]["reviewers"][reviewer_index - 1]["output_sha256"] = _digest(
+        output_raw
+    )
+    reviewers = semantic["agent_review"]["reviewers"]
+
+    roster_path = root / "reference/roster.json"
+    roster = json.loads(roster_path.read_text(encoding="utf-8"))
+    roster["reviewers"] = reviewers
+    roster_raw = _json_bytes(_record(roster))
+    roster_path.write_bytes(roster_raw)
+
+    consensus_path = root / "reference/consensus.json"
+    consensus = json.loads(consensus_path.read_text(encoding="utf-8"))
+    consensus["roster_sha256"] = _digest(roster_raw)
+    consensus["reviewer_output_sha256s"] = [row["output_sha256"] for row in reviewers]
+    consensus_raw = _json_bytes(_record(consensus))
+    consensus_path.write_bytes(consensus_raw)
+
+    semantic["agent_review"]["roster_sha256"] = _digest(roster_raw)
+    semantic["agent_review"]["consensus_sha256"] = _digest(consensus_raw)
+    semantic_raw = _json_bytes(_record(semantic))
+    semantic_path.write_bytes(semantic_raw)
+
+    binding_path = root / "reference/candidate-binding.json"
+    binding = json.loads(binding_path.read_text(encoding="utf-8"))
+    binding["semantic_reference"]["sha256"] = _digest(semantic_raw)
+    binding["agent_roster"]["sha256"] = _digest(roster_raw)
+    binding["agent_consensus"]["sha256"] = _digest(consensus_raw)
+    binding_raw = _json_bytes(_record(binding))
+    binding_path.write_bytes(binding_raw)
+
+    replacements = {
+        output_relative: output_raw,
+        "reference/roster.json": roster_raw,
+        "reference/consensus.json": consensus_raw,
+        "reference/semantic.json": semantic_raw,
+        "reference/candidate-binding.json": binding_raw,
+    }
+    for relative in ("typed/machine-holdout.json", "typed/machine-blind.json"):
+        typed_path = root / relative
+        typed = json.loads(typed_path.read_text(encoding="utf-8"))
+        typed["payload"].update(
+            {
+                "semantic_reference_source": _source(root, "reference/semantic.json"),
+                "candidate_binding_source": _source(
+                    root, "reference/candidate-binding.json"
+                ),
+                "agent_roster_source": _source(root, "reference/roster.json"),
+                "agent_consensus_source": _source(root, "reference/consensus.json"),
+            }
+        )
+        typed_raw = _json_bytes(_record(typed))
+        typed_path.write_bytes(typed_raw)
+        replacements[relative] = typed_raw
+    for item in manifest["files"]:
+        raw = replacements.get(item["relative_path"])
+        if raw is not None:
+            item.update({"byte_size": len(raw), "sha256": _digest(raw)})
+    manifest["external_inputs"].update(
+        {
+            "semantic_reference_sha256": _digest(semantic_raw),
+            "candidate_binding_sha256": _digest(binding_raw),
+            "agent_roster_sha256": _digest(roster_raw),
+            "agent_consensus_sha256": _digest(consensus_raw),
+        }
+    )
+    paths["manifest"].write_bytes(_json_bytes(_record(manifest)))
+
+
 def test_v4_accepts_machine_only_bundle_and_returns_no_claim_flags(tmp_path: Path) -> None:
     result = _validate(_seed(tmp_path))
     assert result["schema_version"].endswith("/v4")
@@ -715,6 +884,25 @@ def test_v4_accepts_machine_only_bundle_and_returns_no_claim_flags(tmp_path: Pat
     assert result["human_authenticity"] == "not_claimed"
     assert "release_ready" not in result
     assert "claim_eligible" not in result
+
+
+def test_v4_rejects_schema_invalid_reviewer_output_even_with_fresh_hash_chain(
+    tmp_path: Path,
+) -> None:
+    paths = _seed(tmp_path)
+    _write_json(
+        paths["root"],
+        "reference/reviewer-1-output.json",
+        {
+            "agent_id": "agent:reviewer-1",
+            "decision": "approved",
+            "unexpected": True,
+        },
+    )
+    _refresh_reference_chain(paths, reviewer_index=1)
+
+    with pytest.raises(ExternalQualificationBundleV4Error, match="reviewer output"):
+        _validate(paths)
 
 
 def test_v4_rejects_human_gold_even_when_self_hashed(tmp_path: Path) -> None:

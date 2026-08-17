@@ -37,6 +37,27 @@ def test_v8_classification_is_exactly_machine_only_and_fourteen_core_gates() -> 
     ]
     assert provenance._expected_gate_corpus_roles("codex") == ["qualification_holdout"]
     assert provenance._expected_gate_corpus_roles("migration_recovery") == ["candidate_full"]
+    assert provenance._expected_gate_corpus_roles("canonical_integrity") == [
+        "candidate_full"
+    ]
+
+
+def test_provenance_protocol_gate_inventory_rejects_classification_drift() -> None:
+    _value, _raw, core_ids = provenance._load_classification(
+        provenance._CURRENT_CLASSIFICATION_PATH
+    )
+    protocol = json.loads(
+        (provenance.REPOSITORY / "benchmarks/v013/qualification-protocol-v2.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    protocol["gates"][0]["gate_id"] = "protocol_only_gate"
+    with pytest.raises(ReleaseProvenanceV8Error, match="differs from classification"):
+        provenance._core_require_exact_protocol_gate_ids(
+            protocol,
+            expected_gate_ids=tuple(core_ids),
+            error_type=ReleaseProvenanceV8Error,
+        )
 
 
 def test_machine_external_binding_keeps_panel_arbiter_and_isolation_distinct() -> None:

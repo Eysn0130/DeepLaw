@@ -868,7 +868,7 @@ def test_exact_wheel_v2_receipt_rejects_cross_binding_replays_and_v1_receipts(
             "lock_sha256": LOCK,
         },
         "run_binding": {"candidate_run_id": 101, "evidence_run_id": 202},
-        "corpus_binding": {"role": "qualification_holdout", "sha256": CORPUS},
+        "corpus_binding": {"role": "candidate_full", "sha256": CORPUS},
         "candidate": {
             "wheel_filename": "deeplaw-0.13.0-py3-none-any.whl",
             "wheel_sha256": WHEEL,
@@ -976,7 +976,7 @@ def test_exact_wheel_v2_receipt_rejects_cross_binding_replays_and_v1_receipts(
             tmp_path,
             kind="exact_wheel_execution",
             payload={"source": source},
-            corpus_role="qualification_holdout",
+            corpus_role="candidate_full",
             name="v2-template.json",
         )
         envelope = json.loads(template.read_text(encoding="utf-8"))
@@ -988,7 +988,7 @@ def test_exact_wheel_v2_receipt_rejects_cross_binding_replays_and_v1_receipts(
                 "reference_provenance": "agent_consensus",
                 "human_authenticity": "not_claimed",
                 "run_binding": {"run_id": "evidence-run-202", "workflow_run_id": 202},
-                "corpus": {"sha256": CORPUS, "role": "qualification_holdout"},
+                "corpus": {"sha256": CORPUS, "role": "candidate_full"},
             }
         )
         envelope["record_sha256"] = _sha(
@@ -2219,3 +2219,198 @@ def test_typed_evidence_cli_requires_all_external_bindings(tmp_path: Path) -> No
         check=False,
     )
     assert missing.returncode == 2
+
+
+def test_scale_rejects_periodic_claim_ineligible_synthetic_rows(tmp_path: Path) -> None:
+    expected = _json_file(
+        tmp_path,
+        "commercial-scale-expected.json",
+        {
+            "rows": [
+                {
+                    "sample_size": size,
+                    "expected_cases": [{"case_id": f"scale-{size}", "expected": True}],
+                    "thresholds": {
+                        "max_latency_ms": 100,
+                        "max_rss_bytes": 100,
+                        "max_storage_bytes": 100,
+                        "min_throughput_per_sec": 1,
+                    },
+                }
+                for size in (1000, 10000, 100000)
+            ]
+        },
+    )
+    observed = _json_file(
+        tmp_path,
+        "periodic-synthetic-scale.json",
+        {
+            "evidence_class": "periodic_synthetic",
+            "fixture_kind": "development_synthetic",
+            "candidate_wheel_sha256": WHEEL,
+            "actual_candidate": False,
+            "claim_eligible": False,
+            "receipt": _receipt(
+                corpus_sha256=expected["sha256"],
+                corpus_role="qualification_holdout",
+            ),
+            "rows": [
+                {
+                    "sample_size": size,
+                    "latency_ms": 1,
+                    "rss_bytes": 2,
+                    "storage_bytes": 3,
+                    "throughput_per_sec": 4,
+                    "observed_cases": [{"case_id": f"scale-{size}", "observed": True}],
+                    "command": "periodic-synthetic-diagnostic",
+                    "execution_id": f"periodic-synthetic-{size}",
+                    "exit_code": 0,
+                }
+                for size in (1000, 10000, 100000)
+            ],
+        },
+    )
+    manifest = _envelope(
+        tmp_path,
+        kind="scale_report",
+        payload={"expected_source": expected, "observed_source": observed},
+        corpus_sha256=expected["sha256"],
+        corpus_role="qualification_holdout",
+    )
+    envelope = json.loads(manifest.read_text(encoding="utf-8"))
+    envelope.update(
+        {
+            "schema_version": "deeplaw.typed-qualification-evidence/v2",
+            "profile": "machine_evaluated_no_human_attestation",
+            "reference_provenance": "agent_consensus",
+            "human_authenticity": "not_claimed",
+        }
+    )
+    envelope["record_sha256"] = _sha(
+        _canonical({key: value for key, value in envelope.items() if key != "record_sha256"})
+    )
+    manifest.write_bytes(_canonical(envelope))
+
+    with pytest.raises(TypedQualificationEvidenceError, match="commercial candidate scale"):
+        parse_typed_evidence(
+            manifest,
+            expected_corpus_sha256=expected["sha256"],
+        )
+
+
+def test_v2_commercial_scale_requires_closed_process_receipts(tmp_path: Path) -> None:
+    expected = _json_file(
+        tmp_path,
+        "candidate-scale-expected.json",
+        {
+            "rows": [
+                {
+                    "sample_size": size,
+                    "expected_cases": [{"case_id": f"scale-{size}", "expected": True}],
+                    "thresholds": {
+                        "max_latency_ms": 100,
+                        "max_rss_bytes": 100,
+                        "max_storage_bytes": 100,
+                        "min_throughput_per_sec": 1,
+                    },
+                }
+                for size in (1000, 10000, 100000)
+            ]
+        },
+    )
+    observed_value = {
+        "evidence_class": "commercial_candidate_scale",
+        "fixture_kind": "frozen_candidate_corpus",
+        "candidate_wheel_sha256": WHEEL,
+        "actual_candidate": True,
+        "claim_eligible": True,
+        "receipt": _receipt(
+            corpus_sha256=expected["sha256"],
+            corpus_role="qualification_holdout",
+        ),
+        "rows": [
+            {
+                "sample_size": size,
+                "latency_ms": 1,
+                "rss_bytes": 2,
+                "storage_bytes": 3,
+                "throughput_per_sec": 4,
+                "observed_cases": [{"case_id": f"scale-{size}", "observed": True}],
+                "command": "candidate-scale-runner",
+                "execution_id": f"candidate-scale-{size}",
+                "exit_code": 0,
+                "process": {
+                    "executable_sha256": RUNNER["sha256"],
+                    "pid": size,
+                    "parent_pid": 99,
+                    "process_tree_sha256": _sha(f"process-tree-{size}".encode()),
+                    "input_sha256s": [WHEEL, expected["sha256"]],
+                    "output_sha256": _sha(f"scale-output-{size}".encode()),
+                    "environment_key_allowlist": ["LANG", "LC_ALL", "PATH"],
+                    "read_only_mounts": [
+                        {
+                            "mount_id": "candidate-wheel",
+                            "source_sha256": WHEEL,
+                            "mode": "read_only",
+                        },
+                        {
+                            "mount_id": "frozen-scale-corpus",
+                            "source_sha256": expected["sha256"],
+                            "mode": "read_only",
+                        },
+                    ],
+                    "started_at": "2026-08-17T02:00:00Z",
+                    "finished_at": "2026-08-17T02:01:00Z",
+                    "exit_code": 0,
+                },
+            }
+            for size in (1000, 10000, 100000)
+        ],
+    }
+    observed = _json_file(tmp_path, "candidate-scale-observed.json", observed_value)
+    manifest = _envelope(
+        tmp_path,
+        kind="scale_report",
+        payload={"expected_source": expected, "observed_source": observed},
+        corpus_sha256=expected["sha256"],
+        corpus_role="qualification_holdout",
+    )
+
+    def reseal() -> None:
+        raw = _canonical(observed_value)
+        (tmp_path / "candidate-scale-observed.json").write_bytes(raw)
+        envelope = json.loads(manifest.read_text(encoding="utf-8"))
+        envelope.update(
+            {
+                "schema_version": "deeplaw.typed-qualification-evidence/v2",
+                "profile": "machine_evaluated_no_human_attestation",
+                "reference_provenance": "agent_consensus",
+                "human_authenticity": "not_claimed",
+            }
+        )
+        envelope["payload"]["observed_source"].update(
+            {"byte_size": len(raw), "sha256": _sha(raw)}
+        )
+        envelope["record_sha256"] = _sha(
+            _canonical(
+                {key: value for key, value in envelope.items() if key != "record_sha256"}
+            )
+        )
+        manifest.write_bytes(_canonical(envelope))
+
+    reseal()
+    assert parse_typed_evidence(
+        manifest,
+        expected_corpus_sha256=expected["sha256"],
+    )["status"] == "passed"
+
+    observed_value["rows"][0]["process"]["environment_key_allowlist"].append("API_KEY")
+    reseal()
+    with pytest.raises(TypedQualificationEvidenceError, match="Secret or Host auth key"):
+        parse_typed_evidence(manifest, expected_corpus_sha256=expected["sha256"])
+
+    observed_value["rows"][0]["process"]["environment_key_allowlist"].remove("API_KEY")
+    observed_value["rows"][0]["process"]["read_only_mounts"].pop()
+    reseal()
+    with pytest.raises(TypedQualificationEvidenceError, match="mounts differ"):
+        parse_typed_evidence(manifest, expected_corpus_sha256=expected["sha256"])

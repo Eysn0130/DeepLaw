@@ -10702,6 +10702,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_context_bridge_uses_the_exact_opencode_pin_and_marks_compaction_experimental"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_context_bridge_uses_the_exact_opencode_pin_and_marks_compaction_experimental"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
             "name": "test_manifest_and_readme_freeze_exact_candidate_identity"
           },
           "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_manifest_and_readme_freeze_exact_candidate_identity"
@@ -11094,9 +11101,23 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_scale_rejects_periodic_claim_ineligible_synthetic_rows"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_scale_rejects_periodic_claim_ineligible_synthetic_rows"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
             "name": "test_typed_evidence_cli_requires_all_external_bindings"
           },
           "node_id": "tests/test_v013_pass24_typed_evidence.py::test_typed_evidence_cli_requires_all_external_bindings"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_typed_evidence",
+            "name": "test_v2_commercial_scale_requires_closed_process_receipts"
+          },
+          "node_id": "tests/test_v013_pass24_typed_evidence.py::test_v2_commercial_scale_requires_closed_process_receipts"
         },
         {
           "junit": {
@@ -11171,6 +11192,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_exact_wheel_execution_is_candidate_full_identity_not_holdout_execution"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_exact_wheel_execution_is_candidate_full_identity_not_holdout_execution"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
             "name": "test_machine_reference_gate_has_no_human_semantics"
           },
           "node_id": "tests/test_v013_pass25_classification_v8.py::test_machine_reference_gate_has_no_human_semantics"
@@ -11181,6 +11209,13 @@
             "name": "test_only_machine_reference_gate_consumes_final_blind"
           },
           "node_id": "tests/test_v013_pass25_classification_v8.py::test_only_machine_reference_gate_consumes_final_blind"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_classification_v8",
+            "name": "test_protocol_v2_and_classification_v8_use_one_canonical_core_gate_set"
+          },
+          "node_id": "tests/test_v013_pass25_classification_v8.py::test_protocol_v2_and_classification_v8_use_one_canonical_core_gate_set"
         },
         {
           "junit": {
@@ -11307,6 +11342,13 @@
             "name": "test_v4_rejects_orphan_and_symlink"
           },
           "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_orphan_and_symlink"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_external_bundle_v4",
+            "name": "test_v4_rejects_schema_invalid_reviewer_output_even_with_fresh_hash_chain"
+          },
+          "node_id": "tests/test_v013_pass25_external_bundle_v4.py::test_v4_rejects_schema_invalid_reviewer_output_even_with_fresh_hash_chain"
         },
         {
           "junit": {
@@ -11472,6 +11514,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_machine_reference_cannot_pass_without_retained_candidate_output_and_execution"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_machine_reference_cannot_pass_without_retained_candidate_output_and_execution"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
             "name": "test_machine_reference_recomputes_pass_without_human_attestation"
           },
           "node_id": "tests/test_v013_pass25_machine_evidence.py::test_machine_reference_recomputes_pass_without_human_attestation"
@@ -11507,6 +11556,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_replacing_candidate_output_invalidates_old_scorer_receipts"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_replacing_candidate_output_invalidates_old_scorer_receipts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
             "name": "test_scorer_disagreement_is_rejected"
           },
           "node_id": "tests/test_v013_pass25_machine_evidence.py::test_scorer_disagreement_is_rejected"
@@ -11535,6 +11591,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_candidate_runner_cannot_receive_reference_scorer_or_dotenv_domains"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_candidate_runner_cannot_receive_reference_scorer_or_dotenv_domains"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
             "name": "test_external_dispatch_requires_only_candidate_run_id"
           },
           "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_dispatch_requires_only_candidate_run_id"
@@ -11556,9 +11619,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_workflows",
-            "name": "test_external_keeps_exact_host_pins_and_only_login_status_auth_check"
+            "name": "test_external_keeps_exact_host_pins_and_delegates_auth_to_brokers"
           },
-          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_keeps_exact_host_pins_and_only_login_status_auth_check"
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_keeps_exact_host_pins_and_delegates_auth_to_brokers"
         },
         {
           "junit": {
@@ -11566,13 +11629,6 @@
             "name": "test_external_requires_distinct_executable_scorer_a_b_and_arbiter_hashes"
           },
           "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_requires_distinct_executable_scorer_a_b_and_arbiter_hashes"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass25_machine_workflows",
-            "name": "test_external_runner_binds_all_machine_inputs_and_two_available_run_ids"
-          },
-          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_runner_binds_all_machine_inputs_and_two_available_run_ids"
         },
         {
           "junit": {
@@ -11640,6 +11696,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_qualification_assembler_v8",
+            "name": "test_protocol_gate_inventory_must_equal_classification"
+          },
+          "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_protocol_gate_inventory_must_equal_classification"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_qualification_assembler_v8",
             "name": "test_safe_relative_rejects_absolute_and_parent_paths"
           },
           "node_id": "tests/test_v013_pass25_qualification_assembler_v8.py::test_safe_relative_rejects_absolute_and_parent_paths"
@@ -11678,6 +11741,13 @@
             "name": "test_parser_rejects_trusted_human_approver_option"
           },
           "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_parser_rejects_trusted_human_approver_option"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_release_provenance_v8",
+            "name": "test_provenance_protocol_gate_inventory_rejects_classification_drift"
+          },
+          "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_provenance_protocol_gate_inventory_rejects_classification_drift"
         },
         {
           "junit": {
@@ -14410,9 +14480,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2043,
+      "count": 2053,
       "selection": "not qualification and not windows_native",
-      "sha256": "cda5d6c17129bdbacc3e00047109bb92db4350cb675693e557382f268c0e800e"
+      "sha256": "64f31ad6b81898580d812e5de1e822660cba87a5004d59dd841b807e370b4638"
     },
     "windows": {
       "additional_cases": [
@@ -14445,13 +14515,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2047,
+      "count": 2057,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "4129d1b14e25cc9688794cd3671e09c3401eaf50367c30cc5483fe455b79a9e8"
+      "sha256": "bd6229e9094ee56761ba625cc508f40260005fa54092a649732bc7f42bd6c365"
     }
   },
-  "manifest_sha256": "12b6a1699b60371dae9dce590921f07b1c11ceb7772e437846582c3078c55a49",
+  "manifest_sha256": "28956eb11e2615ced855513c16e3cc6aaf943cc8b10f923d7be2a3c9ee12d450",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

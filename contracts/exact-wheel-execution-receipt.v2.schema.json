@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deeplaw.dev/contracts/exact-wheel-execution-receipt.v2.schema.json",
   "title": "DeepLaw exact wheel execution receipt v2",
-  "description": "Path-free receipt for an isolated execution of the one retained Candidate Full wheel, bound to the candidate build, external evidence run, and qualification holdout. It is an execution identity receipt, not Candidate Full JUnit/platform evidence and not scorer isolation evidence.",
+  "description": "Path-free receipt for an isolated exact-wheel synthetic public journey, bound to the candidate build, external evidence run, and candidate-full raw inventory identity. It is an execution identity receipt, not a machine-qualification result, Candidate Full JUnit/platform evidence, or scorer isolation evidence.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -562,6 +562,7 @@
       }
     },
     "corpusBinding": {
+      "description": "The supplied SHA-256 is the retained Candidate Full raw-inventory identity used by this synthetic public journey.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -570,7 +571,7 @@
       ],
       "properties": {
         "role": {
-          "const": "qualification_holdout"
+          "const": "candidate_full"
         },
         "sha256": {
           "$ref": "#/$defs/sha256"

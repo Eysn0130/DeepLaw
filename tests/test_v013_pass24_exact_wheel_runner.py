@@ -27,7 +27,7 @@ CANDIDATE_TREE = "b" * 40
 CANDIDATE_LOCK_SHA256 = "c" * 64
 CANDIDATE_RUN_ID = 101
 EVIDENCE_RUN_ID = 202
-QUALIFICATION_HOLDOUT_SHA256 = "d" * 64
+CANDIDATE_FULL_INVENTORY_SHA256 = "d" * 64
 
 
 def execute_exact_wheel(**kwargs: Any) -> dict[str, Any]:
@@ -41,7 +41,7 @@ def execute_exact_wheel(**kwargs: Any) -> dict[str, Any]:
         expected_lock_sha256=CANDIDATE_LOCK_SHA256,
         candidate_run_id=CANDIDATE_RUN_ID,
         evidence_run_id=EVIDENCE_RUN_ID,
-        corpus_sha256=QUALIFICATION_HOLDOUT_SHA256,
+        corpus_sha256=CANDIDATE_FULL_INVENTORY_SHA256,
         **kwargs,
     )
 
@@ -252,8 +252,8 @@ def test_unique_wheel_is_installed_and_receipt_is_path_free(tmp_path: Path) -> N
         "evidence_run_id": EVIDENCE_RUN_ID,
     }
     assert receipt["corpus_binding"] == {
-        "role": "qualification_holdout",
-        "sha256": QUALIFICATION_HOLDOUT_SHA256,
+        "role": "candidate_full",
+        "sha256": CANDIDATE_FULL_INVENTORY_SHA256,
     }
     assert receipt["candidate"] == {
         "wheel_filename": wheel.name,
@@ -437,7 +437,7 @@ def test_candidate_full_v1_rejects_external_binding_arguments(tmp_path: Path) ->
             expected_lock_sha256=CANDIDATE_LOCK_SHA256,
             candidate_run_id=CANDIDATE_RUN_ID,
             evidence_run_id=EVIDENCE_RUN_ID,
-            corpus_sha256=QUALIFICATION_HOLDOUT_SHA256,
+            corpus_sha256=CANDIDATE_FULL_INVENTORY_SHA256,
         )
 
 

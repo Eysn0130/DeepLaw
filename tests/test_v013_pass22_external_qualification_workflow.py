@@ -30,15 +30,18 @@ def test_external_qualification_workflow_matches_consumer_and_never_rebuilds() -
     assert "self-hosted" in producer
     assert "macOS" in producer
     assert "deeplaw-qualification" in producer
-    assert "DEEPLAW_SEMANTIC_REFERENCE" in producer
-    assert "DEEPLAW_AGENT_ROSTER" in producer
-    assert "DEEPLAW_AGENT_CONSENSUS" in producer
-    assert "DEEPLAW_AGENT_ISOLATION" in producer
+    assert "DEEPLAW_REFERENCE_FREEZER" in producer
+    assert "DEEPLAW_REFERENCE_CASES" in producer
+    assert "DEEPLAW_REVIEWER_OUTPUT_1" in producer
+    assert "DEEPLAW_REVIEWER_PROCESS_3" in producer
+    assert "DEEPLAW_CANDIDATE_HOST_RUNNER" in producer
+    assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in producer
+    assert "DEEPLAW_OPENCODE_CREDENTIAL_BROKER" in producer
     assert "DEEPLAW_SCORER_A" in producer
     assert "DEEPLAW_SCORER_B" in producer
     assert "DEEPLAW_DETERMINISTIC_ARBITER" in producer
-    assert "DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER" in producer
-    assert 'evidence_run_id="${GITHUB_RUN_ID}"' in producer
+    assert "DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER" not in producer
+    assert '--evidence-run-id "${GITHUB_RUN_ID}"' in producer
     assert '--candidate-run-id "${CANDIDATE_RUN_ID}"' in producer
     assert '--evidence-run-id "${EVIDENCE_RUN_ID}"' in producer
     assert "external_qualification_bundle_v4" in producer

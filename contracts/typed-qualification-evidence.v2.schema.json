@@ -526,6 +526,8 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "candidate_output_source",
+        "candidate_execution_source",
         "semantic_reference_source",
         "candidate_binding_source",
         "agent_roster_source",
@@ -537,6 +539,8 @@
         "process_identity"
       ],
       "properties": {
+        "candidate_output_source": {"$ref": "#/$defs/jsonSource"},
+        "candidate_execution_source": {"$ref": "#/$defs/jsonSource"},
         "semantic_reference_source": {"$ref": "#/$defs/jsonSource"},
         "candidate_binding_source": {"$ref": "#/$defs/jsonSource"},
         "agent_roster_source": {"$ref": "#/$defs/jsonSource"},

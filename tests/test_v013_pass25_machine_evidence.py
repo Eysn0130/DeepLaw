@@ -276,9 +276,62 @@ def _fixture(root: Path) -> tuple[Path, dict[str, Any]]:
         "arbiter": arbiter,
         "payload": {},
     }
+    candidate_output_rows = [
+        {
+            "case_id": case["case_id"],
+            "observed": case["expected"],
+            "duties": case["duties"],
+            "hard_failures": [],
+            "false_authority": False,
+        }
+        for case in cases
+    ]
+    candidate_output = _seal(
+        {
+            "schema_version": "deeplaw.machine-candidate-output/v1",
+            "profile": profile,
+            "candidate": envelope["candidate_binding"],
+            "run": envelope["run_binding"],
+            "corpus": envelope["corpus"],
+            "runner": envelope["runner"],
+            "rows": candidate_output_rows,
+        }
+    )
+    candidate_output_ref, candidate_output_raw = _write(
+        root,
+        "candidate/raw-output.json",
+        candidate_output,
+    )
+    candidate_execution = _seal(
+        {
+            "schema_version": "deeplaw.machine-candidate-execution/v1",
+            "profile": profile,
+            "candidate": envelope["candidate_binding"],
+            "run": envelope["run_binding"],
+            "corpus": envelope["corpus"],
+            "runner": envelope["runner"],
+            "executable_sha256": envelope["runner"]["sha256"],
+            "process": {
+                "pid": 101,
+                "parent_pid": 100,
+                "process_tree_sha256": "e" * 64,
+                "environment_key_allowlist": ["PATH"],
+                "read_only_input_sha256s": [WHEEL, HOLDOUT],
+                "started_at": "2026-08-17T02:00:00Z",
+                "finished_at": "2026-08-17T02:01:00Z",
+                "exit_code": 0,
+            },
+            "output_sha256": _sha(candidate_output_raw),
+        }
+    )
+    candidate_execution_ref, _ = _write(
+        root,
+        "candidate/execution.json",
+        candidate_execution,
+    )
     rows_a = []
     rows_b = []
-    for case in cases:
+    for case, output_row in zip(cases, candidate_output_rows, strict=True):
         common = {
             "case_id": case["case_id"],
             "expected": case["expected"],
@@ -287,6 +340,7 @@ def _fixture(root: Path) -> tuple[Path, dict[str, Any]]:
             "hard_failures": [],
             "runner_process_id": "runner:process",
             "false_authority": False,
+            "candidate_output_row_sha256": _sha(_canonical(output_row)),
         }
         rows_a.append({**common, "scorer_process_id": "scorer-a:process"})
         rows_b.append({**common, "scorer_process_id": "scorer-b:process"})
@@ -321,6 +375,8 @@ def _fixture(root: Path) -> tuple[Path, dict[str, Any]]:
         {"receipt": _receipt(envelope, envelope["scorer"]), "rows": arbiter_rows},
     )
     envelope["payload"] = {
+        "candidate_execution_source": candidate_execution_ref,
+        "candidate_output_source": candidate_output_ref,
         "semantic_reference_source": reference_ref,
         "candidate_binding_source": binding_ref,
         "agent_roster_source": roster_ref,
@@ -376,6 +432,74 @@ def test_machine_reference_recomputes_pass_without_human_attestation(tmp_path: P
     assert result["metrics"]["case_pass_rate"] == 1.0
     assert result["metrics"]["human_attested"] is False
     assert result["metrics"]["human_authenticity"] == "not_claimed"
+
+
+def test_machine_reference_cannot_pass_without_retained_candidate_output_and_execution(
+    tmp_path: Path,
+) -> None:
+    manifest, envelope = _fixture(tmp_path)
+    envelope["payload"].pop("candidate_output_source")
+    _rewrite_manifest(manifest, envelope)
+
+    with pytest.raises(
+        TypedQualificationEvidenceError,
+        match=r"candidate (?:output|execution)",
+    ):
+        parse_typed_evidence(
+            manifest,
+            root=tmp_path,
+            expected_candidate={
+                "commit": COMMIT,
+                "tree": TREE,
+                "lock_sha256": LOCK,
+                "wheel_sha256": WHEEL,
+                "sdist_sha256": SDIST,
+            },
+            expected_workflow_run_id=17,
+            expected_corpus_sha256=HOLDOUT,
+        )
+
+
+def test_replacing_candidate_output_invalidates_old_scorer_receipts(tmp_path: Path) -> None:
+    manifest, envelope = _fixture(tmp_path)
+    output_path = tmp_path / envelope["payload"]["candidate_output_source"]["relative_path"]
+    output = json.loads(output_path.read_text(encoding="utf-8"))
+    output["rows"][0]["observed"] = {"include": [], "exclude": ["bounded_answer"]}
+    output.pop("record_sha256")
+    _seal(output)
+    output_path.write_bytes(_canonical(output))
+    output_raw = output_path.read_bytes()
+    envelope["payload"]["candidate_output_source"].update(
+        {"byte_size": len(output_raw), "sha256": _sha(output_raw)}
+    )
+    execution_path = tmp_path / envelope["payload"]["candidate_execution_source"][
+        "relative_path"
+    ]
+    execution = json.loads(execution_path.read_text(encoding="utf-8"))
+    execution["output_sha256"] = _sha(output_raw)
+    execution.pop("record_sha256")
+    _seal(execution)
+    execution_path.write_bytes(_canonical(execution))
+    execution_raw = execution_path.read_bytes()
+    envelope["payload"]["candidate_execution_source"].update(
+        {"byte_size": len(execution_raw), "sha256": _sha(execution_raw)}
+    )
+    _rewrite_manifest(manifest, envelope)
+
+    with pytest.raises(TypedQualificationEvidenceError, match="candidate output"):
+        parse_typed_evidence(
+            manifest,
+            root=tmp_path,
+            expected_candidate={
+                "commit": COMMIT,
+                "tree": TREE,
+                "lock_sha256": LOCK,
+                "wheel_sha256": WHEEL,
+                "sdist_sha256": SDIST,
+            },
+            expected_workflow_run_id=17,
+            expected_corpus_sha256=HOLDOUT,
+        )
 
 
 def test_caller_authored_pass_is_rejected_even_with_fresh_record_hash(tmp_path: Path) -> None:

@@ -80,7 +80,7 @@
         "argv_prefix": []
       },
       "required_corpus_roles": [
-        "qualification_holdout"
+        "candidate_full"
       ],
       "artifact_kinds": [
         "exact_wheel_execution"

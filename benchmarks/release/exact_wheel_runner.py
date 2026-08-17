@@ -1278,7 +1278,10 @@ def execute_exact_wheel(
         evidence_run_id = _strict_positive_run(evidence_run_id, label="evidence run id")
         if candidate_run_id == evidence_run_id:
             raise ExactWheelExecutionError("candidate and evidence run ids must be distinct")
-        _strict_sha256(corpus_sha256, label="qualification corpus SHA-256")
+        _strict_sha256(
+            corpus_sha256,
+            label="candidate-full raw inventory SHA-256",
+        )
         if (
             candidate_commit == "0" * 40
             or candidate_tree == "0" * 40
@@ -1454,7 +1457,7 @@ def execute_exact_wheel(
                         "evidence_run_id": evidence_run_id,
                     },
                     "corpus_binding": {
-                        "role": "qualification_holdout",
+                        "role": "candidate_full",
                         "sha256": corpus_sha256,
                     },
                 }

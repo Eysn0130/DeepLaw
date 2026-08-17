@@ -15,6 +15,7 @@ from benchmarks.release.assemble_commercial_qualification_v8 import (
     _safe_relative,
     _TypedRecord,
 )
+from benchmarks.release.qualification_evidence_core import require_exact_protocol_gate_ids
 
 SHA = "a" * 64
 COMMIT = "1" * 40
@@ -37,7 +38,7 @@ def _record(tmp_path: Path, *, status: str = "passed") -> _TypedRecord:
             "sdist_sha256": SHA,
         },
         "run_binding": {"run_id": "run:one", "workflow_run_id": 1},
-        "corpus": {"role": "qualification_holdout", "sha256": SHA},
+        "corpus": {"role": "candidate_full", "sha256": SHA},
         "runner": {"identity": "runner:one", "sha256": SHA},
         "scorer_panel": {
             "scorer_a": {
@@ -174,6 +175,25 @@ def test_v8_mapping_has_fourteen_core_machine_gates() -> None:
     assert _GATE_EVIDENCE_KINDS["machine_reference_isolation"] == {
         "machine_reference_scorer"
     }
+
+
+def test_protocol_gate_inventory_must_equal_classification() -> None:
+    protocol = {"gates": [{"gate_id": gate_id} for gate_id in _GATE_EVIDENCE_KINDS]}
+    require_exact_protocol_gate_ids(
+        protocol,
+        expected_gate_ids=list(_GATE_EVIDENCE_KINDS),
+        error_type=CommercialQualificationAssemblerError,
+    )
+    protocol["gates"][-1]["gate_id"] = "classification_only_gate"
+    with pytest.raises(
+        CommercialQualificationAssemblerError,
+        match="differs from classification",
+    ):
+        require_exact_protocol_gate_ids(
+            protocol,
+            expected_gate_ids=list(_GATE_EVIDENCE_KINDS),
+            error_type=CommercialQualificationAssemblerError,
+        )
 
 
 def test_execution_identity_is_path_free() -> None:

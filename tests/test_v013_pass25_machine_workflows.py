@@ -78,12 +78,15 @@ def test_external_interface_is_machine_only_and_has_no_legacy_human_or_singular_
     ):
         assert forbidden not in workflow
     for required in (
-        "DEEPLAW_SEMANTIC_REFERENCE",
-        "DEEPLAW_AGENT_ROSTER",
-        "DEEPLAW_AGENT_CONSENSUS",
-        "DEEPLAW_AGENT_ISOLATION",
-        "DEEPLAW_QUALIFICATION_HOLDOUT",
-        "DEEPLAW_FINAL_BLIND_HOLDOUT",
+        "DEEPLAW_REFERENCE_FREEZER",
+        "DEEPLAW_REFERENCE_CASES",
+        "DEEPLAW_REVIEWER_OUTPUT_1",
+        "DEEPLAW_REVIEWER_OUTPUT_2",
+        "DEEPLAW_REVIEWER_OUTPUT_3",
+        "DEEPLAW_CANDIDATE_HOST_RUNNER",
+        "DEEPLAW_CODEX_CREDENTIAL_BROKER",
+        "DEEPLAW_OPENCODE_CREDENTIAL_BROKER",
+        "DEEPLAW_EVIDENCE_ASSEMBLER",
         "DEEPLAW_SCORER_A",
         "DEEPLAW_SCORER_B",
         "DEEPLAW_DETERMINISTIC_ARBITER",
@@ -123,50 +126,40 @@ def test_external_requires_distinct_executable_scorer_a_b_and_arbiter_hashes() -
     assert 'test "${scorer_a_sha256}" != "${scorer_b_sha256}"' in workflow
     assert 'test "${scorer_a_sha256}" != "${arbiter_sha256}"' in workflow
     assert 'test "${scorer_b_sha256}" != "${arbiter_sha256}"' in workflow
-    assert "--scorer-a \"${DEEPLAW_SCORER_A}\"" in workflow
-    assert "--scorer-b \"${DEEPLAW_SCORER_B}\"" in workflow
-    assert "--deterministic-arbiter \"${DEEPLAW_DETERMINISTIC_ARBITER}\"" in workflow
-    assert "--scorer-a-sha256" in workflow
-    assert "--scorer-b-sha256" in workflow
-    assert "--arbiter-sha256" in workflow
-    assert "--runner-sha256" in workflow
+    assert '"${DEEPLAW_SCORER_A}" \\' in workflow
+    assert '"${DEEPLAW_SCORER_B}" \\' in workflow
+    assert '"${DEEPLAW_DETERMINISTIC_ARBITER}" \\' in workflow
+    assert '--process-receipt "${scorer_a}/process.json"' in workflow
+    assert '--process-receipt "${scorer_b}/process.json"' in workflow
+    assert '--process-receipt "${arbitration}/process.json"' in workflow
     assert "exact_wheel_receipt_sha256" in workflow
     assert "external runner replaced the exact-wheel execution receipt" in workflow
 
 
-def test_external_runner_binds_all_machine_inputs_and_two_available_run_ids() -> None:
+def test_external_candidate_runner_cannot_receive_reference_scorer_or_dotenv_domains() -> None:
     workflow = _workflow("external-qualification-evidence.yml")
-
-    for argument in (
-        "--candidate-full-raw-root",
-        "--verified-dist",
-        "--exact-wheel-receipt",
-        "--active-qualification",
+    forbidden_tokens = {
         "--semantic-reference",
         "--agent-roster",
         "--agent-consensus",
         "--agent-isolation",
-        "--qualification-holdout",
-        "--final-blind-holdout",
-        "--candidate-run-id",
-        "--evidence-run-id",
-        "--candidate-commit",
-        "--candidate-tree",
-        "--expected-lock-sha256",
-        "--corpus-sha256",
-        "--exact-wheel-runner-identity",
-        "--exact-wheel-runner-sha256",
-        "--codex-version",
-        "--codex-sha256",
-        "--codex-model",
-        "--codex-reasoning-effort max",
-        "--opencode-version",
-        "--opencode-source-commit",
-        "--opencode-config-selector",
-        "--opencode-response-model-id",
+        "--scorer-a",
+        "--scorer-b",
+        "--deterministic-arbiter",
         "--dotenv",
-    ):
-        assert argument in workflow
+        "DEEPLAW_OPENCODE_DOTENV",
+    }
+    before_mode, after_mode = workflow.split("--mode non-host", 1)
+    candidate_invocation = before_mode.rsplit("          env -i", 1)[1]
+    candidate_invocation += "--mode non-host"
+    candidate_invocation += after_mode.split("          env -i", 1)[0]
+    assert "--candidate-full-raw-root" in candidate_invocation
+    assert "--verified-dist" in candidate_invocation
+    assert all(token not in candidate_invocation for token in forbidden_tokens)
+    assert '"${DEEPLAW_REFERENCE_FREEZER}" \\' in workflow
+    assert '--candidate-visible false' in workflow
+    assert '"${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \\' in workflow
+    assert '"${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \\' in workflow
     assert "benchmarks.release.external_qualification_bundle_v4" in workflow
     assert "--qualification-run-id" not in workflow
     assert "python -m build" not in workflow
@@ -174,13 +167,15 @@ def test_external_runner_binds_all_machine_inputs_and_two_available_run_ids() ->
     assert "hatch build" not in workflow
 
 
-def test_external_keeps_exact_host_pins_and_only_login_status_auth_check() -> None:
+def test_external_keeps_exact_host_pins_and_delegates_auth_to_brokers() -> None:
     workflow = _workflow("external-qualification-evidence.yml")
 
     assert 'codex-cli 0.148.0-alpha.9' in workflow
     assert "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f" in workflow
     assert "gpt-5.6-luna" in workflow
-    assert 'login status' in workflow
+    assert 'login status' not in workflow
+    assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in workflow
+    assert "DEEPLAW_OPENCODE_CREDENTIAL_BROKER" in workflow
     assert '1.18.16' in workflow
     assert 'a3647eb025c7615159d417dcc49fc39fdaeba65b' in workflow
     assert 'deepseek/deepseek-v4-flash' in workflow

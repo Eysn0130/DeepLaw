@@ -11,16 +11,42 @@ caller-authored status facts, or a trusted-human descriptor as an input.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import math
 import re
 import sys
 from collections.abc import Mapping, Sequence
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
+
+from benchmarks.release.qualification_evidence_core import (
+    canonical_json_bytes as _core_canonical_json_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    digest_without as _core_digest_without,
+)
+from benchmarks.release.qualification_evidence_core import (
+    regular_file_bytes as _core_regular_file_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    require_exact_protocol_gate_ids as _core_require_exact_protocol_gate_ids,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_asset_file as _core_safe_asset_file,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_relative_posix as _core_safe_relative_posix,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_root_directory as _core_safe_root_directory,
+)
+from benchmarks.release.qualification_evidence_core import (
+    sha256_bytes as _core_sha256_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    strict_json_bytes as _core_strict_json_bytes,
+)
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 CONTRACTS = REPOSITORY / "contracts"
@@ -141,6 +167,8 @@ _HOST_MODELS = {"codex": "gpt-5.6-luna", "opencode": "deepseek-v4-flash"}
 def _expected_gate_corpus_roles(gate_id: str) -> list[str]:
     if _GATE_EVIDENCE_KINDS.get(gate_id, frozenset()) <= _CANDIDATE_KINDS:
         return ["candidate_full"]
+    if gate_id == "canonical_integrity":
+        return ["candidate_full"]
     if gate_id == "machine_reference_isolation":
         return ["qualification_holdout", "final_blind"]
     return ["qualification_holdout"]
@@ -245,22 +273,13 @@ def _check_projection(value: Any, *, label: str, depth: int = 0) -> None:
 
 
 def _parse_json(raw: bytes, *, label: str, project: bool = True) -> dict[str, Any]:
-    if not isinstance(raw, bytes) or not raw:
-        _fail(f"{label} is empty")
-    try:
-        value = json.loads(
-            raw.decode("utf-8", errors="strict"),
-            object_pairs_hook=_reject_pairs,
-            parse_constant=_reject_constant,
-            parse_float=_finite_float,
-        )
-    except (UnicodeError, ValueError, TypeError, json.JSONDecodeError) as error:
-        raise ReleaseProvenanceV8Error(f"{label} must be strict UTF-8 JSON") from error
-    if not isinstance(value, dict):
-        _fail(f"{label} must be a JSON object")
-    if project:
-        _check_projection(value, label=label)
-    return value
+    return _core_strict_json_bytes(
+        raw,
+        label=label,
+        error_type=ReleaseProvenanceV8Error,
+        projection=(lambda value: _check_projection(value, label=label)) if project else None,
+        require_object=True,
+    )
 
 
 def _has_symlink_component(path: Path) -> bool:
@@ -276,23 +295,12 @@ def _has_symlink_component(path: Path) -> bool:
 
 
 def _regular_file(path: Path, *, label: str, max_bytes: int = _MAX_FILE_BYTES) -> bytes:
-    selected = path.expanduser()
-    if _has_symlink_component(selected) or selected.is_symlink():
-        _fail(f"{label} must be a regular non-symlink file")
-    try:
-        resolved = selected.resolve(strict=True)
-        if resolved.is_symlink() or not resolved.is_file():
-            _fail(f"{label} must be a regular file")
-        size = resolved.stat().st_size
-        if not 1 <= size <= max_bytes:
-            _fail(f"{label} exceeds its byte bound")
-        raw = resolved.read_bytes()
-    except ReleaseProvenanceV8Error:
-        raise
-    except OSError as error:
-        raise ReleaseProvenanceV8Error(f"{label} is unavailable") from error
-    if len(raw) != size:
-        _fail(f"{label} changed while it was read")
+    _resolved, raw = _core_regular_file_bytes(
+        path,
+        label=label,
+        max_bytes=max_bytes,
+        error_type=ReleaseProvenanceV8Error,
+    )
     return raw
 
 
@@ -306,73 +314,44 @@ def _exact_wheel_runner_identity() -> dict[str, str]:
 
 
 def _safe_root(path: Path, *, label: str) -> Path:
-    selected = path.expanduser()
-    if _has_symlink_component(selected) or selected.is_symlink():
-        _fail(f"{label} must be a regular non-symlink directory")
-    try:
-        resolved = selected.resolve(strict=True)
-        if resolved.is_symlink() or not resolved.is_dir():
-            _fail(f"{label} must be a regular directory")
-    except ReleaseProvenanceV8Error:
-        raise
-    except OSError as error:
-        raise ReleaseProvenanceV8Error(f"{label} is unavailable") from error
-    return resolved
+    return _core_safe_root_directory(
+        path,
+        label=label,
+        error_type=ReleaseProvenanceV8Error,
+    )
 
 
 def _safe_relative(value: Any, *, label: str) -> str:
-    if not isinstance(value, str) or not value or "\\" in value or "\x00" in value:
-        _fail(f"{label} is not a safe relative path")
-    parsed = PurePosixPath(value)
-    if (
-        parsed.is_absolute()
-        or not parsed.parts
-        or any(part in {"", ".", ".."} for part in parsed.parts)
-        or ":" in parsed.parts[0]
-        or len(value) > 512
-    ):
-        _fail(f"{label} is not a safe relative path")
-    return parsed.as_posix()
+    return _core_safe_relative_posix(
+        value,
+        label=label,
+        error_type=ReleaseProvenanceV8Error,
+    )
 
 
 def _safe_asset(root: Path, relative: Any, *, label: str) -> Path:
-    name = _safe_relative(relative, label=f"{label} path")
-    selected = root.joinpath(*name.split("/"))
-    cursor = root
-    try:
-        for part in name.split("/"):
-            cursor = cursor / part
-            if cursor.is_symlink():
-                _fail(f"{label} resolves through a symbolic link")
-        resolved = selected.resolve(strict=True)
-    except ReleaseProvenanceV8Error:
-        raise
-    except OSError as error:
-        raise ReleaseProvenanceV8Error(f"{label} is unavailable") from error
-    if selected.is_symlink() or not selected.is_file() or not resolved.is_relative_to(root):
-        _fail(f"{label} is outside its root")
-    return selected
+    return _core_safe_asset_file(
+        root,
+        relative,
+        label=label,
+        error_type=ReleaseProvenanceV8Error,
+    )
 
 
 def _sha256(raw: bytes) -> str:
-    return hashlib.sha256(raw).hexdigest()
+    return _core_sha256_bytes(raw)
 
 
 def _canonical(value: Any) -> bytes:
-    try:
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode("utf-8")
-    except (TypeError, ValueError, UnicodeError) as error:
-        raise ReleaseProvenanceV8Error("value is not canonical JSON") from error
+    return _core_canonical_json_bytes(value, error_type=ReleaseProvenanceV8Error)
 
 
 def _canonical_digest(value: Mapping[str, Any], *, excluded: str) -> str:
-    return _sha256(_canonical({key: item for key, item in value.items() if key != excluded}))
+    return _core_digest_without(
+        value,
+        field=excluded,
+        error_type=ReleaseProvenanceV8Error,
+    )
 
 
 def _record_digest(value: Mapping[str, Any], *, field: str = "record_sha256") -> str:
@@ -682,6 +661,7 @@ def _parse_typed_record(
     evidence_run_id: int,
     external: Mapping[str, str],
     binding: Mapping[str, Any],
+    candidate_inventory_sha256: str,
 ) -> _TypedRecord:
     from benchmarks.release import typed_qualification_evidence as typed
 
@@ -718,6 +698,9 @@ def _parse_typed_record(
     if kind in _CANDIDATE_KINDS:
         if role != "candidate_full":
             _fail("Candidate Full typed evidence has the wrong corpus role")
+    elif kind == "exact_wheel_execution":
+        if role != "candidate_full" or corpus_sha != candidate_inventory_sha256:
+            _fail("exact-wheel evidence does not bind Candidate Full raw inventory")
     elif role not in _EXTERNAL_CORPUS_ROLES:
         _fail("external typed evidence has the wrong corpus role")
     elif corpus_sha != external["qualification_holdout_sha256"] and corpus_sha != external["final_blind_holdout_sha256"]:
@@ -1458,6 +1441,8 @@ def _validate_supply_chain(
 def _protocol_binding(
     root: Path,
     active: Mapping[str, Any],
+    *,
+    core_gate_ids: Sequence[str],
 ) -> dict[str, Any]:
     active_ref = _mapping(active.get("protocol_binding"), label="active protocol binding")
     relative = _safe_relative(active_ref.get("relative_path"), label="qualification protocol path")
@@ -1470,6 +1455,11 @@ def _protocol_binding(
             protocol, _ = _load_json(path, label="qualification protocol", schema="v013-qualification-protocol.v2.schema.json")
             if protocol.get("profile") != _PROFILE:
                 _fail("qualification protocol is not machine-only")
+            _core_require_exact_protocol_gate_ids(
+                protocol,
+                expected_gate_ids=tuple(core_gate_ids),
+                error_type=ReleaseProvenanceV8Error,
+            )
             return {
                 "protocol_id": protocol.get("protocol_id"),
                 "protocol_sha256": _sha256(raw),
@@ -1651,6 +1641,9 @@ def validate_release_provenance(
                 evidence_run_id=evidence_run,
                 external=expected_external,
                 binding=binding,
+                candidate_inventory_sha256=bundle[
+                    "candidate_full_raw_inventory_sha256"
+                ],
             ))
     if len(records) != sum(_REQUIRED_TYPED_COUNTS.values()):
         _fail("typed evidence record count differs")
@@ -1672,7 +1665,7 @@ def validate_release_provenance(
             record.manifest.get("scorer"),
             expected_identities["scorer"],
         )
-    protocol_binding = _protocol_binding(root, active)
+    protocol_binding = _protocol_binding(root, active, core_gate_ids=core_gate_ids)
     _validate_active(
         active,
         candidate=candidate,

@@ -8,7 +8,7 @@
     "protocol_id": "deeplaw-v013-source-candidate-qualification",
     "schema_version": "deeplaw.v013-qualification-protocol/v2",
     "relative_path": "benchmarks/v013/qualification-protocol-v2.json",
-    "sha256": "4f094b312131c87aee920ebeedfd96a24f1a2719c2b158cfc8fa6b507b1c5282"
+    "sha256": "4c68211923dd9b876cc201c55c119637c3e379c0177b6a7b617205766ddf5cff"
   },
   "candidate_binding": {
     "package_version": "0.12.0",

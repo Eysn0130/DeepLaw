@@ -10,6 +10,7 @@ from jsonschema import Draft202012Validator, ValidationError
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v8.json"
+PROTOCOL = REPOSITORY / "benchmarks/v013/qualification-protocol-v2.json"
 SCHEMA = REPOSITORY / "contracts/v013-release-gate-classification.v8.schema.json"
 HISTORICAL_CLASSIFICATION = (
     REPOSITORY / "benchmarks/release/v013-gate-classification-v7.json"
@@ -125,6 +126,15 @@ def test_v8_keeps_fourteen_core_gates_but_replaces_human_gate() -> None:
     assert "human_gold_scorer" not in json.dumps(_load(CLASSIFICATION), sort_keys=True)
 
 
+def test_protocol_v2_and_classification_v8_use_one_canonical_core_gate_set() -> None:
+    protocol = _load(PROTOCOL)
+    protocol_core = {row["gate_id"] for row in protocol["gates"]}
+    classification = _load(CLASSIFICATION)
+    classification_core = set(classification["categories"][0]["gate_ids"])
+
+    assert protocol_core == classification_core == CORE_GATE_IDS
+
+
 def test_v8_core_uses_typed_v2_and_gate_result_v4() -> None:
     gates = _gates(_load(CLASSIFICATION))
     for gate_id, artifact_kind in EXPECTED_ARTIFACTS.items():
@@ -164,6 +174,7 @@ def test_only_machine_reference_gate_consumes_final_blind() -> None:
         if gate_id == "machine_reference_isolation":
             assert roles == ["qualification_holdout", "final_blind"]
         elif gate_id in {
+            "canonical_integrity",
             "migration_recovery",
             "supported_platforms",
             "reproducible_supply_chain",
@@ -171,6 +182,19 @@ def test_only_machine_reference_gate_consumes_final_blind() -> None:
             assert roles == ["candidate_full"]
         else:
             assert roles == ["qualification_holdout"]
+
+
+def test_exact_wheel_execution_is_candidate_full_identity_not_holdout_execution() -> None:
+    classification = _load(CLASSIFICATION)
+    canonical = _gates(classification)["canonical_integrity"]
+    receipt_schema = _load(
+        REPOSITORY / "contracts/exact-wheel-execution-receipt.v2.schema.json"
+    )
+
+    assert canonical["required_corpus_roles"] == ["candidate_full"]
+    assert receipt_schema["$defs"]["corpusBinding"]["properties"]["role"] == {
+        "const": "candidate_full"
+    }
 
 
 def test_v8_freezes_exact_host_pins() -> None:

@@ -370,7 +370,7 @@
       "machine_evidence_allowed": true
     },
     {
-      "gate_id": "machine_review_isolation",
+      "gate_id": "machine_reference_isolation",
       "evidence_kind": "machine_review_panel",
       "status": "not_executed",
       "human_attestation_required": false,

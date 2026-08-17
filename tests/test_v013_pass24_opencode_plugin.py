@@ -14,6 +14,7 @@ PLUGIN = REPOSITORY / "adapters" / "opencode"
 SOURCE_PATH = PLUGIN / "plugins" / "deeplaw-native.ts"
 MANIFEST_PATH = PLUGIN / "manifest.json"
 README_PATH = PLUGIN / "README.md"
+CONTEXT_BRIDGE_PATH = PLUGIN / "context-bridge.json"
 BUN = shutil.which("bun")
 
 
@@ -53,6 +54,18 @@ def test_manifest_and_readme_freeze_exact_candidate_identity() -> None:
         "candidate seam",
     ):
         assert required in readme
+
+
+def test_context_bridge_uses_the_exact_opencode_pin_and_marks_compaction_experimental() -> None:
+    bridge = json.loads(CONTEXT_BRIDGE_PATH.read_text(encoding="utf-8"))
+    assert bridge["exact_upstream"] == {
+        "name": "OpenCode",
+        "version": "1.18.16",
+        "commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+        "plugin_api_status": "version_pinned_experimental",
+        "compaction_hook_stability": "experimental_exact_version_only",
+        "stable_active_note_preview_promote": False,
+    }
 
 
 def test_plugin_source_is_thin_and_does_not_touch_prompt_parts_or_bind() -> None:

@@ -748,9 +748,10 @@ def host_bridge_contract(host: HostFrontend) -> dict[str, Any]:
             "host_surface": "native_mcp_and_agent_guidance",
             "exact_upstream": {
                 "name": "OpenCode",
-                "version": "v2-plugin-api",
-                "commit": "unversioned",
-                "plugin_api_status": "beta",
+                "version": "1.18.16",
+                "commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+                "plugin_api_status": "version_pinned_experimental",
+                "compaction_hook_stability": "experimental_exact_version_only",
                 "stable_active_note_preview_promote": False,
             },
             "ephemeral": True,

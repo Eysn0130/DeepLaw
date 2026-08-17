@@ -10,7 +10,6 @@ sets ``release_ready`` or a product claim.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import os
@@ -19,11 +18,33 @@ import stat
 import sys
 from collections import Counter
 from collections.abc import Mapping
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from defusedxml import ElementTree as DefusedET
 from jsonschema import Draft202012Validator, FormatChecker
+
+from benchmarks.release.qualification_evidence_core import (
+    canonical_json_bytes as _core_canonical_json_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    digest_without as _core_digest_without,
+)
+from benchmarks.release.qualification_evidence_core import (
+    regular_file_bytes as _core_regular_file_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_relative_posix as _core_safe_relative_posix,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_root_directory as _core_safe_root_directory,
+)
+from benchmarks.release.qualification_evidence_core import (
+    sha256_bytes as _core_sha256_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    strict_json_bytes as _core_strict_json_bytes,
+)
 
 MAX_FILES = 10_000
 MAX_FILE_BYTES = 64 * 1024 * 1024
@@ -43,6 +64,9 @@ CANDIDATE_BINDING_SCHEMA = (
     REPOSITORY / "contracts/candidate-gold-binding-receipt.v2.schema.json"
 )
 SEMANTIC_REFERENCE_SCHEMA = REPOSITORY / "contracts/semantic-machine-reference.v1.schema.json"
+MACHINE_REVIEWER_OUTPUT_SCHEMA = (
+    REPOSITORY / "contracts/machine-reviewer-output.v1.schema.json"
+)
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT = re.compile(r"^[0-9a-f]{40}$")
@@ -130,6 +154,8 @@ _JSON_KINDS = frozenset(
         "scale_report",
         "retained_supply_chain",
         "machine_reference_scorer",
+        "machine_candidate_output",
+        "machine_candidate_execution",
         "sbom",
         "openvex",
         "licenses",
@@ -142,6 +168,7 @@ _JSON_KINDS = frozenset(
         "agent_roster",
         "agent_consensus",
         "agent_isolation",
+        "machine_reviewer_output",
         "sanitized_supporting_receipt",
     }
 )
@@ -181,27 +208,21 @@ def _error(message: str) -> None:
 
 
 def _sha256_bytes(raw: bytes) -> str:
-    return hashlib.sha256(raw).hexdigest()
+    return _core_sha256_bytes(raw)
 
 
 def _canonical_json(value: Any) -> str:
-    try:
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        )
-    except (TypeError, ValueError, UnicodeError) as error:
-        raise ExternalQualificationBundleV4Error("value is not canonical JSON") from error
+    return _core_canonical_json_bytes(
+        value,
+        error_type=ExternalQualificationBundleV4Error,
+    ).decode("utf-8")
 
 
 def _record_sha256(value: Mapping[str, Any]) -> str:
-    return _sha256_bytes(
-        _canonical_json(
-            {key: item for key, item in value.items() if key != "record_sha256"}
-        ).encode("utf-8")
+    return _core_digest_without(
+        value,
+        field="record_sha256",
+        error_type=ExternalQualificationBundleV4Error,
     )
 
 
@@ -264,20 +285,12 @@ def _check_json_projection(value: Any, *, depth: int = 0) -> None:
 
 
 def _strict_json_bytes(raw: bytes, *, label: str = "JSON") -> Any:
-    if not isinstance(raw, bytes) or not raw:
-        _error(f"{label} is empty")
-    try:
-        value = json.loads(
-            raw.decode("utf-8", errors="strict"),
-            object_pairs_hook=_reject_pairs,
-            parse_constant=_reject_constant,
-        )
-    except ExternalQualificationBundleV4Error:
-        raise
-    except (UnicodeError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise ExternalQualificationBundleV4Error(f"{label} must be strict UTF-8 JSON") from error
-    _check_json_projection(value)
-    return value
+    return _core_strict_json_bytes(
+        raw,
+        label=label,
+        error_type=ExternalQualificationBundleV4Error,
+        projection=_check_json_projection,
+    )
 
 
 def _has_symlink_component(path: Path) -> bool:
@@ -293,25 +306,12 @@ def _has_symlink_component(path: Path) -> bool:
 
 
 def _regular_path(path: Path, *, label: str, max_bytes: int) -> tuple[Path, bytes]:
-    selected = path.expanduser()
-    if _has_symlink_component(selected) or selected.is_symlink():
-        _error(f"{label} must be a regular non-symlink file")
-    try:
-        resolved = selected.resolve(strict=True)
-        mode = os.lstat(resolved).st_mode
-        if not stat.S_ISREG(mode):
-            _error(f"{label} must be a regular non-symlink file")
-        size = os.stat(resolved).st_size
-        if not 1 <= size <= max_bytes:
-            _error(f"{label} exceeds its byte bound")
-        raw = resolved.read_bytes()
-    except ExternalQualificationBundleV4Error:
-        raise
-    except OSError as error:
-        raise ExternalQualificationBundleV4Error(f"{label} is unavailable") from error
-    if len(raw) != size:
-        _error(f"{label} changed while it was read")
-    return resolved, raw
+    return _core_regular_file_bytes(
+        path,
+        label=label,
+        max_bytes=max_bytes,
+        error_type=ExternalQualificationBundleV4Error,
+    )
 
 
 def _exact_wheel_runner_identity() -> dict[str, str]:
@@ -327,31 +327,29 @@ def _exact_wheel_runner_identity() -> dict[str, str]:
 
 
 def _safe_root(root: Path) -> Path:
-    selected = root.expanduser()
-    if _has_symlink_component(selected) or selected.is_symlink():
-        _error("external bundle root must be a regular non-symlink directory")
     try:
-        resolved = selected.resolve(strict=True)
-        mode = os.lstat(resolved).st_mode
-    except OSError as error:
+        return _core_safe_root_directory(
+            root,
+            label="external bundle root",
+            error_type=ExternalQualificationBundleV4Error,
+        )
+    except ExternalQualificationBundleV4Error as error:
         raise ExternalQualificationBundleV4Error("external bundle root is unavailable") from error
-    if not stat.S_ISDIR(mode):
-        _error("external bundle root must be a regular non-symlink directory")
-    return resolved
 
 
 def _safe_relative_path(value: Any) -> str:
     if not isinstance(value, str) or not _SAFE_PATH.fullmatch(value):
         _error("file reference path is not a safe relative POSIX path")
-    if value.startswith("/") or re.match(r"^[A-Za-z]:", value) or "\\" in value:
-        _error("file reference path is not a safe relative POSIX path")
-    parts = value.split("/")
-    if any(part in {"", ".", ".."} for part in parts):
-        _error("file reference path is not a safe relative POSIX path")
-    parsed = PurePosixPath(value)
-    if parsed.is_absolute() or parsed.parts != tuple(parts):
-        _error("file reference path is not a safe relative POSIX path")
-    return value
+    try:
+        return _core_safe_relative_posix(
+            value,
+            label="file reference path",
+            error_type=ExternalQualificationBundleV4Error,
+        )
+    except ExternalQualificationBundleV4Error as error:
+        raise ExternalQualificationBundleV4Error(
+            "file reference path is not a safe relative POSIX path"
+        ) from error
 
 
 def _forbidden_filename(relative_path: str) -> None:
@@ -1020,6 +1018,7 @@ def _validate_typed(
     actual: Mapping[str, bytes],
     external: Mapping[str, Any],
     candidate_binding: Mapping[str, Any],
+    candidate_inventory_sha256: str,
 ) -> tuple[str | None, str | None, str | None]:
     if not isinstance(value, Mapping):
         _error("typed evidence must be an object")
@@ -1049,8 +1048,16 @@ def _validate_typed(
         _error("typed evidence corpus binding is missing")
     if kind in _CANDIDATE_RUN_KINDS and corpus.get("role") != "candidate_full":
         _error("candidate typed evidence corpus role differs")
+    if kind == "exact_wheel_execution" and corpus.get("role") != "candidate_full":
+        _error("exact-wheel typed evidence corpus role differs")
+    if (
+        kind == "exact_wheel_execution"
+        and corpus.get("sha256") != candidate_inventory_sha256
+    ):
+        _error("exact-wheel typed evidence does not bind Candidate Full raw inventory")
     if (
         kind not in _CANDIDATE_RUN_KINDS
+        and kind != "exact_wheel_execution"
         and corpus.get("role") not in {"qualification_holdout", "final_blind"}
     ):
         _error("qualification typed evidence corpus role differs")
@@ -1100,6 +1107,10 @@ def _reference_index(
         if relative == BUNDLE_MANIFEST_NAME or relative in by_path:
             _error("bundle file inventory contains a duplicate path")
         if relative not in actual:
+            if (
+                reference.get("evidence_kind") == "machine_reviewer_output"
+            ):
+                _error("reviewer output is missing from the retained bundle")
             _error("bundle manifest references a missing file")
         size = reference.get("byte_size")
         if isinstance(size, bool) or not isinstance(size, int) or size != len(actual[relative]):
@@ -1117,7 +1128,12 @@ def _reference_index(
             _error("bundle file reference is invalid")
         mode = _file_policy(kind, media)
         if mode == "json":
-            value = _strict_json_bytes(actual[relative], label="bundle JSON evidence")
+            label = (
+                "reviewer output"
+                if kind == "machine_reviewer_output"
+                else "bundle JSON evidence"
+            )
+            value = _strict_json_bytes(actual[relative], label=label)
             typed_values.append((kind, value))
         elif mode == "xml":
             _check_text(actual[relative], xml=True)
@@ -1130,6 +1146,97 @@ def _reference_index(
     # Validation of candidate binding and semantic reference needs the complete
     # source index, so callers perform the typed pass after this function.
     return by_path, kind_counts
+
+
+def _validate_reviewer_outputs(
+    reviewers: list[Any],
+    *,
+    reference_id: str,
+    review: Mapping[str, Any],
+    references: Mapping[str, Mapping[str, Any]],
+    actual: Mapping[str, bytes],
+) -> tuple[list[str], bool, list[str]]:
+    """Reopen every retained reviewer output and derive the consensus inputs.
+
+    The semantic reference and its consensus receipt are caller-provided
+    bindings.  They are therefore not sufficient evidence on their own: each
+    ``output_sha256`` must resolve to one retained raw output, and that output
+    must independently bind the reviewer identity and frozen review inputs.
+    Only the raw bytes are used to derive the returned output digests,
+    unanimity, and disagreement set.
+    """
+
+    schema = _load_schema(
+        MACHINE_REVIEWER_OUTPUT_SCHEMA,
+        label="machine reviewer output contract",
+    )
+    output_paths: set[str] = set()
+    agent_ids: set[str] = set()
+    process_ids: set[str] = set()
+    output_ids: set[str] = set()
+    decisions: list[str] = []
+    disagreements: set[str] = set()
+    output_sha256s: list[str] = []
+    for reviewer in reviewers:
+        if not isinstance(reviewer, Mapping):
+            _error("reviewer output identity binding is invalid")
+        expected_output_sha256 = reviewer.get("output_sha256")
+        if not isinstance(expected_output_sha256, str) or not _SHA256.fullmatch(
+            expected_output_sha256
+        ):
+            _error("reviewer output digest is invalid")
+        paths = [
+            path
+            for path, reference in references.items()
+            if reference.get("evidence_kind") == "machine_reviewer_output"
+            and reference.get("sha256") == expected_output_sha256
+        ]
+        if len(paths) != 1:
+            _error("reviewer output is not retained exactly once")
+        path = paths[0]
+        if path in output_paths:
+            _error("reviewer output identities are not distinct")
+        output_paths.add(path)
+        raw = actual[path]
+        try:
+            output = _strict_json_bytes(raw, label="reviewer output")
+        except ExternalQualificationBundleV4Error:
+            raise
+        except Exception as error:
+            raise ExternalQualificationBundleV4Error("reviewer output is not parseable") from error
+        if not isinstance(output, Mapping):
+            _error("reviewer output must be an object")
+        _validate_schema(output, schema, label="reviewer output")
+        _check_record(output, label="reviewer output")
+        raw_digest = _sha256_bytes(raw)
+        if raw_digest != expected_output_sha256:
+            _error("reviewer output digest differs from semantic reviewer")
+        expected_identity = {
+            "reference_id": reference_id,
+            "agent_id": reviewer.get("agent_id"),
+            "model_id": reviewer.get("model_id"),
+            "rubric_sha256": review.get("rubric_sha256"),
+            "source_corpus_sha256": review.get("source_corpus_sha256"),
+            "process_identity_sha256": reviewer.get("process_identity_sha256"),
+        }
+        if any(output.get(field) != value for field, value in expected_identity.items()):
+            _error("reviewer output identity or input hash binding differs")
+        agent_id = output["agent_id"]
+        process_id = output["process_identity_sha256"]
+        if agent_id in agent_ids or process_id in process_ids:
+            _error("reviewer output identities are not distinct")
+        agent_ids.add(agent_id)
+        process_ids.add(process_id)
+        output_ids.add(raw_digest)
+        decisions.append(output["decision"])
+        disagreements.update(output["disagreements"])
+        output_sha256s.append(raw_digest)
+    if len(output_ids) != len(output_sha256s):
+        _error("reviewer output identities are not distinct")
+    derived_disagreements = sorted(disagreements)
+    unanimous = bool(decisions) and all(decision == "approved" for decision in decisions)
+    unanimous = unanimous and not derived_disagreements
+    return output_sha256s, unanimous, derived_disagreements
 
 
 def _validate_auxiliary_sources(
@@ -1169,6 +1276,13 @@ def _validate_auxiliary_sources(
         auxiliary[kind] = (source, digest)
     review = semantic["agent_review"]
     reviewers = review["reviewers"]
+    reviewer_output_sha256s, unanimous, disagreements = _validate_reviewer_outputs(
+        reviewers,
+        reference_id=semantic["reference_id"],
+        review=review,
+        references=references,
+        actual=actual,
+    )
     roster = auxiliary["agent_roster"][0]
     if (
         set(roster)
@@ -1201,13 +1315,14 @@ def _validate_auxiliary_sources(
         or consensus.get("roster_sha256") != review["roster_sha256"]
         or consensus.get("rubric_sha256") != review["rubric_sha256"]
         or consensus.get("source_corpus_sha256") != review["source_corpus_sha256"]
-        or consensus.get("reviewer_output_sha256s")
-        != [row["output_sha256"] for row in reviewers]
-        or consensus.get("unanimous") is not True
-        or consensus.get("disagreements") != []
+        or consensus.get("reviewer_output_sha256s") != reviewer_output_sha256s
+        or consensus.get("unanimous") is not unanimous
+        or unanimous is not True
+        or consensus.get("disagreements") != disagreements
+        or disagreements != []
         or auxiliary["agent_consensus"][1] != review["consensus_sha256"]
     ):
-        _error("agent consensus does not bind the semantic reference")
+        _error("agent consensus does not bind retained reviewer output decisions")
     isolation = auxiliary["agent_isolation"][0]
     isolation_true = {
         "reviewer_processes_distinct",
@@ -1252,10 +1367,15 @@ def _validate_auxiliary_sources(
             ("process_identity_sha256", "reviewer process receipt"),
             ("output_sha256", "reviewer output"),
         ):
+            evidence_kind = (
+                "machine_reviewer_output"
+                if field == "output_sha256"
+                else "sanitized_supporting_receipt"
+            )
             matches = [
                 path
                 for path, ref in references.items()
-                if ref.get("evidence_kind") == "sanitized_supporting_receipt"
+                if ref.get("evidence_kind") == evidence_kind
                 and ref.get("sha256") == reviewer[field]
             ]
             if len(matches) != 1:
@@ -1372,6 +1492,9 @@ def validate_external_bundle(
             actual=actual,
             external=manifest["external_inputs"],
             candidate_binding=candidate_binding,
+            candidate_inventory_sha256=manifest[
+                "candidate_full_raw_inventory_sha256"
+            ],
         )
         if kind == "machine_reference_scorer":
             machine_paths.add(path)
@@ -1523,6 +1646,7 @@ def main(argv: list[str] | None = None) -> int:
 __all__ = [
     "BUNDLE_MANIFEST_NAME",
     "BUNDLE_MANIFEST_SCHEMA",
+    "MACHINE_REVIEWER_OUTPUT_SCHEMA",
     "MAX_FILES",
     "MAX_FILE_BYTES",
     "MAX_TOTAL_BYTES",

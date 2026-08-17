@@ -547,6 +547,7 @@
                     "gate_id": {
                       "enum": [
                         "migration_recovery",
+                        "canonical_integrity",
                         "supported_platforms",
                         "reproducible_supply_chain"
                       ]
@@ -592,7 +593,7 @@
               },
               "required_corpus_roles": {
                 "const": [
-                  "qualification_holdout"
+                  "candidate_full"
                 ]
               }
             }

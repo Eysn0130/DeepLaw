@@ -70,8 +70,9 @@ def test_host_preflight_uses_exact_pins_and_never_reads_auth_material() -> None:
     assert "codex-cli 0.148.0-alpha.9" in workflow
     assert "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f" in workflow
     assert "gpt-5.6-luna" in workflow
-    assert "--codex-reasoning-effort max" in workflow
-    assert "login status" in workflow
+    assert "--reasoning-effort max" in workflow
+    assert "login status" not in workflow
+    assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in workflow
     assert "1.18.16" in workflow
     assert "a3647eb025c7615159d417dcc49fc39fdaeba65b" in workflow
     assert "deepseek/deepseek-v4-flash" in workflow
@@ -98,11 +99,12 @@ def test_dotenv_and_external_inputs_are_metadata_only() -> None:
     assert "has_symlink_component" in workflow
     assert "owner_only" in workflow
     assert "mode & 0o077" in workflow
-    assert "DEEPLAW_SEMANTIC_REFERENCE" in workflow
-    assert "DEEPLAW_AGENT_ROSTER" in workflow
-    assert "DEEPLAW_AGENT_CONSENSUS" in workflow
-    assert "DEEPLAW_AGENT_ISOLATION" in workflow
-    assert "DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER" in workflow
+    assert "DEEPLAW_REFERENCE_FREEZER" in workflow
+    assert "DEEPLAW_REFERENCE_CASES" in workflow
+    assert "DEEPLAW_REVIEWER_OUTPUT_1" in workflow
+    assert "DEEPLAW_REVIEWER_PROCESS_3" in workflow
+    assert "DEEPLAW_CANDIDATE_HOST_RUNNER" in workflow
+    assert "DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER" not in workflow
     assert "DEEPLAW_SCORER_A" in workflow
     assert "DEEPLAW_SCORER_B" in workflow
     assert "DEEPLAW_DETERMINISTIC_ARBITER" in workflow
@@ -121,7 +123,7 @@ def test_runner_receipt_is_sanitized_and_v4_validator_is_the_only_bundle_boundar
     assert "typed exact-wheel source binding differs" in workflow
     assert "bundle must contain one exact-wheel typed manifest" in workflow
     assert "--candidate-run-id \"${CANDIDATE_RUN_ID}\"" in workflow
-    assert 'evidence_run_id="${GITHUB_RUN_ID}"' in workflow
+    assert '--evidence-run-id "${GITHUB_RUN_ID}"' in workflow
     assert "--qualification-run-id" not in workflow
     assert "--trusted-human-approver" not in workflow
     assert "bundle-manifest.json" in workflow

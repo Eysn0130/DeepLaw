@@ -66,7 +66,10 @@
         "version": {"type": "string", "minLength": 1, "maxLength": 100},
         "commit": {"type": "string", "minLength": 1, "maxLength": 100},
         "plugin_api_status": {
-          "enum": ["beta", "not_available", "supported"]
+          "enum": ["beta", "not_available", "supported", "version_pinned_experimental"]
+        },
+        "compaction_hook_stability": {
+          "const": "experimental_exact_version_only"
         },
         "stable_active_note_preview_promote": {"type": "boolean"}
       }
@@ -77,5 +80,20 @@
     "authority": {"const": "none"},
     "legal_authority": {"const": false},
     "max_provider_characters": {"const": 65536}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"host": {"const": "opencode"}},
+        "required": ["host"]
+      },
+      "then": {
+        "properties": {
+          "exact_upstream": {
+            "required": ["compaction_hook_stability"]
+          }
+        }
+      }
+    }
+  ]
 }

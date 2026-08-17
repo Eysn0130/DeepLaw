@@ -520,7 +520,7 @@
             "scale_performance",
             "supported_platforms",
             "reproducible_supply_chain",
-            "machine_review_isolation",
+            "machine_reference_isolation",
             "codex",
             "opencode",
             "selective_forget",

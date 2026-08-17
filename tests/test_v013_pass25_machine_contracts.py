@@ -278,6 +278,8 @@ def _typed(
         payload = {}
     if kind == "machine_reference_scorer" and not payload:
         payload = {
+            "candidate_output_source": _source("candidate/output.json"),
+            "candidate_execution_source": _source("candidate/execution.json"),
             "semantic_reference_source": _source("reference/semantic.json"),
             "candidate_binding_source": _source("reference/binding.json"),
             "agent_roster_source": _source("reference/roster.json"),
@@ -653,6 +655,9 @@ def test_new_machine_contracts_are_closed_and_schema_valid() -> None:
     names = [
         "semantic-machine-reference.v1.schema.json",
         "candidate-gold-binding-receipt.v2.schema.json",
+        "machine-reviewer-output.v1.schema.json",
+        "machine-candidate-output.v1.schema.json",
+        "machine-candidate-execution.v1.schema.json",
         "typed-qualification-evidence.v2.schema.json",
         "external-qualification-bundle-manifest.v4.schema.json",
         "provenance-bound-gate-result.v4.schema.json",

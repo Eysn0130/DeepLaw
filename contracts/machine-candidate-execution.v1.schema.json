@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/machine-candidate-execution.v1.schema.json",
+  "title": "DeepLaw retained machine candidate execution v1",
+  "description": "Process receipt for one exact candidate execution and its retained raw output. It proves recorded bindings and process metadata only; it is not a human attestation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "candidate",
+    "run",
+    "corpus",
+    "runner",
+    "executable_sha256",
+    "process",
+    "output_sha256",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.machine-candidate-execution/v1"},
+    "profile": {"const": "machine_evaluated_no_human_attestation"},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "run": {"$ref": "#/$defs/run"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "runner": {"$ref": "#/$defs/identityDigest"},
+    "executable_sha256": {"$ref": "#/$defs/sha256"},
+    "process": {"$ref": "#/$defs/process"},
+    "output_sha256": {"$ref": "#/$defs/sha256"},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "workflow_run_id"],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "role"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "role": {"enum": ["candidate_full", "qualification_holdout", "final_blind"]}
+      }
+    },
+    "identityDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "sha256"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pid",
+        "parent_pid",
+        "process_tree_sha256",
+        "environment_key_allowlist",
+        "read_only_input_sha256s",
+        "started_at",
+        "finished_at",
+        "exit_code"
+      ],
+      "properties": {
+        "pid": {"type": "integer", "minimum": 1},
+        "parent_pid": {"type": "integer", "minimum": 1},
+        "process_tree_sha256": {"$ref": "#/$defs/sha256"},
+        "environment_key_allowlist": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"}
+        },
+        "read_only_input_sha256s": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "started_at": {"type": "string", "format": "date-time"},
+        "finished_at": {"type": "string", "format": "date-time"},
+        "exit_code": {"type": "integer"}
+      }
+    }
+  }
+}

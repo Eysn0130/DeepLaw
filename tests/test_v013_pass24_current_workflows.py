@@ -45,7 +45,11 @@ def test_external_qualification_consumes_candidate_full_and_emits_typed_evidence
     assert "--receipt-contract external-qualification-v2" in workflow
     assert "benchmarks.release.external_qualification_bundle_v4" in workflow
     assert "machine-only v4" in workflow
-    assert "DEEPLAW_SEMANTIC_REFERENCE" in workflow
+    assert "DEEPLAW_REFERENCE_FREEZER" in workflow
+    assert "DEEPLAW_REVIEWER_OUTPUT_1" in workflow
+    assert "DEEPLAW_CANDIDATE_HOST_RUNNER" in workflow
+    assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in workflow
+    assert "DEEPLAW_OPENCODE_CREDENTIAL_BROKER" in workflow
     assert "DEEPLAW_SCORER_A" in workflow
     assert "DEEPLAW_SCORER_B" in workflow
     assert "DEEPLAW_DETERMINISTIC_ARBITER" in workflow
