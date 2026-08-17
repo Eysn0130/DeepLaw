@@ -23,6 +23,22 @@ _TASK_BINDING = build_task_context_binding(
 )
 
 
+@pytest.fixture(autouse=True)
+def _candidate_wheel_plugin_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
+    plugin = (
+        Path(__file__).resolve().parents[1]
+        / "adapters"
+        / "opencode"
+        / "plugins"
+        / "deeplaw-native.ts"
+    )
+    monkeypatch.setattr(
+        runner,
+        "_installed_opencode_plugin_bytes",
+        lambda _deeplaw_executable: plugin.read_bytes(),
+    )
+
+
 def _capsule(marker: str = "NEXT_ACTION") -> dict[str, object]:
     return {
         "schema_version": "deeplaw.knowledge-capsule-projection/v1",
@@ -196,35 +212,26 @@ def _availability_events() -> bytes:
     )
 
 
-def test_secret_parser_is_exact_and_never_accepts_ambient_or_duplicates(tmp_path: Path) -> None:
-    dotenv = tmp_path / ".env"
-    dotenv.write_text("# comment\nDEEPSEEK_API_KEY='qualification-secret'\n", encoding="utf-8")
-    dotenv.chmod(0o600)
-    assert runner.load_deepseek_key(dotenv) == "qualification-secret"
-
-    dotenv.write_text("DEEPSEEK_API_KEY=one\nDEEPSEEK_API_KEY=two\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="invalid"):
-        runner.load_deepseek_key(dotenv)
-
-    dotenv.write_text("OTHER=ambient\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="invalid"):
-        runner.load_deepseek_key(dotenv)
-
-    dotenv.write_text(
-        "DEEPSEEK_API_KEY=qualification-secret\nOTHER=not-qualification-only\n",
-        encoding="utf-8",
+def _preflight_plugin_fixture(tmp_path: Path) -> tuple[Path, dict[str, object], dict[str, object]]:
+    project = tmp_path / "preflight-project"
+    project.mkdir()
+    run_root = tmp_path / "preflight-run"
+    run_root.mkdir()
+    receipt, _ = runner._install_exact_opencode_plugin(
+        repository=project,
+        run_root=run_root,
+        deeplaw_executable=tmp_path / "deeplaw",
     )
-    with pytest.raises(ValueError, match="invalid"):
-        runner.load_deepseek_key(dotenv)
+    resolved = runner.build_opencode_config()
+    resolved["plugin"] = [(project / runner._PLUGIN_INSTALLED_RELATIVE).as_uri()]
+    return project, receipt, resolved
 
-    if os.name != "nt":
-        dotenv.write_text("DEEPSEEK_API_KEY=qualification-secret\n", encoding="utf-8")
-        dotenv.chmod(0o640)
-        with pytest.raises(ValueError, match="invalid"):
-            runner.load_deepseek_key(dotenv)
-        dotenv.chmod(0o400)
-        with pytest.raises(ValueError, match="invalid"):
-            runner.load_deepseek_key(dotenv)
+
+def test_runner_has_no_dotenv_or_provider_secret_input_surface() -> None:
+    source = Path(runner.__file__).read_text(encoding="utf-8")
+    assert not hasattr(runner, "load_deepseek_key")
+    assert "--dotenv" not in source
+    assert "load_deepseek_key" not in source
 
 
 def test_sensitive_scan_accepts_public_https_but_rejects_private_paths() -> None:
@@ -245,11 +252,70 @@ def test_permission_and_config_are_exactly_read_only() -> None:
     assert config["permission"] == permission
     assert config["agent"]["qualification"]["permission"] == permission  # type: ignore[index]
     prompt = config["agent"]["qualification"]["prompt"]  # type: ignore[index]
-    assert "copy every key and value unchanged" in prompt.casefold()
-    assert "do not add, remove, rename, infer, or rewrite fields" in prompt.casefold()
+    assert "continuity capsule" in prompt.casefold()
+    assert "do not invoke any tool" in prompt.casefold()
+    assert "knowledge_support" not in prompt
     assert "every response string non-empty and at most 200 characters" in prompt
     assert "each response array to one through three items" in prompt
     assert set(config["mcp"]) == {"deeplaw_knowledge"}  # type: ignore[arg-type]
+
+
+def test_project_plugin_mode_has_no_legacy_pure_or_project_config_bypass(
+    tmp_path: Path,
+) -> None:
+    environment = runner.build_host_environment(
+        root=tmp_path,
+        opencode_binary=tmp_path / "bin" / "opencode",
+        node_binary=tmp_path / "bin" / "node",
+    )
+    assert "OPENCODE_PURE" not in environment
+    assert "OPENCODE_DISABLE_PROJECT_CONFIG" not in environment
+    assert "--pure" not in runner._opencode_cli_turn_args()
+    assert "plugin" not in runner.build_opencode_config()
+
+
+def test_prepare_scenario_state_installs_exact_plugin_bytes_and_receipt(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    _environment, _wrapper_receipt, plugin_receipt = runner._prepare_scenario_state(
+        base_environment={},
+        run_root=run_root,
+        repository=repository,
+        deeplaw_executable=tmp_path / "deeplaw",
+        node_binary=tmp_path / "node",
+    )
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "adapters"
+        / "opencode"
+        / "plugins"
+        / "deeplaw-native.ts"
+    )
+    target = repository / runner._PLUGIN_INSTALLED_RELATIVE
+    assert target.read_bytes() == source.read_bytes()
+    assert plugin_receipt["exact_match"] is True
+    assert plugin_receipt["source_sha256"] == plugin_receipt["installed_sha256"]
+    assert plugin_receipt["source_bytes"] == plugin_receipt["installed_bytes"]
+    assert (run_root / "opencode-plugin-receipt.json").is_file()
+    assert _environment["PATH"].split(os.pathsep)[0] == str(tmp_path)
+    assert Path(_environment["DEEPLAW_KNOWLEDGE_VAULT"]).is_absolute()
+    assert Path(_environment["DEEPLAW_KNOWLEDGE_VAULT"]) == (repository / "vault").resolve()
+
+    broken_repository = tmp_path / "broken-repository"
+    broken_repository.mkdir()
+    broken_target = broken_repository / runner._PLUGIN_INSTALLED_RELATIVE
+    broken_target.parent.mkdir(parents=True)
+    os.symlink(tmp_path / "missing-plugin.ts", broken_target)
+    with pytest.raises(runner.QualificationError, match="regular file"):
+        runner._install_exact_opencode_plugin(
+            repository=broken_repository,
+            run_root=tmp_path / "broken-run",
+            deeplaw_executable=tmp_path / "deeplaw",
+        )
 
 
 def test_host_environment_is_allowlisted_and_isolated(tmp_path: Path) -> None:
@@ -257,10 +323,9 @@ def test_host_environment_is_allowlisted_and_isolated(tmp_path: Path) -> None:
         root=tmp_path,
         opencode_binary=tmp_path / "bin" / "opencode",
         node_binary=tmp_path / "bin" / "node",
-        provider_key="qualification-secret",
         canaries={name: f"canary-{index}" for index, name in enumerate(runner._CANARY_NAMES)},
     )
-    assert environment["DEEPSEEK_API_KEY"] == "qualification-secret"
+    assert "DEEPSEEK_API_KEY" not in environment
     assert set(runner._CANARY_NAMES) <= set(environment)
     assert "HOME" in environment and environment["HOME"].startswith(str(tmp_path))
     assert "USERPROFILE" in environment
@@ -275,6 +340,27 @@ def test_process_group_options_fail_closed_for_platform() -> None:
         assert options["creationflags"]
     else:
         assert options["start_new_session"] is True
+
+
+def test_owner_broker_launcher_must_be_owner_only_and_process_separated(
+    tmp_path: Path,
+) -> None:
+    host = tmp_path / "opencode"
+    host.write_bytes(b"host-binary")
+    launcher = tmp_path / "owner-broker"
+    launcher.write_bytes(b"broker-launcher")
+    launcher.chmod(0o700)
+    assert runner._validate_owner_broker_launcher(
+        launcher, host_binary=host
+    ) == hashlib.sha256(b"broker-launcher").hexdigest()
+
+    launcher.chmod(0o750)
+    with pytest.raises(runner.QualificationError, match="owner-only"):
+        runner._validate_owner_broker_launcher(launcher, host_binary=host)
+    launcher.chmod(0o700)
+    launcher.write_bytes(host.read_bytes())
+    with pytest.raises(runner.QualificationError, match="process-separated"):
+        runner._validate_owner_broker_launcher(launcher, host_binary=host)
 
 
 def test_timeout_terminates_the_created_process_group(
@@ -361,11 +447,10 @@ def test_session_identity_is_safe_for_cli_and_loopback_paths() -> None:
             )
 
 
-def test_preflight_keeps_provider_secret_out_of_static_inspection_commands(
+def test_preflight_keeps_owner_broker_out_of_static_inspection_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    provider_key = "qualification-secret"
-    resolved = runner.build_opencode_config()
+    project, plugin_receipt, resolved = _preflight_plugin_fixture(tmp_path)
     calls: list[tuple[tuple[str, ...], dict[str, str]]] = []
     availability_environments: list[dict[str, str]] = []
 
@@ -380,10 +465,10 @@ def test_preflight_keeps_provider_secret_out_of_static_inspection_commands(
         calls.append((args, environment))
         if args == ("--version",):
             stdout = b"1.18.16\n"
-        elif args == ("--pure", "models", "deepseek"):
+        elif args == ("models", "deepseek"):
             stdout = b"deepseek/deepseek-v4-flash\n"
         else:
-            assert args == ("--pure", "debug", "config")
+            assert args == ("debug", "config")
             stdout = runner._encoded(resolved)
         return {
             "stdout": stdout,
@@ -404,12 +489,14 @@ def test_preflight_keeps_provider_secret_out_of_static_inspection_commands(
     monkeypatch.setattr(runner, "_probe_model_availability", availability)
     receipt = runner.preflight_opencode(
         binary=tmp_path / "opencode",
+        host_launcher=tmp_path / "owner-broker",
+        deeplaw_executable=tmp_path / "deeplaw",
         environment={
-            "DEEPSEEK_API_KEY": provider_key,
             **{name: f"canary-{name}" for name in runner._CANARY_NAMES},
         },
         cwd=tmp_path,
-        provider_key=provider_key,
+        project_root=project,
+        plugin_receipt=plugin_receipt,
     )
     assert calls
     assert all("DEEPSEEK_API_KEY" not in environment for _args, environment in calls)
@@ -419,7 +506,7 @@ def test_preflight_keeps_provider_secret_out_of_static_inspection_commands(
     )
     assert len(availability_environments) == 1
     availability_environment = availability_environments[0]
-    assert availability_environment["DEEPSEEK_API_KEY"] == provider_key
+    assert "DEEPSEEK_API_KEY" not in availability_environment
     assert all(
         availability_environment[name] == f"canary-{name}"
         for name in runner._CANARY_NAMES
@@ -437,28 +524,29 @@ def test_preflight_keeps_provider_secret_out_of_static_inspection_commands(
         cwd: Path,
     ) -> dict[str, object]:
         result = run_command(binary, args=args, environment=environment, cwd=cwd)
-        if args == ("--pure", "models", "deepseek"):
-            result["stdout"] = (
-                b"deepseek/deepseek-v4-flash\n" + provider_key.encode("utf-8")
-            )
+        if args == ("models", "deepseek"):
+            result["stdout"] = b"deepseek/deepseek-v4-flash\ncanary-leak"
         return result
 
     monkeypatch.setattr(runner, "_run_opencode_command", leaking_command)
     with pytest.raises(runner.QualificationError, match="forbidden value"):
         runner.preflight_opencode(
             binary=tmp_path / "opencode",
-            environment={"DEEPSEEK_API_KEY": provider_key},
+            host_launcher=tmp_path / "owner-broker",
+            deeplaw_executable=tmp_path / "deeplaw",
+            environment={runner._CANARY_NAMES[0]: "canary-leak"},
             cwd=tmp_path,
-            provider_key=provider_key,
+            project_root=project,
+            plugin_receipt=plugin_receipt,
         )
 
 
-def test_preflight_rejects_a_secret_resolved_into_debug_config(
+def test_preflight_rejects_a_canary_resolved_into_debug_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    provider_key = "qualification-secret"
-    resolved = runner.build_opencode_config()
-    resolved["provider"]["deepseek"]["options"]["apiKey"] = provider_key  # type: ignore[index]
+    canary = "qualification-canary"
+    project, plugin_receipt, resolved = _preflight_plugin_fixture(tmp_path)
+    resolved["provider"]["deepseek"]["options"]["apiKey"] = canary  # type: ignore[index]
 
     def run_command(
         binary: Path,
@@ -470,8 +558,8 @@ def test_preflight_rejects_a_secret_resolved_into_debug_config(
         del binary, environment, cwd
         outputs = {
             ("--version",): b"1.18.16\n",
-            ("--pure", "models", "deepseek"): b"deepseek/deepseek-v4-flash\n",
-            ("--pure", "debug", "config"): runner._encoded(resolved),
+            ("models", "deepseek"): b"deepseek/deepseek-v4-flash\n",
+            ("debug", "config"): runner._encoded(resolved),
         }
         return {
             "stdout": outputs[args],
@@ -486,9 +574,80 @@ def test_preflight_rejects_a_secret_resolved_into_debug_config(
     with pytest.raises(runner.QualificationError, match="forbidden value"):
         runner.preflight_opencode(
             binary=tmp_path / "opencode",
-            environment={"DEEPSEEK_API_KEY": provider_key},
+            host_launcher=tmp_path / "owner-broker",
+            deeplaw_executable=tmp_path / "deeplaw",
+            environment={runner._CANARY_NAMES[0]: canary},
             cwd=tmp_path,
-            provider_key=provider_key,
+            project_root=project,
+            plugin_receipt=plugin_receipt,
+        )
+
+
+def test_resolved_config_must_bind_the_unique_installed_project_plugin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    receipt, _ = runner._install_exact_opencode_plugin(
+        repository=project,
+        run_root=run_root,
+        deeplaw_executable=tmp_path / "deeplaw",
+    )
+    resolved = runner.build_opencode_config()
+    target = project / runner._PLUGIN_INSTALLED_RELATIVE
+    resolved["plugin"] = [target.as_uri()]
+
+    def run_command(
+        binary: Path,
+        *,
+        args: tuple[str, ...],
+        environment: dict[str, str],
+        cwd: Path,
+    ) -> dict[str, object]:
+        del binary, environment, cwd
+        outputs = {
+            ("--version",): b"1.18.16\n",
+            ("models", "deepseek"): b"deepseek/deepseek-v4-flash\n",
+            ("debug", "config"): runner._encoded(resolved),
+        }
+        return {
+            "stdout": outputs[args],
+            "stderr": b"",
+            "returncode": 0,
+            "elapsed_ms": 1,
+            "timed_out": False,
+            "output_overflow": False,
+        }
+
+    monkeypatch.setattr(runner, "_run_opencode_command", run_command)
+    monkeypatch.setattr(
+        runner,
+        "_probe_model_availability",
+        lambda *args, **kwargs: {"status": "available"},
+    )
+    result = runner.preflight_opencode(
+        binary=tmp_path / "opencode",
+        host_launcher=tmp_path / "owner-broker",
+        deeplaw_executable=tmp_path / "deeplaw",
+        environment={},
+        cwd=tmp_path,
+        project_root=project,
+        plugin_receipt=receipt,
+    )
+    assert result["external_plugin"]["exact_match"] is True  # type: ignore[index]
+
+    resolved["plugin"] = []
+    with pytest.raises(runner.QualificationError, match="exact project plugin"):
+        runner.preflight_opencode(
+            binary=tmp_path / "opencode",
+            host_launcher=tmp_path / "owner-broker",
+            deeplaw_executable=tmp_path / "deeplaw",
+            environment={},
+            cwd=tmp_path,
+            project_root=project,
+            plugin_receipt=receipt,
         )
 
 
@@ -554,6 +713,143 @@ def test_analyzer_accepts_one_or_two_safe_reads_and_rejects_three() -> None:
         )
 
 
+def test_analyzer_accepts_native_hook_capsule_without_mcp_tool_call() -> None:
+    capsule = {
+        "schema_version": "deeplaw.host-continuity-capsule/v1",
+        "status": "gap",
+        "statements": [],
+        "gaps": [{"code": "route_forgotten"}],
+        "conflicts": [],
+        "write_performed": False,
+    }
+    rows = [
+        {
+            "type": "step_finish",
+            "part": {
+                "tokens": {
+                    "input": 10,
+                    "cache_read": 0,
+                    "cache_write": 0,
+                    "output": 4,
+                    "reasoning": 1,
+                    "total": 15,
+                }
+            },
+            "sessionID": "session-hook",
+            "messageID": "message-finish",
+        },
+        {
+            "type": "text",
+            "part": {
+                "text": pass13_evidence.canonical_json(
+                    {
+                        "summary": "gap",
+                        "next_step": "request owner checkpoint",
+                        "preserved_decisions": ["keep bounded"],
+                        "open_gaps": ["route_forgotten"],
+                    }
+                )
+            },
+            "sessionID": "session-hook",
+            "messageID": "message-final",
+        },
+    ]
+    text = pass13_evidence.canonical_json(capsule)
+    analysis = runner.analyze_opencode_events(
+        b"".join(
+            (json.dumps(row, separators=(",", ":")) + "\n").encode("utf-8")
+            for row in rows
+        ),
+        continuity_capsule=capsule,
+        continuity_text=text,
+    )
+    assert analysis["safe_read"]["safe_read_operations"] == ["resolve-host-continuity"]
+    assert analysis["safe_read"]["call_count"] == 0
+    assert b"tool_use" not in analysis["sanitized_events"]
+
+
+def test_plugin_delivery_receipt_must_match_exact_native_context() -> None:
+    capsule = {
+        "schema_version": "deeplaw.host-continuity-capsule/v1",
+        "status": "gap",
+        "statements": [],
+        "gaps": [{"code": "route_forgotten"}],
+        "conflicts": [],
+        "write_performed": False,
+    }
+    text = pass13_evidence.canonical_json(capsule)
+    session = "session-hook"
+    observation = {
+        "schema_version": "deeplaw.opencode-continuity-delivery-observation/v1",
+        "event_type": "experimental.chat.system.transform",
+        "session_sha256": hashlib.sha256(session.encode()).hexdigest(),
+        "context_sha256": hashlib.sha256(text.encode()).hexdigest(),
+        "context_bytes": len(text.encode()),
+        "status": "gap",
+        "statement_count": 0,
+        "gap_codes": ["route_forgotten"],
+        "conflict_count": 0,
+    }
+    receipt = runner._continuity_delivery_from_observations(
+        [observation],
+        session_id=session,
+        continuity_capsule=capsule,
+        continuity_text=text,
+    )
+    assert receipt["context_sha256"] == observation["context_sha256"]
+
+    with pytest.raises(runner.QualificationError, match="exactly once"):
+        runner._continuity_delivery_from_observations(
+            [],
+            session_id=session,
+            continuity_capsule=capsule,
+            continuity_text=text,
+        )
+    with pytest.raises(runner.QualificationError, match="did not match"):
+        runner._continuity_delivery_from_observations(
+            [{**observation, "context_sha256": "f" * 64}],
+            session_id=session,
+            continuity_capsule=capsule,
+            continuity_text=text,
+        )
+
+
+def test_compaction_delivery_adds_one_checkpoint_gap_to_canonical_bytes() -> None:
+    capsule = {
+        "schema_version": "deeplaw.host-continuity-capsule/v1",
+        "status": "gap",
+        "statements": [],
+        "gaps": [{"code": "route_forgotten"}],
+        "conflicts": [],
+        "write_performed": False,
+    }
+    selected, text = runner._continuity_with_checkpoint_gap(capsule)
+    assert [item["code"] for item in selected["gaps"]] == [
+        "route_forgotten",
+        "checkpoint_grant_missing",
+    ]
+    assert text == pass13_evidence.canonical_json(selected)
+    observation = {
+        "schema_version": "deeplaw.opencode-continuity-delivery-observation/v1",
+        "event_type": "experimental.session.compacting",
+        "session_sha256": hashlib.sha256(b"session-hook").hexdigest(),
+        "context_sha256": hashlib.sha256(text.encode()).hexdigest(),
+        "context_bytes": len(text.encode()),
+        "status": "gap",
+        "statement_count": 0,
+        "gap_codes": ["checkpoint_grant_missing", "route_forgotten"],
+        "conflict_count": 0,
+    }
+    receipt = runner._continuity_delivery_from_observations(
+        [observation],
+        session_id="session-hook",
+        continuity_capsule=selected,
+        continuity_text=text,
+        event_type="experimental.session.compacting",
+    )
+    assert receipt["event_type"] == "experimental.session.compacting"
+
+
 def test_analyzer_rejects_provider_canonical_mismatch_and_unsafe_operation() -> None:
     mismatched = _tool_output()
     mismatched["content"][0]["text"] = json.dumps(_capsule())  # type: ignore[index]
@@ -615,6 +911,49 @@ def test_analyzer_requires_the_exact_task_binding() -> None:
         )
 
 
+def _model_observation(*, summary: bool, mode: str | None = None) -> dict[str, object]:
+    return {
+        "schema_version": "deeplaw.opencode-model-observation/v1",
+        "event_type": "message.updated",
+        "session_sha256": hashlib.sha256(b"session-fixture").hexdigest(),
+        "message_sha256": "a" * 64,
+        "role": "assistant",
+        "provider_id": "deepseek",
+        "model_id": "deepseek-v4-flash",
+        "summary": summary,
+        "mode": mode,
+        "finish": "stop",
+        "tokens": {
+            "input": 10,
+            "cache": {"read": 2, "write": 0},
+            "output": 4,
+            "reasoning": 1,
+            "total": 17,
+        },
+    }
+
+
+def test_actual_assistant_response_model_comes_from_plugin_metadata() -> None:
+    observations = [_model_observation(summary=False)]
+    assert runner._response_model_from_observations(
+        observations,
+        session_id="session-fixture",
+    ) == (
+        "deepseek",
+        "deepseek-v4-flash",
+        1,
+    )
+
+    with pytest.raises(runner.QualificationError, match="model identity"):
+        runner._response_model_from_observations([], session_id="session-fixture")
+    observations[0]["model_id"] = "deepseek-chat"
+    with pytest.raises(runner.QualificationError, match="model identity"):
+        runner._response_model_from_observations(
+            observations,
+            session_id="session-fixture",
+        )
+
+
 def test_error_tool_event_validates_call_shape_before_status() -> None:
     event = _event()
     event["part"]["state"]["status"] = "error"  # type: ignore[index]
@@ -636,25 +975,21 @@ def test_error_tool_event_validates_call_shape_before_status() -> None:
         )
 
 
-def test_compaction_usage_comes_from_one_public_summary_message() -> None:
-    tokens = {
-        "input": 10,
-        "cache": {"read": 2, "write": 0},
-        "output": 4,
-        "reasoning": 1,
-        "total": 17,
-    }
-    messages = [
-        {"info": {"role": "assistant", "summary": False, "tokens": tokens}},
-        {"info": {"role": "assistant", "summary": True, "tokens": tokens}},
-    ]
-    usage = runner._compaction_usage_from_messages(messages)
+def test_compaction_usage_comes_from_one_sanitized_metadata_observation() -> None:
+    observations = [_model_observation(summary=True, mode="compaction")]
+    usage = runner._compaction_usage_from_observations(
+        observations,
+        session_id="session-fixture",
+    )
     assert usage["total_tokens"] == 17
     aggregate, native_turn = runner._account_turn_usage(usage, usage)
     assert aggregate["total_tokens"] == 34
     assert native_turn["total_tokens"] == 17
     with pytest.raises(runner.QualificationError, match="one actual compaction"):
-        runner._compaction_usage_from_messages(messages[:1])
+        runner._compaction_usage_from_observations(
+            [],
+            session_id="session-fixture",
+        )
 
 
 def test_machine_markers_require_the_final_decision_and_post_forget_gap() -> None:
@@ -847,7 +1182,7 @@ def test_execute_success_cleans_external_isolated_root(
         deeplaw_executable=tmp_path / "deeplaw",
         output_dir=output_dir,
         opencode_binary=tmp_path / "opencode",
-        dotenv=tmp_path / ".env",
+        host_launcher=tmp_path / "owner-broker",
         human_gold_path=tmp_path / "human-gold.json",
     )
     assert result == {"status": "executed"}
@@ -875,7 +1210,7 @@ def test_execute_failure_cleans_root_and_preserves_original_exception(
             deeplaw_executable=tmp_path / "deeplaw",
             output_dir=tmp_path / "retained-failure",
             opencode_binary=tmp_path / "opencode",
-            dotenv=tmp_path / ".env",
+            host_launcher=tmp_path / "owner-broker",
             human_gold_path=tmp_path / "human-gold.json",
         )
     assert created and not created[0].exists()
@@ -923,8 +1258,8 @@ def test_main_returns_nonzero_for_nonexecuted_report(
             str(tmp_path / "output"),
             "--opencode-binary",
             str(tmp_path / "opencode"),
-            "--dotenv",
-            str(tmp_path / ".env"),
+            "--opencode-launcher",
+            str(tmp_path / "owner-broker"),
             "--human-gold",
             str(tmp_path / "human-gold.json"),
         ]

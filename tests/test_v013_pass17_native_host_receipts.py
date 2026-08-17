@@ -26,6 +26,7 @@ CODEX_NATIVE_VOCABULARY = {
     "item/started",
     "item/completed",
 }
+CODEX_CURRENT_NATIVE_VOCABULARY = CODEX_NATIVE_VOCABULARY | {"hook/completed"}
 DIAGNOSTIC_EVIDENCE = (
     REPOSITORY
     / "benchmarks"
@@ -99,7 +100,16 @@ def test_diagnostic_pre_host_path_does_not_read_qualification_cases(
         profile.mkdir()
         binary = tmp_path / "codex"
         binary.write_bytes(b"codex fixture")
-        monkeypatch.setattr(codex_runner.shutil, "which", lambda command: str(binary))
+        binary.chmod(0o700)
+        launcher = tmp_path / "owner-broker"
+        launcher.write_bytes(b"owner broker fixture")
+        launcher.chmod(0o700)
+        monkeypatch.setattr(codex_runner, "_validate_codex_binary", lambda value: binary)
+        monkeypatch.setattr(
+            codex_runner,
+            "_validate_owner_broker_launcher",
+            lambda *args, **kwargs: "a" * 64,
+        )
         monkeypatch.setattr(
             codex_runner,
             "_host_environment",
@@ -112,16 +122,18 @@ def test_diagnostic_pre_host_path_does_not_read_qualification_cases(
                 output_dir=output,
                 profile_root=profile,
                 human_gold_path=None,
+                codex_binary=binary,
+                codex_launcher=launcher,
                 mode="diagnostic",
             )
     else:
         root = tmp_path / "opencode-root"
         root.mkdir()
-        monkeypatch.setattr(opencode_runner, "load_deepseek_key", lambda path: "test-key")
+        monkeypatch.setattr(opencode_runner, "_validate_binary", lambda binary: "a" * 64)
         monkeypatch.setattr(
             opencode_runner,
-            "_validate_binary",
-            lambda binary: (_ for _ in ()).throw(ReachedHostStart()),
+            "_validate_owner_broker_launcher",
+            lambda *args, **kwargs: (_ for _ in ()).throw(ReachedHostStart()),
         )
         with pytest.raises(ReachedHostStart):
             opencode_runner._execute_qualification_body(
@@ -129,7 +141,7 @@ def test_diagnostic_pre_host_path_does_not_read_qualification_cases(
                 deeplaw_executable=tmp_path / "deeplaw",
                 output_dir=output,
                 opencode_binary=tmp_path / "opencode",
-                dotenv=tmp_path / "owner.env",
+                host_launcher=tmp_path / "owner-broker",
                 human_gold_path=None,
                 root=root,
                 mode="diagnostic",
@@ -157,19 +169,19 @@ def test_opencode_prompts_disclose_the_exact_non_scoring_output_protocol() -> No
     binding = opencode_runner.pass16_continuity_cases.git_binding(
         REPOSITORY, task_line="pass17-prompt-test"
     )
-    bound = opencode_runner._candidate_prompt(
+    native = opencode_runner._candidate_prompt(
         opencode_runner.pass16_continuity_cases.task_case("cold_start"), binding
     )
-    assert bound.endswith("do not use a code fence, prefix, or suffix.")
     expected_call = opencode_runner._context_call_arguments(
         opencode_runner.pass16_continuity_cases.task_case("cold_start"), binding
     )
-    assert pass13_evidence.canonical_json(expected_call) in bound
+    assert pass13_evidence.canonical_json(expected_call) not in native
+    assert "continuity capsule supplied by the native Host context" in native
+    assert "do not invoke any tool" in native
+    assert "task_binding" not in native
     assert expected_call["query_plan_version"] == "6"
-    assert "complete JSON object" in bound
-    assert "Copy every key and value unchanged" in bound
-    assert "every string non-empty and at most 200 characters" in bound
-    assert "each array to one through three items" in bound
+    assert "every string non-empty and at most 200 characters" in native
+    assert "each array to one through three items" in native
     development_config = opencode_runner.build_opencode_config(
         agent_name="development"
     )
@@ -181,29 +193,32 @@ def test_opencode_prompts_disclose_the_exact_non_scoring_output_protocol() -> No
 def test_opencode_runner_and_shared_validator_use_native_not_codex_vocabulary() -> None:
     runner_source = inspect.getsource(opencode_runner._run_one_scenario)
     fabricated = sorted(
-        method for method in CODEX_NATIVE_VOCABULARY if f'"{method}"' in runner_source
+        method
+        for method in CODEX_CURRENT_NATIVE_VOCABULARY
+        if f'"{method}"' in runner_source
     )
     assert fabricated == []
 
     codex = pass13_evidence.native_lifecycle_requirements("codex")
     opencode = pass13_evidence.native_lifecycle_requirements("opencode")
-    assert set().union(*codex.values()) == CODEX_NATIVE_VOCABULARY
-    assert set().union(*opencode.values()).isdisjoint(CODEX_NATIVE_VOCABULARY)
+    assert set().union(*codex.values()) == CODEX_CURRENT_NATIVE_VOCABULARY
+    assert set().union(*opencode.values()).isdisjoint(CODEX_CURRENT_NATIVE_VOCABULARY)
 
 
 def test_single_diagnostic_covers_each_native_lifecycle_seam() -> None:
     codex = pass13_evidence.native_lifecycle_requirements("codex")
     opencode = pass13_evidence.native_lifecycle_requirements("opencode")
-    assert codex["development_diagnostic"] == CODEX_NATIVE_VOCABULARY
+    assert codex["development_diagnostic"] == CODEX_CURRENT_NATIVE_VOCABULARY
     assert opencode["development_diagnostic"] == {
         "cli.run.json",
+        "experimental.session.compacting",
+        "message.updated.metadata",
         "session.get",
         "session.summarize",
-        "session.messages",
     }
 
 
-def test_codex_context_prompt_uses_the_complete_public_v6_call_shape() -> None:
+def test_codex_context_prompt_uses_native_host_delivery_without_tool_arguments() -> None:
     binding = codex_runner._make_binding("cold_start")
     arguments = codex_runner._context_call_arguments(
         task="source_free_development_task",
@@ -214,11 +229,13 @@ def test_codex_context_prompt_uses_the_complete_public_v6_call_shape() -> None:
         "task": "source_free_development_task",
         "confirm_no_case_data": True,
         "query_plan_version": "6",
-        "task_binding": binding,
     }
     prompt = codex_runner._prompt("cold_start", binding)
     expected = {**arguments, "task": "continuity_cold_new_v1"}
-    assert pass13_evidence.canonical_json(expected) in prompt
+    assert pass13_evidence.canonical_json(expected) not in prompt
+    assert "continuity capsule supplied by the native Host context" in prompt
+    assert "do not invoke any tool" in prompt
+    assert "task_binding" not in prompt
 
     diagnostic_arguments = codex_runner._context_call_arguments(
         task="source_free_development_task",
@@ -250,6 +267,10 @@ def test_diagnostic_mode_is_reachable_before_external_human_gold() -> None:
             "diagnostic-output",
             "--profile-root",
             "codex-profile",
+            "--codex-binary",
+            "codex",
+            "--codex-launcher",
+            "owner-broker",
         ]
     )
     opencode_args = opencode_runner._parse_args(
@@ -264,8 +285,8 @@ def test_diagnostic_mode_is_reachable_before_external_human_gold() -> None:
             "diagnostic-output",
             "--opencode-binary",
             "opencode",
-            "--dotenv",
-            "owner.env",
+            "--opencode-launcher",
+            "owner-broker",
         ]
     )
     assert codex_args.mode == "diagnostic"
@@ -288,6 +309,12 @@ def test_diagnostic_reaches_candidate_preparation_without_gold(
     if host == "codex":
         profile = tmp_path / "codex-profile"
         profile.mkdir()
+        binary = tmp_path / "codex"
+        binary.write_bytes(b"codex fixture")
+        binary.chmod(0o700)
+        launcher = tmp_path / "owner-broker"
+        launcher.write_bytes(b"owner broker fixture")
+        launcher.chmod(0o700)
         with pytest.raises(ReachedCandidatePreparation):
             codex_runner.execute(
                 candidate_wheel=tmp_path / "candidate.whl",
@@ -295,6 +322,8 @@ def test_diagnostic_reaches_candidate_preparation_without_gold(
                 output_dir=tmp_path / "output",
                 profile_root=profile,
                 human_gold_path=None,
+                codex_binary=binary,
+                codex_launcher=launcher,
                 mode="diagnostic",
             )
     else:
@@ -306,14 +335,14 @@ def test_diagnostic_reaches_candidate_preparation_without_gold(
                 deeplaw_executable=tmp_path / "deeplaw",
                 output_dir=tmp_path / "output",
                 opencode_binary=tmp_path / "opencode",
-                dotenv=tmp_path / "owner.env",
+                host_launcher=tmp_path / "owner-broker",
                 human_gold_path=None,
                 root=root,
                 mode="diagnostic",
             )
 
 
-def test_codex_diagnostic_inherits_existing_login_but_keeps_other_roots_closed(
+def test_codex_modes_use_owner_broker_and_keep_all_roots_closed(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -326,34 +355,22 @@ def test_codex_diagnostic_inherits_existing_login_but_keeps_other_roots_closed(
     monkeypatch.setenv("OPENAI_API_KEY", "forbidden-api-key")
     profile = tmp_path / "diagnostic-profile"
 
-    environment = codex_runner._host_environment(
-        Path("/opt/codex"),
-        profile,
-        inherit_existing_login=True,
-    )
+    environment = codex_runner._host_environment(Path("/opt/codex"), profile)
 
-    assert environment["HOME"] == str(ambient_home.resolve())
-    assert environment["CODEX_HOME"] == str(ambient_codex.resolve())
+    assert environment["HOME"] == str((profile / "home").resolve())
+    assert environment["CODEX_HOME"] == str((profile / "codex").resolve())
     assert environment["XDG_CONFIG_HOME"] == str(profile / "xdg-config")
     assert environment["XDG_DATA_HOME"] == str(profile / "xdg-data")
+    assert environment["HOME"] != str(ambient_home.resolve())
+    assert environment["CODEX_HOME"] != str(ambient_codex.resolve())
     assert "OPENAI_API_KEY" not in environment
-    assert codex_runner._isolation_receipt(
-        profile,
-        environment,
-        inherit_existing_login=True,
-    ) == {
-        "profile_kind": "temporary_closed_with_existing_login",
-        "home_isolated": False,
-        "codex_home_isolated": False,
-        "xdg_config_home_isolated": True,
-        "xdg_data_home_isolated": True,
-        "ambient_host_state_inherited": True,
-        "ambient_plugins_inherited": False,
-        "ambient_apps_inherited": False,
-        "ambient_hooks_inherited": False,
-        "secret_values_retained": False,
-        "auth_class": "chatgpt_login",
-    }
+    assert codex_runner._isolation_receipt(profile, environment) == (
+        pass13_evidence.isolation_receipt(host="codex")
+    )
+    with pytest.raises(codex_runner.QualificationFailure, match="owner credential broker"):
+        codex_runner._host_environment(
+            Path("/opt/codex"), profile, inherit_existing_login=True
+        )
 
 
 def test_v2_allows_existing_login_only_for_codex_diagnostic(tmp_path: Path) -> None:
@@ -543,7 +560,7 @@ def test_retained_pass17_diagnostics_are_immutable_and_stale_for_provider_v7() -
         report = json.loads(path.read_text(encoding="utf-8"))
         with pytest.raises(
             pass13_evidence.EvidenceValidationError,
-            match="tools/list measurement",
+            match="current v2 contract bytes",
         ):
             pass13_evidence.validate_host_report_consistency(report)
         assert report["status"] == "executed"

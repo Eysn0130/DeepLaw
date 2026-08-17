@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -30,6 +31,36 @@ def test_opencode_uses_the_frozen_three_case_matrix_and_neutral_prompts() -> Non
         assert prompt == pass16_continuity_cases.candidate_prompt(
             pass16_continuity_cases.task_case(scenario)
         )
+
+
+def test_formal_candidate_prompt_uses_only_native_capsule_and_no_internal_route_data() -> None:
+    import importlib
+    import re
+
+    runner = importlib.import_module(
+        "benchmarks.hosts.run_pass13_opencode_continuity_qualification"
+    )
+    cases = importlib.import_module("benchmarks.hosts.pass16_continuity_cases")
+    prompt = runner._candidate_prompt(cases.task_case("cold_start"))
+    assert "task_binding" not in prompt
+    assert "session" not in prompt.casefold()
+    assert "knowledge_support" not in prompt
+    assert re.search(r"\b[0-9a-f]{64}\b", prompt) is None
+    assert not re.search(r"(?:^|\s)/(?:Users|private|tmp)/", prompt)
+
+
+def test_formal_fixture_does_not_call_raw_sink_apply() -> None:
+    import importlib
+    import inspect
+    import re
+
+    runner = importlib.import_module(
+        "benchmarks.hosts.run_pass13_opencode_continuity_qualification"
+    )
+    source = inspect.getsource(runner._seed_continuity_fixture)
+    assert "_run_sink_request" not in source
+    assert re.search(r'"task",\s+"start"', source)
+    assert re.search(r'"task",\s+"checkpoint"', source)
 
 
 def test_markers_include_current_stale_wrong_task_wrong_worktree_and_forget() -> None:
@@ -185,6 +216,31 @@ def test_public_summarize_call_is_exact_and_accepts_boolean_success(
     ]
 
 
+def test_public_session_create_uses_post_session_and_validates_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib
+
+    runner = importlib.import_module(
+        "benchmarks.hosts.run_pass13_opencode_continuity_qualification"
+    )
+    server = runner._OpenCodeLocalServer(
+        binary=tmp_path / "opencode",
+        environment={},
+        cwd=tmp_path,
+        root=tmp_path,
+    )
+    calls: list[tuple[str, str, object]] = []
+
+    def request(method: str, path: str, payload: object = None) -> dict[str, str]:
+        calls.append((method, path, payload))
+        return {"id": "session-created"}
+
+    monkeypatch.setattr(server, "request", request)
+    assert server.create() == "session-created"
+    assert calls == [("POST", "/session", {})]
+
+
 def test_wrapper_receipt_is_validated_after_the_first_host_turn_starts_mcp(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -194,19 +250,32 @@ def test_wrapper_receipt_is_validated_after_the_first_host_turn_starts_mcp(
         "benchmarks.hosts.run_pass13_opencode_continuity_qualification"
     )
     case = runner.pass16_continuity_cases.task_case("cold_start")
+    continuity_text = (
+        '{"conflicts":[],"gaps":[{"code":"fixture"}],'
+        '"schema_version":"deeplaw.host-continuity-capsule/v1",'
+        '"statements":[],"status":"gap","write_performed":false}'
+    )
     receipt_path = tmp_path / "run" / "mcp-wrapper-receipt.json"
+    model_receipt_path = (
+        tmp_path / "run" / "tmp" / "opencode-model-observations.jsonl"
+    )
     order: list[str] = []
 
-    def prepare(**kwargs: object) -> tuple[dict[str, str], Path]:
+    def prepare(**kwargs: object) -> tuple[dict[str, str], Path, dict[str, object]]:
         run_root = kwargs["run_root"]
         assert isinstance(run_root, Path)
         run_root.mkdir(parents=True, exist_ok=True)
+        (run_root / "tmp").mkdir(parents=True, exist_ok=True)
         (run_root / "deeplaw-closed-mcp").write_text("wrapper\n", encoding="utf-8")
-        return {}, receipt_path
+        model_receipt_path.touch(mode=0o600)
+        return {
+            runner._MODEL_RECEIPT_ENV_NAME: str(model_receipt_path)
+        }, receipt_path, {"exact_match": True}
 
     def seed(*args: object, **kwargs: object) -> dict[str, object]:
         return {
             "grant_id": "grant",
+            "task_handle": "taskh_fixture",
             "knowledge_id": "knowledge",
             "revision_id": "revision",
             "seed_boundary": {
@@ -224,6 +293,49 @@ def test_wrapper_receipt_is_validated_after_the_first_host_turn_starts_mcp(
     def host_turn(*args: object, **kwargs: object) -> dict[str, object]:
         order.append("turn")
         receipt_path.write_text("{}\n", encoding="utf-8")
+        observations = [
+            {
+                "schema_version": (
+                    "deeplaw.opencode-continuity-delivery-observation/v1"
+                ),
+                "event_type": "experimental.chat.system.transform",
+                "session_sha256": hashlib.sha256(b"session-fixture").hexdigest(),
+                "context_sha256": hashlib.sha256(
+                    continuity_text.encode("utf-8")
+                ).hexdigest(),
+                "context_bytes": len(continuity_text.encode("utf-8")),
+                "status": "gap",
+                "statement_count": 0,
+                "gap_codes": ["fixture"],
+                "conflict_count": 0,
+            },
+            {
+                "schema_version": "deeplaw.opencode-model-observation/v1",
+                "event_type": "message.updated",
+                "session_sha256": hashlib.sha256(b"session-fixture").hexdigest(),
+                "message_sha256": "a" * 64,
+                "role": "assistant",
+                "provider_id": "deepseek",
+                "model_id": "deepseek-v4-flash",
+                "summary": False,
+                "mode": None,
+                "finish": "stop",
+                "tokens": {
+                    "input": 1,
+                    "output": 1,
+                    "reasoning": 0,
+                    "total": 2,
+                    "cache": {"read": 0, "write": 0},
+                },
+            },
+        ]
+        model_receipt_path.write_text(
+            "".join(
+                json.dumps(item, separators=(",", ":")) + "\n"
+                for item in observations
+            ),
+            encoding="utf-8",
+        )
         return {
             "returncode": 0,
             "stdout": b'{"sessionID":"session-fixture"}\n',
@@ -291,16 +403,36 @@ def test_wrapper_receipt_is_validated_after_the_first_host_turn_starts_mcp(
         def stop(self) -> None:
             pass
 
+        def create(self) -> str:
+            return "session-fixture"
+
         def resume(self, session_id: str) -> dict[str, str]:
             return {"id": session_id}
 
     monkeypatch.setattr(runner, "_prepare_scenario_state", prepare)
+    monkeypatch.setattr(runner, "_validate_plugin_receipt", lambda *args, **kwargs: None)
     monkeypatch.setattr(runner, "_seed_continuity_fixture", seed)
     monkeypatch.setattr(runner, "_run_opencode_command", host_turn)
     monkeypatch.setattr(runner, "analyze_opencode_events", analyze)
     monkeypatch.setattr(runner, "validate_mcp_receipt", validate)
     monkeypatch.setattr(runner, "_ledger_head", lambda *args, **kwargs: "e" * 64)
     monkeypatch.setattr(runner, "_OpenCodeLocalServer", LocalServer)
+    monkeypatch.setattr(runner, "_bind_public_host_session", lambda *args, **kwargs: {})
+    monkeypatch.setattr(
+        runner,
+        "_resolve_public_host_continuity",
+        lambda *args, **kwargs: (
+            {
+                "schema_version": "deeplaw.host-continuity-capsule/v1",
+                "status": "gap",
+                "statements": [],
+                "gaps": [{"code": "fixture"}],
+                "conflicts": [],
+                "write_performed": False,
+            },
+                continuity_text,
+        ),
+    )
     monkeypatch.setattr(
         runner,
         "observe_knowledge_support_tools_list",
@@ -316,6 +448,7 @@ def test_wrapper_receipt_is_validated_after_the_first_host_turn_starts_mcp(
         run_index=1,
         scenario="cold_start",
         opencode_binary=tmp_path / "opencode",
+        host_launcher=tmp_path / "owner-broker",
         deeplaw_executable=tmp_path / "deeplaw",
         environment={},
         run_root=tmp_path / "run",
@@ -350,14 +483,14 @@ def test_historical_source_revision_is_explicitly_rejected(tmp_path: Path) -> No
             deeplaw_executable=tmp_path / "deeplaw",
             output_dir=tmp_path / "output",
             opencode_binary=tmp_path / "opencode",
-            dotenv=tmp_path / ".env",
+            host_launcher=tmp_path / "owner-broker",
             human_gold_path=tmp_path / "human-gold.json",
             root=tmp_path,
             source_revision_id="historical-source",
         )
 
 
-def test_missing_external_human_gold_blocks_before_candidate_or_provider_start(
+def test_candidate_runner_rejects_human_gold_before_candidate_or_provider_start(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import importlib
@@ -370,20 +503,20 @@ def test_missing_external_human_gold_blocks_before_candidate_or_provider_start(
     def prepare_candidate(*args: object, **kwargs: object) -> object:
         nonlocal called
         called = True
-        raise AssertionError("candidate preparation must not run before Human Gold")
+        raise AssertionError("candidate preparation must not receive Human Gold")
 
     monkeypatch.setattr(
         runner.QualificationOrchestrator,
         "prepare_candidate",
         prepare_candidate,
     )
-    with pytest.raises(runner.QualificationError, match="frozen external Human Gold"):
+    with pytest.raises(runner.QualificationError, match="must not receive Human Gold"):
         runner._execute_qualification_body(
             candidate_wheel=tmp_path / "candidate.whl",
             deeplaw_executable=tmp_path / "deeplaw",
             output_dir=tmp_path / "output",
             opencode_binary=tmp_path / "opencode",
-            dotenv=tmp_path / ".env",
+            host_launcher=tmp_path / "owner-broker",
             human_gold_path=tmp_path / "missing-human-gold.json",
             root=tmp_path,
         )

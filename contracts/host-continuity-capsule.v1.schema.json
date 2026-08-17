@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.local/contracts/host-continuity-capsule.v1.schema.json",
+  "title": "DeepLaw provider-safe Host continuity capsule v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "statements", "gaps", "conflicts", "write_performed"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-continuity-capsule/v1"},
+    "status": {"enum": ["admitted", "gap"]},
+    "statements": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/statement"}
+    },
+    "gaps": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/gap"}
+    },
+    "conflicts": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/conflict"}
+    },
+    "write_performed": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "admitted"}}, "required": ["status"]},
+      "then": {"properties": {"statements": {"minItems": 1}}},
+      "else": {
+        "properties": {
+          "statements": {"maxItems": 0},
+          "gaps": {"minItems": 1}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "safeText": {"type": "string", "minLength": 1, "maxLength": 512},
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "content", "authority", "legal_authority", "valid_from", "valid_to", "citations"
+      ],
+      "properties": {
+        "content": {"$ref": "#/$defs/safeText"},
+        "authority": {"type": "string", "minLength": 1, "maxLength": 100},
+        "legal_authority": {"const": false},
+        "valid_from": {"type": ["string", "null"], "maxLength": 100},
+        "valid_to": {"type": ["string", "null"], "maxLength": 100},
+        "citations": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["locator"],
+            "properties": {
+              "locator": {"type": "string", "minLength": 1, "maxLength": 200}
+            }
+          }
+        }
+      }
+    },
+    "gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,99}$"},
+        "message": {"type": "string", "minLength": 1, "maxLength": 160}
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1, "maxLength": 160}
+      }
+    }
+  }
+}

@@ -2070,6 +2070,17 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     task_resolve_host.add_argument("--session-sha256", required=True)
     task_resolve_host.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_resolve_continuity = task_commands.add_parser("resolve-host-continuity")
+    task_resolve_continuity.add_argument(
+        "--vault", type=Path, default=default_knowledge_vault()
+    )
+    task_resolve_continuity.add_argument(
+        "--host", choices=("codex", "opencode"), required=True
+    )
+    task_resolve_continuity.add_argument("--session-sha256", required=True)
+    task_resolve_continuity.add_argument(
+        "--workspace", type=Path, default=Path.cwd()
+    )
     task_forget = task_commands.add_parser("forget")
     task_forget.add_argument("--vault", type=Path, default=default_knowledge_vault())
     task_forget.add_argument("--task-handle", required=True)
@@ -2427,6 +2438,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             fork_task,
             inspect_task,
             locate_task,
+            resolve_host_continuity_capsule,
             resolve_host_session,
             resume_task,
             start_task,
@@ -2500,6 +2512,13 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             )
         if args.task_command == "resolve-host-session":
             return resolve_host_session(
+                vault_path=args.vault,
+                host=args.host,
+                session_sha256=args.session_sha256,
+                workspace=args.workspace,
+            )
+        if args.task_command == "resolve-host-continuity":
+            return resolve_host_continuity_capsule(
                 vault_path=args.vault,
                 host=args.host,
                 session_sha256=args.session_sha256,
