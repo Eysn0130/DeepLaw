@@ -2897,9 +2897,9 @@
         {
           "junit": {
             "classname": "tests.test_knowledge_sink_mcp",
-            "name": "test_stdio_advertises_v7_and_accepts_internal_v5_compatibility"
+            "name": "test_stdio_advertises_v7_while_direct_v5_compatibility_remains_internal"
           },
-          "node_id": "tests/test_knowledge_sink_mcp.py::test_stdio_advertises_v7_and_accepts_internal_v5_compatibility"
+          "node_id": "tests/test_knowledge_sink_mcp.py::test_stdio_advertises_v7_while_direct_v5_compatibility_remains_internal"
         },
         {
           "junit": {
@@ -11976,6 +11976,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_machine_reference_rejects_a_candidate_domain_without_broker_boundary"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_machine_reference_rejects_a_candidate_domain_without_broker_boundary"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
             "name": "test_orphan_receipt_is_rejected"
           },
           "node_id": "tests/test_v013_pass25_machine_evidence.py::test_orphan_receipt_is_rejected"
@@ -12049,6 +12056,13 @@
             "name": "test_external_dispatch_requires_only_candidate_run_id"
           },
           "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_dispatch_requires_only_candidate_run_id"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_has_six_role_domains_and_one_way_security_handoffs"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_has_six_role_domains_and_one_way_security_handoffs"
         },
         {
           "junit": {
@@ -12256,9 +12270,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_persistent_runtime",
-            "name": "test_runtime_manifest_tamper_fails_closed_before_recall"
+            "name": "test_runtime_manifest_tamper_fails_closed_before_query"
           },
-          "node_id": "tests/test_v013_persistent_runtime.py::test_runtime_manifest_tamper_fails_closed_before_recall"
+          "node_id": "tests/test_v013_persistent_runtime.py::test_runtime_manifest_tamper_fails_closed_before_query"
         },
         {
           "junit": {
@@ -15026,9 +15040,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2131,
+      "count": 2133,
       "selection": "not qualification and not windows_native",
-      "sha256": "d6f02c085c74dc14e7209368eef82966363cc7944ab46c579a890ac5f892e5ef"
+      "sha256": "b7fe7133fdc91a4cb03168acc1fa8b88d7d26d52effc741b96d5ad6207192ef1"
     },
     "windows": {
       "additional_cases": [
@@ -15061,13 +15075,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2135,
+      "count": 2137,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "30b912e3a1c22b55624146adf620b9b65b9ebb9474d69c2c236f4951633bb32b"
+      "sha256": "68cf26b33403529848c862ec24de95e73825f200029cc62f8109083626efe7c0"
     }
   },
-  "manifest_sha256": "f25b569ea290e524a9a41cd5e46a4f3ba66a97b49ee3963e0c3fd0e042aa3f16",
+  "manifest_sha256": "f4ce7885e662b28761eee50d1e4a9c444e84416383a128bb94365982991b2374",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

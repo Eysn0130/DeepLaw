@@ -3647,7 +3647,14 @@ def test_compilation_capable_sink_reuses_the_domain_coordinator(tmp_path: Path) 
     assert resumed["result"]["projection"]["living_wiki"]["knowledge_count"] == 3
     assert len(canonical_json(resumed).encode("utf-8")) < 65_536
     Draft202012Validator(definition.outputSchema).validate(resumed)
-    support = knowledge_tool_definition(autonomous=True)
+    support_schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "contracts/knowledge-support.output.v6.schema.json"
+        ).read_text(
+            encoding="utf-8"
+        )
+    )
     status = handle_knowledge_support(
         operation="compilation",
         compilation_action="status",
@@ -3670,8 +3677,8 @@ def test_compilation_capable_sink_reuses_the_domain_coordinator(tmp_path: Path) 
     assert query["result"]["capsule"]["schema_version"] == (
         "deeplaw.knowledge-capsule-projection/v1"
     )
-    Draft202012Validator(support.outputSchema).validate(status)
-    Draft202012Validator(support.outputSchema).validate(query)
+    Draft202012Validator(support_schema).validate(status)
+    Draft202012Validator(support_schema).validate(query)
     assert KnowledgeOS.open(root).verify()["valid"] is True
     with pytest.raises(
         KnowledgeOSValidationError,

@@ -72,6 +72,14 @@ deeplaw knowledge init --vault ./vault --name my-project --scope project
 deeplaw knowledge doctor --vault ./vault
 ```
 
+Production MCP configuration uses the closed-environment launchers. These commands are for owner
+diagnostics; the later `host connect` step generates the same argv for static Host configuration:
+
+```bash
+deeplaw knowledge mcp --closed-environment --stdio
+deeplaw mcp --closed-environment --stdio
+```
+
 Start the task line and generate a task-neutral, read-only Host configuration for manual merge.
 Static `host connect` does not select a task, manage Host authentication/runtime, or enable
 `knowledge_sink`.
@@ -119,6 +127,12 @@ deeplaw knowledge context --vault ./vault --task 'Verify the guide.' \
 
 ## Fixed boundaries
 
+- Knowledge Duties are compiled before candidate comparison; uncovered duties remain explicit Gaps
+  in the bounded Knowledge Capsule.
+- The public `0.12.0` package retains Semantic Compilation v2 and Synthesis Refresh. Query Plan v5
+  is an explicit compatibility path; Query Plan v6 is current. CLI, MCP, Python, Obsidian, and
+  Tolaria surfaces remain thin bridges. Prior deterministic Agent machine-consensus results are
+  development evidence, not current qualification or human attestation.
 - `knowledge_support` is permanently read-only; `knowledge_sink` is a separate grant-controlled
   mutation process; `law_support` is separate and read-only.
 - DeepLaw does not automatically read or retain prompts, transcripts, hidden reasoning, auth,

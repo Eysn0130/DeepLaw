@@ -70,6 +70,14 @@ deeplaw knowledge init --vault ./vault --name my-project --scope project
 deeplaw knowledge doctor --vault ./vault
 ```
 
+正式 MCP 配置必须使用闭合环境入口；以下命令用于 owner 诊断，静态 Host 配置由后续
+`host connect` 生成同一 argv：
+
+```bash
+deeplaw knowledge mcp --closed-environment --stdio
+deeplaw mcp --closed-environment --stdio
+```
+
 建立任务线并生成 task-neutral、只读、人工合并的 Host 配置。静态 `host connect` 不选择 task，
 不管理 Host 登录或 runtime，也不启用 `knowledge_sink`。
 
@@ -112,6 +120,8 @@ deeplaw knowledge context --vault ./vault --task 'Verify the guide.' \
 
 ## 固定边界
 
+- 自主写入不等于权威升级。embedding、图权重、模型 confidence、引用次数或使用频率都不能产生
+  官方身份、法律 Authority 或法律适用结论。
 - `knowledge_support` 永久只读；`knowledge_sink` 是独立、显式 grant 控制的写进程；
   `law_support` 独立只读。
 - 不自动读取或保存 prompt、transcript、hidden reasoning、auth、Secret 或 raw log。

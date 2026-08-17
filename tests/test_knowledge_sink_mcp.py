@@ -430,7 +430,12 @@ def test_autonomous_read_support_exposes_federated_partitions_lineage_and_graph(
     assert inspection["result"]["agent_ready"] is True
     assert inspection["result"]["autonomous"]["counts"]["feedback_events"] == 1
     assert verification["result"]["valid"] is True
-    schema = knowledge_tool_definition(autonomous=True).outputSchema
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "contracts/knowledge-support.output.v6.schema.json"
+        ).read_text(encoding="utf-8")
+    )
     for response in (
         search,
         exact,
@@ -1381,7 +1386,9 @@ def test_stdio_sink_exposes_only_the_explicit_mutation_leaf(tmp_path: Path) -> N
         }
 
 
-def test_stdio_advertises_v7_and_accepts_internal_v5_compatibility(tmp_path: Path) -> None:
+def test_stdio_advertises_v7_while_direct_v5_compatibility_remains_internal(
+    tmp_path: Path,
+) -> None:
     root, grant_id = _ready(tmp_path)
     handle_knowledge_sink(
         _remember_request("stdio-purpose-aware-context"),
@@ -1419,18 +1426,6 @@ def test_stdio_advertises_v7_and_accepts_internal_v5_compatibility(tmp_path: Pat
                 branch["$ref"].rsplit("/", maxsplit=1)[-1]
                 for branch in provider["oneOf"]
             } == {"query", "context", "explain"}
-            semantic = await session.call_tool(
-                "knowledge_support",
-                {"operation": "semantic", "semantic_action": "profile"},
-            )
-            sources = await session.call_tool(
-                "knowledge_support",
-                {"operation": "source", "source_action": "list"},
-            )
-            syntheses = await session.call_tool(
-                "knowledge_support",
-                {"operation": "synthesis", "synthesis_action": "coverage"},
-            )
             purpose_context = await session.call_tool(
                 "knowledge_support",
                 {
@@ -1459,41 +1454,6 @@ def test_stdio_advertises_v7_and_accepts_internal_v5_compatibility(tmp_path: Pat
                     "capsule_projection": "compact",
                 },
             )
-            editor = await session.call_tool(
-                "knowledge_support",
-                {
-                    "operation": "editor_context",
-                    "editor_context": {
-                        "schema_version": "deeplaw.editor-context-envelope/v1",
-                        "frontend": "obsidian",
-                        "frontend_version": "test-1",
-                        "vault_identity": vault_id,
-                        "active_note": None,
-                        "selected_text": None,
-                        "selection_range": None,
-                        "open_tabs": [],
-                        "explicit_note_references": [],
-                        "backlinks": [],
-                        "outlinks": [],
-                        "active_canvas": None,
-                        "active_bases_view": None,
-                        "user_intent": "Find governed knowledge.",
-                        "persistence_allowed": False,
-                        "scope": "project",
-                        "max_sensitivity": "private",
-                        "budgets": {
-                            "max_notes": 5,
-                            "max_context_characters": 2000,
-                            "max_selected_characters": 500,
-                            "max_provider_characters": 65536,
-                        },
-                        "confirm_no_case_data": True,
-                    },
-                },
-            )
-            assert semantic.isError is False
-            assert sources.isError is False
-            assert syntheses.isError is False
             assert purpose_context.isError is False
             assert purpose_context.structuredContent["result"]["query_plan"]["purpose"] == (
                 "quote"
@@ -1511,8 +1471,63 @@ def test_stdio_advertises_v7_and_accepts_internal_v5_compatibility(tmp_path: Pat
             assert '"authority_boundary"' not in provider_text
             assert '"receipt":' not in provider_text
             assert '"delivery"' not in provider_text
-            assert editor.isError is False
-            assert editor.structuredContent["result"]["ephemeral_context"] is True
-            assert editor.structuredContent["result"]["persistence_performed"] is False
+        internal = [
+            handle_knowledge_support(
+                operation="semantic",
+                semantic_action="profile",
+                vault_path=root,
+            ),
+            handle_knowledge_support(
+                operation="source",
+                source_action="list",
+                vault_path=root,
+            ),
+            handle_knowledge_support(
+                operation="synthesis",
+                synthesis_action="coverage",
+                vault_path=root,
+            ),
+        ]
+        editor = handle_knowledge_support(
+            operation="editor_context",
+            editor_context={
+                "schema_version": "deeplaw.editor-context-envelope/v1",
+                "frontend": "obsidian",
+                "frontend_version": "test-1",
+                "vault_identity": vault_id,
+                "active_note": None,
+                "selected_text": None,
+                "selection_range": None,
+                "open_tabs": [],
+                "explicit_note_references": [],
+                "backlinks": [],
+                "outlinks": [],
+                "active_canvas": None,
+                "active_bases_view": None,
+                "user_intent": "Find governed knowledge.",
+                "persistence_allowed": False,
+                "scope": "project",
+                "max_sensitivity": "private",
+                "budgets": {
+                    "max_notes": 5,
+                    "max_context_characters": 2000,
+                    "max_selected_characters": 500,
+                    "max_provider_characters": 65536,
+                },
+                "confirm_no_case_data": True,
+            },
+            vault_path=root,
+        )
+        internal.append(editor)
+        compatibility_schema = json.loads(
+            (
+                Path(__file__).resolve().parents[1]
+                / "contracts/knowledge-support.output.v6.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        for response in internal:
+            Draft202012Validator(compatibility_schema).validate(response)
+        assert editor["result"]["ephemeral_context"] is True
+        assert editor["result"]["persistence_performed"] is False
 
     asyncio.run(exercise())

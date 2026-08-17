@@ -14,6 +14,8 @@ The machine-readable protocol is
 `contracts/v013-qualification-protocol.v2.schema.json`; the frozen bytes are
 `benchmarks/v013/qualification-protocol-v2.json` and its recorded SHA-256. Protocol v1 and Gate
 v1-v7 remain historical compatibility inputs. They are not rewritten or used as current state.
+The frozen v1 Host receipt is `invalidated-for-current-qualification`; current Host evidence uses
+`deeplaw.host-continuity-qualification/v2`.
 
 ## Product and Provider boundary
 
@@ -52,6 +54,11 @@ file named `holdout` is still development material. Missing exact source-specifi
 Machine reviewers and Luna may produce machine audit evidence. They are not independent human
 review, Human Gold, legal experts, `human_verified`, or model diversity. The active profile has no
 human or legal attestation.
+
+The runner remains **diagnostic first**: a source-free diagnostic must succeed before any costly
+external task is attempted, but it is never qualification evidence. Older protocol prose described
+the next stage as external Human Gold; under the frozen v2 machine-only profile that stage is an
+isolated machine-reference evaluation with no human or legal attestation.
 
 ## Exact candidate and invalidation
 

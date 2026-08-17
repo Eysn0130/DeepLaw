@@ -1,4 +1,4 @@
-"""Fail-closed parsers for the current v7 qualification evidence seam.
+"""Fail-closed parsers for the current v8 qualification evidence seam.
 
 The input to this module is an evidence manifest, not a result report.  The
 manifest identifies immutable raw receipts (and, for Candidate Full, the raw
@@ -29,6 +29,18 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from defusedxml import ElementTree as DefusedET
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.release.security_domain_receipt import (
+    ROLES as _SECURITY_DOMAIN_ROLES,
+)
+from benchmarks.release.security_domain_receipt import (
+    SecurityDomainReceiptError as _SecurityDomainReceiptError,
+)
+from benchmarks.release.security_domain_receipt import (
+    security_domain_set_sha256 as _security_domain_set_sha256,
+)
+from benchmarks.release.security_domain_receipt import (
+    validate_security_domain_receipt as _validate_security_domain_receipt,
+)
 from deeplaw.native_host import (
     NativeHostObservationError,
     derive_native_host_receipt,
@@ -54,7 +66,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "19452470db424ef7f0f456843090537f123583af5ceade67e8144c59dafc8f2e"
+    "a5c908d5a6784756631fec3bf61599bde56eb879aca667a0d875a7efb591b7d6"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -527,6 +539,11 @@ def _source_refs(kind: str, payload: Mapping[str, Any]) -> list[Mapping[str, Any
                 keys={"platform", "python_version", "source"},
             )
             refs.append(item["source"])
+    elif kind == "machine_reference_scorer":
+        security_receipts = payload.get("security_domain_receipt_sources")
+        if not isinstance(security_receipts, list) or len(security_receipts) != 5:
+            _fail("Machine reference security-domain receipt sources are incomplete")
+        refs.extend(security_receipts)
     return refs
 
 
@@ -2121,6 +2138,37 @@ def _parse_machine_reference(
         root=root,
         label="deterministic arbiter rows",
     )
+    security_receipts: dict[str, Mapping[str, Any]] = {}
+    for index, source_ref in enumerate(payload["security_domain_receipt_sources"]):
+        value, _ = _source_json(
+            source_ref,
+            root=root,
+            label=f"security-domain receipt[{index}]",
+            allow_count_paths=frozenset({("negative_canary", "leaked_count")}),
+        )
+        try:
+            receipt = _validate_security_domain_receipt(value)
+        except _SecurityDomainReceiptError as error:
+            _fail(str(error))
+        role = str(receipt["role"])
+        if role in security_receipts:
+            _fail("security-domain receipt roles are duplicated")
+        security_receipts[role] = receipt
+    if set(security_receipts) != set(_SECURITY_DOMAIN_ROLES):
+        _fail("security-domain receipt roles are incomplete")
+    try:
+        security_domains_sha256 = _security_domain_set_sha256(
+            list(security_receipts.values())
+        )
+    except _SecurityDomainReceiptError as error:
+        _fail(str(error))
+    if len(
+        {
+            receipt["attester_executable_sha256"]
+            for receipt in security_receipts.values()
+        }
+    ) != 1:
+        _fail("security-domain attester executable bindings differ")
     _validate_contract(
         reference,
         "semantic-machine-reference.v1.schema.json",
@@ -2371,6 +2419,89 @@ def _parse_machine_reference(
     ):
         _fail("machine-reference scorer/runner binding differs")
 
+    expected_artifacts = {
+        "reference_freezer": (
+            {"reference-cases", "reviewer-inputs"},
+            {"sealed-reference"},
+        ),
+        "candidate_host": (
+            {
+                "verified-candidate-artifacts",
+                "qualification-inputs",
+                "final-blind-inputs",
+            },
+            {"candidate-sanitized-output"},
+        ),
+        "scorer_a": (
+            {"candidate-sanitized-output", "sealed-reference"},
+            {"scorer-a-output"},
+        ),
+        "scorer_b": (
+            {"candidate-sanitized-output", "sealed-reference"},
+            {"scorer-b-output"},
+        ),
+        "arbiter": ({"scorer-a-output", "scorer-b-output"}, {"arbiter-output"}),
+    }
+    forbidden_artifacts = {
+        "reference_freezer": {
+            "candidate-sanitized-output",
+            "scorer-a-output",
+            "scorer-b-output",
+            "arbiter-output",
+        },
+        "candidate_host": {
+            "sealed-reference",
+            "scorer-a-output",
+            "scorer-b-output",
+            "arbiter-output",
+        },
+        "scorer_a": {"scorer-b-output", "arbiter-output"},
+        "scorer_b": {"scorer-a-output", "arbiter-output"},
+        "arbiter": {"candidate-sanitized-output", "sealed-reference"},
+    }
+    producers: dict[str, str] = {}
+    for receipt in security_receipts.values():
+        for artifact in receipt["egress"]:
+            if artifact["name"] in producers:
+                _fail("security-domain artifact has multiple producers")
+            producers[artifact["name"]] = artifact["sha256"]
+    for role, receipt in security_receipts.items():
+        ingress = {item["name"] for item in receipt["ingress"]}
+        egress = {item["name"] for item in receipt["egress"]}
+        if (ingress, egress) != expected_artifacts[role]:
+            _fail(f"security-domain {role} artifact visibility is not role-bounded")
+        for artifact in receipt["ingress"]:
+            produced = producers.get(artifact["name"])
+            if produced is not None and produced != artifact["sha256"]:
+                _fail("security-domain producer/consumer artifact hash differs")
+        if {
+            item["name"] for item in receipt["negative_canary"]["targets"]
+        } != forbidden_artifacts[role]:
+            _fail(f"security-domain {role} prohibited visibility is incomplete")
+        expected_process_count = 2 if role == "candidate_host" else 1
+        if len(receipt["process_receipt_sha256s"]) != expected_process_count:
+            _fail(f"security-domain {role} process receipt inventory is incomplete")
+        if role == "candidate_host":
+            if (
+                receipt["secret_policy"] != "broker_only_exact_host"
+                or receipt["network"]["policy"] != "host_provider_allowlist"
+            ):
+                _fail("candidate security domain is not broker-only/provider-allowlisted")
+        elif (
+            receipt["secret_policy"] != "forbidden"
+            or receipt["network"]["policy"] != "deny_all"
+        ):
+            _fail(f"non-candidate security domain {role} is not closed")
+    executable_bindings = {
+        "candidate_host": envelope["runner"]["sha256"],
+        "scorer_a": scorer_a["sha256"],
+        "scorer_b": scorer_b["sha256"],
+        "arbiter": arbiter["sha256"],
+    }
+    for role, expected in executable_bindings.items():
+        if security_receipts[role]["executable"]["executable_sha256"] != expected:
+            _fail(f"security-domain executable is not the frozen {role} input")
+
     process = payload["process_identity"]
     process_ids = {
         process["scorer_a_process_id"],
@@ -2596,6 +2727,7 @@ def _parse_machine_reference(
             "hard_failure_observation_count": hard,
             "false_authority_count": false_authority,
             "reference_isolation_pass_rate": 1.0,
+            "security_domains_sha256": security_domains_sha256,
             "scorer_panel_sha256": panel_digest,
             "arbiter_sha256": arbiter["sha256"],
             "corpus_role": envelope["corpus"]["role"],

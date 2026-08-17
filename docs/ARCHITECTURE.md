@@ -163,6 +163,9 @@ Discovery != Admission != Selection != Authority != Adjudication
 
 ### Source-to-Knowledge flow
 
+The Cognitive Index Layer, including Source Tree, code-symbol search, graph adjacency, communities,
+and query accelerators, is disposable derived state. None of it grants identity or Authority.
+
 ```text
 Source Revision
   -> Source IR, stable Fragments, Locators, and parse provenance
