@@ -250,6 +250,22 @@ def test_apply_updates_only_current_surfaces_and_preserves_history(tmp_path: Pat
         ).read_text(encoding="utf-8")
     )
     assert product_surface_schema["properties"]["package_version"]["const"] == "0.13.0"
+    source_matrix_schema = json.loads(
+        (
+            repository
+            / "contracts/authoritative-source-quality-decision-matrix.v2.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert source_matrix_schema["properties"]["release_target"]["const"] == "0.13.0"
+    for name in (
+        "semantic-machine-review-packet.v1.schema.json",
+        "semantic-machine-review-consensus.v1.schema.json",
+        "semantic-owner-review-packet.v1.schema.json",
+    ):
+        schema = json.loads((repository / "contracts" / name).read_text(encoding="utf-8"))
+        assert schema["$defs"]["candidate_binding"]["properties"]["version"]["const"] == (
+            "0.13.0"
+        )
     machine_review_builder = (
         repository / "benchmarks/semantic/build_machine_review_consensus.py"
     ).read_text(encoding="utf-8")

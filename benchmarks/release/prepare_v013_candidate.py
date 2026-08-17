@@ -66,6 +66,10 @@ CURRENT_SURFACE_FILES = (
     "adapters/obsidian/plugin/package-lock.json",
     "governance/product-surface-manifest.v1.json",
     "contracts/product-surface-manifest.v1.schema.json",
+    "contracts/authoritative-source-quality-decision-matrix.v2.schema.json",
+    "contracts/semantic-machine-review-packet.v1.schema.json",
+    "contracts/semantic-machine-review-consensus.v1.schema.json",
+    "contracts/semantic-owner-review-packet.v1.schema.json",
     "benchmarks/semantic/build_machine_review_consensus.py",
     "security/openvex.json",
     ACTIVE_RELATIVE,
@@ -86,6 +90,10 @@ VERSION_SURFACE_FILES = (
     "adapters/obsidian/plugin/package-lock.json",
     "governance/product-surface-manifest.v1.json",
     "contracts/product-surface-manifest.v1.schema.json",
+    "contracts/authoritative-source-quality-decision-matrix.v2.schema.json",
+    "contracts/semantic-machine-review-packet.v1.schema.json",
+    "contracts/semantic-machine-review-consensus.v1.schema.json",
+    "contracts/semantic-owner-review-packet.v1.schema.json",
     "benchmarks/semantic/build_machine_review_consensus.py",
     "security/openvex.json",
 )
@@ -417,6 +425,26 @@ def _build_updates(
                 original[relative],
                 b'"package_version": {"const": "0.12.0"}',
                 b'"package_version": {"const": "0.13.0"}',
+                label=relative,
+            )
+            continue
+        if relative == "contracts/authoritative-source-quality-decision-matrix.v2.schema.json":
+            updates[relative] = _expect_once(
+                original[relative],
+                b'"release_target": {"const": "0.12.0"}',
+                b'"release_target": {"const": "0.13.0"}',
+                label=relative,
+            )
+            continue
+        if relative in {
+            "contracts/semantic-machine-review-packet.v1.schema.json",
+            "contracts/semantic-machine-review-consensus.v1.schema.json",
+            "contracts/semantic-owner-review-packet.v1.schema.json",
+        }:
+            updates[relative] = _expect_once(
+                original[relative],
+                b'"version": {"const": "0.12.0"}',
+                b'"version": {"const": "0.13.0"}',
                 label=relative,
             )
             continue
