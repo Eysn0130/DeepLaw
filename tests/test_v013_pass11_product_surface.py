@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -291,7 +292,8 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
         (REPOSITORY / "governance/product-surface-manifest.v1.json").read_bytes()
     )
     Draft202012Validator(schema).validate(manifest)
-    assert manifest["package_version"] == "0.12.0"
+    project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+    assert manifest["package_version"] == project["project"]["version"]
     assert manifest["lifecycle_status"] == "source_candidate"
     assert manifest["release_ready"] is False
     assert [item["name"] for item in manifest["default_product"]] == [
@@ -394,10 +396,18 @@ def test_current_documented_product_truth_cannot_drift_to_historical_state() -> 
     )
     assert active["schema_version"] == "deeplaw.v013-active-qualification/v2"
     assert active["profile"] == "machine_evaluated_no_human_attestation"
-    assert active["status"] == "machine_evaluation_pending"
-    assert active["candidate_version"] == "0.12.0"
-    assert active["candidate_binding"]["package_version"] == "0.12.0"
-    assert active["blocker"] == "machine_evaluation_not_executed"
+    project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+    version = project["project"]["version"]
+    assert active["candidate_version"] == version
+    assert active["candidate_binding"]["package_version"] == version
+    expected_stage = {
+        "0.12.0": ("machine_evaluation_pending", "machine_evaluation_not_executed"),
+        "0.13.0": (
+            "construction_candidate_machine_evaluation_pending",
+            "candidate_artifact_not_built",
+        ),
+    }
+    assert (active["status"], active["blocker"]) == expected_stage[version]
     assert active["release_ready"] is False
     assert active["claim_eligible"] is False
 

@@ -279,7 +279,7 @@ def test_contracts_and_classification_fixture_are_closed() -> None:
     assert {
         item["gate_id"] for item in CLASSIFICATION["gates"] if item["category"] == "Core"
     } == set(CORE_GATES)
-    assert set(CORE_GATES) == release_policy.V013_CORE_GATE_IDS - {
+    assert set(CORE_GATES) == release_policy.V013_V6_CORE_GATE_IDS - {
         "opencode",
         "timeline",
     }
@@ -287,12 +287,12 @@ def test_contracts_and_classification_fixture_are_closed() -> None:
         item["gate_id"]
         for item in CLASSIFICATION["gates"]
         if item["category"] == "Capability"
-    } == release_policy.V013_CAPABILITY_GATE_IDS | {"opencode", "timeline"}
+    } == release_policy.V013_V6_CAPABILITY_GATE_IDS | {"opencode", "timeline"}
     assert {
         item["gate_id"]
         for item in CLASSIFICATION["gates"]
         if item["category"] == "Competitive Claim"
-    } == release_policy.V013_COMPETITIVE_GATE_IDS
+    } == release_policy.V013_V6_COMPETITIVE_GATE_IDS
 
 
 def test_legacy_self_report_cannot_pass_and_deferred_capabilities_are_not_claimed() -> None:
@@ -606,7 +606,7 @@ def test_v013_provenance_assembler_rejects_legacy_v3_after_validator_activation(
     )
     classification_path = root / "evidence/classification.json"
     classification_path.write_bytes(
-        release_policy.V013_ACTIVE_CLASSIFICATION_PATH.read_bytes()
+        release_policy.V013_V6_CLASSIFICATION_PATH.read_bytes()
     )
     for logical_path, path in (
         ("evidence/semantic-report.json", report_path),

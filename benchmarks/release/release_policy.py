@@ -2,8 +2,9 @@
 
 This module deliberately uses only the Python standard library.  It is invoked by release
 workflow steps before project dependencies are installed, so it must remain importable from a
-clean checkout.  The v0.12 manifest is a compatibility contract; v0.13 introduces an independent
-v6 decision contract and cannot be downgraded to the historical v5/no-model decision.
+clean checkout. The v0.12 manifest is a compatibility contract. The older v0.13 v6 envelope is
+also retained for historical validation, while the active machine-only classification is v8 and
+cannot be downgraded to either compatibility path.
 """
 
 from __future__ import annotations
@@ -18,16 +19,27 @@ from typing import Any
 
 V5_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v5"
 V6_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v6"
-V013_ACTIVE_CLASSIFICATION_PATH = Path(__file__).with_name(
+V8_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v8"
+V013_V6_CLASSIFICATION_PATH = Path(__file__).with_name(
     "v013-gate-classification-v6.json"
 )
-V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH = Path(__file__).resolve().parents[2] / (
+V013_V6_CLASSIFICATION_SCHEMA_PATH = Path(__file__).resolve().parents[2] / (
     "contracts/v013-release-gate-classification.v6.schema.json"
 )
-V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION = (
+V013_V6_CLASSIFICATION_SCHEMA_VERSION = (
     "deeplaw.v013-release-gate-classification/v6"
 )
-V013_ACTIVE_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v6"
+V013_V6_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v6"
+V013_ACTIVE_CLASSIFICATION_PATH = Path(__file__).with_name(
+    "v013-gate-classification-v8.json"
+)
+V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH = Path(__file__).resolve().parents[2] / (
+    "contracts/v013-release-gate-classification.v8.schema.json"
+)
+V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION = (
+    "deeplaw.v013-release-gate-classification/v8"
+)
+V013_ACTIVE_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v8"
 
 _SEMVER_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -35,7 +47,7 @@ _GIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 # Every item is intentionally a separate path.  A single aggregate ``passed`` field cannot hide
 # a missing model run, a critical legal failure, or a supply-chain verification omission.
-V013_REQUIRED_EVIDENCE_PATHS: tuple[str, ...] = (
+V013_V6_REQUIRED_EVIDENCE_PATHS: tuple[str, ...] = (
     "bindings.prd_path",
     "bindings.prd_sha256",
     "bindings.traceability_path",
@@ -60,7 +72,7 @@ V013_REQUIRED_EVIDENCE_PATHS: tuple[str, ...] = (
     "semantic_evidence.gate_statuses[]",
 )
 
-V013_CORE_GATE_IDS = frozenset(
+V013_V6_CORE_GATE_IDS = frozenset(
     {
         "canonical_integrity",
         "migration_recovery",
@@ -78,10 +90,15 @@ V013_CORE_GATE_IDS = frozenset(
         "timeline",
     }
 )
-V013_CAPABILITY_GATE_IDS = frozenset({"semantic_restore", "claude"})
-V013_COMPETITIVE_GATE_IDS = frozenset(
+V013_V6_CAPABILITY_GATE_IDS = frozenset({"semantic_restore", "claude"})
+V013_V6_COMPETITIVE_GATE_IDS = frozenset(
     {"comparative_incremental_benefit", "superiority", "sota"}
 )
+V013_CORE_GATE_IDS = frozenset(
+    (V013_V6_CORE_GATE_IDS - {"human_gold_isolation"}) | {"machine_reference_isolation"}
+)
+V013_CAPABILITY_GATE_IDS = V013_V6_CAPABILITY_GATE_IDS
+V013_COMPETITIVE_GATE_IDS = V013_V6_COMPETITIVE_GATE_IDS
 
 _V5_REQUIRED_TOP_LEVEL = frozenset(
     {
@@ -155,14 +172,25 @@ def _semver(version: str) -> tuple[int, int, int]:
 
 
 def required_manifest_schema_version(version: str) -> str:
-    """Return the manifest schema required by a release package version."""
+    """Return the current manifest schema required by a release package version."""
+
+    major, minor, _patch = _semver(version)
+    if (major, minor) < (0, 13):
+        return V5_MANIFEST_SCHEMA
+    if (major, minor) == (0, 13):
+        return V8_MANIFEST_SCHEMA
+    raise ReleasePolicyError(f"no commercial release policy is defined for {version}")
+
+
+def required_legacy_manifest_schema_version(version: str) -> str:
+    """Select a historical envelope schema without representing it as current policy."""
 
     major, minor, _patch = _semver(version)
     if (major, minor) < (0, 13):
         return V5_MANIFEST_SCHEMA
     if (major, minor) == (0, 13):
         return V6_MANIFEST_SCHEMA
-    raise ReleasePolicyError(f"no commercial release policy is defined for {version}")
+    raise ReleasePolicyError(f"no legacy commercial release policy is defined for {version}")
 
 
 def _fail(message: str) -> None:
@@ -444,7 +472,9 @@ def _v6_manifest(manifest: Mapping[str, Any], release_version: str) -> None:
     )
     statuses = semantic["gate_statuses"]
     if not isinstance(statuses, list) or len(statuses) != (
-        len(V013_CORE_GATE_IDS) + len(V013_CAPABILITY_GATE_IDS) + len(V013_COMPETITIVE_GATE_IDS)
+        len(V013_V6_CORE_GATE_IDS)
+        + len(V013_V6_CAPABILITY_GATE_IDS)
+        + len(V013_V6_COMPETITIVE_GATE_IDS)
     ):
         _fail("semantic_evidence.gate_statuses is incomplete")
     observed: dict[str, tuple[str, str]] = {}
@@ -466,18 +496,22 @@ def _v6_manifest(manifest: Mapping[str, Any], release_version: str) -> None:
         }:
             _fail(f"semantic_evidence.gate_statuses[{index}].status is invalid")
         observed[gate_id] = (item["category"], item["status"])
-    if set(observed) != V013_CORE_GATE_IDS | V013_CAPABILITY_GATE_IDS | V013_COMPETITIVE_GATE_IDS:
+    if set(observed) != (
+        V013_V6_CORE_GATE_IDS
+        | V013_V6_CAPABILITY_GATE_IDS
+        | V013_V6_COMPETITIVE_GATE_IDS
+    ):
         _fail("semantic_evidence.gate_statuses does not match the frozen v0.13 gate inventory")
-    if any(observed[gate] != ("Core", "passed") for gate in V013_CORE_GATE_IDS):
+    if any(observed[gate] != ("Core", "passed") for gate in V013_V6_CORE_GATE_IDS):
         _fail("every v0.13 Core gate must be semantically passed")
     if any(
         observed[gate][0] != "Capability" or observed[gate][1] not in {"passed", "not_claimed"}
-        for gate in V013_CAPABILITY_GATE_IDS
+        for gate in V013_V6_CAPABILITY_GATE_IDS
     ):
         _fail("v0.13 Capability gates must be passed or explicitly not_claimed")
     if any(
         observed[gate] != ("Competitive Claim", "not_claimed")
-        for gate in V013_COMPETITIVE_GATE_IDS
+        for gate in V013_V6_COMPETITIVE_GATE_IDS
     ):
         _fail("v0.13 competitive claims must remain not_claimed")
 
@@ -488,15 +522,15 @@ def _v6_manifest(manifest: Mapping[str, Any], release_version: str) -> None:
     _verify_record_digest(manifest)
 
 
-def validate_manifest_for_release(
+def validate_legacy_manifest_for_release(
     manifest: Mapping[str, Any], *, release_version: str
 ) -> None:
-    """Validate a manifest against the policy selected by ``release_version``."""
+    """Validate a v5/v6 compatibility envelope for historical replay only."""
 
     _semver(release_version)
     if not isinstance(manifest, Mapping):
         _fail("release manifest must be an object")
-    expected = required_manifest_schema_version(release_version)
+    expected = required_legacy_manifest_schema_version(release_version)
     observed = manifest.get("schema_version")
     if observed != expected:
         _fail(
@@ -506,6 +540,20 @@ def validate_manifest_for_release(
         _v5_manifest(manifest, release_version)
     else:
         _v6_manifest(manifest, release_version)
+
+
+def validate_manifest_for_release(
+    manifest: Mapping[str, Any], *, release_version: str
+) -> None:
+    """Validate a current release manifest, failing closed at the v0.13 evidence seam."""
+
+    expected = required_manifest_schema_version(release_version)
+    if expected == V8_MANIFEST_SCHEMA:
+        _fail(
+            "v0.13 release manifests require benchmarks.release.release_provenance_v8 "
+            "with the retained Candidate Full and external evidence roots"
+        )
+    validate_legacy_manifest_for_release(manifest, release_version=release_version)
 
 
 def _main() -> int:

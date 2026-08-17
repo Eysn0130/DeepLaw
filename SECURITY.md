@@ -19,17 +19,18 @@ only. Missing qualification evidence remains `not_executed`; no tag or release f
 ## Supported versions
 
 Security fixes are evaluated for the current software release, `v0.12.0`, and the `main` branch.
-Historical v0.12 release artifacts retain their manifest-v5 contract. Every future `0.13.x`
-release is fail-closed on commercial manifest v6; an old v5 manifest, repository-visible
-development Gold, or no-model Host smoke cannot satisfy model-task acceptance. The v6 manifest
-binds exact candidate artifacts and hashed repository-external Human Gold, Host, Legal Pack,
-scale, cross-platform, supply-chain, provenance, and public-redownload evidence. Unknown later
+Historical v0.12 release artifacts retain their manifest-v5 contract. The current `0.13.x`
+machine-only path is fail-closed on commercial manifest v8; old v5-v7 manifests,
+repository-visible development Gold, or no-model Host smoke cannot satisfy model-task acceptance.
+The v8 manifest binds exact candidate artifacts and hashed repository-external machine references,
+Host, Legal Pack, scale, cross-platform, supply-chain, provenance, and public-redownload evidence.
+Unknown later
 versions have no implicit manifest downgrade. Comparative leadership remains separately gated with
 `competitive_claim_eligible=false`. Older versions, local knowledge-release artifacts, and
 third-party packages are not separately supported unless a release notice says otherwise.
 The published v0.12 manifest records `commercial_release_eligible=true` and
 `quality_protocol_eligible=true`; those historical flags do not qualify this v0.13 source
-candidate or bypass manifest v6.
+candidate or bypass manifest v8.
 
 ## Report a vulnerability privately
 

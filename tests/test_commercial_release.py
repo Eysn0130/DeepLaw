@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -52,7 +53,8 @@ def _junit(path: Path, *, skipped: int = 0) -> None:
 
 
 def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
-    assert set(_unified_versions(REPOSITORY).values()) == {"0.12.0"}
+    project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+    assert set(_unified_versions(REPOSITORY).values()) == {project["project"]["version"]}
     assert all(_docs(REPOSITORY).values())
     assert "商业" not in (REPOSITORY / "README.md").read_text(encoding="utf-8")
     english_homepage = (REPOSITORY / "README_EN.md").read_text(encoding="utf-8")
@@ -66,7 +68,7 @@ def test_release_versions_public_homepages_and_claim_policy_are_exact() -> None:
     ]
 
 
-def test_homepages_distinguish_historical_and_formal_release_evidence() -> None:
+def test_homepages_keep_history_out_of_current_status_and_link_navigation() -> None:
     historical_name = "LIVING_WIKI_ACCEPTANCE_REPORT_2026-07-30.md"
     historical = (REPOSITORY / "docs" / historical_name).read_text(encoding="utf-8")
     assert "Historical pre-release implementation report" in historical
@@ -74,15 +76,14 @@ def test_homepages_distinguish_historical_and_formal_release_evidence() -> None:
 
     for homepage_name in ("README.md", "README_EN.md"):
         homepage = (REPOSITORY / homepage_name).read_text(encoding="utf-8")
-        assert "V0_12_ACCEPTANCE_MATRIX.md" in homepage
-        assert "RELEASE_NOTES_v0.12.0.md" in homepage
-        assert "commercial-release-manifest.json" in homepage
-        assert "post-release-verification.json" in homepage
-        if historical_name in homepage:
-            historical_line = next(
-                line for line in homepage.splitlines() if historical_name in line
-            ).casefold()
-            assert "histor" in historical_line or "pre-release" in historical_line
+        assert "docs/README.md" in homepage
+        assert "0.12.0 Beta" in homepage
+        assert "machine_evaluation_pending" in homepage
+        assert "V0_12_ACCEPTANCE_MATRIX.md" not in homepage
+        assert "RELEASE_NOTES_v0.12.0.md" not in homepage
+        assert "commercial-release-manifest.json" not in homepage
+        assert "post-release-verification.json" not in homepage
+        assert historical_name not in homepage
 
 
 def test_commercial_manifest_schema_cannot_reverse_owner_decision() -> None:

@@ -20,8 +20,9 @@ from benchmarks.release.evidence import (
 )
 from benchmarks.release.release_policy import (
     V5_MANIFEST_SCHEMA,
+    required_legacy_manifest_schema_version,
     required_manifest_schema_version,
-    validate_manifest_for_release,
+    validate_legacy_manifest_for_release,
 )
 from benchmarks.semantic.build_machine_review_consensus import (
     candidate_binding as semantic_candidate_binding,
@@ -185,34 +186,39 @@ def _openvex(path: Path, *, version: str) -> dict[str, Any]:
 
 
 def _docs(repository: Path) -> dict[str, bool]:
-    project = tomllib.loads((repository / "pyproject.toml").read_text(encoding="utf-8"))
-    version = project["project"]["version"]
-    major, minor, _patch = version.split(".")
-    acceptance = f"docs/V{major}_{minor}_ACCEPTANCE_MATRIX.md"
-    release_notes = f"docs/RELEASE_NOTES_v{version}.md"
     required = {
-        "README.md": ("本地单用户 Agent Knowledge OS", "Knowledge Capsule", f"v{version}"),
-        "README_EN.md": (
-            "Local single-user Agent Knowledge OS",
+        "README.md": (
+            "Local-first Agent Knowledge OS",
             "Knowledge Capsule",
-            f"v{version}",
+            "release_ready=false",
+            "knowledge-support input v7 / output v6",
         ),
-        "CHANGELOG.md": (version, "competitive_claim_eligible=false"),
+        "README_EN.md": (
+            "Local-first Agent Knowledge OS",
+            "Knowledge Capsule",
+            "release_ready=false",
+            "knowledge-support input v7 / output v6",
+        ),
         "SECURITY.md": (
-            f"v{version}",
-            "commercial_release_eligible=true",
-            "quality_protocol_eligible=true",
+            "machine_evaluated_no_human_attestation",
+            "Gate classification is v8",
+            "not_executed",
         ),
-        "docs/INSTALL_UPGRADE_ROLLBACK.md": ("0.6.0", version),
-        acceptance: (
-            "commercial_release_eligible=true",
-            "quality_protocol_eligible=true",
-            "competitive_claim_eligible=false",
+        "docs/PRODUCT_REQUIREMENTS.md": (
+            "PRD revision: **1.3.2**",
+            "Task Continuity / Governed Project Knowledge",
+            "Source-native Evidence Library",
+            "Living Wiki",
         ),
-        release_notes: (
-            "commercial_release_eligible=true",
-            "quality_protocol_eligible=true",
-            "competitive_claim_eligible=false",
+        "docs/ARCHITECTURE.md": (
+            "Product-role view",
+            "Runtime data-flow view",
+            "Deployment/security view",
+        ),
+        "docs/V0_13_QUALIFICATION_PROTOCOL.md": (
+            "machine_evaluated_no_human_attestation",
+            "current classification is Gate v8",
+            "14 Core",
         ),
     }
     result: dict[str, bool] = {}
@@ -708,7 +714,7 @@ def assemble(
         raise CommercialReleaseError(
             f"release {version} requires {required_schema}; "
             "the historical v5/no-model assembler is closed; use "
-            "benchmarks.release.v013_commercial_release with semantically validated v6 evidence"
+            "the current v0.13 release_provenance_v8 path with retained evidence"
         )
     versions = _unified_versions(repository)
     platform_reports = [
@@ -1295,7 +1301,7 @@ def main() -> int:
         release_version = tomllib.loads(
             (args.repository.resolve() / "pyproject.toml").read_text(encoding="utf-8")
         )["project"]["version"]
-        expected_schema = required_manifest_schema_version(release_version)
+        expected_schema = required_legacy_manifest_schema_version(release_version)
         schema_name = (
             "commercial-release-manifest.v5.schema.json"
             if expected_schema == V5_MANIFEST_SCHEMA
@@ -1305,7 +1311,7 @@ def main() -> int:
         Draft202012Validator.check_schema(schema)
         write_report(args.output.resolve(), report)
         emitted = load_json(args.output.resolve())
-        validate_manifest_for_release(emitted, release_version=release_version)
+        validate_legacy_manifest_for_release(emitted, release_version=release_version)
         Draft202012Validator(schema).validate(emitted)
     except (OSError, RuntimeError) as error:
         print(str(error), file=sys.stderr)

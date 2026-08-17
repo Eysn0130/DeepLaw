@@ -336,5 +336,6 @@ part of this PRD review.
 
 The research supports the Page Registry/Link Index/Resolver, Coverage Specification, projection
 profiles, split Skills, first-512 MCP instructions and host-neutral Context Envelope. It does not
-satisfy real-host, Human Gold, desktop product, cross-platform or competitive-comparator gates;
+satisfy real-host, machine-reference isolation, desktop product, cross-platform or
+competitive-comparator gates;
 those require separate executable evidence and remain `not_executed` until actually run.

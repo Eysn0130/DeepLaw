@@ -93,8 +93,9 @@ decision. The closed `v013-release-gate-classification/v1` freezes gate categori
 model requirements, metric bounds, and exact hard-zero counter inventories. A deterministic
 validator reads those bytes and rejects weakened thresholds, missing counters, stale candidate or
 protocol bindings, development-as-blind claims, secret canaries, and private absolute paths. Only
-`v013_commercial_release` may derive manifest v6; `release_policy` then validates the envelope and
-asset invariants. Publish and public-redownload paths rerun the semantic validator first. No such
+the v8 commercial assembler may derive manifest v8; release provenance v8 then reopens the typed
+evidence and validates the envelope and asset invariants. Publish and public-redownload paths
+rerun the semantic validator first. No such
 report or manifest was generated for this candidate, so every external gate remains
 `not_executed`.
 

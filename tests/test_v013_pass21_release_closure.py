@@ -18,7 +18,7 @@ def _load(path: Path) -> dict[str, object]:
     return value
 
 
-def test_active_qualification_binding_accepts_semver_and_matches_package() -> None:
+def test_v1_qualification_binding_remains_a_historical_012_deadlock_record() -> None:
     schema_path = REPOSITORY / "contracts/v013-active-qualification.v1.schema.json"
     binding_path = REPOSITORY / "benchmarks/v013/active-qualification-v1.json"
     schema = _load(schema_path)
@@ -31,7 +31,8 @@ def test_active_qualification_binding_accepts_semver_and_matches_package() -> No
         line for line in pyproject.splitlines() if line.startswith("version = ")
     )
     package_version = version_line.split('"', 2)[1]
-    assert binding["candidate_version"] == package_version
+    assert package_version in {"0.12.0", "0.13.0"}
+    assert binding["candidate_version"] == "0.12.0"
     assert schema["properties"]["candidate_version"]["pattern"] == (
         "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
     )
@@ -76,6 +77,9 @@ def test_pre_freeze_version_deadlock_is_explicit_and_fail_closed() -> None:
     assert binding["release_ready"] is False
     assert binding["claim_eligible"] is False
     assert release_policy.required_manifest_schema_version("0.13.0") == (
+        "deeplaw.commercial-release-manifest/v8"
+    )
+    assert release_policy.required_legacy_manifest_schema_version("0.13.0") == (
         "deeplaw.commercial-release-manifest/v6"
     )
     with pytest.raises(QualificationFreezeError, match="release_version_binding_deadlock"):
@@ -96,7 +100,7 @@ def test_gate_v6_is_active_timeline_is_core_and_validators_are_ready() -> None:
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(classification)
 
-    assert classification_path == release_policy.V013_ACTIVE_CLASSIFICATION_PATH
+    assert classification_path == release_policy.V013_V6_CLASSIFICATION_PATH
     assert classification["assembly_policy"] == {
         "assembly_enabled": False,
         "reason_code": "awaiting_all_core_gate_pass",
@@ -107,7 +111,7 @@ def test_gate_v6_is_active_timeline_is_core_and_validators_are_ready() -> None:
     }
     assert gates["timeline"]["category"] == "Core"
     assert gates["timeline"]["required"] is True
-    for gate_id in release_policy.V013_CORE_GATE_IDS:
+    for gate_id in release_policy.V013_V6_CORE_GATE_IDS:
         gate = gates[gate_id]
         assert gate["implementation_status"] == "ready"
         assert gate["assembly_enabled"] is False

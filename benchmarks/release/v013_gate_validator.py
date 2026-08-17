@@ -1,9 +1,9 @@
-"""Derive v0.13 Gate Results from reusable raw execution evidence.
+"""Derive historical v0.13 v6 Gate Results from reusable raw execution evidence.
 
 The validator never accepts a caller-authored pass flag. It reopens every raw file,
 checks its byte and record identity, binds it to the active exact candidate, derives
 metrics from numerator/denominator samples, derives hard-failure counts, and applies
-the active Gate v6 thresholds and Host constraints. One raw execution file may be
+the frozen Gate v6 thresholds and Host constraints. One raw execution file may be
 referenced by multiple independent Gate invocations.
 """
 

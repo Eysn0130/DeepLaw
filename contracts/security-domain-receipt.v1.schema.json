@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/security-domain-receipt.v1.schema.json",
+  "title": "DeepLaw OS-observed external qualification security-domain receipt v1",
+  "description": "A sanitized runner/OS observation. Policy booleans or shared-process claims do not establish isolation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "profile", "role", "domain_id", "runner", "executable",
+    "principal", "mount", "network", "ipc", "ingress", "egress", "visibility",
+    "negative_canary", "secret_policy", "process_receipt_sha256", "process_receipt_sha256s", "observed_roots_sha256",
+    "attester_executable_sha256", "observed", "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.security-domain-receipt/v1"},
+    "profile": {"const": "machine_evaluated_no_human_attestation"},
+    "role": {"enum": ["reference_freezer", "candidate_host", "scorer_a", "scorer_b", "arbiter"]},
+    "domain_id": {"$ref": "#/$defs/identifier"},
+    "runner": {"$ref": "#/$defs/runner"},
+    "executable": {
+      "type": "object", "additionalProperties": false,
+      "required": ["executable_sha256", "process_tree_sha256"],
+      "properties": {"executable_sha256": {"$ref": "#/$defs/sha256"}, "process_tree_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "principal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["uid", "principal_id", "acl_sha256"],
+      "properties": {"uid": {"type": "integer", "minimum": 0}, "principal_id": {"$ref": "#/$defs/identifier"}, "acl_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "mount": {
+      "type": "object", "additionalProperties": false,
+      "required": ["namespace_id", "inventory_sha256", "read_only_input_sha256s"],
+      "properties": {"namespace_id": {"$ref": "#/$defs/identifier"}, "inventory_sha256": {"$ref": "#/$defs/sha256"}, "read_only_input_sha256s": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/sha256"}, "uniqueItems": true}}
+    },
+    "network": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy", "policy_sha256"],
+      "properties": {"policy": {"enum": ["deny_all", "host_provider_allowlist"]}, "policy_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "ipc": {
+      "type": "object", "additionalProperties": false,
+      "required": ["namespace_id", "policy", "policy_sha256"],
+      "properties": {"namespace_id": {"$ref": "#/$defs/identifier"}, "policy": {"enum": ["deny_shared", "artifact_pipe_only"]}, "policy_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "ingress": {"$ref": "#/$defs/artifacts"},
+    "egress": {"$ref": "#/$defs/artifacts"},
+    "visibility": {
+      "type": "object", "additionalProperties": false,
+      "required": ["can_read", "cannot_read"],
+      "properties": {"can_read": {"$ref": "#/$defs/digests"}, "cannot_read": {"$ref": "#/$defs/digests"}}
+    },
+    "negative_canary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempts", "targets", "leaked_count", "observation_sha256"],
+      "properties": {"attempts": {"type": "integer", "minimum": 1}, "targets": {"$ref": "#/$defs/artifacts"}, "leaked_count": {"const": 0}, "observation_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "secret_policy": {"enum": ["forbidden", "broker_only_exact_host"]},
+    "process_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "process_receipt_sha256s": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/sha256"}, "uniqueItems": true},
+    "observed_roots_sha256": {"$ref": "#/$defs/sha256"},
+    "attester_executable_sha256": {"$ref": "#/$defs/sha256"},
+    "observed": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "command_id", "attestation_sha256"],
+      "properties": {"source": {"const": "os_runner_attestation"}, "command_id": {"$ref": "#/$defs/identifier"}, "attestation_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"},
+    "runner": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ephemeral_runner_id", "runner_label", "runner_attestation_sha256"],
+      "properties": {"ephemeral_runner_id": {"$ref": "#/$defs/identifier"}, "runner_label": {"type": "string", "pattern": "^deeplaw-qualification-[a-z-]+$"}, "runner_attestation_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "sha256"],
+      "properties": {"name": {"$ref": "#/$defs/identifier"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "artifacts": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/artifact"}, "uniqueItems": true},
+    "digests": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/sha256"}, "uniqueItems": true}
+  }
+}

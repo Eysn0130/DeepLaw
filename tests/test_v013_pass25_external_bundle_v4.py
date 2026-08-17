@@ -14,6 +14,12 @@ from benchmarks.release.external_qualification_bundle_v4 import (
     _record_sha256,
     validate_external_bundle,
 )
+from benchmarks.release.security_domain_receipt import (
+    ROLE_LABELS,
+    process_receipt_set_sha256,
+    record_sha256,
+    security_domain_set_sha256,
+)
 
 COMMIT = "1" * 40
 TREE = "2" * 40
@@ -64,6 +70,90 @@ def _source(root: Path, relative: str, media_type: str = "application/json") -> 
         "sha256": _digest(raw),
         "media_type": media_type,
     }
+
+
+def _security_receipt(
+    role: str,
+    ingress_names: set[str],
+    egress_name: str,
+    *,
+    forbidden_names: set[str],
+    network_policy: str = "deny_all",
+    executable_sha256: str | None = None,
+    process_receipt_sha256s: list[str] | None = None,
+) -> dict[str, Any]:
+    def artifact(name: str) -> dict[str, str]:
+        # Artifact identity is global across the handoff.  A role-specific
+        # digest would allow a producer/consumer mismatch to pass unnoticed.
+        return {"name": name, "sha256": _digest(f"artifact:{name}".encode())}
+
+    ingress = [artifact(name) for name in sorted(ingress_names)]
+    egress = [artifact(egress_name)]
+    can_read = [item["sha256"] for item in ingress]
+    canary_targets = [
+        {"name": name, "sha256": _digest(f"negative-canary:{role}:{name}".encode())}
+        for name in sorted(forbidden_names)
+    ]
+    cannot_read = [item["sha256"] for item in canary_targets]
+    process_receipts = process_receipt_sha256s or [
+        _digest(f"process-receipt:{role}".encode())
+    ]
+    value: dict[str, Any] = {
+        "schema_version": "deeplaw.security-domain-receipt/v1",
+        "profile": "machine_evaluated_no_human_attestation",
+        "role": role,
+        "domain_id": f"domain:{role}",
+        "runner": {
+            "ephemeral_runner_id": f"runner:{role}",
+            "runner_label": ROLE_LABELS[role],
+            "runner_attestation_sha256": _digest(f"runner-attestation:{role}".encode()),
+        },
+        "executable": {
+            "executable_sha256": executable_sha256
+            or _digest(f"executable:{role}".encode()),
+            "process_tree_sha256": _digest(f"process-tree:{role}".encode()),
+        },
+        "principal": {
+            "uid": 1000 + len(role),
+            "principal_id": f"principal:{role}",
+            "acl_sha256": _digest(f"acl:{role}".encode()),
+        },
+        "mount": {
+            "namespace_id": f"mount:{role}",
+            "inventory_sha256": _digest(f"mount:{role}".encode()),
+            "read_only_input_sha256s": can_read,
+        },
+        "network": {
+            "policy": network_policy,
+            "policy_sha256": _digest(f"network:{role}".encode()),
+        },
+        "ipc": {
+            "namespace_id": f"ipc:{role}",
+            "policy": "artifact_pipe_only",
+            "policy_sha256": _digest(f"ipc:{role}".encode()),
+        },
+        "ingress": ingress,
+        "egress": egress,
+        "visibility": {"can_read": can_read, "cannot_read": cannot_read},
+        "negative_canary": {
+            "attempts": len(canary_targets),
+            "targets": canary_targets,
+            "leaked_count": 0,
+            "observation_sha256": _digest(f"canary:{role}:zero".encode()),
+        },
+        "secret_policy": "broker_only_exact_host" if role == "candidate_host" else "forbidden",
+        "process_receipt_sha256": process_receipt_set_sha256(process_receipts),
+        "process_receipt_sha256s": process_receipts,
+        "observed_roots_sha256": _digest(f"observed-roots:{role}".encode()),
+        "attester_executable_sha256": _digest(b"frozen-security-domain-attester"),
+        "observed": {
+            "source": "os_runner_attestation",
+            "command_id": f"observe:{role}",
+            "attestation_sha256": _digest(f"os-observation:{role}".encode()),
+        },
+    }
+    value["record_sha256"] = record_sha256(value)
+    return value
 
 
 def _record(value: dict[str, Any]) -> dict[str, Any]:
@@ -277,7 +367,7 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
         "runner_sha256": RUNNER,
         "scorer_panel_sha256": panel["panel_sha256"],
         "arbiter_sha256": ARBITER,
-        "compiler_scorer_isolation_sha256": _digest(isolation_raw),
+        "compiler_scorer_isolation_sha256": _digest(b"frozen-security-domain-attester"),
     }
     binding = _record(
         {
@@ -321,6 +411,104 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
     )
     binding_raw = _write_json(root, "reference/candidate-binding.json", binding)
     external["candidate_binding_sha256"] = _digest(binding_raw)
+
+    process_receipts: dict[str, list[str]] = {}
+    for role in (
+        "reference_freezer",
+        "candidate_host",
+        "scorer_a",
+        "scorer_b",
+        "arbiter",
+    ):
+        process_receipts[role] = []
+        for index in range(2 if role == "candidate_host" else 1):
+            raw = _write_json(
+                root,
+                f"process/{role}-{index + 1}.json",
+                {
+                    "schema_version": "deeplaw.sanitized-process-observation/v1",
+                    "role": role,
+                    "ordinal": index + 1,
+                },
+            )
+            process_receipts[role].append(_digest(raw))
+
+    security_receipts = {
+        "reference_freezer": _security_receipt(
+            "reference_freezer",
+            {"reference-cases", "reviewer-inputs"},
+            "sealed-reference",
+            forbidden_names={
+                "candidate-sanitized-output",
+                "scorer-a-output",
+                "scorer-b-output",
+                "arbiter-output",
+            },
+            process_receipt_sha256s=process_receipts["reference_freezer"],
+        ),
+        "candidate_host": _security_receipt(
+            "candidate_host",
+            {"verified-candidate-artifacts", "qualification-inputs", "final-blind-inputs"},
+            "candidate-sanitized-output",
+            forbidden_names={
+                "sealed-reference",
+                "scorer-a-output",
+                "scorer-b-output",
+                "arbiter-output",
+            },
+            network_policy="host_provider_allowlist",
+            executable_sha256=RUNNER,
+            process_receipt_sha256s=process_receipts["candidate_host"],
+        ),
+        "scorer_a": _security_receipt(
+            "scorer_a",
+            {"candidate-sanitized-output", "sealed-reference"},
+            "scorer-a-output",
+            forbidden_names={"scorer-b-output", "arbiter-output"},
+            executable_sha256=SCORER_A,
+            process_receipt_sha256s=process_receipts["scorer_a"],
+        ),
+        "scorer_b": _security_receipt(
+            "scorer_b",
+            {"candidate-sanitized-output", "sealed-reference"},
+            "scorer-b-output",
+            forbidden_names={"scorer-a-output", "arbiter-output"},
+            executable_sha256=SCORER_B,
+            process_receipt_sha256s=process_receipts["scorer_b"],
+        ),
+        "arbiter": _security_receipt(
+            "arbiter",
+            {"scorer-a-output", "scorer-b-output"},
+            "arbiter-output",
+            forbidden_names={"candidate-sanitized-output", "sealed-reference"},
+            executable_sha256=ARBITER,
+            process_receipt_sha256s=process_receipts["arbiter"],
+        ),
+    }
+    security_receipt_sources: list[dict[str, Any]] = []
+    for role, receipt in security_receipts.items():
+        relative = f"security/{role}.json"
+        _write_json(root, relative, receipt)
+        security_receipt_sources.append(_source(root, relative))
+    external["security_domains_sha256"] = security_domain_set_sha256(
+        list(security_receipts.values())
+    )
+    external["security_domain_executable_sha256"] = {
+        role: receipt["executable"]["executable_sha256"]
+        for role, receipt in security_receipts.items()
+    }
+    external["security_domain_process_tree_sha256"] = {
+        role: receipt["executable"]["process_tree_sha256"]
+        for role, receipt in security_receipts.items()
+    }
+    external["security_domain_process_receipt_sha256"] = {
+        role: receipt["process_receipt_sha256"]
+        for role, receipt in security_receipts.items()
+    }
+    external["security_domain_observed_roots_sha256"] = {
+        role: receipt["observed_roots_sha256"]
+        for role, receipt in security_receipts.items()
+    }
 
     def source(relative: str, media: str = "application/json") -> dict[str, Any]:
         return _source(root, relative, media)
@@ -483,6 +671,7 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
             "agent_roster_source": source("reference/roster.json"),
             "agent_consensus_source": source("reference/consensus.json"),
             "agent_isolation_source": source("reference/isolation.json"),
+            "security_domain_receipt_sources": security_receipt_sources,
             "scorer_a_rows_source": source(a_path),
             "scorer_b_rows_source": source(b_path),
             "arbiter_consensus_rows_source": source(arb_path),
@@ -689,6 +878,9 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
         elif relative == "reference/isolation.json":
             media = "application/json"
             kind = "agent_isolation"
+        elif relative.startswith("security/") and relative.endswith(".json"):
+            media = "application/json"
+            kind = "security_domain_receipt"
         elif relative.startswith("reference/reviewer-") and relative.endswith(
             "-output.json"
         ):
@@ -794,6 +986,20 @@ def _validate(paths: dict[str, Any]) -> dict[str, Any]:
         expected_candidate_run_id=101,
         expected_evidence_run_id=202,
     )
+
+
+def _refresh_security_receipt(
+    paths: dict[str, Any], role: str, receipt: dict[str, Any]
+) -> None:
+    path = paths["root"] / f"security/{role}.json"
+    raw = _json_bytes(receipt)
+    path.write_bytes(raw)
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+    for item in manifest["files"]:
+        if item["relative_path"] == f"security/{role}.json":
+            item.update({"byte_size": len(raw), "sha256": _digest(raw)})
+            break
+    paths["manifest"].write_bytes(_json_bytes(_record(manifest)))
 
 
 def _refresh_reference_chain(paths: dict[str, Any], *, reviewer_index: int) -> None:
@@ -1093,4 +1299,105 @@ def test_v4_requires_retained_reviewer_and_corpus_bytes(
     paths["manifest"].write_bytes(_json_bytes(_record(manifest)))
 
     with pytest.raises(ExternalQualificationBundleV4Error, match=message):
+        _validate(paths)
+
+
+def test_v4_rejects_security_domain_executable_hash_drift(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    receipt_path = paths["root"] / "security/scorer_a.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["executable"]["executable_sha256"] = "f" * 64
+    receipt["record_sha256"] = record_sha256(receipt)
+    receipt_raw = _json_bytes(receipt)
+    receipt_path.write_bytes(receipt_raw)
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+    for item in manifest["files"]:
+        if item["relative_path"] == "security/scorer_a.json":
+            item.update({"byte_size": len(receipt_raw), "sha256": _digest(receipt_raw)})
+    paths["manifest"].write_bytes(_json_bytes(_record(manifest)))
+    with pytest.raises(ExternalQualificationBundleV4Error, match="executable hash drifted"):
+        _validate(paths)
+
+
+def test_v4_rejects_security_domain_attester_hash_drift(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    receipt_path = paths["root"] / "security/scorer_a.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["attester_executable_sha256"] = "f" * 64
+    receipt["record_sha256"] = record_sha256(receipt)
+    _refresh_security_receipt(paths, "scorer_a", receipt)
+    with pytest.raises(
+        ExternalQualificationBundleV4Error,
+        match="attester executable hash drifted",
+    ):
+        _validate(paths)
+
+
+def test_v4_rejects_security_domain_read_only_ingress_drift(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    receipt_path = paths["root"] / "security/scorer_a.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["mount"]["read_only_input_sha256s"] = []
+    receipt["record_sha256"] = record_sha256(receipt)
+    _refresh_security_receipt(paths, "scorer_a", receipt)
+    with pytest.raises(
+        ExternalQualificationBundleV4Error,
+        match="read-only input hashes must equal artifact ingress",
+    ):
+        _validate(paths)
+
+
+def test_v4_rejects_security_domain_producer_consumer_hash_drift(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    receipt_path = paths["root"] / "security/scorer_a.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["egress"][0]["sha256"] = "f" * 64
+    receipt["record_sha256"] = record_sha256(receipt)
+    _refresh_security_receipt(paths, "scorer_a", receipt)
+    with pytest.raises(
+        ExternalQualificationBundleV4Error,
+        match="producer/consumer artifact hash differs",
+    ):
+        _validate(paths)
+
+
+def test_v4_rejects_arbitrary_or_missing_prohibited_visibility_hash(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    receipt_path = paths["root"] / "security/scorer_a.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["visibility"]["cannot_read"] = ["f" * 64]
+    receipt["record_sha256"] = record_sha256(receipt)
+    _refresh_security_receipt(paths, "scorer_a", receipt)
+    with pytest.raises(
+        ExternalQualificationBundleV4Error,
+        match="negative-canary targets",
+    ):
+        _validate(paths)
+
+
+def test_v4_rejects_wrong_named_negative_canary_target(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    receipt_path = paths["root"] / "security/scorer_a.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["negative_canary"]["targets"][0]["name"] = "sealed-reference"
+    receipt["record_sha256"] = record_sha256(receipt)
+    _refresh_security_receipt(paths, "scorer_a", receipt)
+    with pytest.raises(
+        ExternalQualificationBundleV4Error,
+        match="prohibited artifact visibility is incomplete",
+    ):
+        _validate(paths)
+
+
+def test_v4_requires_provider_allowlist_for_candidate_domain(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    receipt_path = paths["root"] / "security/candidate_host.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["network"]["policy"] = "deny_all"
+    receipt["record_sha256"] = record_sha256(receipt)
+    _refresh_security_receipt(paths, "candidate_host", receipt)
+    with pytest.raises(
+        ExternalQualificationBundleV4Error,
+        match="network policy is not provider allowlisted",
+    ):
         _validate(paths)

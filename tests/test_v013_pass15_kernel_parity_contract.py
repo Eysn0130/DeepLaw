@@ -10,9 +10,9 @@ from jsonschema import Draft202012Validator
 from benchmarks.release import release_policy
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v6.json"
+CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v8.json"
 CLASSIFICATION_SCHEMA = (
-    REPOSITORY / "contracts/v013-release-gate-classification.v6.schema.json"
+    REPOSITORY / "contracts/v013-release-gate-classification.v8.schema.json"
 )
 
 
@@ -50,7 +50,7 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
     gates = {item["gate_id"]: item for item in classification["gates"]}  # type: ignore[index]
     for gate_id in ("codex", "opencode"):
         assert gates[gate_id]["accepted_input_schema_versions"] == [
-            "deeplaw.v013-gate-source-evidence/v1"
+            "deeplaw.typed-qualification-evidence/v2"
         ]
         assert gates[gate_id]["minimum_distinct_run_count"] == 3
         assert gates[gate_id]["required_unique_dimensions"] == [
@@ -62,8 +62,13 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
         ]
     assert gates["codex"]["constraints"] == {
         "host": "codex",
-        "tool_version": "0.147.0-alpha.1.2",
+        "tool_version": "codex-cli 0.148.0-alpha.9",
+        "binary_sha256": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f",
+        "source_commit": None,
+        "config_selector": None,
         "model_id": "gpt-5.6-luna",
+        "expected_response_model_id": "gpt-5.6-luna",
+        "reasoning_effort": "max",
         "argv_prefix": ["codex", "app-server", "--stdio"],
     }
     assert gates["opencode"]["constraints"]["tool_version"] == "1.18.16"
@@ -180,8 +185,8 @@ def test_frozen_behavior_map_claim_boundary_and_candidate_status_are_explicit() 
     assert "Caller-authored PASS values" in traceability
 
     pyproject = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
-    assert pyproject["project"]["version"] == "0.12.0"
     manifest = _load(REPOSITORY / "governance/product-surface-manifest.v1.json")
-    assert manifest["package_version"] == "0.12.0"
+    assert pyproject["project"]["version"] in {"0.12.0", "0.13.0"}
+    assert manifest["package_version"] == pyproject["project"]["version"]
     assert manifest["lifecycle_status"] == "source_candidate"
     assert manifest["release_ready"] is False

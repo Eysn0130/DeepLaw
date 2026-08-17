@@ -533,6 +533,7 @@
         "agent_roster_source",
         "agent_consensus_source",
         "agent_isolation_source",
+        "security_domain_receipt_sources",
         "scorer_a_rows_source",
         "scorer_b_rows_source",
         "arbiter_consensus_rows_source",
@@ -546,6 +547,12 @@
         "agent_roster_source": {"$ref": "#/$defs/jsonSource"},
         "agent_consensus_source": {"$ref": "#/$defs/jsonSource"},
         "agent_isolation_source": {"$ref": "#/$defs/jsonSource"},
+        "security_domain_receipt_sources": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {"$ref": "#/$defs/jsonSource"}
+        },
         "scorer_a_rows_source": {"$ref": "#/$defs/jsonSource"},
         "scorer_b_rows_source": {"$ref": "#/$defs/jsonSource"},
         "arbiter_consensus_rows_source": {"$ref": "#/$defs/jsonSource"},
