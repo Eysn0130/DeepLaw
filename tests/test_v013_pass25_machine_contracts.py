@@ -188,6 +188,14 @@ def _security_domain_sources() -> list[dict[str, Any]]:
     ]
 
 
+def _process_receipt_sources() -> list[dict[str, Any]]:
+    return [
+        _source(f"process/{role}-{index + 1}.json")
+        for role in SECURITY_ROLES
+        for index in range(2 if role == "candidate_host" else 1)
+    ]
+
+
 def _role_digests(seed: str) -> dict[str, str]:
     return {role: seed for role in SECURITY_ROLES}
 
@@ -304,6 +312,7 @@ def _typed(
             "agent_consensus_source": _source("reference/consensus.json"),
             "agent_isolation_source": _source("reference/isolation.json"),
             "security_domain_receipt_sources": _security_domain_sources(),
+            "process_receipt_sources": _process_receipt_sources(),
             "scorer_a_rows_source": _source("scorer/a-rows.json"),
             "scorer_b_rows_source": _source("scorer/b-rows.json"),
             "arbiter_consensus_rows_source": _source("scorer/arbiter-rows.json"),
@@ -784,6 +793,7 @@ def test_typed_v2_preserves_kind_vocabulary_and_adds_machine_reference_scorer() 
         for source in _typed()["payload"]["security_domain_receipt_sources"]
     } == {f"security/{role}.json" for role in SECURITY_ROLES}
     assert len(_typed()["payload"]["security_domain_receipt_sources"]) == 5
+    assert len(_typed()["payload"]["process_receipt_sources"]) == 6
     machine = _typed()
     assert machine["scorer"] == {
         "identity": machine["arbiter"]["identity"],

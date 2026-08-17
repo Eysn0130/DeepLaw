@@ -94,18 +94,22 @@ def test_legacy_v1_to_v6_calls_are_internal_compatibility_only() -> None:
     )
 
 
-def test_provider_host_route_is_opaque_and_internal_binding_is_not_advertised() -> None:
+def test_host_route_is_unadvertised_internal_compatibility_only() -> None:
     route = {
         "operation": "query",
         "query": "governed decision",
         "host_route": {"host": "codex", "session_sha256": "a" * 64},
     }
-    assert next(_provider_input_validator().iter_errors(route), None) is None
-    assert _validate_knowledge_tool_arguments(route, autonomous=True) == "provider_v7"
+    assert next(_provider_input_validator().iter_errors(route), None) is not None
+    assert (
+        _validate_knowledge_tool_arguments(route, autonomous=True)
+        == "internal_compatibility"
+    )
 
     schema = json.loads(CONTRACT.read_text(encoding="utf-8"))
     rendered = json.dumps(schema, sort_keys=True)
-    assert "host_route" in rendered
+    assert "host_route" not in rendered
+    assert "session_sha256" not in rendered
     assert "task_binding" not in rendered
 
 

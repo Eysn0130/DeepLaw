@@ -534,6 +534,7 @@
         "agent_consensus_source",
         "agent_isolation_source",
         "security_domain_receipt_sources",
+        "process_receipt_sources",
         "scorer_a_rows_source",
         "scorer_b_rows_source",
         "arbiter_consensus_rows_source",
@@ -551,6 +552,12 @@
           "type": "array",
           "minItems": 5,
           "maxItems": 5,
+          "items": {"$ref": "#/$defs/jsonSource"}
+        },
+        "process_receipt_sources": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
           "items": {"$ref": "#/$defs/jsonSource"}
         },
         "scorer_a_rows_source": {"$ref": "#/$defs/jsonSource"},

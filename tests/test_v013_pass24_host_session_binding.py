@@ -309,6 +309,9 @@ def test_host_session_route_v2_keeps_route_identity_across_edit_and_blocks_old_c
             confirm_no_case_data=True,
         )
     provider = context["provider_capsule"]["capsule"]
+    provider_json = json.dumps(provider, sort_keys=True)
+    assert "session_sha256" not in provider_json
+    assert session_sha256 not in provider_json
     gap_codes = {
         item["code"]
         for item in provider["gaps"]
@@ -782,7 +785,7 @@ def test_provider_host_route_recomputes_binding_or_returns_gap(tmp_path: Path) -
         "schema_version": "deeplaw.host-route-gap/v1",
         "status": "gap",
         "host": "codex",
-        "session_sha256": sha256_bytes(b"missing-native-session"),
         "write_performed": False,
         "gaps": [{"code": "route_unbound"}],
     }
+    assert "session_sha256" not in json.dumps(missing_gap, sort_keys=True)

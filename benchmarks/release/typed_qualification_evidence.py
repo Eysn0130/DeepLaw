@@ -66,7 +66,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "8d66c7794cc4e73d4e8999fbfef6ed6bfebfe773f9775dd02ba3302229a0e440"
+    "119551d551b1c1ddafb816f4f7a93bc8bc08da20ec4f217ecec26467a29bad5b"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -543,7 +543,11 @@ def _source_refs(kind: str, payload: Mapping[str, Any]) -> list[Mapping[str, Any
         security_receipts = payload.get("security_domain_receipt_sources")
         if not isinstance(security_receipts, list) or len(security_receipts) != 5:
             _fail("Machine reference security-domain receipt sources are incomplete")
+        process_receipts = payload.get("process_receipt_sources")
+        if not isinstance(process_receipts, list) or len(process_receipts) != 6:
+            _fail("Machine reference process receipt sources are incomplete")
         refs.extend(security_receipts)
+        refs.extend(process_receipts)
     return refs
 
 
@@ -577,6 +581,11 @@ def _validate_envelope(
         ):
             if field not in payload:
                 _fail(f"{label} source is required for machine reference scoring")
+        process_receipts = payload.get("process_receipt_sources")
+        if not isinstance(process_receipts, list) or len(process_receipts) != 6:
+            _fail(
+                "process receipt sources are required for machine reference scoring"
+            )
     _validate_contract(envelope, schema_name, label="typed evidence")
     kind = envelope.get("kind")
     if not isinstance(kind, str):
@@ -2156,6 +2165,24 @@ def _parse_machine_reference(
         security_receipts[role] = receipt
     if set(security_receipts) != set(_SECURITY_DOMAIN_ROLES):
         _fail("security-domain receipt roles are incomplete")
+    retained_process_receipts: list[str] = []
+    for index, source_ref in enumerate(payload["process_receipt_sources"]):
+        _value, source = _source_json(
+            source_ref,
+            root=root,
+            label=f"sanitized process receipt[{index}]",
+        )
+        retained_process_receipts.append(str(source.ref["sha256"]))
+    required_process_receipts = {
+        digest
+        for receipt in security_receipts.values()
+        for digest in receipt["process_receipt_sha256s"]
+    }
+    if (
+        len(retained_process_receipts) != len(set(retained_process_receipts))
+        or set(retained_process_receipts) != required_process_receipts
+    ):
+        _fail("security-domain process receipt bytes are not retained exactly once")
     try:
         security_domains_sha256 = _security_domain_set_sha256(
             list(security_receipts.values())

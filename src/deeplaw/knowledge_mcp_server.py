@@ -931,6 +931,26 @@ def _validate_knowledge_tool_arguments(
     provider_error = next(_provider_input_validator().iter_errors(arguments), None)
     if provider_error is None:
         return "provider_v7"
+    # A thin local Host driver may inject the already-hashed route after the
+    # model has produced a v7 call.  Keep that metadata unadvertised and
+    # classify it as internal compatibility; it must never be returned to the
+    # Provider.  The base request still has to satisfy the closed v7 contract.
+    if autonomous and "host_route" in arguments:
+        internal_arguments = dict(arguments)
+        route = internal_arguments.pop("host_route")
+        internal_error = next(
+            _provider_input_validator().iter_errors(internal_arguments), None
+        )
+        if (
+            internal_error is None
+            and isinstance(route, Mapping)
+            and set(route) == {"host", "session_sha256"}
+            and route.get("host") in {"codex", "opencode"}
+            and isinstance(route.get("session_sha256"), str)
+            and re.fullmatch(r"[0-9a-f]{64}", str(route["session_sha256"]))
+            is not None
+        ):
+            return "internal_compatibility"
     compatibility = (
         _compatibility_input_validator()
         if autonomous
@@ -962,7 +982,7 @@ def _resolve_provider_host_route(
     workspace: Path,
     fixed_task_binding: Mapping[str, Any] | None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """Resolve one opaque native Host route into the existing task binding."""
+    """Resolve unadvertised local Host metadata into the existing task binding."""
 
     route = arguments.get("host_route")
     if route is None:
@@ -989,7 +1009,6 @@ def _resolve_provider_host_route(
             "schema_version": "deeplaw.host-route-gap/v1",
             "status": "gap",
             "host": str(route["host"]),
-            "session_sha256": str(route["session_sha256"]),
             "write_performed": False,
             "gaps": [{"code": str(code)}],
         }
@@ -1003,7 +1022,6 @@ def _resolve_provider_host_route(
             "schema_version": "deeplaw.host-route-gap/v1",
             "status": "gap",
             "host": str(route["host"]),
-            "session_sha256": str(route["session_sha256"]),
             "write_performed": False,
             "gaps": [{"code": "route_stale"}],
         }

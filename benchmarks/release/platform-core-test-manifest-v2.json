@@ -11164,6 +11164,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_provider_surface",
+            "name": "test_host_route_is_unadvertised_internal_compatibility_only"
+          },
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_host_route_is_unadvertised_internal_compatibility_only"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_provider_surface",
             "name": "test_initial_capsule_character_budgets_are_bounded"
           },
           "node_id": "tests/test_v013_pass24_provider_surface.py::test_initial_capsule_character_budgets_are_bounded"
@@ -11181,13 +11188,6 @@
             "name": "test_provider_contract_is_closed_and_advertises_only_three_operations"
           },
           "node_id": "tests/test_v013_pass24_provider_surface.py::test_provider_contract_is_closed_and_advertises_only_three_operations"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass24_provider_surface",
-            "name": "test_provider_host_route_is_opaque_and_internal_binding_is_not_advertised"
-          },
-          "node_id": "tests/test_v013_pass24_provider_surface.py::test_provider_host_route_is_opaque_and_internal_binding_is_not_advertised"
         },
         {
           "junit": {
@@ -11976,6 +11976,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_evidence",
+            "name": "test_machine_reference_cannot_pass_without_retained_process_receipt_bytes"
+          },
+          "node_id": "tests/test_v013_pass25_machine_evidence.py::test_machine_reference_cannot_pass_without_retained_process_receipt_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_evidence",
             "name": "test_machine_reference_recomputes_pass_without_human_attestation"
           },
           "node_id": "tests/test_v013_pass25_machine_evidence.py::test_machine_reference_recomputes_pass_without_human_attestation"
@@ -12098,6 +12105,13 @@
             "name": "test_external_requires_distinct_executable_scorer_a_b_and_arbiter_hashes"
           },
           "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_requires_distinct_executable_scorer_a_b_and_arbiter_hashes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_external_role_guards_are_deletion_sensitive"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_external_role_guards_are_deletion_sensitive"
         },
         {
           "junit": {
@@ -15047,9 +15061,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2134,
+      "count": 2136,
       "selection": "not qualification and not windows_native",
-      "sha256": "66dee4ca5b95e2e11e0948c6e614e3ef33bf8bf18d0d668e7074f8bb8665f547"
+      "sha256": "3e059ebd93c675528b125afb8f67ab43692b75716361331dab7557024cfaee33"
     },
     "windows": {
       "additional_cases": [
@@ -15082,13 +15096,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2138,
+      "count": 2140,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "7e45742b5fae49d40934ae2cb2d10054c3b94849017d5867a2b08aa26909c28d"
+      "sha256": "54c35c4f09cd77db6105ef4cea3588cd961c839c19124c6d77fa479b0025bcc7"
     }
   },
-  "manifest_sha256": "d2196a779a33b4f6d47c6643cb13b1c1f9a1b83cb66c00a56409ff5117e9c819",
+  "manifest_sha256": "f4d93c2a7a5fe181b9aaa95eed3e6ea5d2cd52e3faa018a03b595a99c6472185",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

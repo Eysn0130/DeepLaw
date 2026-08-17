@@ -356,17 +356,21 @@ def _fixture(root: Path) -> tuple[Path, dict[str, Any]]:
     )
     binding_ref, _ = _write(root, "reference/binding.json", binding)
     process_receipts: dict[str, list[str]] = {}
+    process_receipt_sources: list[dict[str, Any]] = []
     for role in SECURITY_ROLES:
         process_receipts[role] = []
         for index in range(2 if role == "candidate_host" else 1):
-            raw = _canonical(
+            source_ref, raw = _write(
+                root,
+                f"process/{role}-{index + 1}.json",
                 {
                     "schema_version": "deeplaw.sanitized-process-observation/v1",
                     "role": role,
                     "ordinal": index + 1,
-                }
+                },
             )
             process_receipts[role].append(_sha(raw))
+            process_receipt_sources.append(source_ref)
 
     security_receipts = {
         "reference_freezer": _security_receipt(
@@ -555,6 +559,7 @@ def _fixture(root: Path) -> tuple[Path, dict[str, Any]]:
         "agent_consensus_source": consensus_ref,
         "agent_isolation_source": isolation_ref,
         "security_domain_receipt_sources": security_domain_receipt_sources,
+        "process_receipt_sources": process_receipt_sources,
         "scorer_a_rows_source": scorer_a_ref,
         "scorer_b_rows_source": scorer_b_ref,
         "arbiter_consensus_rows_source": arbiter_ref,
@@ -654,6 +659,20 @@ def test_machine_reference_cannot_pass_without_retained_candidate_output_and_exe
             expected_workflow_run_id=17,
             expected_corpus_sha256=HOLDOUT,
         )
+
+
+def test_machine_reference_cannot_pass_without_retained_process_receipt_bytes(
+    tmp_path: Path,
+) -> None:
+    manifest, envelope = _fixture(tmp_path)
+    envelope["payload"]["process_receipt_sources"].pop()
+    _rewrite_manifest(manifest, envelope)
+
+    with pytest.raises(
+        TypedQualificationEvidenceError,
+        match="process receipt",
+    ):
+        parse_typed_evidence(manifest, root=tmp_path)
 
 
 def test_replacing_candidate_output_invalidates_old_scorer_receipts(tmp_path: Path) -> None:

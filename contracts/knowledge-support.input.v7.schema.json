@@ -17,7 +17,6 @@
         "operation": {"const": "query"},
         "query": {"$ref": "#/$defs/queryText"},
         "query_plan_version": {"const": "6"},
-        "host_route": {"$ref": "#/$defs/hostRoute"},
         "purpose": {"$ref": "#/$defs/purpose"},
         "policy": {"$ref": "#/$defs/policy"},
         "scope": {"$ref": "#/$defs/scope"},
@@ -45,7 +44,6 @@
         "goal": {"type": "string", "minLength": 1, "maxLength": 2000},
         "confirm_no_case_data": {"const": true},
         "query_plan_version": {"const": "6"},
-        "host_route": {"$ref": "#/$defs/hostRoute"},
         "purpose": {"$ref": "#/$defs/purpose"},
         "policy": {"$ref": "#/$defs/policy"},
         "scope": {"$ref": "#/$defs/scope"},
@@ -128,16 +126,6 @@
           "applicability", "limitation", "source_evidence", "unresolved_gap"
         ]
       }
-    },
-    "hostRoute": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["host", "session_sha256"],
-      "properties": {
-        "host": {"enum": ["codex", "opencode"]},
-        "session_sha256": {"$ref": "#/$defs/sha256"}
-      }
-    },
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    }
   }
 }

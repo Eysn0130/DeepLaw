@@ -208,6 +208,10 @@ def test_external_requires_distinct_executable_scorer_a_b_and_arbiter_hashes() -
     assert "shasum -a 256 \"${DEEPLAW_SCORER_A}\"" in workflow
     assert "shasum -a 256 \"${DEEPLAW_SCORER_B}\"" in workflow
     assert "expected_scorer_sha256" in workflow
+    assert "expected_arbiter_sha256" in workflow
+    assert '["external_inputs"]["arbitration_sha256"]' in workflow
+    assert workflow.count("frozen-active-qualification.json") >= 8
+    assert "cmp -s" in workflow
     assert "--process-receipt scorer-a-output/result/process.json" in workflow
     assert "--process-receipt scorer-b-output/result/process.json" in workflow
     assert "--process-receipt arbiter-output/result/process.json" in workflow
@@ -245,6 +249,42 @@ def test_external_candidate_runner_cannot_receive_reference_scorer_or_dotenv_dom
     assert "python -m build" not in workflow
     assert "uv build" not in workflow
     assert "hatch build" not in workflow
+
+
+def test_external_role_guards_are_deletion_sensitive() -> None:
+    workflow = _workflow("external-qualification-evidence.yml")
+    blocks = {
+        name: _job_block(workflow, name)
+        for name in (
+            "candidate",
+            "reference_freezer",
+            "scorer_a",
+            "scorer_b",
+            "arbiter",
+            "assembly",
+        )
+    }
+    for token in (
+        "DEEPLAW_REFERENCE_FREEZER",
+        "DEEPLAW_REFERENCE_DOMAIN_RUNNER",
+        "DEEPLAW_SCORER_A",
+        "DEEPLAW_SCORER_B",
+        "DEEPLAW_DETERMINISTIC_ARBITER",
+    ):
+        assert token in blocks["candidate"].split("test -n", 1)[0]
+    for name in ("reference_freezer", "scorer_a", "scorer_b", "arbiter", "assembly"):
+        prefix = blocks[name].split("test -n", 1)[0]
+        assert "DEEPLAW_OPENCODE_DOTENV" in prefix
+        assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in prefix
+        assert "DEEPLAW_OPENCODE_CREDENTIAL_BROKER" in prefix
+    assert "test ! -e scorer-inputs/scorer-b-output" in blocks["scorer_a"]
+    assert "test ! -e scorer-inputs/arbiter-output" in blocks["scorer_a"]
+    assert "test ! -e scorer-inputs/scorer-a-output" in blocks["scorer_b"]
+    assert "test ! -e scorer-inputs/arbiter-output" in blocks["scorer_b"]
+    assert "test ! -e arbiter-inputs/candidate-sanitized-output" in blocks["arbiter"]
+    assert "test ! -e arbiter-inputs/sealed-reference" in blocks["arbiter"]
+    assert "expected_arbiter_sha256" in blocks["arbiter"]
+    assert "cmp -s" in blocks["arbiter"]
 
 
 def test_external_keeps_exact_host_pins_and_delegates_auth_to_brokers() -> None:

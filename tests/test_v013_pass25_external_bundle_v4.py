@@ -413,6 +413,7 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
     external["candidate_binding_sha256"] = _digest(binding_raw)
 
     process_receipts: dict[str, list[str]] = {}
+    process_receipt_sources: list[dict[str, Any]] = []
     for role in (
         "reference_freezer",
         "candidate_host",
@@ -432,6 +433,9 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
                 },
             )
             process_receipts[role].append(_digest(raw))
+            process_receipt_sources.append(
+                _source(root, f"process/{role}-{index + 1}.json")
+            )
 
     security_receipts = {
         "reference_freezer": _security_receipt(
@@ -672,6 +676,7 @@ def _seed(tmp_path: Path) -> dict[str, Any]:
             "agent_consensus_source": source("reference/consensus.json"),
             "agent_isolation_source": source("reference/isolation.json"),
             "security_domain_receipt_sources": security_receipt_sources,
+            "process_receipt_sources": process_receipt_sources,
             "scorer_a_rows_source": source(a_path),
             "scorer_b_rows_source": source(b_path),
             "arbiter_consensus_rows_source": source(arb_path),

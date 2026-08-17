@@ -42,6 +42,10 @@ _PRIVATE_ROUTE_FIELDS = frozenset(
         "route_knowledge_ids",
         "route_metadata",
         "checkpoint_route",
+        "host_route",
+        "route_identity",
+        "session_sha256",
+        "parent_session_sha256",
     }
 )
 

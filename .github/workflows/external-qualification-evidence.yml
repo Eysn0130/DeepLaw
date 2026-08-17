@@ -571,6 +571,9 @@ jobs:
             --process-receipt scorer-a-output/result/process.json \
             --output scorer-a-output/result
           test -s scorer-a-output/result/process.json
+          cp scorer-inputs/candidate-sanitized-output/frozen-active-qualification.json \
+            scorer-a-output/result/frozen-active-qualification.json
+          test -s scorer-a-output/result/frozen-active-qualification.json
           "${DEEPLAW_SECURITY_DOMAIN_ATTESTER}" \
             --role scorer_a \
             --runner-label deeplaw-qualification-scorer-a \
@@ -638,6 +641,9 @@ jobs:
             --process-receipt scorer-b-output/result/process.json \
             --output scorer-b-output/result
           test -s scorer-b-output/result/process.json
+          cp scorer-inputs/candidate-sanitized-output/frozen-active-qualification.json \
+            scorer-b-output/result/frozen-active-qualification.json
+          test -s scorer-b-output/result/frozen-active-qualification.json
           "${DEEPLAW_SECURITY_DOMAIN_ATTESTER}" \
             --role scorer_b \
             --runner-label deeplaw-qualification-scorer-b \
@@ -694,6 +700,13 @@ jobs:
           test -f "${DEEPLAW_DETERMINISTIC_ARBITER}"
           test ! -L "${DEEPLAW_DETERMINISTIC_ARBITER}"
           test "$(stat -f '%u:%Lp' "${DEEPLAW_DETERMINISTIC_ARBITER}")" = "$(id -u):700"
+          test -s arbiter-inputs/scorer-a-output/result/frozen-active-qualification.json
+          test -s arbiter-inputs/scorer-b-output/result/frozen-active-qualification.json
+          cmp -s \
+            arbiter-inputs/scorer-a-output/result/frozen-active-qualification.json \
+            arbiter-inputs/scorer-b-output/result/frozen-active-qualification.json
+          expected_arbiter_sha256="$(python -c 'import json,pathlib; print(json.loads(pathlib.Path("arbiter-inputs/scorer-a-output/result/frozen-active-qualification.json").read_text(encoding="utf-8"))["external_inputs"]["arbitration_sha256"])')"
+          test "$(shasum -a 256 "${DEEPLAW_DETERMINISTIC_ARBITER}" | cut -d ' ' -f 1)" = "${expected_arbiter_sha256}"
           attester_sha256="$(shasum -a 256 "${DEEPLAW_SECURITY_DOMAIN_ATTESTER}" | cut -d ' ' -f 1)"
           test "${attester_sha256}" = "${DEEPLAW_SECURITY_DOMAIN_ATTESTER_SHA256}"
           mkdir -p arbiter-output/security arbiter-output/result
