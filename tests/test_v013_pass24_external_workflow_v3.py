@@ -133,6 +133,17 @@ def test_host_preflight_uses_exact_pins_and_never_reads_auth_material() -> None:
 
 def test_dotenv_and_external_inputs_are_metadata_only() -> None:
     workflow = _workflow()
+    assert "! find " not in workflow
+    assert "! grep " not in workflow
+    assert workflow.count("forbidden_path=\"$(find ") == 4
+    assert all(
+        "-print -quit" in line
+        for line in workflow.splitlines()
+        if 'forbidden_path="$(find ' in line
+    )
+    assert workflow.count('test -z "${forbidden_path}"') == 4
+    assert 'if grep -Fq -- "$1" "$2"; then' in workflow
+    assert 'test "${grep_status}" -eq 1' in workflow
     assert "DEEPLAW_OPENCODE_DOTENV" in workflow
     assert "--dotenv \"${DEEPLAW_OPENCODE_DOTENV}\"" in workflow
     assert "DEEPLAW_SECURITY_DOMAIN_ATTESTER" in workflow

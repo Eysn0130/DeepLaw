@@ -376,7 +376,8 @@ jobs:
             --attester-executable-sha256 "${DEEPLAW_SECURITY_DOMAIN_ATTESTER_SHA256}" \
             --output candidate-output/security/candidate_host.json
           test -s candidate-output/security/candidate_host.json
-          ! find candidate-output -name '.env' -o -name 'auth.json' -o -name 'transcript' -o -name 'reasoning' -o -name 'raw-events'
+          forbidden_path="$(find candidate-output \( -name '.env' -o -name 'auth.json' -o -name 'transcript' -o -name 'reasoning' -o -name 'raw-events' \) -print -quit)"
+          test -z "${forbidden_path}"
 
       - name: Export only sanitized candidate output for downstream scorers
         shell: bash
@@ -390,7 +391,8 @@ jobs:
           cp "${CANDIDATE_INPUT_ROOT}/verified-candidate-artifacts/retained-artifact-manifest.json" candidate-sanitized-output/
           cp "${CANDIDATE_INPUT_ROOT}/verified-candidate-artifacts/frozen-active-qualification.json" candidate-sanitized-output/
           cp "${CANDIDATE_INPUT_ROOT}/candidate-full-raw-evidence/candidate-full-inventory-receipt.json" candidate-sanitized-output/
-          ! find candidate-sanitized-output -name '.env' -o -name 'auth.json' -o -name 'transcript' -o -name 'reasoning' -o -name 'raw-events'
+          forbidden_path="$(find candidate-sanitized-output \( -name '.env' -o -name 'auth.json' -o -name 'transcript' -o -name 'reasoning' -o -name 'raw-events' \) -print -quit)"
+          test -z "${forbidden_path}"
 
       - name: Upload one-way sanitized candidate artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -415,7 +417,8 @@ jobs:
           test -s candidate-qualification-inputs/verified-dist/retained-artifact-manifest.json
           test -s candidate-qualification-inputs/candidate-full-raw-evidence/candidate-full-inventory-receipt.json
           test -s candidate-qualification-inputs/exact-wheel-receipt.json
-          ! find candidate-qualification-inputs -name '.env' -o -name 'auth.json' -o -name 'transcript' -o -name 'reasoning' -o -name 'raw-events'
+          forbidden_path="$(find candidate-qualification-inputs \( -name '.env' -o -name 'auth.json' -o -name 'transcript' -o -name 'reasoning' -o -name 'raw-events' \) -print -quit)"
+          test -z "${forbidden_path}"
 
       - name: Upload exact Candidate Full inputs for assembly
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -798,7 +801,8 @@ jobs:
           test -s "${candidate_full_raw_root}/candidate-full-run-receipt.json"
           test -s "${candidate_full_raw_root}/candidate-full-inventory-receipt.json"
           test -s "${exact_wheel_receipt}"
-          ! find assembly-inputs/candidate-qualification-inputs -name '.env' -o -name 'auth.json' -o -name 'transcript' -o -name 'reasoning' -o -name 'raw-events'
+          forbidden_path="$(find assembly-inputs/candidate-qualification-inputs \( -name '.env' -o -name 'auth.json' -o -name 'transcript' -o -name 'reasoning' -o -name 'raw-events' \) -print -quit)"
+          test -z "${forbidden_path}"
           python - "${verified_dist}" "${exact_wheel_receipt}" <<'PY'
           import hashlib
           import json
@@ -850,8 +854,16 @@ jobs:
             --evidence-run-id "${EVIDENCE_RUN_ID}" \
             > assembly-output/bundle-validation.json
           test -s assembly-output/bundle-validation.json
-          ! grep -F "${GITHUB_WORKSPACE}" assembly-output/bundle-validation.json
-          ! grep -F "${RUNNER_TEMP}" assembly-output/bundle-validation.json
+          reject_literal() {
+            if grep -Fq -- "$1" "$2"; then
+              return 1
+            else
+              grep_status=$?
+              test "${grep_status}" -eq 1
+            fi
+          }
+          reject_literal "${GITHUB_WORKSPACE}" assembly-output/bundle-validation.json
+          reject_literal "${RUNNER_TEMP}" assembly-output/bundle-validation.json
 
       - name: Upload sanitized external qualification evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
