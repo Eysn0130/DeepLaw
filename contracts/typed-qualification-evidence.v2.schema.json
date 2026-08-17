@@ -1,0 +1,556 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/typed-qualification-evidence.v2.schema.json",
+  "title": "DeepLaw typed raw qualification evidence v2",
+  "description": "Versioned typed evidence envelope for the machine-only qualification profile. The existing evidence-kind vocabulary remains available; machine reference scoring is a new closed kind. No envelope field establishes human authenticity or caller-authored pass facts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "reference_provenance",
+    "human_authenticity",
+    "kind",
+    "candidate_binding",
+    "run_binding",
+    "corpus",
+    "runner",
+    "scorer",
+    "payload",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.typed-qualification-evidence/v2"},
+    "profile": {"const": "machine_evaluated_no_human_attestation"},
+    "reference_provenance": {"const": "agent_consensus"},
+    "human_authenticity": {"const": "not_claimed"},
+    "kind": {
+      "enum": [
+        "candidate_full_junit",
+        "candidate_platform_receipt",
+        "host_event_sequence",
+        "exact_wheel_execution",
+        "legal_rows",
+        "wiki_journey_rows",
+        "context_capsule_selection_usage",
+        "scale_report",
+        "retained_supply_chain",
+        "machine_reference_scorer"
+      ]
+    },
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "run_binding": {"$ref": "#/$defs/runBinding"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "runner": {"$ref": "#/$defs/identityDigest"},
+    "scorer": {"$ref": "#/$defs/identityDigest"},
+    "scorer_panel": {"$ref": "#/$defs/scorerPanel"},
+    "arbiter": {"$ref": "#/$defs/arbiterDigest"},
+    "payload": {"type": "object"},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "candidate_full_junit"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/candidateFullJunit"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "candidate_platform_receipt"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/candidatePlatformReceipt"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "host_event_sequence"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/hostEventSequence"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "exact_wheel_execution"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/exactWheelExecution"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "legal_rows"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/legalRows"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "wiki_journey_rows"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/wikiJourneyRows"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "context_capsule_selection_usage"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/contextCapsuleSelectionUsage"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "scale_report"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/scaleReport"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "retained_supply_chain"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/retainedSupplyChain"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "machine_reference_scorer"}}, "required": ["kind"]},
+      "then": {
+        "required": ["scorer_panel", "arbiter"],
+        "properties": {"payload": {"$ref": "#/$defs/machineReferenceScorer"}}
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "runBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "workflow_run_id"],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "role"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "role": {"enum": ["candidate_full", "qualification_holdout", "final_blind"]}
+      }
+    },
+    "identityDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "sha256"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "scorerIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "identity", "sha256"],
+      "properties": {
+        "role": {"enum": ["independent_scorer_a", "independent_scorer_b"]},
+        "identity": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "scorerPanel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scorer_a", "scorer_b", "panel_sha256", "distinct_scorers"],
+      "properties": {
+        "scorer_a": {
+          "allOf": [
+            {"$ref": "#/$defs/scorerIdentity"},
+            {
+              "properties": {
+                "role": {"const": "independent_scorer_a"},
+                "identity": {"pattern": "^independent-scorer-a:[A-Za-z0-9._:/-]{1,199}$"}
+              }
+            }
+          ]
+        },
+        "scorer_b": {
+          "allOf": [
+            {"$ref": "#/$defs/scorerIdentity"},
+            {
+              "properties": {
+                "role": {"const": "independent_scorer_b"},
+                "identity": {"pattern": "^independent-scorer-b:[A-Za-z0-9._:/-]{1,199}$"}
+              }
+            }
+          ]
+        },
+        "panel_sha256": {"$ref": "#/$defs/sha256"},
+        "distinct_scorers": {"const": true}
+      }
+    },
+    "arbiterDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "identity", "sha256"],
+      "properties": {
+        "role": {"const": "deterministic_arbiter"},
+        "identity": {
+          "type": "string",
+          "pattern": "^deterministic-arbiter:[A-Za-z0-9._:/-]{1,199}$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "byte_size", "sha256", "media_type"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/safePath"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "media_type": {
+          "enum": [
+            "application/json",
+            "application/xml",
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/octet-stream",
+            "text/plain",
+            "text/csv",
+            "text/html",
+            "text/markdown"
+          ]
+        }
+      }
+    },
+    "jsonSource": {
+      "allOf": [
+        {"$ref": "#/$defs/source"},
+        {"properties": {"media_type": {"const": "application/json"}}}
+      ]
+    },
+    "payloadBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {"source": {"$ref": "#/$defs/source"}}
+    },
+    "candidateFullJunit": {
+      "allOf": [
+        {"$ref": "#/$defs/payloadBase"},
+        {"properties": {"source": {"properties": {"media_type": {"const": "application/xml"}}}}}
+      ]
+    },
+    "candidatePlatformReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "platform_manifest_source", "junit_sources"],
+      "properties": {
+        "source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "platform_manifest_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "junit_sources": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["platform", "python_version", "source"],
+            "properties": {
+              "platform": {"enum": ["ubuntu", "macos", "windows"]},
+              "python_version": {"enum": ["3.11", "3.12", "3.13"]},
+              "source": {
+                "allOf": [
+                  {"$ref": "#/$defs/source"},
+                  {"properties": {"media_type": {"const": "application/xml"}}}
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "hostEventSequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_source",
+        "lifecycle_source",
+        "usage_source",
+        "expected_source",
+        "continuity_source",
+        "isolation_source"
+      ],
+      "properties": {
+        "event_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "lifecycle_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "usage_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "expected_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "continuity_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "isolation_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        }
+      }
+    },
+    "exactWheelExecution": {
+      "allOf": [
+        {"$ref": "#/$defs/payloadBase"},
+        {"properties": {"source": {"properties": {"media_type": {"const": "application/json"}}}}}
+      ]
+    },
+    "legalRows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_catalog_source", "original_source_refs", "expected_source", "observed_source"],
+      "properties": {
+        "source_catalog_source": {"$ref": "#/$defs/jsonSource"},
+        "original_source_refs": {
+          "type": "array",
+          "minItems": 28,
+          "maxItems": 28,
+          "items": {"$ref": "#/$defs/originalSource"}
+        },
+        "expected_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "observed_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "originalSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "version_id", "source"],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/identifier"},
+        "version_id": {"$ref": "#/$defs/identifier"},
+        "source": {"$ref": "#/$defs/source"}
+      }
+    },
+    "wikiJourneyRows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_source", "observed_source"],
+      "properties": {
+        "expected_source": {"$ref": "#/$defs/jsonSource"},
+        "observed_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "contextCapsuleSelectionUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_source",
+        "provider_capsule_source",
+        "query_trace_source",
+        "ledger_source",
+        "usage_source"
+      ],
+      "properties": {
+        "expected_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "provider_capsule_source": {"$ref": "#/$defs/jsonSource"},
+        "query_trace_source": {"$ref": "#/$defs/jsonSource"},
+        "ledger_source": {"$ref": "#/$defs/jsonSource"},
+        "usage_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "scaleReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_source", "observed_source"],
+      "properties": {
+        "expected_source": {"$ref": "#/$defs/jsonSource"},
+        "observed_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "retainedSupplyChain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_build_source",
+        "retained_candidate_source",
+        "pre_publish_receipt_source",
+        "wheel_source",
+        "sdist_source",
+        "sbom_source",
+        "openvex_source",
+        "licenses_source",
+        "provenance_source"
+      ],
+      "properties": {
+        "candidate_build_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "retained_candidate_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "pre_publish_receipt_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/json"}}}
+          ]
+        },
+        "wheel_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/octet-stream"}}}
+          ]
+        },
+        "sdist_source": {
+          "allOf": [
+            {"$ref": "#/$defs/source"},
+            {"properties": {"media_type": {"const": "application/octet-stream"}}}
+          ]
+        },
+        "sbom_source": {"$ref": "#/$defs/jsonSource"},
+        "openvex_source": {"$ref": "#/$defs/jsonSource"},
+        "licenses_source": {"$ref": "#/$defs/jsonSource"},
+        "provenance_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "legacyProcessIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scorer_process_id",
+        "runner_process_id",
+        "scorer_identity_sha256",
+        "runner_identity_sha256",
+        "separate_processes"
+      ],
+      "properties": {
+        "scorer_process_id": {"$ref": "#/$defs/identifier"},
+        "runner_process_id": {"$ref": "#/$defs/identifier"},
+        "scorer_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "runner_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "separate_processes": {"const": true}
+      }
+    },
+    "processIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scorer_process_id",
+        "runner_process_id",
+        "scorer_identity_sha256",
+        "runner_identity_sha256",
+        "separate_processes"
+      ],
+      "properties": {
+        "scorer_process_id": {"$ref": "#/$defs/identifier"},
+        "runner_process_id": {"$ref": "#/$defs/identifier"},
+        "scorer_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "runner_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "separate_processes": {"const": true}
+      }
+    },
+    "machineProcessIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scorer_a_process_id",
+        "scorer_b_process_id",
+        "runner_process_id",
+        "arbiter_process_id",
+        "scorer_a_identity_sha256",
+        "scorer_b_identity_sha256",
+        "runner_identity_sha256",
+        "arbiter_identity_sha256",
+        "scorer_processes_distinct",
+        "arbiter_process_distinct",
+        "separate_processes"
+      ],
+      "properties": {
+        "scorer_a_process_id": {"type": "string", "pattern": "^scorer-a:[A-Za-z0-9._:/-]{1,199}$"},
+        "scorer_b_process_id": {"type": "string", "pattern": "^scorer-b:[A-Za-z0-9._:/-]{1,199}$"},
+        "runner_process_id": {"type": "string", "pattern": "^runner:[A-Za-z0-9._:/-]{1,199}$"},
+        "arbiter_process_id": {"type": "string", "pattern": "^arbiter:[A-Za-z0-9._:/-]{1,199}$"},
+        "scorer_a_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "scorer_b_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "runner_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "arbiter_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "scorer_processes_distinct": {"const": true},
+        "arbiter_process_distinct": {"const": true},
+        "separate_processes": {"const": true}
+      }
+    },
+    "machineReferenceScorer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_output_source",
+        "candidate_execution_source",
+        "semantic_reference_source",
+        "candidate_binding_source",
+        "agent_roster_source",
+        "agent_consensus_source",
+        "agent_isolation_source",
+        "scorer_a_rows_source",
+        "scorer_b_rows_source",
+        "arbiter_consensus_rows_source",
+        "process_identity"
+      ],
+      "properties": {
+        "candidate_output_source": {"$ref": "#/$defs/jsonSource"},
+        "candidate_execution_source": {"$ref": "#/$defs/jsonSource"},
+        "semantic_reference_source": {"$ref": "#/$defs/jsonSource"},
+        "candidate_binding_source": {"$ref": "#/$defs/jsonSource"},
+        "agent_roster_source": {"$ref": "#/$defs/jsonSource"},
+        "agent_consensus_source": {"$ref": "#/$defs/jsonSource"},
+        "agent_isolation_source": {"$ref": "#/$defs/jsonSource"},
+        "scorer_a_rows_source": {"$ref": "#/$defs/jsonSource"},
+        "scorer_b_rows_source": {"$ref": "#/$defs/jsonSource"},
+        "arbiter_consensus_rows_source": {"$ref": "#/$defs/jsonSource"},
+        "process_identity": {"$ref": "#/$defs/machineProcessIdentity"}
+      }
+    }
+  }
+}

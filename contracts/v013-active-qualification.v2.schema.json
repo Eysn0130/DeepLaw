@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-active-qualification.v2.schema.json",
+  "title": "DeepLaw v0.13 active machine-evaluated qualification v2",
+  "description": "Machine-only qualification state machine from a non-runnable 0.12 hold, through candidate preparation, to one exact frozen 0.13 candidate. No state asserts Human Gold, release readiness, or public claims.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "qualification_id",
+    "profile",
+    "status",
+    "candidate_version",
+    "protocol_binding",
+    "candidate_binding",
+    "external_inputs",
+    "host_constraints",
+    "human_review",
+    "blocker",
+    "release_ready",
+    "claim_eligible",
+    "machine_qualification_claim_eligible",
+    "competitive_claim_eligible",
+    "owner_tag_release_confirmation"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-active-qualification/v2"},
+    "qualification_id": {"const": "deeplaw-v013-active-machine-evaluated-candidate"},
+    "profile": {"const": "machine_evaluated_no_human_attestation"},
+    "status": {
+      "enum": [
+        "machine_evaluation_pending",
+        "construction_candidate_machine_evaluation_pending",
+        "frozen_exact_candidate_machine_evaluation_pending"
+      ]
+    },
+    "candidate_version": {"enum": ["0.12.0", "0.13.0"]},
+    "protocol_binding": {"$ref": "#/$defs/protocolBinding"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "external_inputs": {"$ref": "#/$defs/externalInputs"},
+    "host_constraints": {"$ref": "#/$defs/hostConstraints"},
+    "human_review": {"$ref": "#/$defs/humanReview"},
+    "blocker": {
+      "enum": [
+        "machine_evaluation_not_executed",
+        "candidate_artifact_not_built",
+        null
+      ]
+    },
+    "release_ready": {"const": false},
+    "claim_eligible": {"const": false},
+    "machine_qualification_claim_eligible": {"const": false},
+    "competitive_claim_eligible": {"const": false},
+    "owner_tag_release_confirmation": {
+      "const": "required_at_release_decision"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "machine_evaluation_pending"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "candidate_version": {"const": "0.12.0"},
+          "blocker": {"const": "machine_evaluation_not_executed"},
+          "candidate_binding": {"$ref": "#/$defs/pendingCandidateBinding"},
+          "external_inputs": {"$ref": "#/$defs/pendingExternalInputs"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "construction_candidate_machine_evaluation_pending"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "candidate_version": {"const": "0.13.0"},
+          "blocker": {"const": "candidate_artifact_not_built"},
+          "candidate_binding": {"$ref": "#/$defs/constructionCandidateBinding"},
+          "external_inputs": {"$ref": "#/$defs/frozenExternalInputs"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "frozen_exact_candidate_machine_evaluation_pending"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "candidate_version": {"const": "0.13.0"},
+          "blocker": {"const": null},
+          "candidate_binding": {"$ref": "#/$defs/frozenCandidateBinding"},
+          "external_inputs": {"$ref": "#/$defs/frozenExternalInputs"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "protocolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "schema_version", "relative_path", "sha256"],
+      "properties": {
+        "protocol_id": {"const": "deeplaw-v013-source-candidate-qualification"},
+        "schema_version": {"const": "deeplaw.v013-qualification-protocol/v2"},
+        "relative_path": {
+          "const": "benchmarks/v013/qualification-protocol-v2.json"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_version",
+        "source_commit",
+        "source_tree",
+        "lock_sha256",
+        "wheel_filename",
+        "wheel_sha256",
+        "sdist_filename",
+        "sdist_sha256",
+        "artifact_manifest_sha256"
+      ],
+      "properties": {
+        "package_version": {"enum": ["0.12.0", "0.13.0"]},
+        "source_commit": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/git"}]},
+        "source_tree": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/git"}]},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_filename": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^deeplaw-0\\.13\\.0-[A-Za-z0-9_.+-]+\\.whl$"}
+          ]
+        },
+        "wheel_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "sdist_filename": {
+          "oneOf": [
+            {"type": "null"},
+            {"const": "deeplaw-0.13.0.tar.gz"}
+          ]
+        },
+        "sdist_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "artifact_manifest_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        }
+      }
+    },
+    "externalInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semantic_machine_proposal_sha256",
+        "qualification_holdout_sha256",
+        "final_blind_holdout_sha256",
+        "agent_review_panel_sha256",
+        "runner_sha256",
+        "scorer_a_sha256",
+        "scorer_b_sha256",
+        "arbitration_sha256",
+        "isolation_sha256"
+      ],
+      "properties": {
+        "semantic_machine_proposal_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "qualification_holdout_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "final_blind_holdout_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "agent_review_panel_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "runner_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "scorer_a_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "scorer_b_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "arbitration_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "isolation_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]}
+      }
+    },
+    "pendingCandidateBinding": {
+      "allOf": [
+        {"$ref": "#/$defs/candidateBinding"},
+        {
+          "properties": {
+            "package_version": {"const": "0.12.0"},
+            "source_commit": {"const": null},
+            "source_tree": {"const": null},
+            "wheel_filename": {"const": null},
+            "wheel_sha256": {"const": null},
+            "sdist_filename": {"const": null},
+            "sdist_sha256": {"const": null},
+            "artifact_manifest_sha256": {"const": null}
+          }
+        }
+      ]
+    },
+    "constructionCandidateBinding": {
+      "allOf": [
+        {"$ref": "#/$defs/candidateBinding"},
+        {
+          "properties": {
+            "package_version": {"const": "0.13.0"},
+            "source_commit": {"const": null},
+            "source_tree": {"const": null},
+            "wheel_filename": {"const": null},
+            "wheel_sha256": {"const": null},
+            "sdist_filename": {"const": null},
+            "sdist_sha256": {"const": null},
+            "artifact_manifest_sha256": {"const": null}
+          }
+        }
+      ]
+    },
+    "frozenCandidateBinding": {
+      "allOf": [
+        {"$ref": "#/$defs/candidateBinding"},
+        {
+          "properties": {
+            "package_version": {"const": "0.13.0"},
+            "source_commit": {"$ref": "#/$defs/git"},
+            "source_tree": {"$ref": "#/$defs/git"},
+            "wheel_filename": {"type": "string"},
+            "wheel_sha256": {"$ref": "#/$defs/sha256"},
+            "sdist_filename": {"const": "deeplaw-0.13.0.tar.gz"},
+            "sdist_sha256": {"$ref": "#/$defs/sha256"},
+            "artifact_manifest_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "pendingExternalInputs": {
+      "allOf": [
+        {"$ref": "#/$defs/externalInputs"},
+        {
+          "properties": {
+            "semantic_machine_proposal_sha256": {"const": null},
+            "qualification_holdout_sha256": {"const": null},
+            "final_blind_holdout_sha256": {"const": null},
+            "agent_review_panel_sha256": {"const": null},
+            "runner_sha256": {"const": null},
+            "scorer_a_sha256": {"const": null},
+            "scorer_b_sha256": {"const": null},
+            "arbitration_sha256": {"const": null},
+            "isolation_sha256": {"const": null}
+          }
+        }
+      ]
+    },
+    "frozenExternalInputs": {
+      "allOf": [
+        {"$ref": "#/$defs/externalInputs"},
+        {
+          "properties": {
+            "semantic_machine_proposal_sha256": {"$ref": "#/$defs/sha256"},
+            "qualification_holdout_sha256": {"$ref": "#/$defs/sha256"},
+            "final_blind_holdout_sha256": {"$ref": "#/$defs/sha256"},
+            "agent_review_panel_sha256": {"$ref": "#/$defs/sha256"},
+            "runner_sha256": {"$ref": "#/$defs/sha256"},
+            "scorer_a_sha256": {"$ref": "#/$defs/sha256"},
+            "scorer_b_sha256": {"$ref": "#/$defs/sha256"},
+            "arbitration_sha256": {"$ref": "#/$defs/sha256"},
+            "isolation_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "humanReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "status",
+        "authenticity",
+        "attestation",
+        "owner_release_confirmation"
+      ],
+      "properties": {
+        "mode": {"const": "optional_non_gating"},
+        "status": {"const": "not_executed"},
+        "authenticity": {"const": "not_claimed"},
+        "attestation": {"const": "not_used_for_machine_profile"},
+        "owner_release_confirmation": {"const": "required"}
+      }
+    },
+    "codexPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binary_version",
+        "binary_sha256",
+        "request_model",
+        "reasoning_effort",
+        "auth_status_command",
+        "auth_material_access"
+      ],
+      "properties": {
+        "binary_version": {"const": "codex-cli 0.148.0-alpha.9"},
+        "binary_sha256": {
+          "const": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f"
+        },
+        "request_model": {"const": "gpt-5.6-luna"},
+        "reasoning_effort": {"const": "max"},
+        "auth_status_command": {"const": "codex login status"},
+        "auth_material_access": {"const": "forbidden"}
+      }
+    },
+    "openCodePin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source_commit",
+        "executable_sha256",
+        "package_sha256",
+        "config_selector",
+        "expected_response_model_id",
+        "runtime",
+        "dotenv_policy",
+        "secret_visibility"
+      ],
+      "properties": {
+        "version": {"const": "1.18.16"},
+        "source_commit": {
+          "const": "a3647eb025c7615159d417dcc49fc39fdaeba65b"
+        },
+        "executable_sha256": {
+          "const": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"
+        },
+        "package_sha256": {
+          "const": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722"
+        },
+        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
+        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "runtime": {"const": "host_bun_runtime_only"},
+        "dotenv_policy": {"const": "owner_only_external_strict_parser"},
+        "secret_visibility": {"const": "forbidden"}
+      }
+    },
+    "hostConstraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codex", "opencode"],
+      "properties": {
+        "codex": {"$ref": "#/$defs/codexPin"},
+        "opencode": {"$ref": "#/$defs/openCodePin"}
+      }
+    }
+  }
+}

@@ -30,11 +30,24 @@ def test_external_qualification_workflow_matches_consumer_and_never_rebuilds() -
     assert "self-hosted" in producer
     assert "macOS" in producer
     assert "deeplaw-qualification" in producer
-    assert "DEEPLAW_HUMAN_GOLD_ROOT" in producer
-    assert "DEEPLAW_INDEPENDENT_SCORER" in producer
-    assert "DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER" in producer
+    assert "DEEPLAW_REFERENCE_FREEZER" in producer
+    assert "DEEPLAW_REFERENCE_CASES" in producer
+    assert "DEEPLAW_REVIEWER_OUTPUT_1" in producer
+    assert "DEEPLAW_REVIEWER_PROCESS_3" in producer
+    assert "DEEPLAW_CANDIDATE_HOST_RUNNER" in producer
+    assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in producer
+    assert "DEEPLAW_OPENCODE_CREDENTIAL_BROKER" in producer
+    assert "DEEPLAW_SCORER_A" in producer
+    assert "DEEPLAW_SCORER_B" in producer
+    assert "DEEPLAW_DETERMINISTIC_ARBITER" in producer
+    assert "DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER" not in producer
     assert '--evidence-run-id "${GITHUB_RUN_ID}"' in producer
     assert '--candidate-run-id "${CANDIDATE_RUN_ID}"' in producer
+    assert '--evidence-run-id "${EVIDENCE_RUN_ID}"' in producer
+    assert "external_qualification_bundle_v4" in producer
+    assert "external_qualification_bundle_v3" not in producer
+    assert "DEEPLAW_HUMAN_GOLD_ROOT" not in producer
+    assert "DEEPLAW_TRUSTED_HUMAN_APPROVER" not in producer
     assert "bundle-manifest.json" in producer
     assert '--evidence-run-id "${EVIDENCE_RUN_ID}"' in consumer
     assert '--candidate-run-id "${CANDIDATE_RUN_ID}"' in consumer

@@ -1,0 +1,580 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-qualification-protocol.v2.schema.json",
+  "title": "DeepLaw v0.13 machine-evaluated qualification protocol v2",
+  "description": "Candidate-independent machine evaluation protocol. It deliberately does not establish human authorship, human approval, legal authority, or release authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "protocol_id",
+    "protocol_version",
+    "status",
+    "freeze_status",
+    "objective",
+    "candidate_binding",
+    "human_review",
+    "data_layers",
+    "roles",
+    "isolation_contract",
+    "hash_contract",
+    "scoring_contract",
+    "failure_policy",
+    "host_constraints",
+    "required_evidence",
+    "gates",
+    "claim_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-qualification-protocol/v2"},
+    "profile": {"const": "machine_evaluated_no_human_attestation"},
+    "protocol_id": {"const": "deeplaw-v013-source-candidate-qualification"},
+    "protocol_version": {"const": 2},
+    "status": {"const": "candidate_qualification"},
+    "freeze_status": {
+      "const": "protocol_frozen_machine_evaluation_candidate_binding_pending"
+    },
+    "objective": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "human_review": {"$ref": "#/$defs/humanReview"},
+    "data_layers": {"$ref": "#/$defs/dataLayers"},
+    "roles": {"$ref": "#/$defs/roles"},
+    "isolation_contract": {"$ref": "#/$defs/isolationContract"},
+    "hash_contract": {"$ref": "#/$defs/hashContract"},
+    "scoring_contract": {"$ref": "#/$defs/scoringContract"},
+    "failure_policy": {"$ref": "#/$defs/failurePolicy"},
+    "host_constraints": {"$ref": "#/$defs/hostConstraints"},
+    "required_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "machine_review_panel",
+          "candidate_full_junit",
+          "candidate_platform_receipt",
+          "host_event_sequence",
+          "exact_wheel_execution",
+          "machine_scorer_rows",
+          "legal_rows",
+          "wiki_journey_rows",
+          "context_capsule_selection_usage",
+          "scale_report",
+          "retained_supply_chain",
+          "isolation_receipt",
+          "machine_gate_result"
+        ]
+      }
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/gate"}
+    },
+    "claim_policy": {"$ref": "#/$defs/claimPolicy"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "nullableSha256": {
+      "anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+    },
+    "nullableGit": {
+      "anyOf": [{"type": "null"}, {"$ref": "#/$defs/git"}]
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_version",
+        "source_commit",
+        "source_tree",
+        "lock_sha256",
+        "wheel_filename",
+        "wheel_sha256",
+        "sdist_filename",
+        "sdist_sha256"
+      ],
+      "properties": {
+        "package_version": {"const": "0.12.0"},
+        "source_commit": {"const": null},
+        "source_tree": {"const": null},
+        "lock_sha256": {
+          "const": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082"
+        },
+        "wheel_filename": {"const": null},
+        "wheel_sha256": {"const": null},
+        "sdist_filename": {"const": null},
+        "sdist_sha256": {"const": null}
+      }
+    },
+    "humanReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "status",
+        "authenticity",
+        "attestation",
+        "owner_release_confirmation"
+      ],
+      "properties": {
+        "mode": {"const": "optional_non_gating"},
+        "status": {"const": "not_executed"},
+        "authenticity": {"const": "not_claimed"},
+        "attestation": {"const": "not_used_for_machine_profile"},
+        "owner_release_confirmation": {"const": "required"}
+      }
+    },
+    "dataLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layer_kind",
+        "residency",
+        "status",
+        "source_visibility",
+        "reference_visibility",
+        "candidate_visibility",
+        "tuning_policy",
+        "failure_policy"
+      ],
+      "properties": {
+        "layer_kind": {
+          "enum": ["development", "qualification_holdout", "final_blind"]
+        },
+        "residency": {
+          "enum": ["repository_or_public_synthetic", "repo_external"]
+        },
+        "status": {
+          "enum": ["development_only", "not_bound", "bound_after_candidate_freeze"]
+        },
+        "source_visibility": {
+          "enum": [
+            "compiler_visible_source_only",
+            "runner_source_only",
+            "evaluator_only"
+          ]
+        },
+        "reference_visibility": {
+          "enum": ["development_allowed", "evaluator_only", "forbidden"]
+        },
+        "candidate_visibility": {
+          "enum": ["not_bound", "source_only", "forbidden"]
+        },
+        "tuning_policy": {"type": "string", "minLength": 1, "maxLength": 500},
+        "failure_policy": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    },
+    "dataLayers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development", "qualification_holdout", "final_blind"],
+      "properties": {
+        "development": {"$ref": "#/$defs/dataLayer"},
+        "qualification_holdout": {"$ref": "#/$defs/dataLayer"},
+        "final_blind": {"$ref": "#/$defs/dataLayer"}
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role_id",
+        "role_kind",
+        "separate_process",
+        "candidate_visibility",
+        "reference_label_visibility",
+        "peer_visibility",
+        "secret_visibility",
+        "output_kind"
+      ],
+      "properties": {
+        "role_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+        },
+        "role_kind": {
+          "enum": [
+            "protocol_freezer",
+            "semantic_reviewer",
+            "adversarial_reviewer",
+            "deterministic_reconciler",
+            "corpus_packager",
+            "reference_vault",
+            "exact_candidate_runner",
+            "independent_scorer",
+            "deterministic_arbitrator",
+            "isolation_auditor",
+            "provenance_assembler"
+          ]
+        },
+        "separate_process": {"const": true},
+        "candidate_visibility": {
+          "enum": ["forbidden", "exact_artifact_only", "metadata_only"]
+        },
+        "reference_label_visibility": {
+          "enum": [
+            "forbidden",
+            "candidate_independent_only",
+            "evaluator_only",
+            "labels_only",
+            "metadata_only"
+          ]
+        },
+        "peer_visibility": {
+          "enum": ["forbidden", "bound_hashes_only", "evaluator_only", "metadata_only"]
+        },
+        "secret_visibility": {"const": "forbidden"},
+        "output_kind": {
+          "enum": [
+            "protocol_manifest",
+            "semantic_review",
+            "adversarial_review",
+            "semantic_machine_reference_proposal",
+            "corpus_manifest",
+            "reference_vault_manifest",
+            "candidate_raw_receipt",
+            "machine_scorer_rows",
+            "arbitration_receipt",
+            "isolation_receipt",
+            "machine_gate_result"
+          ]
+        }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_independent_reviewers",
+        "maximum_role_count",
+        "members"
+      ],
+      "properties": {
+        "minimum_independent_reviewers": {"const": 3},
+        "maximum_role_count": {"const": 13},
+        "members": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 13,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/role"}
+        }
+      }
+    },
+    "isolationContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewer_peer_visibility",
+        "reviewer_candidate_visibility",
+        "reviewer_runner_visibility",
+        "reviewer_scorer_visibility",
+        "runner_reference_labels_visibility",
+        "runner_scorer_visibility",
+        "scorer_peer_visibility",
+        "scorer_candidate_source_visibility",
+        "scorer_runner_process_visibility",
+        "shared_filesystem",
+        "shared_ipc",
+        "shared_transcript",
+        "input_mounts_read_only",
+        "secret_visibility"
+      ],
+      "properties": {
+        "reviewer_peer_visibility": {"const": "forbidden"},
+        "reviewer_candidate_visibility": {"const": "forbidden"},
+        "reviewer_runner_visibility": {"const": "forbidden"},
+        "reviewer_scorer_visibility": {"const": "forbidden"},
+        "runner_reference_labels_visibility": {"const": "forbidden"},
+        "runner_scorer_visibility": {"const": "forbidden"},
+        "scorer_peer_visibility": {"const": "forbidden"},
+        "scorer_candidate_source_visibility": {"const": "forbidden"},
+        "scorer_runner_process_visibility": {"const": "forbidden"},
+        "shared_filesystem": {"const": "forbidden"},
+        "shared_ipc": {"const": "forbidden"},
+        "shared_transcript": {"const": "forbidden"},
+        "input_mounts_read_only": {"const": true},
+        "secret_visibility": {"const": "forbidden"}
+      }
+    },
+    "hashContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "canonical_serialization",
+        "strict_utf8",
+        "reject_duplicate_keys",
+        "reject_nonfinite_numbers",
+        "regular_non_symlink_files",
+        "path_closure",
+        "orphan_files",
+        "record_digest",
+        "required_bindings"
+      ],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "canonical_serialization": {
+          "const": "UTF-8 JSON sort_keys separators=(',', ':') allow_nan=false"
+        },
+        "strict_utf8": {"const": true},
+        "reject_duplicate_keys": {"const": true},
+        "reject_nonfinite_numbers": {"const": true},
+        "regular_non_symlink_files": {"const": true},
+        "path_closure": {"const": true},
+        "orphan_files": {"const": "reject"},
+        "record_digest": {"const": "sha256(canonical_json_without_record_sha256)"},
+        "required_bindings": {
+          "type": "array",
+          "minItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "protocol_manifest",
+              "agent_review_inputs",
+              "agent_review_outputs",
+              "semantic_machine_proposal",
+              "qualification_holdout",
+              "final_blind",
+              "candidate_binding",
+              "runner",
+              "scorer_a",
+              "scorer_b",
+              "arbitration",
+              "isolation",
+              "typed_evidence",
+              "bundle_manifest"
+            ]
+          }
+        }
+      }
+    },
+    "scoringContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_independent_reviewers",
+        "independent_scorer_count",
+        "reviewer_peer_visibility",
+        "scorer_peer_visibility",
+        "arbitration",
+        "disagreement_action",
+        "missing_case_action",
+        "duplicate_case_action",
+        "hard_failure_maximum",
+        "false_authority_maximum",
+        "thresholds_frozen_before_result",
+        "caller_authored_fields_forbidden"
+      ],
+      "properties": {
+        "minimum_independent_reviewers": {"const": 3},
+        "independent_scorer_count": {"const": 2},
+        "reviewer_peer_visibility": {"const": "forbidden"},
+        "scorer_peer_visibility": {"const": "forbidden"},
+        "arbitration": {"const": "deterministic_exact_replay"},
+        "disagreement_action": {"const": "failed"},
+        "missing_case_action": {"const": "failed"},
+        "duplicate_case_action": {"const": "failed"},
+        "hard_failure_maximum": {"const": 0},
+        "false_authority_maximum": {"const": 0},
+        "thresholds_frozen_before_result": {"const": true},
+        "caller_authored_fields_forbidden": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "passed",
+              "pass",
+              "facts",
+              "count",
+              "counts",
+              "total",
+              "failure_count",
+              "passed_count",
+              "success_count",
+              "aggregate"
+            ]
+          }
+        }
+      }
+    },
+    "failurePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewer_disagreement",
+        "reference_or_blind_contamination",
+        "scorer_disagreement",
+        "missing_evidence",
+        "unsafe_artifact",
+        "repair_after_final_blind_failure",
+        "agent_attestation",
+        "placeholder_evidence"
+      ],
+      "properties": {
+        "reviewer_disagreement": {"const": "failed"},
+        "reference_or_blind_contamination": {
+          "const": "failed_replace_with_new_unseen_blind"
+        },
+        "scorer_disagreement": {"const": "failed"},
+        "missing_evidence": {"const": "not_executed"},
+        "unsafe_artifact": {"const": "failed"},
+        "repair_after_final_blind_failure": {
+          "const": "new_unseen_blind_required"
+        },
+        "agent_attestation": {"const": "not_claimed"},
+        "placeholder_evidence": {"const": "reject"}
+      }
+    },
+    "codexPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binary_version",
+        "binary_sha256",
+        "request_model",
+        "reasoning_effort",
+        "auth_status_command",
+        "auth_material_access"
+      ],
+      "properties": {
+        "binary_version": {"const": "codex-cli 0.148.0-alpha.9"},
+        "binary_sha256": {
+          "const": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f"
+        },
+        "request_model": {"const": "gpt-5.6-luna"},
+        "reasoning_effort": {"const": "max"},
+        "auth_status_command": {"const": "codex login status"},
+        "auth_material_access": {"const": "forbidden"}
+      }
+    },
+    "openCodePin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source_commit",
+        "executable_sha256",
+        "package_sha256",
+        "config_selector",
+        "expected_response_model_id",
+        "runtime",
+        "dotenv_policy",
+        "secret_visibility"
+      ],
+      "properties": {
+        "version": {"const": "1.18.16"},
+        "source_commit": {
+          "const": "a3647eb025c7615159d417dcc49fc39fdaeba65b"
+        },
+        "executable_sha256": {
+          "const": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"
+        },
+        "package_sha256": {
+          "const": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722"
+        },
+        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
+        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "runtime": {"const": "host_bun_runtime_only"},
+        "dotenv_policy": {"const": "owner_only_external_strict_parser"},
+        "secret_visibility": {"const": "forbidden"}
+      }
+    },
+    "hostConstraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codex", "opencode"],
+      "properties": {
+        "codex": {"$ref": "#/$defs/codexPin"},
+        "opencode": {"$ref": "#/$defs/openCodePin"}
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "evidence_kind",
+        "status",
+        "human_attestation_required",
+        "machine_evidence_allowed"
+      ],
+      "properties": {
+        "gate_id": {
+          "enum": [
+            "canonical_integrity",
+            "migration_recovery",
+            "secret_host_isolation",
+            "bounded_context",
+            "legal_evidence",
+            "source_citation_locator",
+            "scale_performance",
+            "supported_platforms",
+            "reproducible_supply_chain",
+            "machine_reference_isolation",
+            "codex",
+            "opencode",
+            "selective_forget",
+            "timeline"
+          ]
+        },
+        "evidence_kind": {
+          "enum": [
+            "exact_wheel_execution",
+            "candidate_full_junit",
+            "host_event_sequence",
+            "context_capsule_selection_usage",
+            "legal_rows",
+            "wiki_journey_rows",
+            "scale_report",
+            "candidate_platform_receipt",
+            "retained_supply_chain",
+            "machine_review_panel",
+            "machine_gate_result"
+          ]
+        },
+        "status": {"const": "not_executed"},
+        "human_attestation_required": {"const": false},
+        "machine_evidence_allowed": {"const": true}
+      }
+    },
+    "claimPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "machine_qualification_claim_eligible",
+        "human_gold_claim_eligible",
+        "human_authenticity",
+        "competitive_claim_eligible",
+        "release_ready",
+        "tag_release_confirmation",
+        "not_executed_is_not_pass",
+        "forbidden_claims"
+      ],
+      "properties": {
+        "machine_qualification_claim_eligible": {"const": false},
+        "human_gold_claim_eligible": {"const": false},
+        "human_authenticity": {"const": "not_claimed"},
+        "competitive_claim_eligible": {"const": false},
+        "release_ready": {"const": false},
+        "tag_release_confirmation": {"const": "current_owner_confirmation_required"},
+        "not_executed_is_not_pass": {"const": true},
+        "forbidden_claims": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 120}
+        }
+      }
+    }
+  }
+}

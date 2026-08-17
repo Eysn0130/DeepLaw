@@ -11,15 +11,39 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
-import json
 import math
 import re
 import sys
 from collections.abc import Mapping
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
+
+from benchmarks.release.qualification_evidence_core import (
+    canonical_json_bytes as _core_canonical_json_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    digest_without as _core_digest_without,
+)
+from benchmarks.release.qualification_evidence_core import (
+    regular_file_bytes as _core_regular_file_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_asset_file as _core_safe_asset_file,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_relative_posix as _core_safe_relative_posix,
+)
+from benchmarks.release.qualification_evidence_core import (
+    safe_root_directory as _core_safe_root_directory,
+)
+from benchmarks.release.qualification_evidence_core import (
+    sha256_bytes as _core_sha256_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    strict_json_bytes as _core_strict_json_bytes,
+)
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 CONTRACTS = REPOSITORY / "contracts"
@@ -200,44 +224,41 @@ def _finite_float(value: str) -> float:
 
 
 def _regular_file(path: Path, *, label: str, max_bytes: int = MAX_FILE_BYTES) -> None:
-    try:
-        if path.is_symlink() or not path.is_file():
-            _fail(f"{label} is not a regular file")
-        size = path.stat().st_size
-    except OSError as error:
-        raise ReleaseProvenanceV7Error(f"{label} is unavailable") from error
-    if not 1 <= size <= max_bytes:
-        _fail(f"{label} exceeds its byte bound")
+    _core_regular_file_bytes(
+        path,
+        label=label,
+        max_bytes=max_bytes,
+        error_type=ReleaseProvenanceV7Error,
+    )
 
 
 def _strict_json_file(path: Path, *, label: str) -> tuple[dict[str, Any], bytes]:
-    _regular_file(path, label=label)
+    _resolved, raw = _core_regular_file_bytes(
+        path,
+        label=label,
+        max_bytes=MAX_FILE_BYTES,
+        error_type=ReleaseProvenanceV7Error,
+    )
     try:
-        raw = path.read_bytes()
-        value = json.loads(
-            raw.decode("utf-8"),
-            object_pairs_hook=_reject_pairs,
-            parse_constant=_reject_constant,
-            parse_float=_finite_float,
+        value = _core_strict_json_bytes(
+            raw,
+            label=label,
+            error_type=ReleaseProvenanceV7Error,
+            require_object=True,
         )
-    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+    except ReleaseProvenanceV7Error as error:
+        # v7 exposed one stable parse-error contract.  Keep that historical
+        # surface while sharing the stricter v8 parsing implementation.
         raise ReleaseProvenanceV7Error(f"{label} must be strict UTF-8 JSON") from error
-    if not isinstance(value, dict):
-        _fail(f"{label} must be a JSON object")
     return value, raw
 
 
 def _canonical_json(value: Any) -> str:
-    try:
-        return json.dumps(
-            value,
-            allow_nan=False,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-    except (TypeError, ValueError) as error:
-        raise ReleaseProvenanceV7Error("provenance JSON is not canonicalizable") from error
+    return _core_canonical_json_bytes(
+        value,
+        error_type=ReleaseProvenanceV7Error,
+        message="provenance JSON is not canonicalizable",
+    ).decode("utf-8")
 
 
 def _candidate_corpus_sha256(candidate: Mapping[str, Any]) -> str:
@@ -251,8 +272,11 @@ def _candidate_corpus_sha256(candidate: Mapping[str, Any]) -> str:
 
 
 def _canonical_digest(value: Mapping[str, Any], *, excluded: str) -> str:
-    body = {key: item for key, item in value.items() if key != excluded}
-    return hashlib.sha256(_canonical_json(body).encode("utf-8")).hexdigest()
+    return _core_digest_without(
+        value,
+        field=excluded,
+        error_type=ReleaseProvenanceV7Error,
+    )
 
 
 def _derived_digest(value: Mapping[str, Any]) -> str:
@@ -272,7 +296,7 @@ def _require_record(value: Mapping[str, Any], *, label: str) -> None:
 
 
 def _sha256_bytes(raw: bytes) -> str:
-    return hashlib.sha256(raw).hexdigest()
+    return _core_sha256_bytes(raw)
 
 
 def _load_schema(name: str) -> dict[str, Any]:
@@ -299,44 +323,28 @@ def _validate_schema(value: Mapping[str, Any], *, schema_name: str, label: str) 
 
 
 def _safe_root(path: Path, *, label: str) -> Path:
-    try:
-        if path.is_symlink() or not path.is_dir():
-            _fail(f"{label} is not a regular directory")
-        return path.resolve(strict=True)
-    except OSError as error:
-        raise ReleaseProvenanceV7Error(f"{label} is unavailable") from error
+    return _core_safe_root_directory(
+        path,
+        label=label,
+        error_type=ReleaseProvenanceV7Error,
+    )
 
 
 def _safe_relative(value: Any, *, label: str) -> str:
-    if not isinstance(value, str) or not value or "\\" in value:
-        _fail(f"{label} is not a safe relative path")
-    path = PurePosixPath(value)
-    if path.is_absolute() or not path.parts:
-        _fail(f"{label} is not a safe relative path")
-    if any(part in {"", ".", ".."} for part in path.parts):
-        _fail(f"{label} is not a safe relative path")
-    if ":" in path.parts[0]:
-        _fail(f"{label} is not a safe relative path")
-    return path.as_posix()
+    return _core_safe_relative_posix(
+        value,
+        label=label,
+        error_type=ReleaseProvenanceV7Error,
+    )
 
 
 def _safe_asset(root: Path, relative: Any, *, label: str) -> Path:
-    name = _safe_relative(relative, label=label)
-    selected = root.joinpath(*name.split("/"))
-    cursor = root
-    try:
-        for part in name.split("/"):
-            cursor = cursor / part
-            if cursor.is_symlink():
-                _fail(f"{label} resolves through a symbolic link")
-        if not selected.is_file():
-            _fail(f"{label} is missing")
-        resolved = selected.resolve(strict=True)
-        if not resolved.is_relative_to(root):
-            _fail(f"{label} escapes the asset root")
-    except OSError as error:
-        raise ReleaseProvenanceV7Error(f"{label} is unavailable") from error
-    return selected
+    return _core_safe_asset_file(
+        root,
+        relative,
+        label=label,
+        error_type=ReleaseProvenanceV7Error,
+    )
 
 
 def _load_candidate_raw_inventory(

@@ -70,8 +70,9 @@ def test_host_preflight_uses_exact_pins_and_never_reads_auth_material() -> None:
     assert "codex-cli 0.148.0-alpha.9" in workflow
     assert "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f" in workflow
     assert "gpt-5.6-luna" in workflow
-    assert "--codex-reasoning-effort max" in workflow
-    assert "login status" in workflow
+    assert "--reasoning-effort max" in workflow
+    assert "login status" not in workflow
+    assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in workflow
     assert "1.18.16" in workflow
     assert "a3647eb025c7615159d417dcc49fc39fdaeba65b" in workflow
     assert "deepseek/deepseek-v4-flash" in workflow
@@ -98,36 +99,41 @@ def test_dotenv_and_external_inputs_are_metadata_only() -> None:
     assert "has_symlink_component" in workflow
     assert "owner_only" in workflow
     assert "mode & 0o077" in workflow
-    assert "DEEPLAW_QUALIFICATION_ROOT" in workflow
-    assert "DEEPLAW_HUMAN_GOLD_ROOT" in workflow
-    assert "DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER" in workflow
-    assert "DEEPLAW_INDEPENDENT_SCORER" in workflow
-    assert "DEEPLAW_TRUSTED_HUMAN_APPROVER" in workflow
+    assert "DEEPLAW_REFERENCE_FREEZER" in workflow
+    assert "DEEPLAW_REFERENCE_CASES" in workflow
+    assert "DEEPLAW_REVIEWER_OUTPUT_1" in workflow
+    assert "DEEPLAW_REVIEWER_PROCESS_3" in workflow
+    assert "DEEPLAW_CANDIDATE_HOST_RUNNER" in workflow
+    assert "DEEPLAW_EXTERNAL_QUALIFICATION_RUNNER" not in workflow
+    assert "DEEPLAW_SCORER_A" in workflow
+    assert "DEEPLAW_SCORER_B" in workflow
+    assert "DEEPLAW_DETERMINISTIC_ARBITER" in workflow
+    assert "DEEPLAW_HUMAN_GOLD_ROOT" not in workflow
+    assert "DEEPLAW_TRUSTED_HUMAN_APPROVER" not in workflow
     assert "source \"${DEEPLAW_OPENCODE_DOTENV}\"" not in workflow
     assert "cat \"${DEEPLAW_OPENCODE_DOTENV}\"" not in workflow
 
 
-def test_runner_receipt_is_sanitized_and_v3_validator_is_the_only_bundle_boundary() -> None:
+def test_runner_receipt_is_sanitized_and_v4_validator_is_the_only_bundle_boundary() -> None:
     workflow = _workflow()
     assert "--candidate-full-raw-root" in workflow
     assert "--verified-dist" in workflow
     assert "--exact-wheel-receipt" in workflow
-    assert "raw_digests" in workflow
-    assert "Candidate Full typed source is not retained Candidate Full evidence" in workflow
-    assert "exact-wheel typed source differs from exact receipt" in workflow
-    assert '"retained_supply_chain"' in workflow
+    assert "external runner replaced the exact-wheel execution receipt" in workflow
+    assert "typed exact-wheel source binding differs" in workflow
+    assert "bundle must contain one exact-wheel typed manifest" in workflow
     assert "--candidate-run-id \"${CANDIDATE_RUN_ID}\"" in workflow
-    assert "--evidence-run-id \"${GITHUB_RUN_ID}\"" in workflow
-    assert "--evidence-run-id \"${EVIDENCE_RUN_ID}\"" in workflow
-    assert "--trusted-human-approver" in workflow
+    assert '--evidence-run-id "${GITHUB_RUN_ID}"' in workflow
+    assert "--qualification-run-id" not in workflow
+    assert "--trusted-human-approver" not in workflow
     assert "bundle-manifest.json" in workflow
     assert "test ! -e \"${bundle}/.env\"" in workflow
     assert "test ! -e \"${bundle}/auth.json\"" in workflow
     assert "test ! -e \"${bundle}/transcript\"" in workflow
     assert "test ! -e \"${bundle}/reasoning\"" in workflow
     assert "test ! -e \"${bundle}/raw-events\"" in workflow
-    assert "benchmarks.release.external_qualification_bundle_v3" in workflow
-    assert "--evidence-run-id \"${EVIDENCE_RUN_ID}\"" in workflow
+    assert "benchmarks.release.external_qualification_bundle_v4" in workflow
+    assert "machine-only v4" in workflow
     assert "retention-days: 90" in workflow
     assert "if-no-files-found: error" in workflow
     assert "include-hidden-files: false" in workflow
@@ -135,11 +141,14 @@ def test_runner_receipt_is_sanitized_and_v3_validator_is_the_only_bundle_boundar
     assert "claim_eligible" not in workflow
 
 
-def test_current_typed_parser_is_loaded_without_making_a_gate_decision() -> None:
+def test_current_v4_bundle_validator_is_loaded_without_making_a_gate_decision() -> None:
     workflow = _workflow()
-    assert "benchmarks.release.typed_qualification_evidence" in workflow
-    assert "parse_typed_evidence" in workflow
-    assert "root=selected.parent" in workflow
-    assert "root=bundle" not in workflow
-    assert "benchmarks.release.external_qualification_bundle_v3" in workflow
-    assert "passed" not in workflow.lower()
+    assert "benchmarks.release.external_qualification_bundle_v4" in workflow
+    assert "--root \"${bundle}\"" in workflow
+    assert "--active-qualification \"${active}\"" in workflow
+    assert "--candidate-run-id \"${CANDIDATE_RUN_ID}\"" in workflow
+    assert "--evidence-run-id \"${EVIDENCE_RUN_ID}\"" in workflow
+    assert "benchmarks.release.external_qualification_bundle_v3" not in workflow
+    assert "benchmarks.release.typed_qualification_evidence" not in workflow
+    assert "DEEPLAW_HUMAN_GOLD_ROOT" not in workflow
+    assert "DEEPLAW_TRUSTED_HUMAN_APPROVER" not in workflow

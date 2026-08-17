@@ -1,0 +1,69 @@
+{
+  "schema_version": "deeplaw.v013-active-qualification/v2",
+  "qualification_id": "deeplaw-v013-active-machine-evaluated-candidate",
+  "profile": "machine_evaluated_no_human_attestation",
+  "status": "machine_evaluation_pending",
+  "candidate_version": "0.12.0",
+  "protocol_binding": {
+    "protocol_id": "deeplaw-v013-source-candidate-qualification",
+    "schema_version": "deeplaw.v013-qualification-protocol/v2",
+    "relative_path": "benchmarks/v013/qualification-protocol-v2.json",
+    "sha256": "4c68211923dd9b876cc201c55c119637c3e379c0177b6a7b617205766ddf5cff"
+  },
+  "candidate_binding": {
+    "package_version": "0.12.0",
+    "source_commit": null,
+    "source_tree": null,
+    "lock_sha256": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082",
+    "wheel_filename": null,
+    "wheel_sha256": null,
+    "sdist_filename": null,
+    "sdist_sha256": null,
+    "artifact_manifest_sha256": null
+  },
+  "external_inputs": {
+    "semantic_machine_proposal_sha256": null,
+    "qualification_holdout_sha256": null,
+    "final_blind_holdout_sha256": null,
+    "agent_review_panel_sha256": null,
+    "runner_sha256": null,
+    "scorer_a_sha256": null,
+    "scorer_b_sha256": null,
+    "arbitration_sha256": null,
+    "isolation_sha256": null
+  },
+  "host_constraints": {
+    "codex": {
+      "binary_version": "codex-cli 0.148.0-alpha.9",
+      "binary_sha256": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f",
+      "request_model": "gpt-5.6-luna",
+      "reasoning_effort": "max",
+      "auth_status_command": "codex login status",
+      "auth_material_access": "forbidden"
+    },
+    "opencode": {
+      "version": "1.18.16",
+      "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+      "executable_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
+      "package_sha256": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722",
+      "config_selector": "deepseek/deepseek-v4-flash",
+      "expected_response_model_id": "deepseek-v4-flash",
+      "runtime": "host_bun_runtime_only",
+      "dotenv_policy": "owner_only_external_strict_parser",
+      "secret_visibility": "forbidden"
+    }
+  },
+  "human_review": {
+    "mode": "optional_non_gating",
+    "status": "not_executed",
+    "authenticity": "not_claimed",
+    "attestation": "not_used_for_machine_profile",
+    "owner_release_confirmation": "required"
+  },
+  "blocker": "machine_evaluation_not_executed",
+  "release_ready": false,
+  "claim_eligible": false,
+  "machine_qualification_claim_eligible": false,
+  "competitive_claim_eligible": false,
+  "owner_tag_release_confirmation": "required_at_release_decision"
+}

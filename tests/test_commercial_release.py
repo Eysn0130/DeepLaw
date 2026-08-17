@@ -364,7 +364,7 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert "--verify-report-dir" in gate
     assert 'test -z "$(git status --porcelain=v1 --untracked-files=all)"' in gate
     assert "--evaluation" in gate
-    assert "python -m benchmarks.release.release_provenance_v7" in release
+    assert "python -m benchmarks.release.release_provenance_v8" in release
     publish = release.split("\n  publish:", maxsplit=1)[1].split(
         "\n  public-redownload:", maxsplit=1
     )[0]
@@ -394,7 +394,12 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert gate.count('python: "3.12"') == 3
     assert gate.count('python: "3.13"') == 3
     assert "--expected-python" in gate
-    assert "benchmarks.release.release_provenance_v7" in release
+    assert "benchmarks.release.release_provenance_v8" in release
+    assert "benchmarks.release.external_qualification_bundle_v4" in release
+    assert "--candidate-machine-reference-binding" in release
+    assert "post_build_machine_reference_binding" in release
+    assert "public_release_verified" in release
+    assert "release_provenance_v7" not in release
     assert "benchmarks.release.retained_artifact_manifest" in release
 
 

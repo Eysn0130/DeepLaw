@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/machine-reviewer-output.v1.schema.json",
+  "title": "DeepLaw machine reviewer raw output v1",
+  "description": "A retained raw output from one machine-only semantic reviewer. It never establishes human authorship, human verification, or legal authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "human_authenticity",
+    "reference_id",
+    "agent_id",
+    "model_id",
+    "rubric_sha256",
+    "source_corpus_sha256",
+    "process_identity_sha256",
+    "decision",
+    "disagreements",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.machine-reviewer-output/v1"},
+    "profile": {"const": "machine_evaluated_no_human_attestation"},
+    "human_authenticity": {"const": "not_claimed"},
+    "reference_id": {"type": "string", "pattern": "^semanticref_[0-9a-f]{24}$"},
+    "agent_id": {"$ref": "#/$defs/identifier"},
+    "model_id": {"$ref": "#/$defs/identifier"},
+    "rubric_sha256": {"$ref": "#/$defs/sha256"},
+    "source_corpus_sha256": {"$ref": "#/$defs/sha256"},
+    "process_identity_sha256": {"$ref": "#/$defs/sha256"},
+    "decision": {"enum": ["approved", "rejected"]},
+    "disagreements": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    }
+  }
+}

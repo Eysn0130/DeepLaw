@@ -1,0 +1,1313 @@
+{
+  "schema_version": "deeplaw.v013-release-gate-classification/v8",
+  "classification_id": "deeplaw-v013-commercial-gates-v8",
+  "categories": [
+    {
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_allowed": false,
+      "gate_ids": [
+        "canonical_integrity",
+        "migration_recovery",
+        "secret_host_isolation",
+        "bounded_context",
+        "legal_evidence",
+        "source_citation_locator",
+        "scale_performance",
+        "supported_platforms",
+        "reproducible_supply_chain",
+        "machine_reference_isolation",
+        "codex",
+        "opencode",
+        "selective_forget",
+        "timeline"
+      ]
+    },
+    {
+      "category": "Capability",
+      "category_id": "capability",
+      "required": false,
+      "not_claimed_allowed": true,
+      "gate_ids": [
+        "semantic_restore",
+        "claude"
+      ]
+    },
+    {
+      "category": "Competitive Claim",
+      "category_id": "competitive_claim",
+      "required": false,
+      "not_claimed_allowed": true,
+      "gate_ids": [
+        "comparative_incremental_benefit",
+        "superiority",
+        "sota"
+      ]
+    }
+  ],
+  "assembly_policy": {
+    "assembly_enabled": false,
+    "reason_code": "awaiting_all_core_gate_pass"
+  },
+  "gates": [
+    {
+      "gate_id": "canonical_integrity",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "candidate_full"
+      ],
+      "artifact_kinds": [
+        "exact_wheel_execution"
+      ],
+      "thresholds": [
+        {
+          "metric": "audit_integrity_pass_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "canonical_integrity_failure"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "migration_recovery",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "candidate_full"
+      ],
+      "artifact_kinds": [
+        "candidate_full_junit"
+      ],
+      "thresholds": [
+        {
+          "metric": "recovery_pass_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "recovery_data_loss"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "secret_host_isolation",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 6,
+      "required_unique_dimensions": [
+        "run_id",
+        "host",
+        "task_case"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "qualification_holdout"
+      ],
+      "artifact_kinds": [
+        "host_event_sequence"
+      ],
+      "thresholds": [
+        {
+          "metric": "canary_containment_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "secret_exposure",
+          "private_path_disclosure",
+          "cross_boundary_disclosure"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "bounded_context",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "qualification_holdout"
+      ],
+      "artifact_kinds": [
+        "context_capsule_selection_usage"
+      ],
+      "thresholds": [
+        {
+          "metric": "provider_payload_pass_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "provider_payload_bound_exceeded"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "legal_evidence",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "qualification_holdout"
+      ],
+      "artifact_kinds": [
+        "legal_rows"
+      ],
+      "thresholds": [
+        {
+          "metric": "legal_pack_pass_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "false_authority",
+          "wrong_version_primary",
+          "invalid_quote",
+          "invalid_locator",
+          "protected_source_mutation",
+          "cross_boundary_disclosure",
+          "secret_leak"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "source_citation_locator",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "qualification_holdout"
+      ],
+      "artifact_kinds": [
+        "legal_rows"
+      ],
+      "thresholds": [
+        {
+          "metric": "citation_validity",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "invalid_source",
+          "invalid_quote",
+          "invalid_locator"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "scale_performance",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "qualification_holdout"
+      ],
+      "artifact_kinds": [
+        "scale_report"
+      ],
+      "thresholds": [
+        {
+          "metric": "required_scale_pass_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "required_scale_not_executed"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "supported_platforms",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 9,
+      "required_unique_dimensions": [
+        "run_id",
+        "platform",
+        "python_version"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "candidate_full"
+      ],
+      "artifact_kinds": [
+        "candidate_platform_receipt"
+      ],
+      "thresholds": [
+        {
+          "metric": "platform_matrix_rows",
+          "minimum": 9,
+          "maximum": 9
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "mandatory_skip"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.11"
+        },
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        },
+        {
+          "platform": "linux",
+          "python_version": "3.13"
+        },
+        {
+          "platform": "macos",
+          "python_version": "3.11"
+        },
+        {
+          "platform": "macos",
+          "python_version": "3.12"
+        },
+        {
+          "platform": "macos",
+          "python_version": "3.13"
+        },
+        {
+          "platform": "windows",
+          "python_version": "3.11"
+        },
+        {
+          "platform": "windows",
+          "python_version": "3.12"
+        },
+        {
+          "platform": "windows",
+          "python_version": "3.13"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "reproducible_supply_chain",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "candidate_full"
+      ],
+      "artifact_kinds": [
+        "retained_supply_chain"
+      ],
+      "thresholds": [
+        {
+          "metric": "supply_chain_pass_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "artifact_hash_mismatch",
+          "secret_leak",
+          "private_path_disclosure"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "machine_reference_isolation",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "qualification_holdout",
+        "final_blind"
+      ],
+      "artifact_kinds": [
+        "machine_reference_scorer"
+      ],
+      "thresholds": [
+        {
+          "metric": "reference_isolation_pass_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "compiler_reference_access",
+          "evaluator_output_mutation",
+          "blind_contamination"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "codex",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 3,
+      "required_unique_dimensions": [
+        "run_id",
+        "host",
+        "model",
+        "platform",
+        "task_case"
+      ],
+      "constraints": {
+        "host": "codex",
+        "tool_version": "codex-cli 0.148.0-alpha.9",
+        "binary_sha256": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f",
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": "gpt-5.6-luna",
+        "expected_response_model_id": "gpt-5.6-luna",
+        "reasoning_effort": "max",
+        "argv_prefix": [
+          "codex",
+          "app-server",
+          "--stdio"
+        ]
+      },
+      "required_corpus_roles": [
+        "qualification_holdout"
+      ],
+      "artifact_kinds": [
+        "host_event_sequence"
+      ],
+      "thresholds": [
+        {
+          "metric": "model_task_acceptance_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "model_substitution",
+          "secret_exposure",
+          "wrong_tool_or_parameter"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "macos",
+          "python_version": "3.11"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "selective_forget",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "qualification_holdout"
+      ],
+      "artifact_kinds": [
+        "wiki_journey_rows"
+      ],
+      "thresholds": [
+        {
+          "metric": "forgotten_state_admission_count",
+          "minimum": 0,
+          "maximum": 0
+        },
+        {
+          "metric": "unrelated_state_preservation",
+          "minimum": 1,
+          "maximum": 1
+        },
+        {
+          "metric": "ledger_read_invariance",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "forgotten_state_admission",
+          "unrelated_state_loss",
+          "ledger_read_mutation",
+          "provider_disclosure"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "timeline",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 6,
+      "required_unique_dimensions": [
+        "run_id",
+        "host",
+        "task_case"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "qualification_holdout"
+      ],
+      "artifact_kinds": [
+        "host_event_sequence"
+      ],
+      "thresholds": [
+        {
+          "metric": "timeline_pass_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "wrong_run_inclusion",
+          "private_path_disclosure"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable",
+        "not_applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "semantic_restore",
+      "category": "Capability",
+      "category_id": "capability",
+      "required": false,
+      "not_claimed_only": true,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw.v013.gate.semantic_restore",
+      "validator_version": "0.1.0",
+      "implementation_status": "not_claimed_only",
+      "accepted_input_schema_versions": [],
+      "minimum_distinct_run_count": 1,
+      "required_unique_dimensions": [
+        "run_id"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "development",
+        "qualification_holdout",
+        "final_blind"
+      ],
+      "artifact_kinds": [
+        "semantic-restore-report"
+      ],
+      "thresholds": [
+        {
+          "metric": "semantic_restore_pass_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "history_rewrite",
+          "restore_data_loss"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable",
+        "not_applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": []
+    },
+    {
+      "gate_id": "claude",
+      "category": "Capability",
+      "category_id": "capability",
+      "required": false,
+      "not_claimed_only": true,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw.v013.gate.claude",
+      "validator_version": "0.1.0",
+      "implementation_status": "not_claimed_only",
+      "accepted_input_schema_versions": [],
+      "minimum_distinct_run_count": 3,
+      "required_unique_dimensions": [
+        "run_id",
+        "host",
+        "model"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "development",
+        "qualification_holdout",
+        "final_blind"
+      ],
+      "artifact_kinds": [
+        "claude-host-result"
+      ],
+      "thresholds": [
+        {
+          "metric": "model_task_acceptance_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "model_substitution",
+          "secret_exposure"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable",
+        "not_applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": []
+    },
+    {
+      "gate_id": "opencode",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw-typed-qualification-v2",
+      "validator_version": "2",
+      "implementation_status": "ready",
+      "accepted_input_schema_versions": [
+        "deeplaw.typed-qualification-evidence/v2"
+      ],
+      "minimum_distinct_run_count": 3,
+      "required_unique_dimensions": [
+        "run_id",
+        "host",
+        "model",
+        "platform",
+        "task_case"
+      ],
+      "constraints": {
+        "host": "opencode",
+        "tool_version": "1.18.16",
+        "binary_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
+        "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+        "config_selector": "deepseek/deepseek-v4-flash",
+        "model_id": "deepseek-v4-flash",
+        "expected_response_model_id": "deepseek-v4-flash",
+        "reasoning_effort": null,
+        "argv_prefix": [
+          "opencode",
+          "--pure",
+          "run",
+          "--format",
+          "json"
+        ]
+      },
+      "required_corpus_roles": [
+        "qualification_holdout"
+      ],
+      "artifact_kinds": [
+        "host_event_sequence"
+      ],
+      "thresholds": [
+        {
+          "metric": "model_task_acceptance_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "model_substitution",
+          "secret_exposure",
+          "wrong_tool_or_parameter"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "macos",
+          "python_version": "3.11"
+        }
+      ],
+      "output_schema_versions": [
+        "deeplaw.provenance-bound-gate-result/v4"
+      ]
+    },
+    {
+      "gate_id": "comparative_incremental_benefit",
+      "category": "Competitive Claim",
+      "category_id": "competitive_claim",
+      "required": false,
+      "not_claimed_only": true,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw.v013.gate.comparative_incremental_benefit",
+      "validator_version": "0.1.0",
+      "implementation_status": "not_claimed_only",
+      "accepted_input_schema_versions": [],
+      "minimum_distinct_run_count": 3,
+      "required_unique_dimensions": [
+        "run_id",
+        "comparator",
+        "model"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "development",
+        "qualification_holdout",
+        "final_blind"
+      ],
+      "artifact_kinds": [
+        "comparative-benefit-report"
+      ],
+      "thresholds": [
+        {
+          "metric": "incremental_benefit",
+          "minimum": 0.000001,
+          "maximum": null
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "budget_mismatch",
+          "gold_contamination"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable",
+        "not_applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": []
+    },
+    {
+      "gate_id": "superiority",
+      "category": "Competitive Claim",
+      "category_id": "competitive_claim",
+      "required": false,
+      "not_claimed_only": true,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw.v013.gate.superiority",
+      "validator_version": "0.1.0",
+      "implementation_status": "not_claimed_only",
+      "accepted_input_schema_versions": [],
+      "minimum_distinct_run_count": 3,
+      "required_unique_dimensions": [
+        "run_id",
+        "comparator",
+        "model"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "development",
+        "qualification_holdout",
+        "final_blind"
+      ],
+      "artifact_kinds": [
+        "superiority-report"
+      ],
+      "thresholds": [
+        {
+          "metric": "superiority_margin",
+          "minimum": 0.000001,
+          "maximum": null
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "comparator_mismatch",
+          "unsupported_claim"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable",
+        "not_applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": []
+    },
+    {
+      "gate_id": "sota",
+      "category": "Competitive Claim",
+      "category_id": "competitive_claim",
+      "required": false,
+      "not_claimed_only": true,
+      "assembly_enabled": false,
+      "validator_id": "deeplaw.v013.gate.sota",
+      "validator_version": "0.1.0",
+      "implementation_status": "not_claimed_only",
+      "accepted_input_schema_versions": [],
+      "minimum_distinct_run_count": 3,
+      "required_unique_dimensions": [
+        "run_id",
+        "comparator",
+        "model"
+      ],
+      "constraints": {
+        "host": null,
+        "tool_version": null,
+        "binary_sha256": null,
+        "source_commit": null,
+        "config_selector": null,
+        "model_id": null,
+        "expected_response_model_id": null,
+        "reasoning_effort": null,
+        "argv_prefix": []
+      },
+      "required_corpus_roles": [
+        "development",
+        "qualification_holdout",
+        "final_blind"
+      ],
+      "artifact_kinds": [
+        "sota-report"
+      ],
+      "thresholds": [
+        {
+          "metric": "sota_claim_support_rate",
+          "minimum": 1,
+          "maximum": 1
+        }
+      ],
+      "hard_zero_derivation": {
+        "source_field": "gate_result.hard_failures",
+        "failure_ids": [
+          "missing_named_comparator",
+          "unsupported_claim"
+        ],
+        "maximum_allowed": 0
+      },
+      "allowed_applicability": [
+        "applicable",
+        "not_applicable"
+      ],
+      "required_execution_platforms": [
+        {
+          "platform": "linux",
+          "python_version": "3.12"
+        }
+      ],
+      "output_schema_versions": []
+    }
+  ],
+  "profile": "machine_evaluated_no_human_attestation"
+}

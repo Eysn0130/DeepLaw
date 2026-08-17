@@ -1,0 +1,425 @@
+{
+  "schema_version": "deeplaw.v013-qualification-protocol/v2",
+  "profile": "machine_evaluated_no_human_attestation",
+  "protocol_id": "deeplaw-v013-source-candidate-qualification",
+  "protocol_version": 2,
+  "status": "candidate_qualification",
+  "freeze_status": "protocol_frozen_machine_evaluation_candidate_binding_pending",
+  "objective": "Run a candidate-independent, multi-agent, machine-only evaluation of the v0.13 behavior contract while preserving blind-source isolation, exact artifact provenance, deterministic scoring, and an explicit non-claim of human authorship.",
+  "candidate_binding": {
+    "package_version": "0.12.0",
+    "source_commit": null,
+    "source_tree": null,
+    "lock_sha256": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082",
+    "wheel_filename": null,
+    "wheel_sha256": null,
+    "sdist_filename": null,
+    "sdist_sha256": null
+  },
+  "human_review": {
+    "mode": "optional_non_gating",
+    "status": "not_executed",
+    "authenticity": "not_claimed",
+    "attestation": "not_used_for_machine_profile",
+    "owner_release_confirmation": "required"
+  },
+  "data_layers": {
+    "development": {
+      "layer_kind": "development",
+      "residency": "repository_or_public_synthetic",
+      "status": "development_only",
+      "source_visibility": "compiler_visible_source_only",
+      "reference_visibility": "development_allowed",
+      "candidate_visibility": "not_bound",
+      "tuning_policy": "permitted; never promoted to machine qualification or a release claim",
+      "failure_policy": "diagnostic_only"
+    },
+    "qualification_holdout": {
+      "layer_kind": "qualification_holdout",
+      "residency": "repo_external",
+      "status": "not_bound",
+      "source_visibility": "compiler_visible_source_only",
+      "reference_visibility": "evaluator_only",
+      "candidate_visibility": "source_only",
+      "tuning_policy": "any diagnostic or tuning use downgrades the corpus to development",
+      "failure_policy": "failure_is_machine_qualification_failure"
+    },
+    "final_blind": {
+      "layer_kind": "final_blind",
+      "residency": "repo_external",
+      "status": "not_bound",
+      "source_visibility": "compiler_visible_source_only",
+      "reference_visibility": "evaluator_only",
+      "candidate_visibility": "source_only",
+      "tuning_policy": "no tuning, repair, or label inspection after release to a candidate run",
+      "failure_policy": "failure_then_repair_requires_new_unseen_holdout"
+    }
+  },
+  "roles": {
+    "minimum_independent_reviewers": 3,
+    "maximum_role_count": 13,
+    "members": [
+      {
+        "role_id": "protocol-freezer",
+        "role_kind": "protocol_freezer",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "forbidden",
+        "peer_visibility": "forbidden",
+        "secret_visibility": "forbidden",
+        "output_kind": "protocol_manifest"
+      },
+      {
+        "role_id": "semantic-reviewer-a",
+        "role_kind": "semantic_reviewer",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "forbidden",
+        "peer_visibility": "forbidden",
+        "secret_visibility": "forbidden",
+        "output_kind": "semantic_review"
+      },
+      {
+        "role_id": "semantic-reviewer-b",
+        "role_kind": "semantic_reviewer",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "forbidden",
+        "peer_visibility": "forbidden",
+        "secret_visibility": "forbidden",
+        "output_kind": "semantic_review"
+      },
+      {
+        "role_id": "semantic-reviewer-c",
+        "role_kind": "semantic_reviewer",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "forbidden",
+        "peer_visibility": "forbidden",
+        "secret_visibility": "forbidden",
+        "output_kind": "semantic_review"
+      },
+      {
+        "role_id": "adversarial-reviewer",
+        "role_kind": "adversarial_reviewer",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "candidate_independent_only",
+        "peer_visibility": "bound_hashes_only",
+        "secret_visibility": "forbidden",
+        "output_kind": "adversarial_review"
+      },
+      {
+        "role_id": "deterministic-reconciler",
+        "role_kind": "deterministic_reconciler",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "candidate_independent_only",
+        "peer_visibility": "bound_hashes_only",
+        "secret_visibility": "forbidden",
+        "output_kind": "semantic_machine_reference_proposal"
+      },
+      {
+        "role_id": "corpus-packager",
+        "role_kind": "corpus_packager",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "forbidden",
+        "peer_visibility": "forbidden",
+        "secret_visibility": "forbidden",
+        "output_kind": "corpus_manifest"
+      },
+      {
+        "role_id": "reference-vault",
+        "role_kind": "reference_vault",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "labels_only",
+        "peer_visibility": "forbidden",
+        "secret_visibility": "forbidden",
+        "output_kind": "reference_vault_manifest"
+      },
+      {
+        "role_id": "exact-candidate-runner",
+        "role_kind": "exact_candidate_runner",
+        "separate_process": true,
+        "candidate_visibility": "exact_artifact_only",
+        "reference_label_visibility": "forbidden",
+        "peer_visibility": "forbidden",
+        "secret_visibility": "forbidden",
+        "output_kind": "candidate_raw_receipt"
+      },
+      {
+        "role_id": "independent-scorer-a",
+        "role_kind": "independent_scorer",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "evaluator_only",
+        "peer_visibility": "forbidden",
+        "secret_visibility": "forbidden",
+        "output_kind": "machine_scorer_rows"
+      },
+      {
+        "role_id": "independent-scorer-b",
+        "role_kind": "independent_scorer",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "evaluator_only",
+        "peer_visibility": "forbidden",
+        "secret_visibility": "forbidden",
+        "output_kind": "machine_scorer_rows"
+      },
+      {
+        "role_id": "deterministic-arbitrator",
+        "role_kind": "deterministic_arbitrator",
+        "separate_process": true,
+        "candidate_visibility": "forbidden",
+        "reference_label_visibility": "evaluator_only",
+        "peer_visibility": "evaluator_only",
+        "secret_visibility": "forbidden",
+        "output_kind": "arbitration_receipt"
+      },
+      {
+        "role_id": "provenance-auditor",
+        "role_kind": "provenance_assembler",
+        "separate_process": true,
+        "candidate_visibility": "metadata_only",
+        "reference_label_visibility": "metadata_only",
+        "peer_visibility": "metadata_only",
+        "secret_visibility": "forbidden",
+        "output_kind": "machine_gate_result"
+      }
+    ]
+  },
+  "isolation_contract": {
+    "reviewer_peer_visibility": "forbidden",
+    "reviewer_candidate_visibility": "forbidden",
+    "reviewer_runner_visibility": "forbidden",
+    "reviewer_scorer_visibility": "forbidden",
+    "runner_reference_labels_visibility": "forbidden",
+    "runner_scorer_visibility": "forbidden",
+    "scorer_peer_visibility": "forbidden",
+    "scorer_candidate_source_visibility": "forbidden",
+    "scorer_runner_process_visibility": "forbidden",
+    "shared_filesystem": "forbidden",
+    "shared_ipc": "forbidden",
+    "shared_transcript": "forbidden",
+    "input_mounts_read_only": true,
+    "secret_visibility": "forbidden"
+  },
+  "hash_contract": {
+    "algorithm": "sha256",
+    "canonical_serialization": "UTF-8 JSON sort_keys separators=(',', ':') allow_nan=false",
+    "strict_utf8": true,
+    "reject_duplicate_keys": true,
+    "reject_nonfinite_numbers": true,
+    "regular_non_symlink_files": true,
+    "path_closure": true,
+    "orphan_files": "reject",
+    "record_digest": "sha256(canonical_json_without_record_sha256)",
+    "required_bindings": [
+      "protocol_manifest",
+      "agent_review_inputs",
+      "agent_review_outputs",
+      "semantic_machine_proposal",
+      "qualification_holdout",
+      "final_blind",
+      "candidate_binding",
+      "runner",
+      "scorer_a",
+      "scorer_b",
+      "arbitration",
+      "isolation",
+      "typed_evidence",
+      "bundle_manifest"
+    ]
+  },
+  "scoring_contract": {
+    "minimum_independent_reviewers": 3,
+    "independent_scorer_count": 2,
+    "reviewer_peer_visibility": "forbidden",
+    "scorer_peer_visibility": "forbidden",
+    "arbitration": "deterministic_exact_replay",
+    "disagreement_action": "failed",
+    "missing_case_action": "failed",
+    "duplicate_case_action": "failed",
+    "hard_failure_maximum": 0,
+    "false_authority_maximum": 0,
+    "thresholds_frozen_before_result": true,
+    "caller_authored_fields_forbidden": [
+      "passed",
+      "pass",
+      "facts",
+      "count",
+      "counts",
+      "total",
+      "failure_count",
+      "passed_count",
+      "success_count",
+      "aggregate"
+    ]
+  },
+  "failure_policy": {
+    "reviewer_disagreement": "failed",
+    "reference_or_blind_contamination": "failed_replace_with_new_unseen_blind",
+    "scorer_disagreement": "failed",
+    "missing_evidence": "not_executed",
+    "unsafe_artifact": "failed",
+    "repair_after_final_blind_failure": "new_unseen_blind_required",
+    "agent_attestation": "not_claimed",
+    "placeholder_evidence": "reject"
+  },
+  "host_constraints": {
+    "codex": {
+      "binary_version": "codex-cli 0.148.0-alpha.9",
+      "binary_sha256": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f",
+      "request_model": "gpt-5.6-luna",
+      "reasoning_effort": "max",
+      "auth_status_command": "codex login status",
+      "auth_material_access": "forbidden"
+    },
+    "opencode": {
+      "version": "1.18.16",
+      "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+      "executable_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
+      "package_sha256": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722",
+      "config_selector": "deepseek/deepseek-v4-flash",
+      "expected_response_model_id": "deepseek-v4-flash",
+      "runtime": "host_bun_runtime_only",
+      "dotenv_policy": "owner_only_external_strict_parser",
+      "secret_visibility": "forbidden"
+    }
+  },
+  "required_evidence": [
+    "machine_review_panel",
+    "candidate_full_junit",
+    "candidate_platform_receipt",
+    "host_event_sequence",
+    "exact_wheel_execution",
+    "machine_scorer_rows",
+    "legal_rows",
+    "wiki_journey_rows",
+    "context_capsule_selection_usage",
+    "scale_report",
+    "retained_supply_chain",
+    "isolation_receipt",
+    "machine_gate_result"
+  ],
+  "gates": [
+    {
+      "gate_id": "canonical_integrity",
+      "evidence_kind": "exact_wheel_execution",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "migration_recovery",
+      "evidence_kind": "candidate_full_junit",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "secret_host_isolation",
+      "evidence_kind": "host_event_sequence",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "bounded_context",
+      "evidence_kind": "context_capsule_selection_usage",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "legal_evidence",
+      "evidence_kind": "legal_rows",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "source_citation_locator",
+      "evidence_kind": "legal_rows",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "scale_performance",
+      "evidence_kind": "scale_report",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "supported_platforms",
+      "evidence_kind": "candidate_platform_receipt",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "reproducible_supply_chain",
+      "evidence_kind": "retained_supply_chain",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "machine_reference_isolation",
+      "evidence_kind": "machine_review_panel",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "codex",
+      "evidence_kind": "host_event_sequence",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "opencode",
+      "evidence_kind": "host_event_sequence",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "selective_forget",
+      "evidence_kind": "wiki_journey_rows",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    },
+    {
+      "gate_id": "timeline",
+      "evidence_kind": "host_event_sequence",
+      "status": "not_executed",
+      "human_attestation_required": false,
+      "machine_evidence_allowed": true
+    }
+  ],
+  "claim_policy": {
+    "machine_qualification_claim_eligible": false,
+    "human_gold_claim_eligible": false,
+    "human_authenticity": "not_claimed",
+    "competitive_claim_eligible": false,
+    "release_ready": false,
+    "tag_release_confirmation": "current_owner_confirmation_required",
+    "not_executed_is_not_pass": true,
+    "forbidden_claims": [
+      "human_verified",
+      "human_gold",
+      "human_attested",
+      "fully_verified",
+      "competitive_superiority",
+      "release_authorized"
+    ]
+  }
+}

@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/candidate-gold-binding-receipt.v2.schema.json",
+  "title": "DeepLaw post-build Candidate machine reference binding receipt v2",
+  "description": "Binds a candidate-independent machine reference and its agent review provenance to one exact candidate, holdout, blind, runner, and scorer. It never asserts human authenticity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "profile",
+    "reference_provenance",
+    "human_authenticity",
+    "bound_at",
+    "semantic_reference",
+    "agent_roster",
+    "agent_consensus",
+    "agent_isolation",
+    "candidate",
+    "artifacts",
+    "holdout",
+    "blind",
+    "scorer_panel",
+    "arbiter",
+    "runner",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.candidate-gold-binding-receipt/v2"},
+    "status": {"const": "post_build_machine_reference_bound"},
+    "profile": {"const": "machine_evaluated_no_human_attestation"},
+    "reference_provenance": {"const": "agent_consensus"},
+    "human_authenticity": {"const": "not_claimed"},
+    "bound_at": {"type": "string", "format": "date-time"},
+    "semantic_reference": {"$ref": "#/$defs/semanticReference"},
+    "agent_roster": {"$ref": "#/$defs/digest"},
+    "agent_consensus": {"$ref": "#/$defs/digest"},
+    "agent_isolation": {"$ref": "#/$defs/digest"},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "artifacts": {"$ref": "#/$defs/artifacts"},
+    "holdout": {"$ref": "#/$defs/holdout"},
+    "blind": {"$ref": "#/$defs/blind"},
+    "scorer_panel": {"$ref": "#/$defs/scorerPanel"},
+    "arbiter": {"$ref": "#/$defs/arbiterDigest"},
+    "runner": {"$ref": "#/$defs/identityDigest"},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "semanticReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference_id", "schema_version", "sha256"],
+      "properties": {
+        "reference_id": {"type": "string", "pattern": "^semanticref_[0-9a-f]{24}$"},
+        "schema_version": {"const": "deeplaw.semantic-machine-reference/v1"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {"sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "byte_size"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.+-]{0,199}$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wheel", "sdist"],
+      "properties": {
+        "wheel": {"$ref": "#/$defs/artifact"},
+        "sdist": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "holdout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "sha256"],
+      "properties": {
+        "role": {"const": "qualification_holdout"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "blind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "sha256"],
+      "properties": {
+        "role": {"const": "final_blind"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "identityDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "sha256"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "scorerIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "identity", "sha256"],
+      "properties": {
+        "role": {"enum": ["independent_scorer_a", "independent_scorer_b"]},
+        "identity": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "scorerPanel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scorer_a", "scorer_b", "panel_sha256", "distinct_scorers"],
+      "properties": {
+        "scorer_a": {
+          "allOf": [
+            {"$ref": "#/$defs/scorerIdentity"},
+            {
+              "properties": {
+                "role": {"const": "independent_scorer_a"},
+                "identity": {"pattern": "^independent-scorer-a:[A-Za-z0-9._:/-]{1,199}$"}
+              }
+            }
+          ]
+        },
+        "scorer_b": {
+          "allOf": [
+            {"$ref": "#/$defs/scorerIdentity"},
+            {
+              "properties": {
+                "role": {"const": "independent_scorer_b"},
+                "identity": {"pattern": "^independent-scorer-b:[A-Za-z0-9._:/-]{1,199}$"}
+              }
+            }
+          ]
+        },
+        "panel_sha256": {"$ref": "#/$defs/sha256"},
+        "distinct_scorers": {"const": true}
+      }
+    },
+    "arbiterDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "identity", "sha256"],
+      "properties": {
+        "role": {"const": "deterministic_arbiter"},
+        "identity": {
+          "type": "string",
+          "pattern": "^deterministic-arbiter:[A-Za-z0-9._:/-]{1,199}$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

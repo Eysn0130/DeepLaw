@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/semantic-machine-reference.v1.schema.json",
+  "title": "DeepLaw candidate-independent semantic machine reference v1",
+  "description": "A machine-evaluated semantic reference. It is deliberately not a Human Gold artifact and cannot establish human authorship, approval, or authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "profile",
+    "reference_provenance",
+    "human_authenticity",
+    "frozen_at",
+    "reference_id",
+    "model_outputs_seen_before_freeze",
+    "candidate_visible_when_frozen",
+    "human_claim_eligible",
+    "competitive_claim_eligible",
+    "agent_review",
+    "labels",
+    "cases",
+    "duties",
+    "hard_failures",
+    "thresholds",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.semantic-machine-reference/v1"},
+    "status": {"const": "semantic_machine_reference_frozen"},
+    "profile": {"const": "machine_evaluated_no_human_attestation"},
+    "reference_provenance": {"const": "agent_consensus"},
+    "human_authenticity": {"const": "not_claimed"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "reference_id": {"type": "string", "pattern": "^semanticref_[0-9a-f]{24}$"},
+    "model_outputs_seen_before_freeze": {"const": true},
+    "candidate_visible_when_frozen": {"const": false},
+    "human_claim_eligible": {"const": false},
+    "competitive_claim_eligible": {"const": false},
+    "agent_review": {"$ref": "#/$defs/agentReview"},
+    "labels": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/label"}
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/case"}
+    },
+    "duties": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/duty"}
+    },
+    "hard_failures": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/hardFailure"}
+    },
+    "thresholds": {"$ref": "#/$defs/thresholds"},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "agentReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewers",
+        "roster_sha256",
+        "consensus_sha256",
+        "isolation_sha256",
+        "rubric_sha256",
+        "source_corpus_sha256",
+        "minimum_distinct_agents",
+        "unanimity_required"
+      ],
+      "properties": {
+        "reviewers": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/reviewer"}
+        },
+        "roster_sha256": {"$ref": "#/$defs/sha256"},
+        "consensus_sha256": {"$ref": "#/$defs/sha256"},
+        "isolation_sha256": {"$ref": "#/$defs/sha256"},
+        "rubric_sha256": {"$ref": "#/$defs/sha256"},
+        "source_corpus_sha256": {"$ref": "#/$defs/sha256"},
+        "minimum_distinct_agents": {"type": "integer", "minimum": 3, "maximum": 32},
+        "unanimity_required": {"const": true}
+      }
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_id",
+        "role",
+        "model_id",
+        "implementation_sha256",
+        "prompt_sha256",
+        "process_identity_sha256",
+        "output_sha256",
+        "conclusions_hidden_from_peers",
+        "separate_process"
+      ],
+      "properties": {
+        "agent_id": {"$ref": "#/$defs/identifier"},
+        "role": {"$ref": "#/$defs/identifier"},
+        "model_id": {"$ref": "#/$defs/identifier"},
+        "implementation_sha256": {"$ref": "#/$defs/sha256"},
+        "prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "process_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "output_sha256": {"$ref": "#/$defs/sha256"},
+        "conclusions_hidden_from_peers": {"const": true},
+        "separate_process": {"const": true}
+      }
+    },
+    "label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label_id", "description"],
+      "properties": {
+        "label_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["include", "exclude"],
+      "properties": {
+        "include": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        },
+        "exclude": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "labels", "expected", "duties", "hard_failures", "thresholds"],
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^goldcase_[a-z0-9][a-z0-9_-]{2,63}$"},
+        "labels": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        },
+        "expected": {"$ref": "#/$defs/expected"},
+        "duties": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        },
+        "hard_failures": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"}
+        },
+        "thresholds": {"$ref": "#/$defs/thresholds"}
+      }
+    },
+    "duty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duty_id", "description"],
+      "properties": {
+        "duty_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "hardFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "description"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,63}$"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_case_pass_rate",
+        "minimum_duty_coverage",
+        "maximum_hard_failures",
+        "maximum_false_authority"
+      ],
+      "properties": {
+        "minimum_case_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "minimum_duty_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "maximum_hard_failures": {"const": 0},
+        "maximum_false_authority": {"const": 0}
+      }
+    }
+  }
+}

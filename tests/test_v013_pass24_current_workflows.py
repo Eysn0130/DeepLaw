@@ -17,6 +17,7 @@ def test_candidate_full_retains_raw_platform_and_exact_wheel_evidence() -> None:
     assert "uv export --frozen --no-dev --no-emit-project" in workflow
     assert "candidate-requirements.txt" in workflow
     assert "benchmarks.release.exact_wheel_runner" in workflow
+    assert "--receipt-contract candidate-full-v1" in workflow
     assert "exact-wheel-execution.json" in workflow
     assert "candidate-full-raw-evidence" in workflow
     assert "benchmarks.release.pre_publish_artifact_gate" in workflow
@@ -41,9 +42,22 @@ def test_external_qualification_consumes_candidate_full_and_emits_typed_evidence
     assert "candidate-full-raw-evidence" in workflow
     assert "verified-candidate-artifacts" in workflow
     assert "benchmarks.release.exact_wheel_runner" in workflow
-    assert "benchmarks.release.typed_qualification_evidence" in workflow
+    assert "--receipt-contract external-qualification-v2" in workflow
+    assert "benchmarks.release.external_qualification_bundle_v4" in workflow
+    assert "machine-only v4" in workflow
+    assert "DEEPLAW_REFERENCE_FREEZER" in workflow
+    assert "DEEPLAW_REVIEWER_OUTPUT_1" in workflow
+    assert "DEEPLAW_CANDIDATE_HOST_RUNNER" in workflow
+    assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in workflow
+    assert "DEEPLAW_OPENCODE_CREDENTIAL_BROKER" in workflow
+    assert "DEEPLAW_SCORER_A" in workflow
+    assert "DEEPLAW_SCORER_B" in workflow
+    assert "DEEPLAW_DETERMINISTIC_ARBITER" in workflow
     assert "--candidate-run-id" in workflow
     assert "--evidence-run-id" in workflow
+    assert "--qualification-run-id" not in workflow
+    assert "DEEPLAW_HUMAN_GOLD_ROOT" not in workflow
+    assert "--trusted-human-approver" not in workflow
     assert "python -m build" not in workflow
     assert "uv build" not in workflow
     assert "hatch build" not in workflow
@@ -54,13 +68,19 @@ def test_commercial_qualification_recomputes_current_typed_core_gates() -> None:
 
     assert "candidate-full-raw-evidence" in workflow
     assert "v013-qualification-evidence" in workflow
-    assert "benchmarks.release.assemble_commercial_qualification_v7" in workflow
-    assert "v013-gate-classification-v7.json" in workflow
-    assert "benchmarks.release.release_provenance_v7" in workflow
+    assert "benchmarks.release.assemble_commercial_qualification_v8" in workflow
+    assert "v013-gate-classification-v8.json" in workflow
+    assert "benchmarks.release.release_provenance_v8" in workflow
     assert "candidate_run_id" in workflow
     assert "evidence_run_id" in workflow
     assert "GITHUB_RUN_ID" in workflow
-    assert "--qualification-run-id" in workflow
+    assert 'QUALIFICATION_RUN_ID: ${{ github.run_id }}' in workflow
+    assert '--qualification-run-id "${QUALIFICATION_RUN_ID}"' in workflow
+    assert "machine-only" in workflow
+    assert "post_build_machine_reference_binding" in workflow
+    assert "candidate_machine_reference" in workflow
+    assert "benchmarks.release.assemble_commercial_qualification_v7" not in workflow
+    assert "benchmarks.release.release_provenance_v7" not in workflow
 
 
 def test_release_is_manual_three_run_provenance_then_draft_and_public_verify() -> None:
@@ -78,7 +98,8 @@ def test_release_is_manual_three_run_provenance_then_draft_and_public_verify() -
         "owner_release_confirmation",
     } <= set(inputs)
     assert "test \"${OWNER_RELEASE_CONFIRMATION}\" = \"publish-v0.13.0\"" in workflow
-    assert "benchmarks.release.release_provenance_v7" in workflow
+    assert "benchmarks.release.release_provenance_v8" in workflow
+    assert "benchmarks.release.external_qualification_bundle_v4" in workflow
     assert "--candidate-run-id" in workflow
     assert "--evidence-run-id" in workflow
     assert "--qualification-run-id" in workflow
@@ -90,3 +111,7 @@ def test_release_is_manual_three_run_provenance_then_draft_and_public_verify() -
     assert workflow.index("--draft=false") < workflow.index(
         "Publicly redownload immutable release without credentials"
     )
+    assert "post_build_machine_reference_binding" in workflow
+    assert "--candidate-machine-reference-binding" in workflow
+    assert "public_release_verified" in workflow
+    assert "release_provenance_v7" not in workflow

@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       evidence_run_id:
-        description: Owner-controlled external qualification run with frozen raw evidence.
+        description: Successful machine-only External Qualification Evidence run with frozen raw evidence.
         required: true
         type: string
 
@@ -79,7 +79,7 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/candidate-full-raw-evidence
 
-      - name: Download owner-controlled external qualification evidence
+      - name: Download machine-only external qualification evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: v013-qualification-evidence
@@ -97,6 +97,8 @@ jobs:
         env:
           ACTIVE_PATH: ${{ runner.temp }}/verified-dist/frozen-active-qualification.json
           BUNDLE_PATH: ${{ runner.temp }}/external-source/bundle-manifest.json
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ inputs.evidence_run_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -171,17 +173,26 @@ jobs:
           lock_sha = hashlib.sha256(Path("uv.lock").read_bytes()).hexdigest()
           if candidate["lock_sha256"] != lock_sha:
               raise SystemExit("Candidate Full lock differs from qualification lock")
+          if bundle.get("candidate_run_id") != int(os.environ["CANDIDATE_RUN_ID"]):
+              raise SystemExit("external bundle candidate run differs from dispatch input")
+          if bundle.get("evidence_run_id") != int(os.environ["EVIDENCE_RUN_ID"]):
+              raise SystemExit("external bundle evidence run differs from dispatch input")
           external = bundle["external_inputs"]
           outputs = {
               **candidate,
-              "semantic_gold_sha256": external["semantic_gold_sha256"],
+              "semantic_reference_sha256": external["semantic_reference_sha256"],
+              "candidate_binding_sha256": external["candidate_binding_sha256"],
               "qualification_holdout_sha256": external[
                   "qualification_holdout_sha256"
               ],
               "final_blind_sha256": external["final_blind_holdout_sha256"],
-              "scorer_sha256": external["scorer_sha256"],
+              "agent_roster_sha256": external["agent_roster_sha256"],
+              "agent_consensus_sha256": external["agent_consensus_sha256"],
+              "agent_isolation_sha256": external["agent_isolation_sha256"],
               "runner_sha256": external["runner_sha256"],
-              "isolation_sha256": external[
+              "scorer_panel_sha256": external["scorer_panel_sha256"],
+              "arbiter_sha256": external["arbiter_sha256"],
+              "compiler_scorer_isolation_sha256": external[
                   "compiler_scorer_isolation_sha256"
               ],
           }
@@ -192,7 +203,7 @@ jobs:
                   stream.write(f"{key}={value}\n")
           PY
 
-      - name: Assemble current v7 Gate results from raw typed evidence
+      - name: Assemble current v8 Gate results from raw typed evidence
         env:
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
           EVIDENCE_RUN_ID: ${{ inputs.evidence_run_id }}
@@ -205,15 +216,14 @@ jobs:
           mkdir "${assets}"
           test -z "$(find "${RUNNER_TEMP}/verified-dist" -maxdepth 1 -type l -print -quit)"
           find "${RUNNER_TEMP}/verified-dist" -maxdepth 1 -type f -exec cp {} "${assets}/" \;
-          uv run --frozen python -m benchmarks.release.assemble_commercial_qualification_v7 \
+          uv run --frozen python -m benchmarks.release.assemble_commercial_qualification_v8 \
             --bundle-root "${RUNNER_TEMP}/external-source" \
             --assets-root "${assets}" \
             --candidate-raw-root "${RUNNER_TEMP}/candidate-full-raw-evidence" \
             --active-qualification \
               "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
-            --classification benchmarks/release/v013-gate-classification-v7.json \
-            --trusted-human-approver benchmarks/v013/trusted-human-approver-v1.json \
-            --protocol benchmarks/v013/qualification-protocol-v1.json \
+            --classification benchmarks/release/v013-gate-classification-v8.json \
+            --protocol benchmarks/v013/qualification-protocol-v2.json \
             --candidate-run-id "${CANDIDATE_RUN_ID}" \
             --evidence-run-id "${EVIDENCE_RUN_ID}" \
             --qualification-run-id "${QUALIFICATION_RUN_ID}" \
@@ -222,15 +232,26 @@ jobs:
             --lock-sha256 "${{ steps.bindings.outputs.lock_sha256 }}" \
             --wheel-sha256 "${{ steps.bindings.outputs.wheel_sha256 }}" \
             --sdist-sha256 "${{ steps.bindings.outputs.sdist_sha256 }}" \
-            --semantic-gold-sha256 \
-              "${{ steps.bindings.outputs.semantic_gold_sha256 }}" \
+            --semantic-reference-sha256 \
+              "${{ steps.bindings.outputs.semantic_reference_sha256 }}" \
+            --candidate-binding-sha256 \
+              "${{ steps.bindings.outputs.candidate_binding_sha256 }}" \
             --qualification-holdout-sha256 \
               "${{ steps.bindings.outputs.qualification_holdout_sha256 }}" \
-            --final-blind-sha256 \
+            --final-blind-holdout-sha256 \
               "${{ steps.bindings.outputs.final_blind_sha256 }}" \
-            --scorer-sha256 "${{ steps.bindings.outputs.scorer_sha256 }}" \
+            --agent-roster-sha256 \
+              "${{ steps.bindings.outputs.agent_roster_sha256 }}" \
+            --agent-consensus-sha256 \
+              "${{ steps.bindings.outputs.agent_consensus_sha256 }}" \
+            --agent-isolation-sha256 \
+              "${{ steps.bindings.outputs.agent_isolation_sha256 }}" \
             --runner-sha256 "${{ steps.bindings.outputs.runner_sha256 }}" \
-            --isolation-sha256 "${{ steps.bindings.outputs.isolation_sha256 }}"
+            --scorer-panel-sha256 \
+              "${{ steps.bindings.outputs.scorer_panel_sha256 }}" \
+            --arbiter-sha256 "${{ steps.bindings.outputs.arbiter_sha256 }}" \
+            --compiler-scorer-isolation-sha256 \
+              "${{ steps.bindings.outputs.compiler_scorer_isolation_sha256 }}"
 
       - name: Discover closed transitive provenance paths
         id: provenance-paths
@@ -257,13 +278,15 @@ jobs:
           bindings = [
               item["relative_path"]
               for item in bundle["files"]
-              if item["evidence_kind"] == "post_build_gold_binding"
+              if item["evidence_kind"] == "post_build_machine_reference_binding"
           ]
           if len(bindings) != 1:
-              raise SystemExit("external bundle must contain one Candidate Gold binding")
+              raise SystemExit(
+                  "external bundle must contain one Candidate machine reference binding"
+              )
           for label, relative in (
               ("pre_publish", pre_publish),
-              ("candidate_gold", f"external-evidence/{bindings[0]}"),
+              ("candidate_machine_reference", f"external-evidence/{bindings[0]}"),
           ):
               path = PurePosixPath(relative)
               if path.is_absolute() or ".." in path.parts or "." in path.parts:
@@ -278,14 +301,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv run --frozen python -m benchmarks.release.release_provenance_v7 \
+          uv run --frozen python -m benchmarks.release.release_provenance_v8 \
             --release-manifest \
               "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
-            --classification benchmarks/release/v013-gate-classification-v7.json \
+            --classification benchmarks/release/v013-gate-classification-v8.json \
             --pre-publish-receipt \
               "${RUNNER_TEMP}/release-assets/${{ steps.provenance-paths.outputs.pre_publish }}" \
-            --candidate-gold-binding \
-              "${RUNNER_TEMP}/release-assets/${{ steps.provenance-paths.outputs.candidate_gold }}" \
+            --candidate-machine-reference-binding \
+              "${RUNNER_TEMP}/release-assets/${{ steps.provenance-paths.outputs.candidate_machine_reference }}" \
             --external-bundle-manifest \
               "${RUNNER_TEMP}/release-assets/external-evidence/bundle-manifest.json" \
             --active-qualification \
@@ -294,8 +317,7 @@ jobs:
             --candidate-raw-root "${RUNNER_TEMP}/candidate-full-raw-evidence" \
             --candidate-run-id "${{ inputs.candidate_run_id }}" \
             --evidence-run-id "${{ inputs.evidence_run_id }}" \
-            --qualification-run-id "${GITHUB_RUN_ID}" \
-            --trusted-human-approver benchmarks/v013/trusted-human-approver-v1.json
+            --qualification-run-id "${GITHUB_RUN_ID}"
 
       - name: Retain exact commercial release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

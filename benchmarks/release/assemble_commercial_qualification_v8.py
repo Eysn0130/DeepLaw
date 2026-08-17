@@ -1,10 +1,10 @@
-"""Assemble the current v7 commercial qualification evidence boundary.
+"""Assemble the current v8 commercial qualification evidence boundary.
 
 This module is deliberately a small, decision-free consumer of the external
 qualification bundle.  It does not execute a Host, score a model, or accept a
 caller supplied ``passed`` value.  Every Gate metric, failure count, run id,
 and input binding is derived by :func:`parse_typed_evidence`; the resulting
-Gate files and report are therefore suitable for the v7 provenance verifier to
+Gate files and report are therefore suitable for the v8 provenance verifier to
 reopen later.
 
 The assembler writes only sanitized, path-relative records.  It never reads
@@ -28,9 +28,9 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from benchmarks.release.external_qualification_bundle_v3 import (
-    ExternalQualificationBundleV3Error,
-    validate_external_bundle,
+from benchmarks.release.external_qualification_bundle_v4 import (
+    ExternalQualificationBundleV4Error,
+    validate_external_bundle_v4,
 )
 from benchmarks.release.qualification_evidence_core import (
     canonical_json_bytes as _core_canonical_json_bytes,
@@ -40,6 +40,9 @@ from benchmarks.release.qualification_evidence_core import (
 )
 from benchmarks.release.qualification_evidence_core import (
     regular_file_bytes as _core_regular_file_bytes,
+)
+from benchmarks.release.qualification_evidence_core import (
+    require_exact_protocol_gate_ids as _core_require_exact_protocol_gate_ids,
 )
 from benchmarks.release.qualification_evidence_core import (
     safe_asset_file as _core_safe_asset_file,
@@ -56,28 +59,29 @@ from benchmarks.release.qualification_evidence_core import (
 from benchmarks.release.qualification_evidence_core import (
     strict_json_bytes as _core_strict_json_bytes,
 )
-from benchmarks.release.release_provenance_v7 import (
-    _CANDIDATE_WORKFLOW_KINDS,
-    _GATE_EVIDENCE_KINDS,
-    _load_candidate_provenance_identities,
-    _load_candidate_raw_inventory,
-)
+from benchmarks.release.typed_qualification_evidence import _PARSERS as _LEGACY_PARSERS
+from benchmarks.release.typed_qualification_evidence import TypedQualificationEvidenceError
 from benchmarks.release.typed_qualification_evidence import (
-    TypedQualificationEvidenceError,
-    parse_typed_evidence,
+    _reject_forbidden_keys as _legacy_reject_forbidden_keys,
 )
+from benchmarks.release.typed_qualification_evidence import _source_data as _legacy_source_data
+from benchmarks.release.typed_qualification_evidence import _strict_json as _legacy_strict_json
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 CONTRACTS = REPOSITORY / "contracts"
-TYPED_SCHEMA_VERSION = "deeplaw.typed-qualification-evidence/v1"
-DERIVED_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v1"
-GATE_SCHEMA_VERSION = "deeplaw.provenance-bound-gate-result/v3"
-REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v4"
-RELEASE_SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v7"
-CLASSIFICATION_SCHEMA_VERSION = "deeplaw.v013-release-gate-classification/v7"
-CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v7"
-VALIDATOR_ID = "deeplaw-typed-qualification-v1"
-VALIDATOR_VERSION = "1"
+TYPED_SCHEMA_VERSION = "deeplaw.typed-qualification-evidence/v2"
+EXACT_WHEEL_RUNNER_SOURCE = REPOSITORY / "benchmarks/release/exact_wheel_runner.py"
+DERIVED_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v2"
+GATE_SCHEMA_VERSION = "deeplaw.provenance-bound-gate-result/v4"
+REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v5"
+RELEASE_SCHEMA_VERSION = "deeplaw.commercial-release-manifest/v8"
+CLASSIFICATION_SCHEMA_VERSION = "deeplaw.v013-release-gate-classification/v8"
+CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v8"
+PROFILE = "machine_evaluated_no_human_attestation"
+REFERENCE_PROVENANCE = "agent_consensus"
+HUMAN_AUTHENTICITY = "not_claimed"
+VALIDATOR_ID = "deeplaw-typed-qualification-v2"
+VALIDATOR_VERSION = "2"
 PACKAGE_NAME = "deeplaw"
 MAX_FILE_BYTES = 64 * 1024 * 1024
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
@@ -93,9 +97,36 @@ _SECRET = re.compile(
     r"(?i)(?:api[_-]?key|access[_-]?token|authorization|bearer|private[_-]?key|secret)\s*[:=]"
 )
 
+_CANDIDATE_WORKFLOW_KINDS = frozenset(
+    {"candidate_full_junit", "candidate_platform_receipt", "retained_supply_chain"}
+)
+_GATE_EVIDENCE_KINDS: dict[str, frozenset[str]] = {
+    "canonical_integrity": frozenset({"exact_wheel_execution"}),
+    "migration_recovery": frozenset({"candidate_full_junit"}),
+    "secret_host_isolation": frozenset({"host_event_sequence"}),
+    "bounded_context": frozenset({"context_capsule_selection_usage"}),
+    "legal_evidence": frozenset({"legal_rows"}),
+    "source_citation_locator": frozenset({"legal_rows"}),
+    "scale_performance": frozenset({"scale_report"}),
+    "supported_platforms": frozenset({"candidate_platform_receipt"}),
+    "reproducible_supply_chain": frozenset({"retained_supply_chain"}),
+    "machine_reference_isolation": frozenset({"machine_reference_scorer"}),
+    "codex": frozenset({"host_event_sequence"}),
+    "opencode": frozenset({"host_event_sequence"}),
+    "selective_forget": frozenset({"wiki_journey_rows"}),
+    "timeline": frozenset({"host_event_sequence"}),
+}
+_FROZEN_HOST_TASK_CASES = frozenset(
+    {
+        "cold/new",
+        "resume/fork/concurrent-worktree",
+        "compaction/forget/stale",
+    }
+)
+
 
 class CommercialQualificationAssemblerError(ValueError):
-    """Raised when current v7 qualification inputs are absent or inconsistent."""
+    """Raised when current v8 qualification inputs are absent or inconsistent."""
 
 
 class _TypedRecord:
@@ -219,6 +250,15 @@ def _regular_file(path: Path, *, label: str, max_bytes: int = MAX_FILE_BYTES) ->
         error_type=CommercialQualificationAssemblerError,
     )
     return raw
+
+
+def _exact_wheel_runner_identity() -> dict[str, str]:
+    return {
+        "identity": "exact-wheel-runner:v2",
+        "sha256": _sha256(
+            _regular_file(EXACT_WHEEL_RUNNER_SOURCE, label="exact-wheel runner source")
+        ),
+    }
 
 
 def _read_json(path: Path, *, label: str) -> tuple[dict[str, Any], bytes]:
@@ -368,18 +408,28 @@ def _load_active(path: Path) -> tuple[dict[str, Any], bytes]:
     value, raw = _read_json(path, label="active qualification")
     _validate_schema(
         value,
-        "v013-active-qualification.v1.schema.json",
+        "v013-active-qualification.v2.schema.json",
         label="active qualification",
     )
-    if value.get("status") != "frozen_exact_candidate":
-        _fail("active qualification candidate is not frozen")
+    human_review = value.get("human_review")
+    if (
+        value.get("profile") != PROFILE
+        or not isinstance(human_review, Mapping)
+        or human_review.get("authenticity") != HUMAN_AUTHENTICITY
+    ):
+        _fail("active qualification is not the machine-only profile")
     return value, raw
 
 
 def _load_classification(path: Path) -> tuple[dict[str, Any], bytes, list[str]]:
-    value, raw = _read_json(path, label="v7 Gate classification")
+    value, raw = _read_json(path, label="v8 Gate classification")
+    _validate_schema(
+        value,
+        "v013-release-gate-classification.v8.schema.json",
+        label="v8 Gate classification",
+    )
     if value.get("schema_version") != CLASSIFICATION_SCHEMA_VERSION:
-        _fail("Gate classification must use the current v7 schema")
+        _fail("Gate classification must use the current v8 schema")
     if value.get("classification_id") != CLASSIFICATION_ID:
         _fail("Gate classification identity differs")
     categories = value.get("categories")
@@ -408,42 +458,28 @@ def _load_classification(path: Path) -> tuple[dict[str, Any], bytes, list[str]]:
     if set(core_ids) != set(_GATE_EVIDENCE_KINDS) or any(
         gate_by_id.get(gate_id, {}).get("category") != "Core" for gate_id in core_ids
     ):
-        _fail("v7 Gate classification is not closed against the verifier mapping")
+        _fail("v8 Gate classification is not closed against the machine verifier mapping")
     for gate_id in core_ids:
         required_roles = gate_by_id[gate_id].get("required_corpus_roles")
-        expected_roles = (
-            ["candidate_full"]
-            if _GATE_EVIDENCE_KINDS[gate_id] <= _CANDIDATE_WORKFLOW_KINDS
-            else ["qualification_holdout", "final_blind"]
-        )
+        if (
+            _GATE_EVIDENCE_KINDS[gate_id] <= _CANDIDATE_WORKFLOW_KINDS
+            or gate_id == "canonical_integrity"
+        ):
+            expected_roles = ["candidate_full"]
+        elif gate_id == "machine_reference_isolation":
+            expected_roles = ["qualification_holdout", "final_blind"]
+        else:
+            expected_roles = ["qualification_holdout"]
         if required_roles != expected_roles:
-            _fail(f"Gate {gate_id} corpus roles are not current v7")
+            _fail(f"Gate {gate_id} corpus roles are not current v8")
+        artifact_kinds = gate_by_id[gate_id].get("artifact_kinds")
+        if artifact_kinds != sorted(_GATE_EVIDENCE_KINDS[gate_id]):
+            _fail(f"Gate {gate_id} artifact mapping is not closed")
+        if gate_by_id[gate_id].get("validator_id") != VALIDATOR_ID:
+            _fail(f"Gate {gate_id} validator identity is not current v2")
+        if str(gate_by_id[gate_id].get("validator_version")) != VALIDATOR_VERSION:
+            _fail(f"Gate {gate_id} validator version is not current v2")
     return value, raw, core_ids
-
-
-def _trusted_approver(path: Path, *, bundle_root: Path) -> Mapping[str, Any]:
-    selected = path.expanduser()
-    if selected.is_symlink() or not selected.is_file():
-        _fail("trusted human approver descriptor must be a regular file")
-    try:
-        resolved = selected.resolve(strict=True)
-        bundle_resolved = bundle_root.resolve(strict=True)
-    except OSError as error:
-        raise CommercialQualificationAssemblerError(
-            "trusted human approver descriptor is unavailable"
-        ) from error
-    if resolved.is_relative_to(bundle_resolved):
-        _fail("trusted human approver descriptor must be outside the external bundle")
-    value, _raw = _read_json(resolved, label="trusted human approver descriptor")
-    if set(value) != {"identity", "key_id", "public_key_b64"}:
-        _fail("trusted human approver descriptor is not closed")
-    if not isinstance(value["identity"], str) or not value["identity"]:
-        _fail("trusted human approver identity is invalid")
-    if not isinstance(value["key_id"], str) or not SHA256.fullmatch(value["key_id"]):
-        _fail("trusted human approver key id is invalid")
-    if not isinstance(value["public_key_b64"], str) or not value["public_key_b64"]:
-        _fail("trusted human approver public key is invalid")
-    return value
 
 
 def _candidate_from_active(active: Mapping[str, Any]) -> dict[str, str]:
@@ -465,6 +501,92 @@ def _candidate_from_active(active: Mapping[str, Any]) -> dict[str, str]:
     return result  # type: ignore[return-value]
 
 
+def _load_candidate_raw_inventory(
+    candidate_raw_root: Path,
+    *,
+    candidate_run_id: int,
+    candidate_commit: str,
+    external_bundle_root: Path,
+) -> tuple[dict[str, tuple[str, int]], bytes]:
+    """Reopen Candidate Full bytes independently of the external bundle."""
+
+    root = _safe_root(candidate_raw_root, label="Candidate Full raw artifact root")
+    bundle = _safe_root(external_bundle_root, label="external evidence root")
+    if root == bundle or root.is_relative_to(bundle) or bundle.is_relative_to(root):
+        _fail("Candidate Full raw artifact root must be independent of the external bundle")
+    inventory_path = root / "candidate-full-inventory-receipt.json"
+    inventory, raw = _read_json(inventory_path, label="Candidate Full raw inventory receipt")
+    if inventory.get("schema_version") != "deeplaw.candidate-full-inventory-receipt/v1":
+        _fail("Candidate Full raw inventory schema is not current")
+    if (
+        inventory.get("record_kind") != "candidate_full_raw_inventory"
+        or inventory.get("run_id") != candidate_run_id
+        or inventory.get("head_sha") != candidate_commit
+        or inventory.get("path_policy") != "logical_relative_paths_only"
+    ):
+        _fail("Candidate Full raw inventory identity differs")
+    rows = inventory.get("files")
+    if not isinstance(rows, list):
+        _fail("Candidate Full raw inventory file list is missing")
+    declared: dict[str, tuple[str, int]] = {}
+    for row in rows:
+        if not isinstance(row, Mapping) or set(row) != {"logical_path", "sha256", "bytes"}:
+            _fail("Candidate Full raw inventory row is not closed")
+        path = _safe_relative(row.get("logical_path"), label="Candidate raw logical path")
+        digest = row.get("sha256")
+        size = row.get("bytes")
+        if not isinstance(digest, str) or not SHA256.fullmatch(digest):
+            _fail("Candidate raw inventory digest is invalid")
+        if isinstance(size, bool) or not isinstance(size, int) or not 1 <= size <= MAX_FILE_BYTES:
+            _fail("Candidate raw inventory byte size is invalid")
+        if path in declared:
+            _fail("Candidate Full raw inventory contains a duplicate path")
+        declared[path] = (digest, size)
+    observed: dict[str, tuple[str, int]] = {}
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            _fail("Candidate Full raw artifact root contains a symbolic link")
+        if not path.is_file() or path == inventory_path:
+            continue
+        data = _regular_file(path, label="Candidate Full raw artifact")
+        observed[path.relative_to(root).as_posix()] = (_sha256(data), len(data))
+    if observed != declared:
+        _fail("Candidate Full raw inventory does not match retained bytes")
+    run_receipt, _run_receipt_raw = _read_json(
+        root / "candidate-full-run-receipt.json",
+        label="Candidate Full raw run receipt",
+    )
+    if (
+        set(run_receipt)
+        != {
+            "schema_version",
+            "record_kind",
+            "workflow",
+            "workflow_path",
+            "run_id",
+            "run_attempt",
+            "head_sha",
+            "event",
+            "retention_days",
+            "path_policy",
+        }
+        or run_receipt.get("schema_version") != "deeplaw.candidate-full-run-receipt/v1"
+        or run_receipt.get("record_kind") != "candidate_full_raw_evidence"
+        or run_receipt.get("workflow") != "Candidate Full"
+        or run_receipt.get("workflow_path") != ".github/workflows/candidate-full.yml"
+        or run_receipt.get("run_id") != candidate_run_id
+        or run_receipt.get("head_sha") != candidate_commit
+        or isinstance(run_receipt.get("run_attempt"), bool)
+        or not isinstance(run_receipt.get("run_attempt"), int)
+        or run_receipt["run_attempt"] < 1
+        or run_receipt.get("event") not in {"workflow_dispatch", "pull_request"}
+        or run_receipt.get("retention_days") != 90
+        or run_receipt.get("path_policy") != "logical_relative_paths_only"
+    ):
+        _fail("Candidate Full raw run receipt identity differs")
+    return declared, raw
+
+
 def _assert_exact_bindings(
     *,
     candidate: Mapping[str, str],
@@ -483,12 +605,12 @@ def _assert_exact_bindings(
         _fail("candidate, evidence, and qualification run ids must be distinct")
 
 
-def _threshold_binding(gold: Mapping[str, Any]) -> dict[str, Any]:
-    thresholds = gold.get("thresholds")
+def _threshold_binding(reference: Mapping[str, Any]) -> dict[str, Any]:
+    thresholds = reference.get("thresholds")
     if not isinstance(thresholds, Mapping):
-        _fail("semantic Gold thresholds are missing")
+        _fail("semantic machine reference thresholds are missing")
     return {
-        "threshold_id": "semantic-gold-thresholds",
+        "threshold_id": "semantic-machine-reference-thresholds",
         "threshold_sha256": _sha256(_canonical(thresholds)),
         "frozen": True,
     }
@@ -507,6 +629,23 @@ def _typed_source_refs(value: Any) -> list[Mapping[str, Any]]:
     return result
 
 
+def _typed_source_data(
+    reference: Mapping[str, Any], *, root: Path, label: str
+) -> tuple[Any, Path]:
+    """Read one v2 source through the legacy byte-hardening seam."""
+
+    if reference.get("media_type") != "application/json":
+        _fail(f"{label} must be JSON")
+    try:
+        source = _legacy_source_data(reference, root=root, label=label)
+        value = _legacy_strict_json(source.raw, label=label)
+        _legacy_reject_forbidden_keys(value)
+    except (OSError, TypedQualificationEvidenceError, ValueError) as error:
+        raise CommercialQualificationAssemblerError(f"{label} source was rejected") from error
+    _projection(value, label=label)
+    return value, source.path
+
+
 def _parse_typed_records(
     *,
     bundle_root: Path,
@@ -517,80 +656,131 @@ def _parse_typed_records(
     holdout_sha256: str,
     blind_sha256: str,
     external_runner: Mapping[str, Any],
-    external_scorer: Mapping[str, Any],
-    candidate_identities: Mapping[str, Mapping[str, Mapping[str, str]]],
-    trusted: Mapping[str, Any],
+    external_scorer_panel: Mapping[str, Any],
+    external_arbiter: Mapping[str, Any],
+    candidate_inventory_sha256: str,
 ) -> list[_TypedRecord]:
-    typed_kinds = set(_GATE_EVIDENCE_KINDS) | {"exact_wheel_execution", "human_gold_scorer"}
+    typed_kinds = set().union(*_GATE_EVIDENCE_KINDS.values()) | {"machine_reference_scorer"}
     records: list[_TypedRecord] = []
     for item in sorted(index.values(), key=lambda entry: entry.relative):
         if item.reference.get("evidence_kind") not in typed_kinds:
             continue
         envelope = _strict_json(item.raw, label="typed qualification manifest")
-        if envelope.get("schema_version") != TYPED_SCHEMA_VERSION:
-            _fail("typed bundle reference is not a typed qualification manifest")
+        _validate_schema(
+            envelope,
+            "typed-qualification-evidence.v2.schema.json",
+            label="typed qualification manifest",
+        )
         kind = envelope.get("kind")
-        if not isinstance(kind, str) or kind != item.reference.get("evidence_kind"):
-            _fail("typed qualification evidence kind differs from bundle reference")
+        if kind == "human_gold_scorer":
+            _fail("human_gold_scorer is not a valid v8 input")
+        if (
+            not isinstance(kind, str)
+            or kind != item.reference.get("evidence_kind")
+            or kind not in typed_kinds
+        ):
+            _fail("typed qualification evidence kind differs from the closed v8 mapping")
+        candidate_binding = envelope.get("candidate_binding")
+        if candidate_binding != dict(candidate):
+            _fail("typed qualification candidate binding differs")
         run_binding = envelope.get("run_binding")
         corpus = envelope.get("corpus")
         if not isinstance(run_binding, Mapping) or not isinstance(corpus, Mapping):
             _fail("typed qualification run/corpus binding is missing")
         is_candidate = kind in _CANDIDATE_WORKFLOW_KINDS
+        expected_workflow = candidate_run_id if is_candidate else evidence_run_id
         run_id = run_binding.get("run_id")
-        workflow_run_id = candidate_run_id if is_candidate else evidence_run_id
         if not isinstance(run_id, str) or not run_id:
             _fail("typed qualification run id is invalid")
+        if run_binding.get("workflow_run_id") != expected_workflow:
+            _fail("typed qualification workflow run binding differs")
         corpus_role = corpus.get("role")
         corpus_sha = corpus.get("sha256")
         if not isinstance(corpus_sha, str) or not SHA256.fullmatch(corpus_sha):
             _fail("typed qualification corpus hash is invalid")
+        expected_corpus = None
         if is_candidate:
             if corpus_role != "candidate_full":
                 _fail("Candidate Full typed evidence has the wrong corpus role")
-            expected_corpus = None
-            identity = candidate_identities.get(kind)
-            if not isinstance(identity, Mapping):
-                _fail(f"Candidate Full provenance identity is missing for {kind}")
-            expected_runner = identity.get("runner")
-            expected_scorer = identity.get("scorer")
+        elif kind == "exact_wheel_execution":
+            if corpus_role != "candidate_full" or corpus_sha != candidate_inventory_sha256:
+                _fail("exact-wheel evidence does not bind Candidate Full raw inventory")
+        elif corpus_role == "qualification_holdout":
+            expected_corpus = holdout_sha256
+        elif corpus_role == "final_blind":
+            expected_corpus = blind_sha256
         else:
-            if corpus_role == "qualification_holdout":
-                expected_corpus = holdout_sha256
-            elif corpus_role == "final_blind":
-                expected_corpus = blind_sha256
-            else:
-                _fail("external typed evidence has an unsupported corpus role")
-            expected_runner = external_runner
-            expected_scorer = external_scorer
-        if corpus_sha != expected_corpus and expected_corpus is not None:
+            _fail("external typed evidence has an unsupported corpus role")
+        if expected_corpus is not None and corpus_sha != expected_corpus:
             _fail("typed qualification corpus hash differs from its frozen input")
-        try:
-            derived = parse_typed_evidence(
-                item.path,
-                root=item.path.parent,
-                expected_candidate=candidate,
-                expected_run_id=run_id,
-                expected_workflow_run_id=workflow_run_id,
-                expected_corpus_sha256=expected_corpus,
-                expected_runner=expected_runner,
-                expected_scorer=expected_scorer,
-                trusted_human_approver=trusted,
+        if (
+            envelope.get("profile") != PROFILE
+            or envelope.get("reference_provenance") != REFERENCE_PROVENANCE
+        ):
+            _fail("typed qualification manifest is not machine-only")
+        if envelope.get("human_authenticity") != HUMAN_AUTHENTICITY:
+            _fail("typed qualification manifest makes a human authenticity claim")
+        if not is_candidate:
+            expected_runner = (
+                _exact_wheel_runner_identity()
+                if kind == "exact_wheel_execution"
+                else external_runner
             )
-        except (OSError, TypedQualificationEvidenceError, ValueError) as error:
-            raise CommercialQualificationAssemblerError(
-                "typed qualification parser rejected a bundle manifest"
-            ) from error
-        if derived.get("kind") != kind or derived.get("status") != "passed":
-            _fail("typed qualification evidence did not derive a passed result")
-        if derived.get("evidence_record_sha256") != envelope.get("record_sha256"):
-            _fail("typed qualification derived record is not bound to its manifest")
+            if envelope.get("runner") != expected_runner:
+                _fail("typed qualification runner identity differs")
+            if kind == "machine_reference_scorer":
+                if envelope.get("scorer_panel") != external_scorer_panel:
+                    _fail("typed qualification scorer panel differs")
+                if envelope.get("arbiter") != external_arbiter:
+                    _fail("typed qualification arbiter differs")
+        record_sha = envelope.get("record_sha256")
+        if (
+            not isinstance(record_sha, str)
+            or not SHA256.fullmatch(record_sha)
+            or record_sha != _record_digest(envelope)
+        ):
+            _fail("typed qualification manifest record digest differs")
         sources = _typed_source_refs(envelope.get("payload"))
         if not sources:
             _fail("typed qualification manifest contains no source receipts")
         for source in sources:
-            source_path = source.get("relative_path")
-            _safe_relative(source_path, label="typed source path")
+            _safe_relative(source.get("relative_path"), label="typed source path")
+            try:
+                _legacy_source_data(
+                    source,
+                    root=bundle_root,
+                    label="typed source",
+                )
+            except (OSError, TypedQualificationEvidenceError, ValueError) as error:
+                raise CommercialQualificationAssemblerError(
+                    "typed source receipt was rejected"
+                ) from error
+        try:
+            parser = _LEGACY_PARSERS.get(kind)
+            if parser is None:
+                _fail(f"typed qualification kind {kind} has no parser")
+            kwargs: dict[str, Any] = {"root": bundle_root, "record_sha256": record_sha}
+            if kind in {
+                "legal_rows",
+                "wiki_journey_rows",
+                "context_capsule_selection_usage",
+                "scale_report",
+                "host_event_sequence",
+            }:
+                kwargs["expected_corpus_sha256"] = expected_corpus
+            if kind == "exact_wheel_execution":
+                kwargs["expected_candidate_run_id"] = candidate_run_id
+            derived = parser(envelope, **kwargs)
+        except (OSError, TypedQualificationEvidenceError, ValueError, KeyError) as error:
+            raise CommercialQualificationAssemblerError(
+                "typed qualification parser rejected a bundle manifest"
+            ) from error
+        derived = dict(derived)
+        derived["schema_version"] = DERIVED_SCHEMA_VERSION
+        if derived.get("kind") != kind or derived.get("status") != "passed":
+            _fail("typed qualification evidence did not derive a passed result")
+        if derived.get("evidence_record_sha256") != record_sha:
+            _fail("typed qualification derived record is not bound to its manifest")
         records.append(
             _TypedRecord(
                 kind=kind,
@@ -631,31 +821,35 @@ def _select_records(
         for item in external
         if item.manifest.get("corpus", {}).get("role") == "final_blind"
     ]
-    selected = holdout or blind
-    role = "qualification_holdout" if holdout else "final_blind"
-    corpus_sha = holdout_sha256 if holdout else blind_sha256
-    if not selected:
-        _fail("external typed evidence has no frozen holdout")
-    if any(item.manifest.get("corpus", {}).get("sha256") != corpus_sha for item in selected):
-        _fail("selected external typed evidence does not share one corpus hash")
-    # A v7 report has one corpus binding.  Do not silently combine holdout and blind rows.
-    expected_counts = {
+    if any(
+        item.manifest.get("corpus", {}).get("sha256") != holdout_sha256
+        for item in holdout
+    ) or any(
+        item.manifest.get("corpus", {}).get("sha256") != blind_sha256
+        for item in blind
+    ):
+        _fail("external typed evidence differs from its frozen corpus hash")
+    holdout_counts = {
         "host_event_sequence": 6,
         "exact_wheel_execution": 1,
-        "human_gold_scorer": 1,
+        "machine_reference_scorer": 1,
         "legal_rows": 1,
         "wiki_journey_rows": 1,
         "context_capsule_selection_usage": 1,
         "scale_report": 1,
     }
-    by_kind: dict[str, list[_TypedRecord]] = defaultdict(list)
-    for item in selected:
-        by_kind[item.kind].append(item)
-    for kind, count in expected_counts.items():
-        if len(by_kind[kind]) != count:
+    by_holdout_kind: dict[str, list[_TypedRecord]] = defaultdict(list)
+    for item in holdout:
+        by_holdout_kind[item.kind].append(item)
+    for kind, count in holdout_counts.items():
+        if len(by_holdout_kind[kind]) != count:
             _fail(f"external typed evidence requires {count} {kind} manifests")
+    if len(holdout) != sum(holdout_counts.values()):
+        _fail("qualification holdout typed evidence inventory is not closed")
+    if len(blind) != 1 or blind[0].kind != "machine_reference_scorer":
+        _fail("final blind must contain exactly one machine-reference scorer manifest")
     hosts: dict[str, list[_TypedRecord]] = defaultdict(list)
-    for item in by_kind["host_event_sequence"]:
+    for item in by_holdout_kind["host_event_sequence"]:
         host = item.derived.get("metrics", {}).get("host")
         task_case = item.derived.get("metrics", {}).get("task_case")
         if host not in {"codex", "opencode"} or task_case not in {
@@ -677,7 +871,7 @@ def _select_records(
             "compaction/forget/stale",
         }:
             _fail(f"{host} Host qualification does not cover the frozen task set")
-    return selected, role, corpus_sha
+    return external, "qualification_holdout", holdout_sha256
 
 
 def _validator_binding(path: Path, *, label: str) -> dict[str, Any]:
@@ -690,7 +884,7 @@ def _validator_binding(path: Path, *, label: str) -> dict[str, Any]:
 
 
 def _execution_schema_fields() -> set[str]:
-    schema_path = CONTRACTS / "provenance-bound-gate-result.v3.schema.json"
+    schema_path = CONTRACTS / "provenance-bound-gate-result.v4.schema.json"
     schema = _strict_json(
         _regular_file(schema_path, label="Gate result contract"),
         label="Gate result contract",
@@ -717,7 +911,7 @@ def _execution(
     workflow_run_id = run.get("workflow_run_id")
     fields = _execution_schema_fields()
     if fields != {"run_id", "workflow_run_id", "input_refs", "evidence_kind"}:
-        _fail("Gate execution contract is not the converged v3 contract")
+        _fail("Gate execution contract is not the converged v4 contract")
     return {
         "run_id": run_id,
         "workflow_run_id": workflow_run_id,
@@ -764,8 +958,8 @@ def _gate_result(
     classification_binding: Mapping[str, Any],
     protocol_binding: Mapping[str, Any],
     threshold_binding: Mapping[str, Any],
-    gold_binding: Mapping[str, Any],
-    corpus: Mapping[str, Any],
+    reference_binding: Mapping[str, Any],
+    corpora: Sequence[Mapping[str, Any]],
     validator_source: Mapping[str, Any],
     validator_executable: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -827,6 +1021,9 @@ def _gate_result(
         _fail(f"Gate {gate_id} contains duplicate typed run identities")
     result: dict[str, Any] = {
         "schema_version": GATE_SCHEMA_VERSION,
+        "profile": PROFILE,
+        "reference_provenance": REFERENCE_PROVENANCE,
+        "human_authenticity": HUMAN_AUTHENTICITY,
         "qualification_run_id": qualification_run_id,
         "gate_id": gate_id,
         "category": "Core",
@@ -843,8 +1040,8 @@ def _gate_result(
         },
         "protocol_binding": dict(protocol_binding),
         "threshold_binding": dict(threshold_binding),
-        "gold_binding": dict(gold_binding),
-        "corpus": dict(corpus),
+        "reference_binding": dict(reference_binding),
+        "corpora": [dict(corpus) for corpus in corpora],
         "status": "passed",
         "executions": executions,
         "run_ids": run_ids,
@@ -853,7 +1050,7 @@ def _gate_result(
         "inputs": inputs,
     }
     result["result_sha256"] = _record_digest(result, field="result_sha256")
-    _validate_schema(result, "provenance-bound-gate-result.v3.schema.json", label=f"Gate {gate_id}")
+    _validate_schema(result, "provenance-bound-gate-result.v4.schema.json", label=f"Gate {gate_id}")
     return result
 
 
@@ -903,20 +1100,30 @@ def _environment() -> dict[str, Any]:
 
 def _external_binding(
     *,
-    semantic_gold_sha256: str,
-    holdout_sha256: str,
-    blind_sha256: str,
-    scorer_sha256: str,
+    semantic_reference_sha256: str,
+    candidate_binding_sha256: str,
+    qualification_holdout_sha256: str,
+    final_blind_holdout_sha256: str,
+    agent_roster_sha256: str,
+    agent_consensus_sha256: str,
+    agent_isolation_sha256: str,
     runner_sha256: str,
-    isolation_sha256: str,
+    scorer_panel_sha256: str,
+    arbiter_sha256: str,
+    compiler_scorer_isolation_sha256: str,
 ) -> dict[str, str]:
     result = {
-        "semantic_gold_sha256": semantic_gold_sha256,
-        "holdout_sha256": holdout_sha256,
-        "blind_sha256": blind_sha256,
-        "scorer_sha256": scorer_sha256,
+        "semantic_reference_sha256": semantic_reference_sha256,
+        "candidate_binding_sha256": candidate_binding_sha256,
+        "qualification_holdout_sha256": qualification_holdout_sha256,
+        "final_blind_holdout_sha256": final_blind_holdout_sha256,
+        "agent_roster_sha256": agent_roster_sha256,
+        "agent_consensus_sha256": agent_consensus_sha256,
+        "agent_isolation_sha256": agent_isolation_sha256,
         "runner_sha256": runner_sha256,
-        "isolation_sha256": isolation_sha256,
+        "scorer_panel_sha256": scorer_panel_sha256,
+        "arbiter_sha256": arbiter_sha256,
+        "compiler_scorer_isolation_sha256": compiler_scorer_isolation_sha256,
     }
     for field, value in result.items():
         if not isinstance(value, str) or not SHA256.fullmatch(value):
@@ -931,7 +1138,6 @@ def assemble_commercial_qualification(
     candidate_raw_root: Path | str,
     active_qualification: Path | str,
     classification: Path | str,
-    trusted_human_approver: Path | str,
     protocol: Path | str,
     candidate_run_id: int,
     evidence_run_id: int,
@@ -939,22 +1145,27 @@ def assemble_commercial_qualification(
     candidate: Mapping[str, str],
     external_inputs: Mapping[str, str],
 ) -> dict[str, Any]:
-    """Validate typed evidence and write a v7 report, Gates, and release manifest.
+    """Validate typed evidence and write a v8 report, Gates, and release manifest.
 
     ``candidate`` must contain exactly ``commit``, ``tree``, ``lock_sha256``,
     ``wheel_sha256``, and ``sdist_sha256``.  ``external_inputs`` must contain
-    exactly the six hash fields used by the v7 release manifest.  No status or
+    exactly the eleven machine reference hash fields used by the v8 release manifest.  No status or
     metric field is accepted from either mapping.
     """
 
     candidate_keys = {"commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"}
     external_keys = {
-        "semantic_gold_sha256",
-        "holdout_sha256",
-        "blind_sha256",
-        "scorer_sha256",
+        "semantic_reference_sha256",
+        "candidate_binding_sha256",
+        "qualification_holdout_sha256",
+        "final_blind_holdout_sha256",
+        "agent_roster_sha256",
+        "agent_consensus_sha256",
+        "agent_isolation_sha256",
         "runner_sha256",
-        "isolation_sha256",
+        "scorer_panel_sha256",
+        "arbiter_sha256",
+        "compiler_scorer_isolation_sha256",
     }
     if set(candidate) != candidate_keys or set(external_inputs) != external_keys:
         _fail("assembler identity descriptors are not closed")
@@ -965,14 +1176,7 @@ def assemble_commercial_qualification(
         if not isinstance(candidate[field], str) or not SHA256.fullmatch(candidate[field]):
             _fail(f"candidate {field} is invalid")
     expected_candidate = dict(candidate)
-    expected_external = _external_binding(**{
-        "semantic_gold_sha256": external_inputs["semantic_gold_sha256"],
-        "holdout_sha256": external_inputs["holdout_sha256"],
-        "blind_sha256": external_inputs["blind_sha256"],
-        "scorer_sha256": external_inputs["scorer_sha256"],
-        "runner_sha256": external_inputs["runner_sha256"],
-        "isolation_sha256": external_inputs["isolation_sha256"],
-    })
+    expected_external = _external_binding(**dict(external_inputs))
     if any(
         isinstance(value, bool) or not isinstance(value, int) or value < 1
         for value in (candidate_run_id, evidence_run_id, qualification_run_id)
@@ -980,6 +1184,17 @@ def assemble_commercial_qualification(
         _fail("workflow run ids must be positive integers")
 
     source_bundle = _safe_root(Path(bundle_root), label="external bundle root")
+    try:
+        validate_external_bundle_v4(
+            source_bundle,
+            expected_candidate_run_id=candidate_run_id,
+            expected_evidence_run_id=evidence_run_id,
+            active_qualification=Path(active_qualification).expanduser(),
+        )
+    except (OSError, ExternalQualificationBundleV4Error, ValueError) as error:
+        raise CommercialQualificationAssemblerError(
+            "external qualification bundle v4 rejected"
+        ) from error
     output_root = Path(assets_root).expanduser()
     if output_root.exists() and output_root.is_symlink():
         _fail("assets root must not be a symbolic link")
@@ -994,59 +1209,55 @@ def assemble_commercial_qualification(
     _classification_value, classification_raw, core_ids = _load_classification(
         Path(classification).expanduser()
     )
-    trusted = _trusted_approver(
-        Path(trusted_human_approver).expanduser(),
-        bundle_root=bundle_root_resolved,
-    )
-    try:
-        bundle_validation = validate_external_bundle(
-            bundle_root_resolved,
-            active_qualification=Path(active_qualification).expanduser(),
-            trusted_human_approver=Path(trusted_human_approver).expanduser(),
-            expected_candidate_run_id=candidate_run_id,
-            expected_evidence_run_id=evidence_run_id,
-        )
-    except (OSError, ExternalQualificationBundleV3Error, ValueError) as error:
-        raise CommercialQualificationAssemblerError(
-            "external qualification bundle v3 boundary rejected"
-        ) from error
-    if bundle_validation.get("candidate_run_id") != candidate_run_id:
-        _fail("external bundle candidate run id differs")
-    if bundle_validation.get("evidence_run_id") != evidence_run_id:
-        _fail("external bundle evidence run id differs")
     manifest, _manifest_raw = _read_json(
         bundle_root_resolved / "bundle-manifest.json",
         label="external bundle manifest",
     )
+    _validate_schema(
+        manifest,
+        "external-qualification-bundle-manifest.v4.schema.json",
+        label="external qualification bundle manifest",
+    )
+    if manifest.get("record_sha256") != _record_digest(manifest):
+        _fail("external bundle manifest record digest differs")
+    for field, expected in (
+        ("candidate_run_id", candidate_run_id),
+        ("evidence_run_id", evidence_run_id),
+    ):
+        if manifest.get(field) != expected:
+            _fail(f"external bundle {field} differs")
+    if (
+        manifest.get("profile") != PROFILE
+        or manifest.get("reference_provenance") != REFERENCE_PROVENANCE
+        or manifest.get("human_authenticity") != HUMAN_AUTHENTICITY
+    ):
+        _fail("external bundle is not the machine-only profile")
     index = _bundle_index(bundle_root_resolved, manifest)
     active_candidate = _candidate_from_active(active)
     manifest_candidate = manifest.get("candidate_binding")
     if not isinstance(manifest_candidate, Mapping):
         _fail("external bundle candidate binding is missing")
-    _assert_exact_bindings(
-        candidate=active_candidate,
-        expected_candidate=expected_candidate,
-        external=manifest.get("external_inputs", {}),
-        expected_external={
-            "semantic_gold_sha256": expected_external["semantic_gold_sha256"],
-            "candidate_gold_binding_sha256": manifest["external_inputs"].get(
-                "candidate_gold_binding_sha256"
-            ),
-            "qualification_holdout_sha256": expected_external["holdout_sha256"],
-            "final_blind_holdout_sha256": expected_external["blind_sha256"],
-            "runner_sha256": expected_external["runner_sha256"],
-            "scorer_sha256": expected_external["scorer_sha256"],
-            "compiler_scorer_isolation_sha256": expected_external["isolation_sha256"],
-        },
-        candidate_run_id=candidate_run_id,
-        evidence_run_id=evidence_run_id,
-        qualification_run_id=qualification_run_id,
-    )
+    if active_candidate != expected_candidate or dict(manifest_candidate) != active_candidate:
+        _fail("external bundle candidate binding differs from the exact candidate")
+    if manifest.get("external_inputs") != {
+        "semantic_reference_sha256": expected_external["semantic_reference_sha256"],
+        "candidate_binding_sha256": expected_external["candidate_binding_sha256"],
+        "qualification_holdout_sha256": expected_external["qualification_holdout_sha256"],
+        "final_blind_holdout_sha256": expected_external["final_blind_holdout_sha256"],
+        "agent_roster_sha256": expected_external["agent_roster_sha256"],
+        "agent_consensus_sha256": expected_external["agent_consensus_sha256"],
+        "agent_isolation_sha256": expected_external["agent_isolation_sha256"],
+        "runner_sha256": expected_external["runner_sha256"],
+        "scorer_panel_sha256": expected_external["scorer_panel_sha256"],
+        "arbiter_sha256": expected_external["arbiter_sha256"],
+        "compiler_scorer_isolation_sha256": expected_external["compiler_scorer_isolation_sha256"],
+    }:
+        _fail("external bundle inputs differ from the exact machine reference binding")
     if dict(manifest_candidate) != active_candidate:
         _fail("external bundle candidate binding differs from the exact candidate")
     # Reopen the independent Candidate Full inventory before consuming any candidate typed source.
     try:
-        _load_candidate_raw_inventory(
+        candidate_raw_inventory, candidate_raw_inventory_bytes = _load_candidate_raw_inventory(
             Path(candidate_raw_root).expanduser(),
             candidate_run_id=candidate_run_id,
             candidate_commit=active_candidate["commit"],
@@ -1056,63 +1267,125 @@ def assemble_commercial_qualification(
         raise CommercialQualificationAssemblerError(
             "Candidate Full raw inventory rejected"
         ) from error
+    bundle_inventory_file = _find_bundle_file(
+        index,
+        digest=manifest.get("candidate_full_raw_inventory_sha256"),
+        evidence_kind="candidate_full_raw_inventory",
+        label="external Candidate Full raw inventory",
+    )
+    bundle_inventory = _strict_json(
+        bundle_inventory_file.raw,
+        label="external Candidate Full raw inventory",
+    )
+    if bundle_inventory_file.raw != candidate_raw_inventory_bytes:
+        _fail("external evidence does not retain the exact Candidate Full inventory receipt")
+    bundle_rows = bundle_inventory.get("files")
+    if not isinstance(bundle_rows, list):
+        _fail("external Candidate Full raw inventory rows are missing")
+    bundle_candidate_inventory: dict[str, tuple[str, int]] = {}
+    for row in bundle_rows:
+        if not isinstance(row, Mapping) or set(row) != {"logical_path", "sha256", "bytes"}:
+            _fail("external Candidate Full raw inventory row is not closed")
+        logical_path = _safe_relative(
+            row.get("logical_path"),
+            label="external Candidate Full raw logical path",
+        )
+        digest = row.get("sha256")
+        size = row.get("bytes")
+        if (
+            not isinstance(digest, str)
+            or not SHA256.fullmatch(digest)
+            or isinstance(size, bool)
+            or not isinstance(size, int)
+            or size < 1
+            or logical_path in bundle_candidate_inventory
+        ):
+            _fail("external Candidate Full raw inventory row is invalid")
+        bundle_candidate_inventory[logical_path] = (digest, size)
+    if bundle_candidate_inventory != candidate_raw_inventory:
+        _fail("external evidence does not bind the independent Candidate Full raw inventory")
 
-    candidate_gold_file = _find_bundle_file(
+    semantic_reference_file = _find_bundle_file(
         index,
-        digest=expected_external["semantic_gold_sha256"],
-        evidence_kind="human_gold_scorer",
-        label="semantic Human Gold",
+        digest=expected_external["semantic_reference_sha256"],
+        evidence_kind="semantic_machine_reference",
+        label="semantic machine reference",
     )
-    semantic_gold = _strict_json(candidate_gold_file.raw, label="semantic Human Gold")
-    _validate_schema(
-        semantic_gold,
-        "semantic-human-gold.v3.schema.json",
-        label="semantic Human Gold",
-    )
-    threshold_binding = _threshold_binding(semantic_gold)
-    candidate_gold_binding_file = _find_bundle_file(
-        index,
-        digest=manifest["external_inputs"]["candidate_gold_binding_sha256"],
-        evidence_kind="post_build_gold_binding",
-        label="Candidate Gold binding",
-    )
-    candidate_gold_binding = _strict_json(
-        candidate_gold_binding_file.raw,
-        label="Candidate Gold binding",
+    semantic_reference = _strict_json(
+        semantic_reference_file.raw,
+        label="semantic machine reference",
     )
     _validate_schema(
-        candidate_gold_binding,
-        "candidate-gold-binding-receipt.v1.schema.json",
-        label="Candidate Gold binding",
+        semantic_reference,
+        "semantic-machine-reference.v1.schema.json",
+        label="semantic machine reference",
     )
-    if candidate_gold_binding.get("record_sha256") != _record_digest(candidate_gold_binding):
-        _fail("Candidate Gold binding record digest differs")
-    external_runner = candidate_gold_binding.get("runner")
-    external_scorer = candidate_gold_binding.get("scorer")
-    if not isinstance(external_runner, Mapping) or not isinstance(external_scorer, Mapping):
-        _fail("Candidate Gold runner/scorer identities are missing")
+    threshold_binding = _threshold_binding(semantic_reference)
+    machine_binding_file = _find_bundle_file(
+        index,
+        digest=expected_external["candidate_binding_sha256"],
+        evidence_kind="post_build_machine_reference_binding",
+        label="Candidate machine reference binding",
+    )
+    machine_binding = _strict_json(
+        machine_binding_file.raw,
+        label="Candidate machine reference binding",
+    )
+    _validate_schema(
+        machine_binding,
+        "candidate-gold-binding-receipt.v2.schema.json",
+        label="Candidate machine reference binding",
+    )
+    if machine_binding.get("record_sha256") != _record_digest(machine_binding):
+        _fail("Candidate machine reference binding record digest differs")
+    external_runner = machine_binding.get("runner")
+    external_scorer_panel = machine_binding.get("scorer_panel")
+    external_arbiter = machine_binding.get("arbiter")
+    if (
+        not isinstance(external_runner, Mapping)
+        or not isinstance(external_scorer_panel, Mapping)
+        or not isinstance(external_arbiter, Mapping)
+    ):
+        _fail("Candidate machine reference runner/scorer panel/arbiter identities are missing")
     if external_runner.get("sha256") != expected_external["runner_sha256"]:
-        _fail("Candidate Gold runner hash differs")
-    if external_scorer.get("sha256") != expected_external["scorer_sha256"]:
-        _fail("Candidate Gold scorer hash differs")
-    candidate_identities = _load_candidate_provenance_identities()
+        _fail("Candidate machine reference runner hash differs")
+    if external_scorer_panel.get("panel_sha256") != expected_external["scorer_panel_sha256"]:
+        _fail("Candidate machine reference scorer panel hash differs")
+    for field, binding_field in (
+        ("semantic_reference_sha256", ("semantic_reference", "sha256")),
+        ("agent_roster_sha256", ("agent_roster", "sha256")),
+        ("agent_consensus_sha256", ("agent_consensus", "sha256")),
+        ("agent_isolation_sha256", ("agent_isolation", "sha256")),
+        ("runner_sha256", ("runner", "sha256")),
+        ("qualification_holdout_sha256", ("holdout", "sha256")),
+        ("final_blind_holdout_sha256", ("blind", "sha256")),
+    ):
+        section, key = binding_field
+        section_value = machine_binding.get(section)
+        if (
+            not isinstance(section_value, Mapping)
+            or section_value.get(key) != expected_external[field]
+        ):
+            _fail(f"Candidate machine reference binding differs for {field}")
+    if external_arbiter.get("sha256") != expected_external["arbiter_sha256"]:
+        _fail("Candidate machine reference arbiter hash differs")
     records = _parse_typed_records(
         bundle_root=bundle_root_resolved,
         index=index,
         candidate=active_candidate,
         candidate_run_id=candidate_run_id,
         evidence_run_id=evidence_run_id,
-        holdout_sha256=expected_external["holdout_sha256"],
-        blind_sha256=expected_external["blind_sha256"],
+        holdout_sha256=expected_external["qualification_holdout_sha256"],
+        blind_sha256=expected_external["final_blind_holdout_sha256"],
         external_runner=external_runner,
-        external_scorer=external_scorer,
-        candidate_identities=candidate_identities,
-        trusted=trusted,
+        external_scorer_panel=external_scorer_panel,
+        external_arbiter=external_arbiter,
+        candidate_inventory_sha256=_sha256(candidate_raw_inventory_bytes),
     )
     selected_external, external_role, external_corpus_sha256 = _select_records(
         records,
-        holdout_sha256=expected_external["holdout_sha256"],
-        blind_sha256=expected_external["blind_sha256"],
+        holdout_sha256=expected_external["qualification_holdout_sha256"],
+        blind_sha256=expected_external["final_blind_holdout_sha256"],
     )
     candidate_records = [item for item in records if item.kind in _CANDIDATE_WORKFLOW_KINDS]
     if len(candidate_records) != 3:
@@ -1164,8 +1437,25 @@ def assemble_commercial_qualification(
         label="qualification protocol path",
     )
     protocol_raw = _regular_file(Path(protocol).expanduser(), label="qualification protocol")
+    protocol_value = _strict_json(protocol_raw, label="qualification protocol")
+    _validate_schema(
+        protocol_value,
+        "v013-qualification-protocol.v2.schema.json",
+        label="qualification protocol",
+    )
+    _core_require_exact_protocol_gate_ids(
+        protocol_value,
+        expected_gate_ids=core_ids,
+        error_type=CommercialQualificationAssemblerError,
+    )
     protocol_sha256 = _sha256(protocol_raw)
-    if protocol_sha256 != protocol_binding_active.get("sha256"):
+    if (
+        protocol_sha256 != protocol_binding_active.get("sha256")
+        or protocol_binding_active.get("schema_version")
+        != "deeplaw.v013-qualification-protocol/v2"
+        or protocol_value.get("protocol_id") != protocol_binding_active.get("protocol_id")
+        or protocol_value.get("profile") != PROFILE
+    ):
         _fail("qualification protocol hash differs from active qualification")
     _copy_and_verify_source(
         Path(protocol).expanduser(),
@@ -1181,10 +1471,13 @@ def assemble_commercial_qualification(
     }
     if not isinstance(protocol_binding["protocol_id"], str) or not protocol_binding["protocol_id"]:
         _fail("qualification protocol identity is invalid")
-    gold_binding = {
-        "gold_sha256": expected_external["semantic_gold_sha256"],
-        "role": "qualification_gold",
-        "source": "repository_external",
+    reference_binding = {
+        "semantic_reference_sha256": expected_external["semantic_reference_sha256"],
+        "agent_roster_sha256": expected_external["agent_roster_sha256"],
+        "agent_consensus_sha256": expected_external["agent_consensus_sha256"],
+        "agent_isolation_sha256": expected_external["agent_isolation_sha256"],
+        "scorer_panel_sha256": expected_external["scorer_panel_sha256"],
+        "arbiter_sha256": expected_external["arbiter_sha256"],
         "frozen": True,
     }
     validator_source = _validator_binding(
@@ -1196,7 +1489,7 @@ def assemble_commercial_qualification(
         label="commercial qualification assembler source",
     )
 
-    # Closed source-kind mapping shared with release_provenance_v7.
+    # Closed source-kind mapping for the machine-only v8 profile.
     by_kind: dict[str, list[_TypedRecord]] = defaultdict(list)
     for item in candidate_records + selected_external:
         by_kind[item.kind].append(item)
@@ -1233,9 +1526,7 @@ def assemble_commercial_qualification(
             for item in by_kind["host_event_sequence"]
             if item.derived["metrics"]["host"] == "opencode"
         ],
-        "human_gold_isolation": [
-            _record_by_kind(selected_external, "human_gold_scorer", label="human_gold_isolation")
-        ],
+        "machine_reference_isolation": by_kind["machine_reference_scorer"],
         "legal_evidence": [
             _record_by_kind(selected_external, "legal_rows", label="legal_evidence")
         ],
@@ -1257,15 +1548,24 @@ def assemble_commercial_qualification(
         ],
     }
     if set(gate_records) != set(_GATE_EVIDENCE_KINDS) or set(gate_records) != set(core_ids):
-        _fail("assembler Gate mapping is not the closed v7 14-Gate mapping")
+        _fail("assembler Gate mapping is not the closed v8 14-Gate mapping")
     gate_results: dict[str, dict[str, Any]] = {}
     gate_paths: dict[str, tuple[str, int, str]] = {}
     for gate_id in core_ids:
-        domain = (
-            candidate_corpus
-            if all(item.kind in _CANDIDATE_WORKFLOW_KINDS for item in gate_records[gate_id])
-            else external_corpus
-        )
+        if all(item.kind in _CANDIDATE_WORKFLOW_KINDS for item in gate_records[gate_id]):
+            gate_corpora = [candidate_corpus]
+        elif gate_id == "machine_reference_isolation":
+            gate_corpora = [
+                external_corpus,
+                {
+                    "role": "final_blind",
+                    "source": "repository_external",
+                    "sha256": expected_external["final_blind_holdout_sha256"],
+                    "frozen": True,
+                },
+            ]
+        else:
+            gate_corpora = [external_corpus]
         gate = _gate_result(
             gate_id,
             gate_records[gate_id],
@@ -1275,8 +1575,8 @@ def assemble_commercial_qualification(
             classification_binding=classification_binding,
             protocol_binding=protocol_binding,
             threshold_binding=threshold_binding,
-            gold_binding=gold_binding,
-            corpus=domain,
+            reference_binding=reference_binding,
+            corpora=gate_corpora,
             validator_source=validator_source,
             validator_executable=validator_executable,
         )
@@ -1287,7 +1587,10 @@ def assemble_commercial_qualification(
 
     report: dict[str, Any] = {
         "schema_version": REPORT_SCHEMA_VERSION,
-        "report_kind": "v013_provenance_bound_gate_collection",
+        "profile": PROFILE,
+        "reference_provenance": REFERENCE_PROVENANCE,
+        "human_authenticity": HUMAN_AUTHENTICITY,
+        "report_kind": "v013_machine_provenance_bound_gate_collection",
         "report_id": f"commercial-v013-{qualification_run_id}",
         "qualification_run_id": qualification_run_id,
         "candidate_binding": {
@@ -1298,8 +1601,17 @@ def assemble_commercial_qualification(
         },
         "protocol_binding": protocol_binding,
         "threshold_binding": threshold_binding,
-        "gold_binding": gold_binding,
-        "corpus": external_corpus,
+        "reference_binding": reference_binding,
+        "corpora": [
+            candidate_corpus,
+            external_corpus,
+            {
+                "role": "final_blind",
+                "source": "repository_external",
+                "sha256": expected_external["final_blind_holdout_sha256"],
+                "frozen": True,
+            },
+        ],
         "classification_binding": classification_binding,
         "gate_results": [
             {
@@ -1316,11 +1628,14 @@ def assemble_commercial_qualification(
             }
             for gate_id in core_ids
         ],
+        "machine_qualification_claim_eligible": True,
+        "human_attested_claim_eligible": False,
+        "competitive_claim_eligible": False,
     }
     report["report_sha256"] = _record_digest(report, field="report_sha256")
     _validate_schema(
         report,
-        "commercial-evidence-report.v4.schema.json",
+        "commercial-evidence-report.v5.schema.json",
         label="commercial evidence report",
     )
     report_relative = "evidence/commercial-evidence-report.json"
@@ -1348,7 +1663,7 @@ def assemble_commercial_qualification(
         _fail("retained supply-chain source bindings are incomplete")
     def source_path(ref: Mapping[str, Any], *, label: str) -> Path:
         relative = _safe_relative(ref.get("relative_path"), label=f"{label} source path")
-        selected = retained.path.parent / relative
+        selected = bundle_root_resolved / relative
         _regular_file(selected, label=label)
         try:
             selected.resolve(strict=True).relative_to(output_root.resolve(strict=True))
@@ -1411,6 +1726,12 @@ def assemble_commercial_qualification(
     manifest_sha = _sha256(retained_manifest_raw)
     if pre_retained.get("manifest_sha256") != manifest_sha:
         _fail("pre-publish retained manifest hash differs")
+    active_binding = active.get("candidate_binding")
+    if (
+        not isinstance(active_binding, Mapping)
+        or active_binding.get("artifact_manifest_sha256") != manifest_sha
+    ):
+        _fail("active candidate retained artifact manifest hash differs")
     pre_relative = (
         pre_path.resolve(strict=True)
         .relative_to(output_root.resolve(strict=True))
@@ -1429,17 +1750,17 @@ def assemble_commercial_qualification(
         if _sha256(raw) != expected_hash or len(raw) != expected_size:
             _fail(f"{label} path does not bind retained bytes")
     active_output = output_root / "evidence/active-qualification.json"
-    active_output_sha, _active_output_size = _write_json(
-        active_output,
-        active,
-        label="active qualification",
-    )
-    if active_output_sha != _sha256(active_raw + b"\n"):
-        # The source may omit a trailing newline; the active file's exact bytes remain bound by
-        # its own supplied hash in the workflow.  This comparison is intentionally informational.
-        pass
+    if active_output.exists() or active_output.is_symlink():
+        _fail("active qualification output must be new and non-symlink")
+    active_output.parent.mkdir(parents=True, exist_ok=True)
+    active_output.write_bytes(active_raw)
+    if _regular_file(active_output, label="active qualification output") != active_raw:
+        _fail("active qualification output differs from its frozen source bytes")
     manifest: dict[str, Any] = {
         "schema_version": RELEASE_SCHEMA_VERSION,
+        "profile": PROFILE,
+        "reference_provenance": REFERENCE_PROVENANCE,
+        "human_authenticity": HUMAN_AUTHENTICITY,
         "environment": _environment(),
         "release": {
             "repository": "Eysn0130/DeepLaw",
@@ -1475,38 +1796,43 @@ def assemble_commercial_qualification(
             "retained_manifest_sha256": manifest_sha,
         },
         "external_bindings": {
-            "semantic_gold_sha256": expected_external["semantic_gold_sha256"],
-            "holdout_sha256": expected_external["holdout_sha256"],
-            "blind_sha256": expected_external["blind_sha256"],
-            "scorer_sha256": expected_external["scorer_sha256"],
+            "semantic_reference_sha256": expected_external["semantic_reference_sha256"],
+            "machine_binding_sha256": expected_external["candidate_binding_sha256"],
+            "holdout_sha256": expected_external["qualification_holdout_sha256"],
+            "blind_sha256": expected_external["final_blind_holdout_sha256"],
+            "agent_roster_sha256": expected_external["agent_roster_sha256"],
+            "agent_consensus_sha256": expected_external["agent_consensus_sha256"],
+            "agent_isolation_sha256": expected_external["agent_isolation_sha256"],
+            "scorer_panel_sha256": expected_external["scorer_panel_sha256"],
+            "arbiter_sha256": expected_external["arbiter_sha256"],
             "runner_sha256": expected_external["runner_sha256"],
-            "isolation_sha256": expected_external["isolation_sha256"],
+            "isolation_sha256": expected_external["compiler_scorer_isolation_sha256"],
         },
         "pre_publish_artifact_gate": {
             "path": pre_relative,
             "receipt_sha256": _sha256(pre_publish_raw),
             "status": "pre_publish_passed",
         },
-        "semantic_evidence": {
+        "machine_evidence": {
             "report_path": report_relative,
             "report_sha256": report_sha,
             "record_sha256": report["report_sha256"],
             "status": "passed",
             "hard_zero": True,
             "core_gates_passed": True,
+            "reference_binding": reference_binding,
         },
         "release_ready": True,
         "public_release_verified": False,
         "post_public_verification": None,
-        "claim_eligible": True,
-        "commercial_release_eligible": True,
-        "quality_protocol_eligible": True,
+        "machine_qualification_claim_eligible": True,
+        "human_attested_claim_eligible": False,
         "competitive_claim_eligible": False,
     }
     manifest["record_sha256"] = _record_digest(manifest)
     _validate_schema(
         manifest,
-        "commercial-release-manifest.v7.schema.json",
+        "commercial-release-manifest.v8.schema.json",
         label="commercial release manifest",
     )
     output_manifest = output_root / "commercial-release-manifest.json"
@@ -1521,7 +1847,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--candidate-raw-root", type=Path, required=True)
     parser.add_argument("--active-qualification", type=Path, required=True)
     parser.add_argument("--classification", type=Path, required=True)
-    parser.add_argument("--trusted-human-approver", type=Path, required=True)
     parser.add_argument("--protocol", type=Path, required=True)
     parser.add_argument("--candidate-run-id", type=int, required=True)
     parser.add_argument("--evidence-run-id", type=int, required=True)
@@ -1531,12 +1856,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--lock-sha256", required=True)
     parser.add_argument("--wheel-sha256", required=True)
     parser.add_argument("--sdist-sha256", required=True)
-    parser.add_argument("--semantic-gold-sha256", required=True)
+    parser.add_argument("--semantic-reference-sha256", required=True)
+    parser.add_argument("--candidate-binding-sha256", required=True)
     parser.add_argument("--qualification-holdout-sha256", required=True)
-    parser.add_argument("--final-blind-sha256", required=True)
-    parser.add_argument("--scorer-sha256", required=True)
+    parser.add_argument("--final-blind-holdout-sha256", required=True)
+    parser.add_argument("--agent-roster-sha256", required=True)
+    parser.add_argument("--agent-consensus-sha256", required=True)
+    parser.add_argument("--agent-isolation-sha256", required=True)
     parser.add_argument("--runner-sha256", required=True)
-    parser.add_argument("--isolation-sha256", required=True)
+    parser.add_argument("--scorer-panel-sha256", required=True)
+    parser.add_argument("--arbiter-sha256", required=True)
+    parser.add_argument("--compiler-scorer-isolation-sha256", required=True)
     return parser
 
 
@@ -1549,7 +1879,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             candidate_raw_root=args.candidate_raw_root,
             active_qualification=args.active_qualification,
             classification=args.classification,
-            trusted_human_approver=args.trusted_human_approver,
             protocol=args.protocol,
             candidate_run_id=args.candidate_run_id,
             evidence_run_id=args.evidence_run_id,
@@ -1562,16 +1891,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "sdist_sha256": args.sdist_sha256,
             },
             external_inputs={
-                "semantic_gold_sha256": args.semantic_gold_sha256,
-                "holdout_sha256": args.qualification_holdout_sha256,
-                "blind_sha256": args.final_blind_sha256,
-                "scorer_sha256": args.scorer_sha256,
+                "semantic_reference_sha256": args.semantic_reference_sha256,
+                "candidate_binding_sha256": args.candidate_binding_sha256,
+                "qualification_holdout_sha256": args.qualification_holdout_sha256,
+                "final_blind_holdout_sha256": args.final_blind_holdout_sha256,
+                "agent_roster_sha256": args.agent_roster_sha256,
+                "agent_consensus_sha256": args.agent_consensus_sha256,
+                "agent_isolation_sha256": args.agent_isolation_sha256,
                 "runner_sha256": args.runner_sha256,
-                "isolation_sha256": args.isolation_sha256,
+                "scorer_panel_sha256": args.scorer_panel_sha256,
+                "arbiter_sha256": args.arbiter_sha256,
+                "compiler_scorer_isolation_sha256": args.compiler_scorer_isolation_sha256,
             },
         )
     except (OSError, CommercialQualificationAssemblerError, ValueError):
-        print("commercial qualification v7 assembly failed", file=sys.stderr)
+        print("commercial qualification v8 assembly failed", file=sys.stderr)
         return 1
     print(json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     return 0

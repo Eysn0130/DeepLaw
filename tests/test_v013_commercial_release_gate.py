@@ -240,7 +240,7 @@ def test_publish_and_post_release_validate_semantics_before_envelope() -> None:
     validation = workflow.split("\n  validate-assets:", maxsplit=1)[1].split(
         "\n  fresh-install:", maxsplit=1
     )[0]
-    assert "benchmarks.release.release_provenance_v7" in validation
+    assert "benchmarks.release.release_provenance_v8" in validation
     assert "--assets-root" in validation
     assert "--candidate-run-id" in validation
     assert "--evidence-run-id" in validation
@@ -261,7 +261,7 @@ def test_historical_assembler_points_v013_to_semantic_assembler() -> None:
     assert "benchmarks.release.v013_commercial_release" in source
 
 
-def test_v013_commercial_qualification_recomputes_v7_from_verified_artifacts() -> None:
+def test_v013_commercial_qualification_recomputes_v8_from_verified_artifacts() -> None:
     workflow = (
         REPOSITORY / ".github/workflows/commercial-qualification.yml"
     ).read_text(
@@ -270,9 +270,14 @@ def test_v013_commercial_qualification_recomputes_v7_from_verified_artifacts() -
     assert "verified-candidate-artifacts" in workflow
     assert "v013-qualification-evidence" in workflow
     assert "candidate-full-raw-evidence" in workflow
-    assert "benchmarks.release.assemble_commercial_qualification_v7" in workflow
-    assert "benchmarks.release.release_provenance_v7" in workflow
-    assert "v013-gate-classification-v7.json" in workflow
+    assert "benchmarks.release.assemble_commercial_qualification_v8" in workflow
+    assert "benchmarks.release.release_provenance_v8" in workflow
+    assert "v013-gate-classification-v8.json" in workflow
+    assert "qualification-protocol-v2.json" in workflow
+    assert "machine-only" in workflow
+    assert "post_build_machine_reference_binding" in workflow
+    assert "--candidate-machine-reference-binding" in workflow
+    assert "trusted-human-approver" not in workflow
     assert "uv build" not in workflow
 
     legacy = (REPOSITORY / ".github/workflows/commercial-gates.yml").read_text(

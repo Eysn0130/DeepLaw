@@ -20,6 +20,7 @@ import re
 import sys
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -35,7 +36,9 @@ from deeplaw.native_host import (
 )
 
 SCHEMA_VERSION = "deeplaw.typed-qualification-evidence/v1"
+SCHEMA_V2_VERSION = "deeplaw.typed-qualification-evidence/v2"
 DERIVED_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v1"
+DERIVED_V2_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v2"
 MAX_SOURCE_BYTES = 64 * 1024 * 1024
 PACKAGE_NAME = "deeplaw"
 _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
@@ -51,7 +54,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "582bb4ba803e795d38ff07652045a530c9459761c95b97de175a25b18e79d7ac"
+    "57e8c1d4fae2e3eff4c10456a7455619a525b6fb98835e144c3a6a38aa9ccba2"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -96,6 +99,11 @@ _RAW_JSON_POSIX_PATH_RE = re.compile(
 )
 _SECRET_RE = re.compile(
     r"""(?i)(?:api[_-]?key|access[_-]?token|authorization|bearer|private[_-]?key|secret)\s*[:=]"""
+)
+_SECRET_ENV_KEY_RE = re.compile(
+    r"(?:auth|credential|secret|password|passwd|api[_-]?key|private[_-]?key|"
+    r"access[_-]?token|token|bearer)",
+    re.IGNORECASE,
 )
 
 
@@ -466,6 +474,18 @@ def _source_refs(kind: str, payload: Mapping[str, Any]) -> list[Mapping[str, Any
             "scorer_rows_source",
             "human_attestation_source",
         ],
+        "machine_reference_scorer": [
+            "candidate_output_source",
+            "candidate_execution_source",
+            "semantic_reference_source",
+            "candidate_binding_source",
+            "agent_roster_source",
+            "agent_consensus_source",
+            "agent_isolation_source",
+            "scorer_a_rows_source",
+            "scorer_b_rows_source",
+            "arbiter_consensus_rows_source",
+        ],
         "legal_rows": [
             "source_catalog_source",
             "expected_source",
@@ -520,13 +540,27 @@ def _validate_envelope(
     expected_runner: Mapping[str, Any] | None,
     expected_scorer: Mapping[str, Any] | None,
 ) -> tuple[str, str]:
-    _validate_contract(
-        envelope,
-        "typed-qualification-evidence.v1.schema.json",
-        label="typed evidence",
-    )
-    if envelope.get("schema_version") != SCHEMA_VERSION:
+    schema_version = envelope.get("schema_version")
+    schema_name = {
+        SCHEMA_VERSION: "typed-qualification-evidence.v1.schema.json",
+        SCHEMA_V2_VERSION: "typed-qualification-evidence.v2.schema.json",
+    }.get(schema_version)
+    if schema_name is None:
         _fail("typed evidence schema version is unsupported")
+    # Keep the failure specific when a v2 machine scorer omits the retained
+    # candidate bytes.  This is both easier to audit and prevents the generic
+    # JSON-Schema error from hiding the evidence-boundary defect.
+    if schema_version == SCHEMA_V2_VERSION and envelope.get("kind") == "machine_reference_scorer":
+        payload = envelope.get("payload")
+        if not isinstance(payload, Mapping):
+            _fail("candidate output and execution sources are required")
+        for field, label in (
+            ("candidate_output_source", "candidate output"),
+            ("candidate_execution_source", "candidate execution"),
+        ):
+            if field not in payload:
+                _fail(f"{label} source is required for machine reference scoring")
+    _validate_contract(envelope, schema_name, label="typed evidence")
     kind = envelope.get("kind")
     if not isinstance(kind, str):
         _fail("typed evidence kind is missing")
@@ -1654,6 +1688,7 @@ def _parse_exact_wheel(
     *,
     root: Path,
     record_sha256: str,
+    expected_candidate_run_id: int | None = None,
 ) -> dict[str, Any]:
     receipt, _ = _source_json(
         envelope["payload"]["source"],
@@ -1661,14 +1696,63 @@ def _parse_exact_wheel(
         label="exact-wheel execution receipt",
         allow_count_paths=frozenset({("public_journey", "step_count")}),
     )
-    _validate_contract(
-        receipt,
-        "exact-wheel-execution-receipt.v1.schema.json",
-        label="exact-wheel receipt",
+    envelope_is_v2 = envelope["schema_version"] == SCHEMA_V2_VERSION
+    receipt_schema = (
+        "exact-wheel-execution-receipt.v2.schema.json"
+        if envelope_is_v2
+        else "exact-wheel-execution-receipt.v1.schema.json"
     )
+    expected_receipt_schema = (
+        "deeplaw.exact-wheel-execution-receipt/v2"
+        if envelope_is_v2
+        else "deeplaw.exact-wheel-execution-receipt/v1"
+    )
+    if receipt.get("schema_version") != expected_receipt_schema:
+        _fail("exact-wheel receipt schema version is not bound to the typed evidence version")
+    _validate_contract(receipt, receipt_schema, label="exact-wheel receipt")
     receipt_record = _record_digest(receipt)
+    if receipt["runner_source_sha256"] != envelope["runner"]["sha256"]:
+        _fail("exact-wheel receipt runner differs from the bound external runner")
     candidate = receipt["candidate"]
     binding = envelope["candidate_binding"]
+    if envelope_is_v2:
+        if expected_candidate_run_id is None:
+            _fail("exact-wheel v2 candidate run binding expectation is required")
+        if (
+            isinstance(expected_candidate_run_id, bool)
+            or not isinstance(expected_candidate_run_id, int)
+            or expected_candidate_run_id < 1
+        ):
+            _fail("exact-wheel v2 candidate run binding expectation is invalid")
+        provenance = receipt["candidate_provenance"]
+        if (
+            provenance["commit"] != binding["commit"]
+            or provenance["tree"] != binding["tree"]
+            or provenance["lock_sha256"] != binding["lock_sha256"]
+        ):
+            _fail("exact-wheel receipt candidate provenance differs from the typed binding")
+        if (
+            provenance["commit"] == "0" * 40
+            or provenance["tree"] == "0" * 40
+            or provenance["lock_sha256"] == "0" * 64
+        ):
+            _fail("exact-wheel receipt candidate provenance contains a placeholder digest")
+        run_binding = receipt["run_binding"]
+        if run_binding["candidate_run_id"] != expected_candidate_run_id:
+            _fail("exact-wheel receipt candidate run differs from the expected Candidate Full run")
+        if run_binding["candidate_run_id"] == run_binding["evidence_run_id"]:
+            _fail("exact-wheel receipt candidate and evidence runs must be distinct")
+        if run_binding["evidence_run_id"] != envelope["run_binding"]["workflow_run_id"]:
+            _fail("exact-wheel receipt evidence run differs from the typed evidence workflow run")
+        corpus = receipt["corpus_binding"]
+        if (
+            corpus["role"] != envelope["corpus"]["role"]
+            or corpus["sha256"] != envelope["corpus"]["sha256"]
+            or corpus["role"] != "candidate_full"
+        ):
+            _fail("exact-wheel receipt corpus differs from Candidate Full raw inventory")
+        if corpus["sha256"] == "0" * 64:
+            _fail("exact-wheel receipt corpus contains a placeholder digest")
     if candidate["wheel_sha256"] != binding["wheel_sha256"]:
         _fail("exact-wheel receipt is bound to a different wheel")
     if candidate["wheel_sha256"] == "0" * 64 or receipt["runner_source_sha256"] == "0" * 64:
@@ -1932,6 +2016,596 @@ def _parse_human_gold(
             "attestation_record_sha256": _record_digest(attestation),
         },
         threshold_failures,
+        record_sha256,
+    )
+
+
+def _machine_scorer_rows(
+    value: Any,
+    *,
+    envelope: Mapping[str, Any],
+    expected_scorer: Mapping[str, Any],
+    label: str,
+) -> list[Mapping[str, Any]]:
+    wrapper = _require_mapping(value, label=label, keys={"receipt", "rows"})
+    receipt = _require_mapping(
+        wrapper["receipt"],
+        label=f"{label}.receipt",
+        keys={"candidate", "run", "corpus", "runner", "scorer"},
+    )
+    for field, expected in (
+        ("candidate", envelope["candidate_binding"]),
+        ("run", envelope["run_binding"]),
+        ("corpus", envelope["corpus"]),
+        ("runner", envelope["runner"]),
+    ):
+        observed = _require_mapping(
+            receipt[field],
+            label=f"{label}.receipt.{field}",
+        )
+        if dict(observed) != dict(expected):
+            _fail(f"{label} receipt has a different {field} binding")
+    scorer = _require_mapping(
+        receipt["scorer"],
+        label=f"{label}.receipt.scorer",
+        keys={"identity", "sha256"},
+    )
+    if (
+        scorer["identity"] != expected_scorer["identity"]
+        or scorer["sha256"] != expected_scorer["sha256"]
+    ):
+        _fail(f"{label} receipt has a different scorer binding")
+    rows = wrapper["rows"]
+    if not isinstance(rows, list) or not rows:
+        _fail(f"{label}.rows must contain real rows")
+    return [
+        _require_mapping(row, label=f"{label}.rows[{index}]")
+        for index, row in enumerate(rows)
+    ]
+
+
+def _parse_machine_reference(
+    envelope: Mapping[str, Any],
+    *,
+    root: Path,
+    record_sha256: str,
+) -> dict[str, Any]:
+    payload = envelope["payload"]
+    candidate_output, candidate_output_source = _source_json(
+        payload["candidate_output_source"],
+        root=root,
+        label="retained machine candidate output",
+    )
+    candidate_execution, _candidate_execution_source = _source_json(
+        payload["candidate_execution_source"],
+        root=root,
+        label="retained machine candidate execution",
+    )
+    reference, reference_source = _source_json(
+        payload["semantic_reference_source"],
+        root=root,
+        label="semantic machine reference",
+    )
+    binding, _ = _source_json(
+        payload["candidate_binding_source"],
+        root=root,
+        label="Candidate machine-reference binding",
+    )
+    roster, roster_source = _source_json(
+        payload["agent_roster_source"],
+        root=root,
+        label="Agent review roster",
+    )
+    consensus, consensus_source = _source_json(
+        payload["agent_consensus_source"],
+        root=root,
+        label="Agent review consensus",
+    )
+    isolation, isolation_source = _source_json(
+        payload["agent_isolation_source"],
+        root=root,
+        label="Agent review isolation",
+    )
+    scorer_a_value, _ = _source_json(
+        payload["scorer_a_rows_source"],
+        root=root,
+        label="independent scorer A rows",
+    )
+    scorer_b_value, _ = _source_json(
+        payload["scorer_b_rows_source"],
+        root=root,
+        label="independent scorer B rows",
+    )
+    arbiter_value, _ = _source_json(
+        payload["arbiter_consensus_rows_source"],
+        root=root,
+        label="deterministic arbiter rows",
+    )
+    _validate_contract(
+        reference,
+        "semantic-machine-reference.v1.schema.json",
+        label="semantic machine reference",
+    )
+    _validate_contract(
+        binding,
+        "candidate-gold-binding-receipt.v2.schema.json",
+        label="Candidate machine-reference binding",
+    )
+    _validate_contract(
+        candidate_output,
+        "machine-candidate-output.v1.schema.json",
+        label="retained machine candidate output",
+    )
+    _validate_contract(
+        candidate_execution,
+        "machine-candidate-execution.v1.schema.json",
+        label="retained machine candidate execution",
+    )
+    candidate_output_record = _record_digest(candidate_output)
+    candidate_execution_record = _record_digest(candidate_execution)
+    for value in (reference, binding, roster, consensus, isolation):
+        _record_digest(value)
+
+    expected_profile = "machine_evaluated_no_human_attestation"
+    if any(
+        value.get("profile") != expected_profile
+        for value in (
+            envelope,
+            candidate_output,
+            candidate_execution,
+            reference,
+            binding,
+            roster,
+            consensus,
+            isolation,
+        )
+    ):
+        _fail("machine-reference profile binding differs")
+    if any(
+        value.get("human_authenticity", "not_claimed") != "not_claimed"
+        for value in (envelope, reference, binding)
+    ):
+        _fail("machine-reference evidence makes a human-authenticity claim")
+    if reference["reference_provenance"] != "agent_consensus":
+        _fail("semantic machine reference provenance is not Agent consensus")
+    for label, value in (
+        ("candidate output", candidate_output),
+        ("candidate execution", candidate_execution),
+    ):
+        for field, expected in (
+            ("candidate", envelope["candidate_binding"]),
+            ("run", envelope["run_binding"]),
+            ("corpus", envelope["corpus"]),
+            ("runner", envelope["runner"]),
+        ):
+            if dict(value[field]) != dict(expected):
+                _fail(f"{label} has a different {field} binding")
+    if candidate_execution["executable_sha256"] != envelope["runner"]["sha256"]:
+        _fail("candidate execution executable hash differs from runner")
+    if candidate_execution["output_sha256"] != _sha256_bytes(candidate_output_source.raw):
+        _fail("candidate execution does not bind retained candidate output")
+    read_only_inputs = candidate_execution["process"]["read_only_input_sha256s"]
+    if any(
+        digest not in read_only_inputs
+        for digest in (
+            envelope["candidate_binding"]["wheel_sha256"],
+            envelope["corpus"]["sha256"],
+        )
+    ):
+        _fail("candidate execution read-only inputs do not cover candidate and corpus")
+    if candidate_execution["process"]["exit_code"] != 0:
+        _fail("candidate execution did not exit successfully")
+    process_receipt = candidate_execution["process"]
+    if process_receipt["pid"] == process_receipt["parent_pid"]:
+        _fail("candidate execution PID and parent PID are not distinct")
+    environment_keys = process_receipt["environment_key_allowlist"]
+    if any(
+        key.casefold() in {"home", "codex_home"} or _SECRET_ENV_KEY_RE.search(key)
+        for key in environment_keys
+    ):
+        _fail("candidate runner environment allowlist contains a Secret or Host auth key")
+    reference_digest = _sha256_bytes(reference_source.raw)
+    semantic_binding = _require_mapping(
+        binding["semantic_reference"],
+        label="Candidate semantic machine-reference binding",
+        keys={"reference_id", "schema_version", "sha256"},
+    )
+    if (
+        semantic_binding["reference_id"] != reference["reference_id"]
+        or semantic_binding["schema_version"] != reference["schema_version"]
+        or semantic_binding["sha256"] != reference_digest
+    ):
+        _fail("Candidate binding does not identify the semantic machine reference")
+
+    review = _require_mapping(reference["agent_review"], label="Agent review")
+    reviewers = review["reviewers"]
+    if not isinstance(reviewers, list) or len(reviewers) < 3:
+        _fail("semantic machine reference lacks three independent reviewers")
+    if len(reviewers) < review["minimum_distinct_agents"]:
+        _fail("semantic machine reference misses its minimum Agent roster")
+    agent_ids = [item["agent_id"] for item in reviewers]
+    process_digests = [item["process_identity_sha256"] for item in reviewers]
+    output_digests = [item["output_sha256"] for item in reviewers]
+    if (
+        len(set(agent_ids)) != len(agent_ids)
+        or len(set(process_digests)) != len(process_digests)
+        or len(set(output_digests)) != len(output_digests)
+    ):
+        _fail("Agent reviewers are not independently identified")
+
+    roster_keys = {
+        "schema_version",
+        "profile",
+        "reference_id",
+        "reviewers",
+        "record_sha256",
+    }
+    roster_record = _require_mapping(roster, label="Agent review roster", keys=roster_keys)
+    if (
+        roster_record["schema_version"] != "deeplaw.agent-review-roster/v1"
+        or roster_record["reference_id"] != reference["reference_id"]
+        or roster_record["reviewers"] != reviewers
+        or _sha256_bytes(roster_source.raw) != review["roster_sha256"]
+        or binding["agent_roster"]["sha256"] != review["roster_sha256"]
+    ):
+        _fail("Agent review roster does not bind the semantic reference")
+
+    consensus_keys = {
+        "schema_version",
+        "profile",
+        "reference_id",
+        "roster_sha256",
+        "rubric_sha256",
+        "source_corpus_sha256",
+        "reviewer_output_sha256s",
+        "unanimous",
+        "disagreements",
+        "record_sha256",
+    }
+    consensus_record = _require_mapping(
+        consensus,
+        label="Agent review consensus",
+        keys=consensus_keys,
+    )
+    if (
+        consensus_record["schema_version"] != "deeplaw.agent-review-consensus/v1"
+        or consensus_record["reference_id"] != reference["reference_id"]
+        or consensus_record["roster_sha256"] != review["roster_sha256"]
+        or consensus_record["rubric_sha256"] != review["rubric_sha256"]
+        or consensus_record["source_corpus_sha256"] != review["source_corpus_sha256"]
+        or consensus_record["reviewer_output_sha256s"] != output_digests
+        or consensus_record["unanimous"] is not True
+        or consensus_record["disagreements"] != []
+        or _sha256_bytes(consensus_source.raw) != review["consensus_sha256"]
+        or binding["agent_consensus"]["sha256"] != review["consensus_sha256"]
+    ):
+        _fail("Agent review consensus is incomplete or inconsistent")
+
+    isolation_keys = {
+        "schema_version",
+        "profile",
+        "reference_id",
+        "reviewer_processes_distinct",
+        "reviewer_outputs_hidden",
+        "candidate_hidden",
+        "runner_reference_labels_hidden",
+        "scorers_mutually_hidden",
+        "scorer_runner_isolated",
+        "arbiter_deterministic",
+        "compiler_reference_access",
+        "evaluator_output_mutation",
+        "blind_contamination",
+        "violations",
+        "record_sha256",
+    }
+    isolation_record = _require_mapping(
+        isolation,
+        label="Agent review isolation",
+        keys=isolation_keys,
+    )
+    isolation_true = (
+        "reviewer_processes_distinct",
+        "reviewer_outputs_hidden",
+        "candidate_hidden",
+        "runner_reference_labels_hidden",
+        "scorers_mutually_hidden",
+        "scorer_runner_isolated",
+        "arbiter_deterministic",
+    )
+    if (
+        isolation_record["schema_version"] != "deeplaw.agent-review-isolation/v1"
+        or isolation_record["reference_id"] != reference["reference_id"]
+        or any(isolation_record[field] is not True for field in isolation_true)
+        or any(
+            isolation_record[field] is not False
+            for field in (
+                "compiler_reference_access",
+                "evaluator_output_mutation",
+                "blind_contamination",
+            )
+        )
+        or isolation_record["violations"] != []
+        or _sha256_bytes(isolation_source.raw) != review["isolation_sha256"]
+        or binding["agent_isolation"]["sha256"] != review["isolation_sha256"]
+    ):
+        _fail("Agent review isolation is not fail-closed")
+
+    candidate = envelope["candidate_binding"]
+    for field in ("commit", "tree", "lock_sha256"):
+        if binding["candidate"][field] != candidate[field]:
+            _fail(f"Candidate machine-reference binding mismatch: {field}")
+    if (
+        binding["artifacts"]["wheel"]["sha256"] != candidate["wheel_sha256"]
+        or binding["artifacts"]["sdist"]["sha256"] != candidate["sdist_sha256"]
+    ):
+        _fail("Candidate machine-reference artifact binding differs")
+    bound_corpora = {
+        (binding["holdout"]["role"], binding["holdout"]["sha256"]),
+        (binding["blind"]["role"], binding["blind"]["sha256"]),
+    }
+    if (envelope["corpus"]["role"], envelope["corpus"]["sha256"]) not in bound_corpora:
+        _fail("machine-reference corpus is not the bound holdout or blind corpus")
+
+    panel = _require_mapping(envelope["scorer_panel"], label="scorer panel")
+    binding_panel = _require_mapping(binding["scorer_panel"], label="bound scorer panel")
+    if dict(panel) != dict(binding_panel):
+        _fail("Candidate binding scorer panel differs from the evidence envelope")
+    scorer_a = _require_mapping(panel["scorer_a"], label="independent scorer A")
+    scorer_b = _require_mapping(panel["scorer_b"], label="independent scorer B")
+    panel_digest = _sha256_bytes(
+        _canonical({"scorer_a": dict(scorer_a), "scorer_b": dict(scorer_b)})
+    )
+    if (
+        scorer_a["identity"] == scorer_b["identity"]
+        or scorer_a["sha256"] == scorer_b["sha256"]
+        or panel["panel_sha256"] != panel_digest
+    ):
+        _fail("independent scorer panel identity is not closed")
+    arbiter = _require_mapping(envelope["arbiter"], label="deterministic arbiter")
+    if dict(arbiter) != dict(binding["arbiter"]):
+        _fail("Candidate binding arbiter differs from the evidence envelope")
+    if (
+        envelope["scorer"]["identity"] != arbiter["identity"]
+        or envelope["scorer"]["sha256"] != arbiter["sha256"]
+        or dict(envelope["runner"]) != dict(binding["runner"])
+    ):
+        _fail("machine-reference scorer/runner binding differs")
+
+    process = payload["process_identity"]
+    process_ids = {
+        process["scorer_a_process_id"],
+        process["scorer_b_process_id"],
+        process["runner_process_id"],
+        process["arbiter_process_id"],
+    }
+    identity_digests = {
+        process["scorer_a_identity_sha256"],
+        process["scorer_b_identity_sha256"],
+        process["runner_identity_sha256"],
+        process["arbiter_identity_sha256"],
+    }
+    if len(process_ids) != 4 or len(identity_digests) != 4:
+        _fail("machine-reference runner, scorers, and arbiter are not distinct")
+    if (
+        process["scorer_a_identity_sha256"] != scorer_a["sha256"]
+        or process["scorer_b_identity_sha256"] != scorer_b["sha256"]
+        or process["runner_identity_sha256"] != envelope["runner"]["sha256"]
+        or process["arbiter_identity_sha256"] != arbiter["sha256"]
+    ):
+        _fail("machine-reference process identities differ from their bindings")
+
+    rows_a = _machine_scorer_rows(
+        scorer_a_value,
+        envelope=envelope,
+        expected_scorer=scorer_a,
+        label="independent scorer A",
+    )
+    rows_b = _machine_scorer_rows(
+        scorer_b_value,
+        envelope=envelope,
+        expected_scorer=scorer_b,
+        label="independent scorer B",
+    )
+    arbiter_rows = _receipt_rows(
+        arbiter_value,
+        envelope=envelope,
+        label="deterministic arbiter",
+    )
+    expected_cases = {case["case_id"]: case for case in reference["cases"]}
+    known_hard_failures = {item["code"] for item in reference["hard_failures"]}
+    candidate_output_rows = candidate_output["rows"]
+    candidate_output_by_case: dict[str, Mapping[str, Any]] = {}
+    for _index, row in enumerate(candidate_output_rows):
+        if row["case_id"] in candidate_output_by_case:
+            _fail("retained candidate output contains duplicate case identity")
+        if row["case_id"] not in expected_cases:
+            _fail("retained candidate output contains an unknown case identity")
+        candidate_output_by_case[row["case_id"]] = row
+    if set(candidate_output_by_case) != set(expected_cases):
+        _fail("retained candidate output does not cover every case")
+    scorer_keys = {
+        "case_id",
+        "expected",
+        "observed",
+        "duties",
+        "hard_failures",
+        "scorer_process_id",
+        "runner_process_id",
+        "false_authority",
+        "candidate_output_row_sha256",
+    }
+    arbiter_keys = {
+        "case_id",
+        "expected",
+        "observed",
+        "duties",
+        "hard_failures",
+        "false_authority",
+        "scorer_a_row_sha256",
+        "scorer_b_row_sha256",
+        "arbiter_process_id",
+        "agreement",
+    }
+    if len(rows_a) != len(rows_b) or len(rows_a) != len(arbiter_rows):
+        _fail("machine-reference scorer and arbiter row inventories differ")
+    by_case_a: dict[str, Mapping[str, Any]] = {}
+    by_case_b: dict[str, Mapping[str, Any]] = {}
+    for label, rows, scorer_process_id, target in (
+        ("scorer A", rows_a, process["scorer_a_process_id"], by_case_a),
+        ("scorer B", rows_b, process["scorer_b_process_id"], by_case_b),
+    ):
+        for index, row in enumerate(rows):
+            if set(row) != scorer_keys:
+                _fail(f"machine-reference {label} row {index} keys are not closed")
+            case_id = row["case_id"]
+            if case_id not in expected_cases or case_id in target:
+                _fail(f"machine-reference {label} case identity is invalid")
+            case = expected_cases[case_id]
+            if row["expected"] != case["expected"] or row["duties"] != case["duties"]:
+                _fail(f"machine-reference {label} expected data differs")
+            if (
+                row["scorer_process_id"] != scorer_process_id
+                or row["runner_process_id"] != process["runner_process_id"]
+                or not isinstance(row["false_authority"], bool)
+            ):
+                _fail(f"machine-reference {label} process or authority observation differs")
+            output_row = candidate_output_by_case[case_id]
+            if row["candidate_output_row_sha256"] != _sha256_bytes(_canonical(output_row)):
+                _fail(
+                    f"machine-reference {label} row is not bound to candidate output; "
+                    "exact agreement cannot be established"
+                )
+            for field in ("observed", "duties", "hard_failures", "false_authority"):
+                if row[field] != output_row[field]:
+                    _fail(
+                        f"machine-reference {label} row differs from candidate output; "
+                        "exact agreement cannot be established"
+                    )
+            if (
+                not isinstance(row["hard_failures"], list)
+                or len(row["hard_failures"]) != len(set(row["hard_failures"]))
+                or any(item not in known_hard_failures for item in row["hard_failures"])
+            ):
+                _fail(f"machine-reference {label} hard failures are invalid")
+            target[case_id] = row
+    if set(by_case_a) != set(expected_cases) or set(by_case_b) != set(expected_cases):
+        _fail("machine-reference scorer rows do not cover every case")
+
+    seen_arbiter: set[str] = set()
+    duties_seen: set[str] = set()
+    mismatch = hard = false_authority = 0
+    for index, row in enumerate(arbiter_rows):
+        if set(row) != arbiter_keys:
+            _fail(f"machine-reference arbiter row {index} keys are not closed")
+        case_id = row["case_id"]
+        if case_id not in expected_cases or case_id in seen_arbiter:
+            _fail("machine-reference arbiter case identity is invalid")
+        seen_arbiter.add(case_id)
+        scorer_a_row = by_case_a[case_id]
+        scorer_b_row = by_case_b[case_id]
+        normalized_a = {
+            key: value
+            for key, value in scorer_a_row.items()
+            if key not in {"scorer_process_id", "runner_process_id"}
+        }
+        normalized_b = {
+            key: value
+            for key, value in scorer_b_row.items()
+            if key not in {"scorer_process_id", "runner_process_id"}
+        }
+        if normalized_a != normalized_b or row["agreement"] is not True:
+            _fail("independent machine scorers did not reach exact agreement")
+        if (
+            row["scorer_a_row_sha256"] != _sha256_bytes(_canonical(scorer_a_row))
+            or row["scorer_b_row_sha256"] != _sha256_bytes(_canonical(scorer_b_row))
+            or row["arbiter_process_id"] != process["arbiter_process_id"]
+        ):
+            _fail("machine-reference arbiter does not bind both scorer rows")
+        for field in (
+            "expected",
+            "observed",
+            "duties",
+            "hard_failures",
+            "false_authority",
+        ):
+            if row[field] != scorer_a_row[field]:
+                _fail("machine-reference arbiter changed a scorer observation")
+        duties_seen.update(row["duties"])
+        mismatch += int(row["observed"] != row["expected"])
+        hard += len(row["hard_failures"])
+        false_authority += int(row["false_authority"])
+    if seen_arbiter != set(expected_cases):
+        _fail("machine-reference arbiter rows do not cover every case")
+
+    # Derive all qualification observations from the retained candidate bytes.
+    # Scorer and arbiter rows are only cross-checks; they cannot manufacture a
+    # passing observation or keep a stale receipt valid after output changes.
+    duties_seen = set()
+    mismatch = hard = false_authority = 0
+    for case_id, output_row in candidate_output_by_case.items():
+        expected = expected_cases[case_id]
+        duties_seen.update(output_row["duties"])
+        mismatch += int(output_row["observed"] != expected["expected"])
+        hard += len(output_row["hard_failures"])
+        false_authority += int(output_row["false_authority"])
+
+    required_duties = {item["duty_id"] for item in reference["duties"]}
+    duty_coverage = (
+        len(duties_seen & required_duties) / len(required_duties)
+        if required_duties
+        else 1.0
+    )
+    case_passes = len(arbiter_rows) - mismatch - sum(
+        1 for row in arbiter_rows if row["observed"] == row["expected"] and row["hard_failures"]
+    )
+    case_pass_rate = case_passes / len(arbiter_rows)
+    thresholds = reference["thresholds"]
+    failures = {
+        "machine_reference_case_pass_rate": int(
+            case_pass_rate < thresholds["minimum_case_pass_rate"]
+        ),
+        "machine_reference_duty_coverage": int(
+            duty_coverage < thresholds["minimum_duty_coverage"]
+        ),
+        "machine_reference_hard_failure": int(
+            hard > thresholds["maximum_hard_failures"]
+        ),
+        "machine_reference_false_authority": int(
+            false_authority > thresholds["maximum_false_authority"]
+        ),
+        "compiler_reference_access": 0,
+        "evaluator_output_mutation": 0,
+        "blind_contamination": 0,
+    }
+    return _derived(
+        "machine_reference_scorer",
+        {
+            "reference_id": reference["reference_id"],
+            "semantic_reference_sha256": reference_digest,
+            "candidate_output_record_sha256": candidate_output_record,
+            "candidate_execution_record_sha256": candidate_execution_record,
+            "candidate_output_sha256": _sha256_bytes(candidate_output_source.raw),
+            "candidate_binding_record_sha256": _record_digest(binding),
+            "agent_reviewer_count": len(reviewers),
+            "agent_model_count": len({item["model_id"] for item in reviewers}),
+            "case_count": len(arbiter_rows),
+            "case_pass_count": case_passes,
+            "case_pass_rate": case_pass_rate,
+            "duty_coverage": duty_coverage,
+            "duty_missing_count": len(required_duties - duties_seen),
+            "hard_failure_observation_count": hard,
+            "false_authority_count": false_authority,
+            "reference_isolation_pass_rate": 1.0,
+            "scorer_panel_sha256": panel_digest,
+            "arbiter_sha256": arbiter["sha256"],
+            "corpus_role": envelope["corpus"]["role"],
+            "corpus_sha256": envelope["corpus"]["sha256"],
+            "reference_provenance": "agent_consensus",
+            "human_authenticity": "not_claimed",
+            "human_attested": False,
+            "thresholds": dict(thresholds),
+        },
+        failures,
         record_sha256,
     )
 
@@ -2970,8 +3644,36 @@ def _parse_scale(
     if expected_source.path == observed_source.path:
         _fail("Scale expected and observed evidence must be separate files")
     expected_rows = _require_rows(expected_value, label="scale expected")
+    observed_rows_value = observed_value
+    if envelope["schema_version"] == SCHEMA_V2_VERSION:
+        commercial_keys = {
+            "evidence_class",
+            "fixture_kind",
+            "candidate_wheel_sha256",
+            "actual_candidate",
+            "claim_eligible",
+            "receipt",
+            "rows",
+        }
+        commercial = _require_mapping(
+            observed_value,
+            label="commercial candidate scale",
+            keys=commercial_keys,
+        )
+        if commercial["evidence_class"] != "commercial_candidate_scale":
+            _fail("commercial candidate scale evidence class is not claim eligible")
+        if commercial["fixture_kind"] != "frozen_candidate_corpus":
+            _fail("commercial candidate scale fixture is not frozen candidate corpus")
+        if commercial["candidate_wheel_sha256"] != envelope["candidate_binding"]["wheel_sha256"]:
+            _fail("commercial candidate scale is bound to a different candidate wheel")
+        if commercial["actual_candidate"] is not True or commercial["claim_eligible"] is not True:
+            _fail("commercial candidate scale is not an actual claim-eligible candidate run")
+        observed_rows_value = {
+            "receipt": commercial["receipt"],
+            "rows": commercial["rows"],
+        }
     observed_rows = _receipt_rows(
-        observed_value,
+        observed_rows_value,
         envelope=envelope,
         label="scale observed",
     )
@@ -2987,6 +3689,8 @@ def _parse_scale(
         "execution_id",
         "exit_code",
     }
+    if envelope["schema_version"] == SCHEMA_V2_VERSION:
+        observed_required.add("process")
     expected_sizes = {1000, 10000, 100000}
     threshold_keys = {
         "max_latency_ms",
@@ -3066,6 +3770,115 @@ def _parse_scale(
         execution_ids.add(row["execution_id"])
         if isinstance(row["exit_code"], bool) or not isinstance(row["exit_code"], int):
             _fail("scale observed exit code is invalid")
+        if envelope["schema_version"] == SCHEMA_V2_VERSION:
+            process_keys = {
+                "executable_sha256",
+                "pid",
+                "parent_pid",
+                "process_tree_sha256",
+                "input_sha256s",
+                "output_sha256",
+                "environment_key_allowlist",
+                "read_only_mounts",
+                "started_at",
+                "finished_at",
+                "exit_code",
+            }
+            process = _require_mapping(
+                row["process"],
+                label=f"scale observed row {index}.process",
+                keys=process_keys,
+            )
+            if process["executable_sha256"] != envelope["runner"]["sha256"]:
+                _fail("scale process executable differs from the bound runner")
+            if (
+                isinstance(process["pid"], bool)
+                or not isinstance(process["pid"], int)
+                or process["pid"] < 1
+                or isinstance(process["parent_pid"], bool)
+                or not isinstance(process["parent_pid"], int)
+                or process["parent_pid"] < 1
+                or process["pid"] == process["parent_pid"]
+            ):
+                _fail("scale process PID binding is invalid")
+            for field in ("process_tree_sha256", "output_sha256"):
+                if (
+                    not isinstance(process[field], str)
+                    or not _SHA256_RE.fullmatch(process[field])
+                    or process[field] == "0" * 64
+                ):
+                    _fail(f"scale process {field} is invalid")
+            input_sha256s = process["input_sha256s"]
+            required_inputs = {
+                envelope["candidate_binding"]["wheel_sha256"],
+                envelope["corpus"]["sha256"],
+            }
+            if (
+                not isinstance(input_sha256s, list)
+                or not 2 <= len(input_sha256s) <= 256
+                or not all(
+                    isinstance(digest, str) and _SHA256_RE.fullmatch(digest)
+                    for digest in input_sha256s
+                )
+                or len(input_sha256s) != len(set(input_sha256s))
+                or not required_inputs <= set(input_sha256s)
+            ):
+                _fail("scale process input hashes do not cover candidate and corpus")
+            environment_keys = process["environment_key_allowlist"]
+            if (
+                not isinstance(environment_keys, list)
+                or len(environment_keys) > 64
+                or not all(
+                    isinstance(key, str)
+                    and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", key)
+                    for key in environment_keys
+                )
+                or len(environment_keys) != len(set(environment_keys))
+                or any(
+                    key.casefold() in {"home", "codex_home"}
+                    or _SECRET_ENV_KEY_RE.search(key)
+                    for key in environment_keys
+                )
+            ):
+                _fail("scale process environment allowlist contains a Secret or Host auth key")
+            mounts = process["read_only_mounts"]
+            if not isinstance(mounts, list) or not mounts:
+                _fail("scale process read-only mounts are missing")
+            mounted_sha256s: set[str] = set()
+            mount_ids: set[str] = set()
+            for mount_index, mount in enumerate(mounts):
+                mount_value = _require_mapping(
+                    mount,
+                    label=f"scale process mount {mount_index}",
+                    keys={"mount_id", "source_sha256", "mode"},
+                )
+                mount_id = mount_value["mount_id"]
+                source_sha256 = mount_value["source_sha256"]
+                if (
+                    not isinstance(mount_id, str)
+                    or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}", mount_id)
+                    or mount_id in mount_ids
+                    or not isinstance(source_sha256, str)
+                    or not _SHA256_RE.fullmatch(source_sha256)
+                    or source_sha256 in mounted_sha256s
+                    or mount_value["mode"] != "read_only"
+                ):
+                    _fail("scale process read-only mount binding is invalid")
+                mount_ids.add(mount_id)
+                mounted_sha256s.add(source_sha256)
+            if set(input_sha256s) != mounted_sha256s:
+                _fail("scale process read-only mounts differ from its input hashes")
+            try:
+                started = datetime.fromisoformat(process["started_at"].replace("Z", "+00:00"))
+                finished = datetime.fromisoformat(process["finished_at"].replace("Z", "+00:00"))
+            except (AttributeError, TypeError, ValueError) as error:
+                raise TypedQualificationEvidenceError(
+                    "scale process timestamps are invalid"
+                ) from error
+            if started.tzinfo is None or finished.tzinfo is None or finished < started:
+                _fail("scale process timestamps are invalid")
+            if process["exit_code"] != row["exit_code"]:
+                _fail("scale process exit code differs from the observed row")
         command_failures += int(row["exit_code"] != 0)
         values = {
             field: _number(row[field], label=f"scale row {index}.{field}")
@@ -3520,6 +4333,7 @@ _PARSERS = {
     "host_event_sequence": _parse_host,
     "exact_wheel_execution": _parse_exact_wheel,
     "human_gold_scorer": _parse_human_gold,
+    "machine_reference_scorer": _parse_machine_reference,
     "legal_rows": _parse_legal,
     "wiki_journey_rows": _parse_wiki,
     "context_capsule_selection_usage": _parse_context,
@@ -3535,6 +4349,7 @@ def parse_typed_evidence(
     expected_candidate: Mapping[str, Any] | None = None,
     expected_run_id: str | None = None,
     expected_workflow_run_id: int | None = None,
+    expected_candidate_run_id: int | None = None,
     expected_corpus_sha256: str | None = None,
     expected_runner: Mapping[str, Any] | None = None,
     expected_scorer: Mapping[str, Any] | None = None,
@@ -3601,6 +4416,8 @@ def parse_typed_evidence(
     }
     if kind == "human_gold_scorer":
         parser_kwargs["trusted_human_approver"] = trusted_human_approver
+    if kind == "exact_wheel_execution":
+        parser_kwargs["expected_candidate_run_id"] = expected_candidate_run_id
     if kind in {
         "legal_rows",
         "wiki_journey_rows",
@@ -3609,7 +4426,10 @@ def parse_typed_evidence(
         "host_event_sequence",
     }:
         parser_kwargs["expected_corpus_sha256"] = expected_corpus_sha256
-    return parser(envelope_value, **parser_kwargs)
+    result = parser(envelope_value, **parser_kwargs)
+    if envelope_value["schema_version"] == SCHEMA_V2_VERSION:
+        result["schema_version"] = DERIVED_V2_SCHEMA_VERSION
+    return result
 
 
 def parse_candidate_full_junit(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -3629,6 +4449,10 @@ def parse_exact_wheel_execution(*args: Any, **kwargs: Any) -> dict[str, Any]:
 
 
 def parse_human_gold_scorer(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    return parse_typed_evidence(*args, **kwargs)
+
+
+def parse_machine_reference_scorer(*args: Any, **kwargs: Any) -> dict[str, Any]:
     return parse_typed_evidence(*args, **kwargs)
 
 
@@ -3762,6 +4586,8 @@ if __name__ == "__main__":
 
 __all__ = [
     "DERIVED_SCHEMA_VERSION",
+    "DERIVED_V2_SCHEMA_VERSION",
+    "SCHEMA_V2_VERSION",
     "SCHEMA_VERSION",
     "TypedQualificationEvidenceError",
     "main",
@@ -3772,6 +4598,7 @@ __all__ = [
     "parse_host_event_sequence",
     "parse_human_gold_scorer",
     "parse_legal_rows",
+    "parse_machine_reference_scorer",
     "parse_retained_supply_chain",
     "parse_scale_report",
     "parse_typed_evidence",

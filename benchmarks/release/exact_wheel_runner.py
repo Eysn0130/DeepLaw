@@ -17,9 +17,14 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-SCHEMA_VERSION = "deeplaw.exact-wheel-execution-receipt/v1"
+V1_RECEIPT_CONTRACT = "candidate-full-v1"
+V2_RECEIPT_CONTRACT = "external-qualification-v2"
+V1_SCHEMA_VERSION = "deeplaw.exact-wheel-execution-receipt/v1"
+V2_SCHEMA_VERSION = "deeplaw.exact-wheel-execution-receipt/v2"
+SCHEMA_VERSION = V2_SCHEMA_VERSION
 PACKAGE_NAME = "deeplaw"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 _SAFE_FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
 _REQUIREMENT_HASH_RE = re.compile(r"--hash=sha256:([0-9a-f]{64})(?=\s|$)")
@@ -69,6 +74,18 @@ def _sha256_file(path: Path) -> str:
 def _strict_sha256(value: str, *, label: str) -> str:
     if not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None:
         raise ExactWheelExecutionError(f"{label} must be a lowercase SHA-256 digest")
+    return value
+
+
+def _strict_git_sha(value: str, *, label: str) -> str:
+    if not isinstance(value, str) or _GIT_SHA_RE.fullmatch(value) is None:
+        raise ExactWheelExecutionError(f"{label} must be a lowercase Git SHA-1 digest")
+    return value
+
+
+def _strict_positive_run(value: int, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ExactWheelExecutionError(f"{label} must be a positive integer")
     return value
 
 
@@ -183,6 +200,42 @@ def _candidate_requirements(
         raise ExactWheelExecutionError("requirements input must be strict UTF-8") from exc
     _validate_requirements_text(text)
     return selected, raw
+
+
+def _stage_verified_requirements(raw: bytes) -> tuple[Path, Path]:
+    """Stage validated requirement bytes in an owner-only private directory."""
+
+    try:
+        stage_dir = Path(tempfile.mkdtemp(prefix="deeplaw-exact-wheel-requirements-"))
+        staged = stage_dir / "candidate-requirements.txt"
+        with staged.open("xb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        staged.chmod(0o600)
+    except (OSError, ValueError) as exc:
+        if "stage_dir" in locals():
+            shutil.rmtree(stage_dir, ignore_errors=True)
+        raise ExactWheelExecutionError(
+            "validated requirements private staging failed"
+        ) from exc
+    return stage_dir, staged
+
+
+def _verify_candidate_requirements_unchanged(
+    requirements: Path,
+    expected_raw: bytes,
+) -> None:
+    if requirements.is_symlink() or not requirements.is_file():
+        raise ExactWheelExecutionError("Candidate requirements changed during installation")
+    try:
+        current_raw = requirements.read_bytes()
+    except OSError as exc:
+        raise ExactWheelExecutionError(
+            "Candidate requirements could not be revalidated after installation"
+        ) from exc
+    if current_raw != expected_raw:
+        raise ExactWheelExecutionError("Candidate requirements changed during installation")
 
 
 def _validate_requirements_text(text: str) -> None:
@@ -1120,16 +1173,39 @@ def _validate_probe(
     }
 
 
-def _schema_path(repository: Path) -> Path:
-    path = repository / "contracts" / "exact-wheel-execution-receipt.v1.schema.json"
+def _schema_path(repository: Path, *, receipt_contract: str) -> Path:
+    schema_name = {
+        V1_RECEIPT_CONTRACT: "exact-wheel-execution-receipt.v1.schema.json",
+        V2_RECEIPT_CONTRACT: "exact-wheel-execution-receipt.v2.schema.json",
+    }.get(receipt_contract)
+    if schema_name is None:
+        raise ExactWheelExecutionError("unsupported exact-wheel receipt contract")
+    path = repository / "contracts" / schema_name
     if path.is_symlink() or not path.is_file():
         raise ExactWheelExecutionError("exact wheel receipt schema is unavailable")
     return path
 
 
-def _validate_receipt(receipt: Mapping[str, Any], *, repository: Path) -> None:
+def _validate_receipt(
+    receipt: Mapping[str, Any],
+    *,
+    repository: Path,
+    receipt_contract: str | None = None,
+) -> None:
+    if receipt_contract is None:
+        schema_version = receipt.get("schema_version")
+        receipt_contract = {
+            V1_SCHEMA_VERSION: V1_RECEIPT_CONTRACT,
+            V2_SCHEMA_VERSION: V2_RECEIPT_CONTRACT,
+        }.get(schema_version)
+    if receipt_contract is None:
+        raise ExactWheelExecutionError("receipt schema version is unsupported")
     try:
-        schema = json.loads(_schema_path(repository).read_text(encoding="utf-8"))
+        schema = json.loads(
+            _schema_path(repository, receipt_contract=receipt_contract).read_text(
+                encoding="utf-8"
+            )
+        )
         validator = Draft202012Validator(schema, format_checker=FormatChecker())
         errors = sorted(validator.iter_errors(receipt), key=lambda error: list(error.path))
     except (OSError, UnicodeError, ValueError) as exc:
@@ -1157,11 +1233,62 @@ def execute_exact_wheel(
     expected_version: str,
     repository: Path,
     venv_path: Path,
+    receipt_contract: str = V2_RECEIPT_CONTRACT,
+    candidate_commit: str | None = None,
+    candidate_tree: str | None = None,
+    expected_lock_sha256: str | None = None,
+    candidate_run_id: int | None = None,
+    evidence_run_id: int | None = None,
+    corpus_sha256: str | None = None,
     runner_source: Path | None = None,
 ) -> dict[str, Any]:
     """Install and probe one Candidate Full wheel without executing checkout source."""
 
     repository = _repository_root(repository)
+    if receipt_contract not in {V1_RECEIPT_CONTRACT, V2_RECEIPT_CONTRACT}:
+        raise ExactWheelExecutionError("unsupported exact-wheel receipt contract")
+    binding_values = (
+        candidate_commit,
+        candidate_tree,
+        expected_lock_sha256,
+        candidate_run_id,
+        evidence_run_id,
+        corpus_sha256,
+    )
+    if receipt_contract == V1_RECEIPT_CONTRACT:
+        if any(value is not None for value in binding_values):
+            raise ExactWheelExecutionError(
+                "candidate-full-v1 does not accept external qualification bindings"
+            )
+    else:
+        if any(value is None for value in binding_values):
+            raise ExactWheelExecutionError(
+                "external-qualification-v2 requires candidate, run, and corpus bindings"
+            )
+        assert candidate_commit is not None
+        assert candidate_tree is not None
+        assert expected_lock_sha256 is not None
+        assert candidate_run_id is not None
+        assert evidence_run_id is not None
+        assert corpus_sha256 is not None
+        _strict_git_sha(candidate_commit, label="candidate commit")
+        _strict_git_sha(candidate_tree, label="candidate tree")
+        _strict_sha256(expected_lock_sha256, label="candidate lock SHA-256")
+        candidate_run_id = _strict_positive_run(candidate_run_id, label="candidate run id")
+        evidence_run_id = _strict_positive_run(evidence_run_id, label="evidence run id")
+        if candidate_run_id == evidence_run_id:
+            raise ExactWheelExecutionError("candidate and evidence run ids must be distinct")
+        _strict_sha256(
+            corpus_sha256,
+            label="candidate-full raw inventory SHA-256",
+        )
+        if (
+            candidate_commit == "0" * 40
+            or candidate_tree == "0" * 40
+            or expected_lock_sha256 == "0" * 64
+            or corpus_sha256 == "0" * 64
+        ):
+            raise ExactWheelExecutionError("candidate or corpus identity is a placeholder digest")
     candidate_wheel = _candidate_wheel(
         candidate_dir,
         expected_wheel_sha256=expected_wheel_sha256,
@@ -1186,19 +1313,31 @@ def execute_exact_wheel(
     source = source.resolve(strict=True)
     runner_source_sha256 = _sha256_file(source)
     created = False
+    requirements_stage_dir: Path | None = None
     try:
+        requirements_stage_dir, staged_requirements = _stage_verified_requirements(
+            requirements_raw
+        )
         python_executable = _create_venv(resolved_venv)
         created = True
         requirements_mode = _install_requirements(
             python_executable=python_executable,
-            requirements=candidate_requirements,
+            requirements=staged_requirements,
             venv_path=resolved_venv,
             wheelhouse=dependency_wheelhouse,
+        )
+        _verify_candidate_requirements_unchanged(
+            candidate_requirements,
+            requirements_raw,
         )
         _install_wheel(
             python_executable=python_executable,
             wheel=candidate_wheel,
             venv_path=resolved_venv,
+        )
+        _verify_candidate_requirements_unchanged(
+            candidate_requirements,
+            requirements_raw,
         )
         observation = _probe_runtime(
             python_executable=python_executable,
@@ -1238,7 +1377,11 @@ def execute_exact_wheel(
         console_entrypoint_sha256 = _sha256_file(console_entrypoint)
         python_sha256 = _sha256_file(runtime["python_executable"])
         receipt: dict[str, Any] = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": (
+                V1_SCHEMA_VERSION
+                if receipt_contract == V1_RECEIPT_CONTRACT
+                else V2_SCHEMA_VERSION
+            ),
             "status": "exact_wheel_executed",
             "runner_source_sha256": runner_source_sha256,
             "candidate": {
@@ -1301,8 +1444,30 @@ def execute_exact_wheel(
                 "candidate_source_only": True,
             },
         }
+        if receipt_contract == V2_RECEIPT_CONTRACT:
+            receipt.update(
+                {
+                    "candidate_provenance": {
+                        "commit": candidate_commit,
+                        "tree": candidate_tree,
+                        "lock_sha256": expected_lock_sha256,
+                    },
+                    "run_binding": {
+                        "candidate_run_id": candidate_run_id,
+                        "evidence_run_id": evidence_run_id,
+                    },
+                    "corpus_binding": {
+                        "role": "candidate_full",
+                        "sha256": corpus_sha256,
+                    },
+                }
+            )
         receipt["record_sha256"] = _record_sha256(receipt)
-        _validate_receipt(receipt, repository=repository)
+        _validate_receipt(
+            receipt,
+            repository=repository,
+            receipt_contract=receipt_contract,
+        )
         return receipt
     except ExactWheelExecutionError:
         if created:
@@ -1312,6 +1477,9 @@ def execute_exact_wheel(
         if created:
             shutil.rmtree(resolved_venv, ignore_errors=True)
         raise ExactWheelExecutionError("exact wheel execution failed") from exc
+    finally:
+        if requirements_stage_dir is not None:
+            shutil.rmtree(requirements_stage_dir, ignore_errors=True)
 
 
 def run_exact_wheel(**kwargs: Any) -> dict[str, Any]:
@@ -1329,6 +1497,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-version", required=True)
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--venv", type=Path, required=True)
+    parser.add_argument(
+        "--receipt-contract",
+        choices=(V1_RECEIPT_CONTRACT, V2_RECEIPT_CONTRACT),
+        default=V2_RECEIPT_CONTRACT,
+    )
+    parser.add_argument("--candidate-commit")
+    parser.add_argument("--candidate-tree")
+    parser.add_argument("--expected-lock-sha256")
+    parser.add_argument("--candidate-run-id", type=int)
+    parser.add_argument("--evidence-run-id", type=int)
+    parser.add_argument("--corpus-sha256")
     parser.add_argument("--receipt", type=Path, required=True)
     return parser
 
@@ -1343,6 +1522,13 @@ def main(argv: list[str] | None = None) -> int:
         expected_version=args.expected_version,
         repository=args.repository,
         venv_path=args.venv,
+        receipt_contract=args.receipt_contract,
+        candidate_commit=args.candidate_commit,
+        candidate_tree=args.candidate_tree,
+        expected_lock_sha256=args.expected_lock_sha256,
+        candidate_run_id=args.candidate_run_id,
+        evidence_run_id=args.evidence_run_id,
+        corpus_sha256=args.corpus_sha256,
     )
     if args.receipt.is_symlink() or args.receipt.exists():
         raise ExactWheelExecutionError("receipt output path must be new and non-symlink")
