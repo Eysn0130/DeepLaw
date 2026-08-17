@@ -15,10 +15,12 @@ V3_CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v3
 V4_CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v4.json"
 V5_CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v5.json"
 V6_CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v6.json"
+V8_CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v8.json"
 V3_SCHEMA = REPOSITORY / "contracts/v013-release-gate-classification.v3.schema.json"
 V4_SCHEMA = REPOSITORY / "contracts/v013-release-gate-classification.v4.schema.json"
 V5_SCHEMA = REPOSITORY / "contracts/v013-release-gate-classification.v5.schema.json"
 V6_SCHEMA = REPOSITORY / "contracts/v013-release-gate-classification.v6.schema.json"
+V8_SCHEMA = REPOSITORY / "contracts/v013-release-gate-classification.v8.schema.json"
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -33,21 +35,21 @@ def _gates(classification: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {gate["gate_id"]: gate for gate in gates}
 
 
-def test_v6_is_the_active_self_consistent_classification() -> None:
-    assert release_policy.V013_ACTIVE_CLASSIFICATION_PATH == V6_CLASSIFICATION
-    assert release_policy.V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH == V6_SCHEMA
+def test_v8_is_the_active_self_consistent_classification() -> None:
+    assert release_policy.V013_ACTIVE_CLASSIFICATION_PATH == V8_CLASSIFICATION
+    assert release_policy.V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH == V8_SCHEMA
     assert release_policy.V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION == (
-        "deeplaw.v013-release-gate-classification/v6"
+        "deeplaw.v013-release-gate-classification/v8"
     )
-    assert release_policy.V013_ACTIVE_CLASSIFICATION_ID == "deeplaw-v013-commercial-gates-v6"
+    assert release_policy.V013_ACTIVE_CLASSIFICATION_ID == "deeplaw-v013-commercial-gates-v8"
 
-    schema = _load(V6_SCHEMA)
-    classification = _load(V6_CLASSIFICATION)
+    schema = _load(V8_SCHEMA)
+    classification = _load(V8_CLASSIFICATION)
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(classification)
 
     assert schema["$id"] == (
-        "https://deeplaw.dev/contracts/v013-release-gate-classification.v6.schema.json"
+        "https://deeplaw.dev/contracts/v013-release-gate-classification.v8.schema.json"
     )
     assert schema["properties"]["schema_version"]["const"] == classification[
         "schema_version"
@@ -59,6 +61,20 @@ def test_v6_is_the_active_self_consistent_classification() -> None:
         release_policy.V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION
     )
     assert classification["classification_id"] == release_policy.V013_ACTIVE_CLASSIFICATION_ID
+    assert {
+        gate["gate_id"] for gate in classification["gates"] if gate["category"] == "Core"
+    } == release_policy.V013_CORE_GATE_IDS
+    assert len(release_policy.V013_CORE_GATE_IDS) == 14
+
+
+def test_v6_remains_the_legacy_commercial_envelope_classification() -> None:
+    assert release_policy.V013_V6_CLASSIFICATION_PATH == V6_CLASSIFICATION
+    assert release_policy.V013_V6_CLASSIFICATION_SCHEMA_PATH == V6_SCHEMA
+    assert release_policy.V013_V6_CLASSIFICATION_SCHEMA_VERSION == (
+        "deeplaw.v013-release-gate-classification/v6"
+    )
+    assert release_policy.V013_V6_CLASSIFICATION_ID == "deeplaw-v013-commercial-gates-v6"
+    Draft202012Validator(_load(V6_SCHEMA)).validate(_load(V6_CLASSIFICATION))
 
 
 def test_v4_is_only_the_allowed_v3_rotation() -> None:

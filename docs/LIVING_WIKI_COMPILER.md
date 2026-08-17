@@ -1,11 +1,18 @@
 # DeepLaw Living Wiki Compiler
 
-Status: **Current source candidate; package 0.12.0; release_ready=false**, 2026-08-11. Release
-eligibility and exact evidence are tracked in [`V0_13_ACCEPTANCE_MATRIX.md`](V0_13_ACCEPTANCE_MATRIX.md),
-the product surface manifest, and the applicable frozen qualification artifacts. This status does
-not qualify Obsidian or Tolaria. One Obsidian seam executed at the historical b14 candidate;
-broader and exact-head qualification is pending. The retained receipt is not Human Gold, a
-qualification holdout, or a final blind run.
+Status: **Current source candidate; package/main 0.12.0 Beta; release_ready=false**, reviewed
+2026-08-17. The Living Wiki is one of three product roles on the shared governed kernel, alongside
+Task Continuity / Governed Project Knowledge and Source-native Evidence Library. Its projections
+are rebuildable and source-linked; Wiki pages are not a complete editable canonical copy of a
+professional source. Qualification remains bound to
+[`benchmarks/v013/active-qualification-v2.json`](../benchmarks/v013/active-qualification-v2.json):
+`machine_evaluation_pending`, profile `machine_evaluated_no_human_attestation`, Gate v8, with no
+`0.13.0` tag or release. Historical receipts are development evidence only, not Human Gold,
+legal-expert attestation, or release qualification.
+
+The shared Context Compiler is `Discovery → Admission → Selection → Bounded Verifiable Knowledge
+Capsule → thin Host drivers`. It is not a fourth product or second retrieval engine. Transcript,
+prompt, raw log, and hidden reasoning are not automatically persisted as memory.
 
 ## Contract boundary
 
@@ -242,9 +249,10 @@ The public facade maps internal validation, not-found, permission and state conf
 
 ## MCP and host workflow
 
-`knowledge_support` input/output v6 is read-only and exposes compilation
-inventory/profile/status/explain, purpose-aware Query Plan v6 query/context and existing
-verification operations. `knowledge_sink` input v6 / output v4 is a separate
+The Provider advertisement is read-only `knowledge-support` input v7/output v6 and exposes only
+`query`, `context`, and `explain`. The local compiler inventory/profile/status and historical
+verification operations remain internal compatibility calls; input v1-v6 and output v1-v5 are
+not advertised as current operations. `knowledge_sink` input v6 / output v4 is a separate
 process and exposes only the operations in its owner-created grant. Its caller-supplied idempotency
 key is durably bound to the exact closed request and a content-addressed result; reusing the key for
 different input fails closed. A compiler host requires both processes; a Skill or retrieved

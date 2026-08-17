@@ -1,4 +1,4 @@
-"""Assemble and revalidate the complete v0.13 Core Gate collection."""
+"""Assemble and revalidate the historical v0.13 v6 Core Gate collection."""
 
 from __future__ import annotations
 

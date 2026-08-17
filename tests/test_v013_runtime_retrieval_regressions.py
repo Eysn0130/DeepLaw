@@ -156,9 +156,8 @@ def test_persistent_read_runtime_reuses_verified_snapshot_without_nested_legacy_
                             params=types.CallToolRequestParams(
                                 name="knowledge_support",
                                 arguments={
-                                    "operation": "recall",
+                                    "operation": "query",
                                     "query": "persistent runtime probe",
-                                    "plane": "autonomous",
                                 },
                             )
                         )

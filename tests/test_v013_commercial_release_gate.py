@@ -16,6 +16,7 @@ from benchmarks.release import release_policy
 REPOSITORY = Path(__file__).resolve().parents[1]
 V5 = "deeplaw.commercial-release-manifest/v5"
 V6 = "deeplaw.commercial-release-manifest/v6"
+V8 = "deeplaw.commercial-release-manifest/v8"
 VERSION = "0.13.0"
 COMMIT = "a" * 40
 TREE = "b" * 40
@@ -64,11 +65,11 @@ def _synthetic_envelope() -> dict[str, Any]:
     }
     gate_statuses = [
         {"gate_id": gate, "category": "Core", "status": "passed"}
-        for gate in sorted(release_policy.V013_CORE_GATE_IDS)
+        for gate in sorted(release_policy.V013_V6_CORE_GATE_IDS)
     ]
     gate_statuses.extend(
         {"gate_id": gate, "category": "Capability", "status": "not_claimed"}
-        for gate in sorted(release_policy.V013_CAPABILITY_GATE_IDS)
+        for gate in sorted(release_policy.V013_V6_CAPABILITY_GATE_IDS)
     )
     gate_statuses.extend(
         {
@@ -76,7 +77,7 @@ def _synthetic_envelope() -> dict[str, Any]:
             "category": "Competitive Claim",
             "status": "not_claimed",
         }
-        for gate in sorted(release_policy.V013_COMPETITIVE_GATE_IDS)
+        for gate in sorted(release_policy.V013_V6_COMPETITIVE_GATE_IDS)
     )
     manifest: dict[str, Any] = {
         "schema_version": V6,
@@ -149,12 +150,13 @@ def _refresh(manifest: dict[str, Any]) -> None:
     manifest["record_sha256"] = _record_digest(manifest)
 
 
-def test_v013_selects_v6_and_cannot_downgrade_to_v5() -> None:
+def test_v013_current_selects_v8_and_legacy_v6_stays_explicit() -> None:
     assert release_policy.required_manifest_schema_version("0.12.9") == V5
-    assert release_policy.required_manifest_schema_version(VERSION) == V6
-    with pytest.raises(release_policy.ReleasePolicyError, match="requires"):
+    assert release_policy.required_manifest_schema_version(VERSION) == V8
+    assert release_policy.required_legacy_manifest_schema_version(VERSION) == V6
+    with pytest.raises(release_policy.ReleasePolicyError, match="release_provenance_v8"):
         release_policy.validate_manifest_for_release(
-            {"schema_version": V5},
+            {"schema_version": V8},
             release_version=VERSION,
         )
 
@@ -168,7 +170,9 @@ def test_v6_schema_and_envelope_policy_accept_only_the_derived_shape() -> None:
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(manifest)
-    release_policy.validate_manifest_for_release(manifest, release_version=VERSION)
+    release_policy.validate_legacy_manifest_for_release(
+        manifest, release_version=VERSION
+    )
 
 
 def test_envelope_rejects_missing_or_failed_core_gate() -> None:
@@ -176,13 +180,17 @@ def test_envelope_rejects_missing_or_failed_core_gate() -> None:
     missing["semantic_evidence"]["gate_statuses"].pop(0)
     _refresh(missing)
     with pytest.raises(release_policy.ReleasePolicyError, match="incomplete"):
-        release_policy.validate_manifest_for_release(missing, release_version=VERSION)
+        release_policy.validate_legacy_manifest_for_release(
+            missing, release_version=VERSION
+        )
 
     failed = _synthetic_envelope()
     failed["semantic_evidence"]["gate_statuses"][0]["status"] = "failed"
     _refresh(failed)
     with pytest.raises(release_policy.ReleasePolicyError, match="Core gate"):
-        release_policy.validate_manifest_for_release(failed, release_version=VERSION)
+        release_policy.validate_legacy_manifest_for_release(
+            failed, release_version=VERSION
+        )
 
 
 def test_capability_and_competitive_gate_semantics_are_fail_closed() -> None:
@@ -195,7 +203,9 @@ def test_capability_and_competitive_gate_semantics_are_fail_closed() -> None:
     row["status"] = "not_executed"
     _refresh(capability)
     with pytest.raises(release_policy.ReleasePolicyError, match="Capability gates"):
-        release_policy.validate_manifest_for_release(capability, release_version=VERSION)
+        release_policy.validate_legacy_manifest_for_release(
+            capability, release_version=VERSION
+        )
 
     competitive = _synthetic_envelope()
     row = next(
@@ -206,7 +216,9 @@ def test_capability_and_competitive_gate_semantics_are_fail_closed() -> None:
     row["status"] = "passed"
     _refresh(competitive)
     with pytest.raises(release_policy.ReleasePolicyError, match="competitive claims"):
-        release_policy.validate_manifest_for_release(competitive, release_version=VERSION)
+        release_policy.validate_legacy_manifest_for_release(
+            competitive, release_version=VERSION
+        )
 
 
 def test_manifest_record_and_candidate_assets_remain_exact() -> None:
@@ -214,16 +226,20 @@ def test_manifest_record_and_candidate_assets_remain_exact() -> None:
     manifest["bindings"]["candidate_wheel_sha256"] = "0" * 64
     _refresh(manifest)
     with pytest.raises(release_policy.ReleasePolicyError, match="wheel sha256"):
-        release_policy.validate_manifest_for_release(manifest, release_version=VERSION)
+        release_policy.validate_legacy_manifest_for_release(
+            manifest, release_version=VERSION
+        )
 
     tampered = _synthetic_envelope()
     tampered["record_sha256"] = "0" * 64
     with pytest.raises(release_policy.ReleasePolicyError, match="record_sha256"):
-        release_policy.validate_manifest_for_release(tampered, release_version=VERSION)
+        release_policy.validate_legacy_manifest_for_release(
+            tampered, release_version=VERSION
+        )
 
 
 def test_required_evidence_inventory_names_semantic_bindings() -> None:
-    required = set(release_policy.V013_REQUIRED_EVIDENCE_PATHS)
+    required = set(release_policy.V013_V6_REQUIRED_EVIDENCE_PATHS)
     assert {
         "bindings.thresholds_sha256",
         "bindings.human_gold_manifest_sha256",
@@ -254,11 +270,12 @@ def test_publish_and_post_release_validate_semantics_before_envelope() -> None:
     assert "gh attestation verify" in public
 
 
-def test_historical_assembler_points_v013_to_semantic_assembler() -> None:
+def test_historical_assembler_closes_v013_in_favor_of_current_v8_path() -> None:
     source = (REPOSITORY / "benchmarks/release/commercial_release.py").read_text(
         encoding="utf-8"
     )
-    assert "benchmarks.release.v013_commercial_release" in source
+    assert "release_provenance_v8" in source
+    assert "retained evidence" in source
 
 
 def test_v013_commercial_qualification_recomputes_v8_from_verified_artifacts() -> None:

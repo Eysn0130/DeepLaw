@@ -1,9 +1,18 @@
 # DeepLaw v0.13 bounded upstream research
 
-Status: **design evidence**, researched 2026-08-08. This report records concepts considered for
-v0.13; it is not evidence that any target capability is shipped. DeepLaw does not vendor or copy
-upstream implementation code in this work. The exact commits below are frozen research anchors,
-not dependency pins or release inputs.
+Status: **design evidence only**, researched 2026-08-08 and reconciled with the 2026-08-17
+architecture freeze. This report records concepts considered for v0.13; it is not evidence that any
+target capability is shipped. Package/main remain `0.12.0 Beta`, active qualification is
+`machine_evaluation_pending` under profile `machine_evaluated_no_human_attestation`, and Gate v8
+remains pending. DeepLaw does not vendor or copy upstream implementation code in this work. The
+exact commits below are frozen research anchors, not dependency pins or release inputs.
+
+The frozen product boundary is three roles on one governed kernel: Task Continuity / Governed
+Project Knowledge, Source-native Evidence Library, and Living Wiki. They share one Context Compiler;
+research does not authorize a fourth product, database, Knowledge kind, Relation predicate, page
+family, Host adapter, Agent runtime, connector, telemetry path or cloud control plane. Automatic
+transcript memory remains prohibited. The current Provider advertisement is input v7/output v6 with
+only `query`, `context`, and `explain`; older Provider versions remain internal compatibility.
 
 ## Frozen references
 
@@ -327,5 +336,6 @@ part of this PRD review.
 
 The research supports the Page Registry/Link Index/Resolver, Coverage Specification, projection
 profiles, split Skills, first-512 MCP instructions and host-neutral Context Envelope. It does not
-satisfy real-host, Human Gold, desktop product, cross-platform or competitive-comparator gates;
+satisfy real-host, machine-reference isolation, desktop product, cross-platform or
+competitive-comparator gates;
 those require separate executable evidence and remain `not_executed` until actually run.

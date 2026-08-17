@@ -1,6 +1,18 @@
 # DeepLaw Evaluation Protocol
 
-Status: **v1 historical boundary; v2 current repository-visible development protocol**.
+Status: **v2 current repository-visible development protocol; package/main 0.12.0 Beta**.
+Reviewed 2026-08-17. Active qualification is
+[`benchmarks/v013/active-qualification-v2.json`](../benchmarks/v013/active-qualification-v2.json)
+with `status=machine_evaluation_pending`, profile
+`machine_evaluated_no_human_attestation`, and Gate classification v8. The 14 v8 Core gates remain
+required; `release_ready=false`, `claim_eligible=false`, and no `0.13.0` tag/release follows from
+this document.
+
+The current Provider advertisement is `knowledge-support` input v7/output v6 and exposes only
+`query`, `context`, and `explain`. Input v1-v6 and output v1-v5 remain internal compatibility
+contracts. Evaluation never treats transcript, prompt, raw log, hidden reasoning, Secret, local
+path, or unadmitted content as Provider evidence. Task Continuity uses explicit task and Host
+session seams; automatic transcript memory is out of scope.
 
 ## Decision
 
@@ -10,9 +22,10 @@ forbidden. Protocol v2 and repository Gold development v3 are the current defaul
 fixtures. They are public, label-visible, repository-visible, non-independent, and never release or
 claim evidence.
 
-The v0.13 release gate additionally requires repository-external Human Gold, Compiler/Evaluator
-isolation receipts, frozen qualification/final-blind holdouts, passing real Host/model tasks, exact
-Legal Pack evidence, complete current-candidate scale, and cross-platform results. Pass 11 retains
+The v0.13 machine-only release gate additionally requires repository-external machine reference
+inputs, OS-enforced isolation receipts, frozen qualification/final-blind holdouts, passing real
+Host/model tasks, exact Legal Pack evidence, complete current-candidate scale, and cross-platform
+results. Pass 11 retains
 some claim-ineligible exact-candidate Host, editor, scale, and artifact observations, but they do
 not supply this complete external gate set and are not part of this repository-visible development
 protocol. See [`V0_13_PASS11_FINAL_DISPOSITION.md`](V0_13_PASS11_FINAL_DISPOSITION.md).
@@ -176,8 +189,8 @@ The output directory contains:
 - `EVALUATION_REPORT.md`;
 - `SHA256SUMS`.
 
-These outputs are reproducible local diagnostics, not the repository-external v0.13 Human Gold or
-Host package. A v0.13 commercial manifest must bind separate external evidence and isolation
+These outputs are reproducible local diagnostics, not the repository-external v0.13 machine
+reference or Host package. A v0.13 commercial manifest must bind separate external evidence and isolation
 receipts; development output cannot be renamed to satisfy that gate.
 
 ## Claim policy

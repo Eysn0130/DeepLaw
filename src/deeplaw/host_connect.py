@@ -10,11 +10,11 @@ from .api import KnowledgeOS
 from .host_runtime import (
     bind_owner_vault,
     build_closed_mcp_argv,
+    host_product_readiness,
     resolve_knowledge_vault,
 )
 from .knowledge_autonomy import AutonomousKnowledgeStore
 from .knowledge_maintenance import knowledge_doctor
-from .task_context import normalize_task_context_binding
 from .util import strict_json_loads
 
 HostName = Literal["codex", "claude-code", "opencode"]
@@ -48,14 +48,12 @@ def _contract() -> dict[str, Any]:
 def _server_argv(
     *,
     vault_id: str,
-    task_binding: Mapping[str, Any] | None,
-    task_handle: str | None,
 ) -> list[str]:
     return build_closed_mcp_argv(
         surface="knowledge_support",
         expected_vault_id=vault_id,
-        task_binding=task_binding,
-        task_handle=task_handle,
+        task_binding=None,
+        task_handle=None,
     )
 
 
@@ -71,18 +69,12 @@ def build_host_connect_plan(
 
     if host not in {"codex", "claude-code", "opencode"}:
         raise ValueError("host must be codex, claude-code, or opencode")
-    if task_handle is not None:
+    if task_binding is not None or task_handle is not None:
         raise ValueError(
-            "static Host configuration cannot bind a task handle; pass it with explicit "
-            "Host workspace metadata at lifecycle time"
+            "static Host Connect is task-neutral; use task start/locate, then the "
+            "explicit bind-host-session or enroll-host-session lifecycle seam"
         )
     selected_host = cast(HostName, host)
-    selected_task_binding = normalize_task_context_binding(
-        task_binding,
-        allow_none=True,
-    )
-    if selected_task_binding is not None and task_handle is not None:
-        raise ValueError("task binding and task handle are mutually exclusive")
     selected_vault = resolve_knowledge_vault(
         vault_path,
         expected_vault_id=None,
@@ -235,11 +227,7 @@ def build_host_connect_plan(
         "caller_confirmation_required_for_future_context": True,
     }
 
-    argv = _server_argv(
-        vault_id=vault_id,
-        task_binding=selected_task_binding,
-        task_handle=None,
-    )
+    argv = _server_argv(vault_id=vault_id)
     owner_binding = bind_owner_vault(selected_vault, owner_home=owner_home)
     plugin_manifest: dict[str, Any] | None = None
     if selected_host == "codex":
@@ -335,12 +323,8 @@ def build_host_connect_plan(
             "path_included": owner_binding["path_included"],
             "binding_store_sha256": owner_binding["binding_store_sha256"],
         },
-        "task_binding_configured": selected_task_binding is not None,
-        "task_binding_sha256": (
-            selected_task_binding["binding_sha256"]
-            if selected_task_binding is not None
-            else None
-        ),
+        "task_binding_configured": False,
+        "task_binding_sha256": None,
         "task_handle_configured": False,
         "task_handle_sha256": None,
         "configuration_kind": configuration_kind,
@@ -351,6 +335,10 @@ def build_host_connect_plan(
         "verification_command": verification_command,
         "preflight": preflight,
         "context_preflight": context_preflight,
+        "readiness": host_product_readiness(
+            autonomous_vault_ready=True,
+            host=selected_host,
+        ),
         "merge_required": True,
         "authentication_managed": False,
         "host_runtime_managed": False,

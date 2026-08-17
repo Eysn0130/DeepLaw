@@ -7,20 +7,30 @@ source administration remain local CLI work. The repository distributes code
 under Apache License 2.0; it does not distribute legal-source packages, case
 documents, generated vault/release databases, or OCR corpora.
 
+Current product and qualification boundary (2026-08-17): package/main remain `0.12.0 Beta`,
+`release_ready=false`, active status is `machine_evaluation_pending`, profile is
+`machine_evaluated_no_human_attestation`, and Gate classification is v8. The three product roles
+(Task Continuity / Governed Project Knowledge, Source-native Evidence Library, Living Wiki) share
+one governed kernel and Context Compiler. Transcript, prompt, raw log and hidden reasoning are not
+automatically persisted as memory. Current `knowledge_support` advertisement is input v7/output v6
+with only `query`, `context`, and `explain`; input v1-v6 and output v1-v5 are internal compatibility
+only. Missing qualification evidence remains `not_executed`; no tag or release follows.
+
 ## Supported versions
 
 Security fixes are evaluated for the current software release, `v0.12.0`, and the `main` branch.
-Historical v0.12 release artifacts retain their manifest-v5 contract. Every future `0.13.x`
-release is fail-closed on commercial manifest v6; an old v5 manifest, repository-visible
-development Gold, or no-model Host smoke cannot satisfy model-task acceptance. The v6 manifest
-binds exact candidate artifacts and hashed repository-external Human Gold, Host, Legal Pack,
-scale, cross-platform, supply-chain, provenance, and public-redownload evidence. Unknown later
+Historical v0.12 release artifacts retain their manifest-v5 contract. The current `0.13.x`
+machine-only path is fail-closed on commercial manifest v8; old v5-v7 manifests,
+repository-visible development Gold, or no-model Host smoke cannot satisfy model-task acceptance.
+The v8 manifest binds exact candidate artifacts and hashed repository-external machine references,
+Host, Legal Pack, scale, cross-platform, supply-chain, provenance, and public-redownload evidence.
+Unknown later
 versions have no implicit manifest downgrade. Comparative leadership remains separately gated with
 `competitive_claim_eligible=false`. Older versions, local knowledge-release artifacts, and
 third-party packages are not separately supported unless a release notice says otherwise.
 The published v0.12 manifest records `commercial_release_eligible=true` and
 `quality_protocol_eligible=true`; those historical flags do not qualify this v0.13 source
-candidate or bypass manifest v6.
+candidate or bypass manifest v8.
 
 ## Report a vulnerability privately
 
@@ -163,11 +173,9 @@ failures become a generic fail-closed error instead of being reflected to the ho
 The optional `knowledge_support` server:
 
 - opens exactly one selected vault read-only;
-- advertises v1 compatibility for untouched v0.7 Vaults or the v3 read contract after autonomous
-  migration; the frozen v2 autonomous seam remains a compatibility contract;
-- exposes only the closed bounded read operations declared by its MCP schema, including
-  search/recall, get, query, context, explain, verify, inspect, lineage, graph, Wiki discovery,
-  identity lookup, and gap discovery;
+- advertises the current `knowledge-support.input/v7` and `knowledge-support.output/v6` contracts;
+- exposes only `query`, `context`, and `explain` in that current Provider advertisement. Historical
+  v1-v6 input and v1-v5 output operation inventories remain internal compatibility contracts;
 - excludes inactive and restricted revisions and strips local filesystem paths;
 - fails closed without echoing the matched value if any bounded response still contains a local
   absolute path or recognized secret-like material;
@@ -196,7 +204,7 @@ The optional `knowledge_sink` server:
 - requires explicit confirmation that no client or case material is present.
 
 The frozen `knowledge-sink.input/v2` contract still accepts legacy unbound `record_run`. New bound
-working-state writes use additive input v5. Legacy reconciliation is an owner operation that writes
+working-state writes use additive input v6. Legacy reconciliation is an owner operation that writes
 a new bound Run and successor Revision; it never mutates historical rows in place.
 
 Read-only is the `law_support`/`knowledge_support` boundary and grants are the

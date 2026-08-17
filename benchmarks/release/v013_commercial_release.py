@@ -1,8 +1,9 @@
-"""Assemble a v0.13 release manifest from provenance-bound evidence.
+"""Assemble the historical v0.13 v6 envelope from provenance-bound evidence.
 
 The historical ``commercial-evidence-report/v1`` observation format is deliberately rejected: its
 hashes do not prove that the reported command, model, runs, metrics, or scans exist.  The assembler
-accepts only the active qualification binding plus independently revalidated Core Gate results.
+accepts only its v6 qualification binding plus independently revalidated Core Gate results. The
+current machine-only release path uses the v8 assembler and provenance verifier instead.
 """
 
 from __future__ import annotations
@@ -18,9 +19,9 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from benchmarks.release.release_policy import (
-    V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH,
-    V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION,
-    validate_manifest_for_release,
+    V013_V6_CLASSIFICATION_SCHEMA_PATH,
+    V013_V6_CLASSIFICATION_SCHEMA_VERSION,
+    validate_legacy_manifest_for_release,
 )
 from benchmarks.release.semantic_evidence import (
     canonical_json,
@@ -36,7 +37,7 @@ MANIFEST_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts" / (
 )
 LEGACY_REPORT_SCHEMA_VERSION = "deeplaw.commercial-evidence-report/v1"
 PROVENANCE_REPORT_SCHEMA_VERSION = "deeplaw.v013-gate-collection/v1"
-PROVENANCE_CLASSIFICATION_SCHEMA_VERSION = V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION
+PROVENANCE_CLASSIFICATION_SCHEMA_VERSION = V013_V6_CLASSIFICATION_SCHEMA_VERSION
 _INPUT_FIELDS = {"schema_version", "environment", "release", "bindings", "artifacts"}
 _DERIVED_FIELDS = {
     "semantic_evidence",
@@ -135,7 +136,7 @@ def _verify_inventory(document: Mapping[str, Any], assets_root: Path) -> None:
 
 def _validate_provenance_classification(classification: Mapping[str, Any]) -> None:
     try:
-        schema = _load_json(V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH)
+        schema = _load_json(V013_V6_CLASSIFICATION_SCHEMA_PATH)
         Draft202012Validator.check_schema(schema)
         errors = sorted(
             Draft202012Validator(schema).iter_errors(classification),
@@ -271,7 +272,9 @@ def assemble_manifest(
             f"assembled v0.13 manifest schema violation at {location}: {first.message}"
         )
     try:
-        validate_manifest_for_release(document, release_version=document["release"]["version"])
+        validate_legacy_manifest_for_release(
+            document, release_version=document["release"]["version"]
+        )
         validate_release_manifest_semantics(
             document,
             assets_root=root,

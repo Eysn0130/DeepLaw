@@ -7,6 +7,7 @@ from jsonschema import Draft202012Validator
 
 from deeplaw.knowledge_mcp_server import (
     _default_provider_max_chars,
+    _load_contract,
     _provider_input_validator,
     _validate_knowledge_tool_arguments,
     knowledge_tool_definition,
@@ -37,6 +38,16 @@ def _advertised_operations(schema: dict[str, object]) -> set[str]:
     return operations
 
 
+def _advertised_output_operations(schema: dict[str, object]) -> set[str]:
+    properties = schema["properties"]
+    assert isinstance(properties, dict)
+    operation = properties["operation"]
+    assert isinstance(operation, dict)
+    values = operation["enum"]
+    assert isinstance(values, list)
+    return {str(value) for value in values}
+
+
 def test_provider_contract_is_closed_and_advertises_only_three_operations() -> None:
     schema = json.loads(CONTRACT.read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
@@ -46,6 +57,24 @@ def test_provider_contract_is_closed_and_advertises_only_three_operations() -> N
         "context",
         "explain",
     }
+    assert _advertised_output_operations(definition.outputSchema) == {
+        "query",
+        "context",
+        "explain",
+    }
+    output_schema_version = definition.outputSchema["properties"]["schema_version"]
+    assert isinstance(output_schema_version, dict)
+    assert output_schema_version["enum"] == [
+        "deeplaw.knowledge-support-output/v3",
+        "deeplaw.knowledge-support-output/v4",
+        "deeplaw.knowledge-support-output/v5",
+        "deeplaw.knowledge-support-output/v6",
+    ]
+    internal_operation = _load_contract(
+        "knowledge-support.output.v6.schema.json"
+    )["properties"]["operation"]
+    assert "wiki" in internal_operation["enum"]
+    assert "search" in internal_operation["enum"]
     assert "search" not in json.dumps(definition.inputSchema, sort_keys=True)
 
 
@@ -65,18 +94,22 @@ def test_legacy_v1_to_v6_calls_are_internal_compatibility_only() -> None:
     )
 
 
-def test_provider_host_route_is_opaque_and_internal_binding_is_not_advertised() -> None:
+def test_host_route_is_unadvertised_internal_compatibility_only() -> None:
     route = {
         "operation": "query",
         "query": "governed decision",
         "host_route": {"host": "codex", "session_sha256": "a" * 64},
     }
-    assert next(_provider_input_validator().iter_errors(route), None) is None
-    assert _validate_knowledge_tool_arguments(route, autonomous=True) == "provider_v7"
+    assert next(_provider_input_validator().iter_errors(route), None) is not None
+    assert (
+        _validate_knowledge_tool_arguments(route, autonomous=True)
+        == "internal_compatibility"
+    )
 
     schema = json.loads(CONTRACT.read_text(encoding="utf-8"))
     rendered = json.dumps(schema, sort_keys=True)
-    assert "host_route" in rendered
+    assert "host_route" not in rendered
+    assert "session_sha256" not in rendered
     assert "task_binding" not in rendered
 
 

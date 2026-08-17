@@ -2042,8 +2042,29 @@ def test_doctor_includes_autonomous_canonical_integrity(tmp_path: Path) -> None:
 
     healthy = knowledge_doctor(root)
     assert healthy["canonical_valid"] is True
+    assert healthy["schema_version"] == "deeplaw.knowledge-doctor/v3"
     assert healthy["checks"]["autonomous_core"]["installed"] is True
     assert healthy["checks"]["autonomous_core"]["integrity"]["valid"] is True
+    readiness = healthy["product_readiness"]
+    assert readiness["autonomous_vault_ready"] is True
+    assert readiness["mcp"]["input_schema"] == (
+        "deeplaw.knowledge-support-input/v7"
+    )
+    assert readiness["mcp"]["output_schema"] == (
+        "deeplaw.knowledge-support-output/v6"
+    )
+    assert all(
+        item["status"] == "owner_verification_required"
+        for item in readiness["hosts"]
+    )
+    assert {
+        item["host"]: item["host_version_for_current_qualification"]
+        for item in readiness["hosts"]
+    } == {
+        "codex": "codex-cli 0.148.0-alpha.9",
+        "claude-code": None,
+        "opencode": "1.18.16",
+    }
 
     workspace = root / revision["workspace_path"]
     workspace.write_text("externally changed without reconciliation\n", encoding="utf-8")

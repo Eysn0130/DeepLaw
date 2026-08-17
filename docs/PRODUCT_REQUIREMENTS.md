@@ -1,15 +1,16 @@
 # DeepLaw Product Requirements
 
 Status: **normative product-direction baseline**
-PRD revision: **1.3.1**
-Reviewed: **2026-08-13**
+PRD revision: **1.3.2**
+Reviewed: **2026-08-17**
 
 This document defines why DeepLaw exists, which user outcomes it owns, the stable product
 boundaries, and the evidence required before scope may expand. It is intentionally smaller and
-more stable than an implementation specification. Current implementation and release status are
-located jointly by `docs/PRD_TRACEABILITY_MATRIX.md` and the latest committed pass-specific
-disposition; historical Pass dispositions are immutable evidence snapshots and no longer represent
-current status. Research snapshots live in `docs/V0_13_UPSTREAM_RESEARCH.md`.
+more stable than an implementation specification. Current implementation mapping is maintained in
+`docs/PRD_TRACEABILITY_MATRIX.md`; current machine and qualification state is maintained by the
+active qualification records and applicable protocol documents. Historical Pass dispositions are
+immutable evidence snapshots and no longer represent current status. Research snapshots live in
+`docs/V0_13_UPSTREAM_RESEARCH.md`.
 
 Runtime facts remain authoritative in `src/deeplaw`, tests, JSON Schemas, SQLite migrations,
 `pyproject.toml`, and `uv.lock`. A requirement marked `Target` is not shipped merely because it is
@@ -50,6 +51,33 @@ standards, policies, manuals, contracts, and research papers remain exact, versi
 in their original format. The Living Wiki is their governed navigation and knowledge projection;
 it is not the canonical document store and does not require a full editable Markdown copy of every
 source.
+
+### Frozen product roles and shared compiler
+
+DeepLaw has exactly three product roles on one shared governed kernel:
+
+1. **Task Continuity / Governed Project Knowledge** preserves task-lineage-specific goals,
+   decisions, constraints, verified facts, gaps, next actions, and bounded Artifact references.
+2. **Source-native Evidence Library** preserves exact source bytes and their Document, Version,
+   Fragment, and Locator identity. Legal Pack is the first-party legal policy plane of this role,
+   not a fourth knowledge engine.
+3. **Living Wiki** gives humans and Agents a readable, navigable projection of governed identities,
+   relations, evidence links, freshness, and gaps. It is not a complete editable canonical copy of
+   professional source material.
+
+These roles share one Context Compiler:
+
+```text
+Discovery -> Admission -> Selection
+  -> bounded, verifiable Knowledge Capsule
+  -> thin Codex/OpenCode/other Host drivers
+```
+
+The Context Compiler is a shared kernel service, not a fourth product or a second retrieval engine.
+No role may introduce a parallel identity, lifecycle, governance, persistence, or retrieval model.
+Automatic transcript memory is explicitly out of scope: DeepLaw MUST NOT scrape, import, summarize,
+or persist a Host transcript in the background. Continuity state is written only through the
+existing bounded, attributable, owner-governed checkpoint path.
 
 DeepLaw is a **Source-to-Knowledge and Task-to-Context Compiler**, not a system for storing or
 injecting as much history as possible.
@@ -209,7 +237,8 @@ Ephemeral delivery plane
 ```
 
 The delivery plane is not a third Authority domain. Query traces and caches are not Canonical
-Knowledge.
+Knowledge. The three product roles are projections and policy uses of these same planes, not new
+durable domains.
 
 The Knowledge OS kernel is limited to four responsibilities:
 
@@ -746,11 +775,13 @@ remain zero.
 ## 12. Current-status boundary
 
 This PRD does not carry mutable release status, package version, benchmark thresholds, or a
-candidate-specific checklist. Current implementation and release status are located jointly by
-`docs/PRD_TRACEABILITY_MATRIX.md` and the latest committed pass-specific disposition. Historical
-Pass dispositions are immutable evidence snapshots and no longer represent current status;
-thresholds and holdout rules live in the applicable evaluation protocol. A capability is not
-shipped, qualified, or claim-eligible merely because its target appears here.
+candidate-specific checklist. Current implementation mapping is located through
+`docs/PRD_TRACEABILITY_MATRIX.md`; current machine/release state is read from the active
+qualification record, current Gate classification, package metadata, and their exact retained
+artifact bindings. Historical Pass dispositions are immutable evidence snapshots and do not
+represent current status. Thresholds and holdout rules live in the applicable evaluation
+protocol. A capability is not shipped, qualified, or claim-eligible merely because its target
+appears here.
 
 ## 13. Explicit non-goals and frozen scope
 
@@ -778,7 +809,8 @@ feature-admission gate:
 - complete materialized `as_of` Wiki browsing and dependency-blind pointer rewind or
   single-Revision revert; temporal retrieval and semantic restore by new revision remain core;
 - new Host adapters and Host-specific business logic;
-- automatic full-transcript ingestion or unrestricted auto-memory;
+- automatic transcript memory, background transcript scraping, automatic full-transcript ingestion,
+  or unrestricted auto-memory;
 - broad Web, Gmail, Notion, social, or enterprise connector acquisition;
 - cloud canonical storage, collaboration, and multi-tenancy; and
 - competitive, SOTA, complete, perfect, or leadership claims without reproducible named-comparator
@@ -862,8 +894,9 @@ Use these labels without implication:
 
 - `Target`: required here but not proven in runtime;
 - `Implemented`: present in an exact candidate with contract and regression evidence;
-- `Qualified`: passed frozen repository-external Human Gold or real-Host tasks plus applicable
-  security and operational gates; and
+- `Qualified`: passed its frozen, source-specific repository-external tasks plus applicable
+  security and operational gates; machine-only evidence remains explicitly
+  `no_human_attestation` and cannot become Human Gold or legal-expert evidence; and
 - `Released`: delivered in a verified artifact with accurate user documentation.
 
 Work proceeds in this evidence order:

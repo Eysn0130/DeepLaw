@@ -8,6 +8,13 @@ from typing import Any
 
 import pytest
 
+from benchmarks.release.security_domain_receipt import (
+    ROLE_LABELS,
+    process_receipt_set_sha256,
+    record_sha256,
+    security_domain_set_sha256,
+    validate_security_domain_receipt,
+)
 from benchmarks.release.typed_qualification_evidence import (
     TypedQualificationEvidenceError,
     parse_typed_evidence,
@@ -26,6 +33,13 @@ RUNNER_SHA = "a" * 64
 ARBITER_SHA = "b" * 64
 RUBRIC_SHA = "c" * 64
 SOURCE_CORPUS_SHA = "d" * 64
+SECURITY_ROLES = (
+    "reference_freezer",
+    "candidate_host",
+    "scorer_a",
+    "scorer_b",
+    "arbiter",
+)
 
 
 def _canonical(value: Any) -> bytes:
@@ -71,6 +85,92 @@ def _receipt(envelope: dict[str, Any], scorer: dict[str, str]) -> dict[str, Any]
         "runner": envelope["runner"],
         "scorer": {"identity": scorer["identity"], "sha256": scorer["sha256"]},
     }
+
+
+def _security_receipt(
+    role: str,
+    ingress_names: set[str],
+    egress_name: str,
+    *,
+    forbidden_names: set[str],
+    network_policy: str = "deny_all",
+    executable_sha256: str | None = None,
+    process_receipt_sha256s: list[str] | None = None,
+) -> dict[str, Any]:
+    def artifact(name: str) -> dict[str, str]:
+        return {"name": name, "sha256": _sha(f"artifact:{name}".encode())}
+
+    ingress = [artifact(name) for name in sorted(ingress_names)]
+    egress = [artifact(egress_name)]
+    canary_targets = [
+        {
+            "name": name,
+            "sha256": _sha(f"negative-canary:{role}:{name}".encode()),
+        }
+        for name in sorted(forbidden_names)
+    ]
+    process_receipts = process_receipt_sha256s or [
+        _sha(f"process-receipt:{role}".encode())
+    ]
+    value: dict[str, Any] = {
+        "schema_version": "deeplaw.security-domain-receipt/v1",
+        "profile": "machine_evaluated_no_human_attestation",
+        "role": role,
+        "domain_id": f"domain:{role}",
+        "runner": {
+            "ephemeral_runner_id": f"runner:{role}",
+            "runner_label": ROLE_LABELS[role],
+            "runner_attestation_sha256": _sha(f"runner-attestation:{role}".encode()),
+        },
+        "executable": {
+            "executable_sha256": executable_sha256
+            or _sha(f"executable:{role}".encode()),
+            "process_tree_sha256": _sha(f"process-tree:{role}".encode()),
+        },
+        "principal": {
+            "uid": 1000 + len(role),
+            "principal_id": f"principal:{role}",
+            "acl_sha256": _sha(f"acl:{role}".encode()),
+        },
+        "mount": {
+            "namespace_id": f"mount:{role}",
+            "inventory_sha256": _sha(f"mount:{role}".encode()),
+            "read_only_input_sha256s": [item["sha256"] for item in ingress],
+        },
+        "network": {
+            "policy": network_policy,
+            "policy_sha256": _sha(f"network:{role}".encode()),
+        },
+        "ipc": {
+            "namespace_id": f"ipc:{role}",
+            "policy": "artifact_pipe_only",
+            "policy_sha256": _sha(f"ipc:{role}".encode()),
+        },
+        "ingress": ingress,
+        "egress": egress,
+        "visibility": {
+            "can_read": [item["sha256"] for item in ingress],
+            "cannot_read": [item["sha256"] for item in canary_targets],
+        },
+        "negative_canary": {
+            "attempts": len(canary_targets),
+            "targets": canary_targets,
+            "leaked_count": 0,
+            "observation_sha256": _sha(f"canary:{role}:zero".encode()),
+        },
+        "secret_policy": "broker_only_exact_host" if role == "candidate_host" else "forbidden",
+        "process_receipt_sha256": process_receipt_set_sha256(process_receipts),
+        "process_receipt_sha256s": process_receipts,
+        "observed_roots_sha256": _sha(f"observed-roots:{role}".encode()),
+        "attester_executable_sha256": _sha(b"frozen-security-domain-attester"),
+        "observed": {
+            "source": "os_runner_attestation",
+            "command_id": f"observe:{role}",
+            "attestation_sha256": _sha(f"os-observation:{role}".encode()),
+        },
+    }
+    value["record_sha256"] = record_sha256(value)
+    return value
 
 
 def _fixture(root: Path) -> tuple[Path, dict[str, Any]]:
@@ -255,6 +355,82 @@ def _fixture(root: Path) -> tuple[Path, dict[str, Any]]:
         }
     )
     binding_ref, _ = _write(root, "reference/binding.json", binding)
+    process_receipts: dict[str, list[str]] = {}
+    process_receipt_sources: list[dict[str, Any]] = []
+    for role in SECURITY_ROLES:
+        process_receipts[role] = []
+        for index in range(2 if role == "candidate_host" else 1):
+            source_ref, raw = _write(
+                root,
+                f"process/{role}-{index + 1}.json",
+                {
+                    "schema_version": "deeplaw.sanitized-process-observation/v1",
+                    "role": role,
+                    "ordinal": index + 1,
+                },
+            )
+            process_receipts[role].append(_sha(raw))
+            process_receipt_sources.append(source_ref)
+
+    security_receipts = {
+        "reference_freezer": _security_receipt(
+            "reference_freezer",
+            {"reference-cases", "reviewer-inputs"},
+            "sealed-reference",
+            forbidden_names={
+                "candidate-sanitized-output",
+                "scorer-a-output",
+                "scorer-b-output",
+                "arbiter-output",
+            },
+            process_receipt_sha256s=process_receipts["reference_freezer"],
+        ),
+        "candidate_host": _security_receipt(
+            "candidate_host",
+            {"verified-candidate-artifacts", "qualification-inputs", "final-blind-inputs"},
+            "candidate-sanitized-output",
+            forbidden_names={
+                "sealed-reference",
+                "scorer-a-output",
+                "scorer-b-output",
+                "arbiter-output",
+            },
+            network_policy="host_provider_allowlist",
+            executable_sha256=RUNNER_SHA,
+            process_receipt_sha256s=process_receipts["candidate_host"],
+        ),
+        "scorer_a": _security_receipt(
+            "scorer_a",
+            {"candidate-sanitized-output", "sealed-reference"},
+            "scorer-a-output",
+            forbidden_names={"scorer-b-output", "arbiter-output"},
+            executable_sha256=SCORER_A_SHA,
+            process_receipt_sha256s=process_receipts["scorer_a"],
+        ),
+        "scorer_b": _security_receipt(
+            "scorer_b",
+            {"candidate-sanitized-output", "sealed-reference"},
+            "scorer-b-output",
+            forbidden_names={"scorer-a-output", "arbiter-output"},
+            executable_sha256=SCORER_B_SHA,
+            process_receipt_sha256s=process_receipts["scorer_b"],
+        ),
+        "arbiter": _security_receipt(
+            "arbiter",
+            {"scorer-a-output", "scorer-b-output"},
+            "arbiter-output",
+            forbidden_names={"candidate-sanitized-output", "sealed-reference"},
+            executable_sha256=ARBITER_SHA,
+            process_receipt_sha256s=process_receipts["arbiter"],
+        ),
+    }
+    security_domain_receipt_sources: list[dict[str, Any]] = []
+    for role in SECURITY_ROLES:
+        relative = f"security/{role}.json"
+        source_ref, _ = _write(root, relative, security_receipts[role])
+        security_domain_receipt_sources.append(source_ref)
+        validate_security_domain_receipt(security_receipts[role], expected_role=role)
+    assert security_domain_set_sha256(list(security_receipts.values()))
     envelope: dict[str, Any] = {
         "schema_version": "deeplaw.typed-qualification-evidence/v2",
         "profile": profile,
@@ -382,6 +558,8 @@ def _fixture(root: Path) -> tuple[Path, dict[str, Any]]:
         "agent_roster_source": roster_ref,
         "agent_consensus_source": consensus_ref,
         "agent_isolation_source": isolation_ref,
+        "security_domain_receipt_sources": security_domain_receipt_sources,
+        "process_receipt_sources": process_receipt_sources,
         "scorer_a_rows_source": scorer_a_ref,
         "scorer_b_rows_source": scorer_b_ref,
         "arbiter_consensus_rows_source": arbiter_ref,
@@ -432,6 +610,29 @@ def test_machine_reference_recomputes_pass_without_human_attestation(tmp_path: P
     assert result["metrics"]["case_pass_rate"] == 1.0
     assert result["metrics"]["human_attested"] is False
     assert result["metrics"]["human_authenticity"] == "not_claimed"
+    assert len(result["metrics"]["security_domains_sha256"]) == 64
+
+
+def test_machine_reference_rejects_a_candidate_domain_without_broker_boundary(
+    tmp_path: Path,
+) -> None:
+    manifest, envelope = _fixture(tmp_path)
+    source = next(
+        item
+        for item in envelope["payload"]["security_domain_receipt_sources"]
+        if item["relative_path"] == "security/candidate_host.json"
+    )
+    receipt_path = tmp_path / source["relative_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["network"]["policy"] = "deny_all"
+    receipt["record_sha256"] = record_sha256(receipt)
+    raw = _canonical(receipt)
+    receipt_path.write_bytes(raw)
+    source.update({"byte_size": len(raw), "sha256": _sha(raw)})
+    _rewrite_manifest(manifest, envelope)
+
+    with pytest.raises(TypedQualificationEvidenceError, match="broker-only"):
+        parse_typed_evidence(manifest, root=tmp_path)
 
 
 def test_machine_reference_cannot_pass_without_retained_candidate_output_and_execution(
@@ -458,6 +659,20 @@ def test_machine_reference_cannot_pass_without_retained_candidate_output_and_exe
             expected_workflow_run_id=17,
             expected_corpus_sha256=HOLDOUT,
         )
+
+
+def test_machine_reference_cannot_pass_without_retained_process_receipt_bytes(
+    tmp_path: Path,
+) -> None:
+    manifest, envelope = _fixture(tmp_path)
+    envelope["payload"]["process_receipt_sources"].pop()
+    _rewrite_manifest(manifest, envelope)
+
+    with pytest.raises(
+        TypedQualificationEvidenceError,
+        match="process receipt",
+    ):
+        parse_typed_evidence(manifest, root=tmp_path)
 
 
 def test_replacing_candidate_output_invalidates_old_scorer_receipts(tmp_path: Path) -> None:

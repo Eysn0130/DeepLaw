@@ -10,6 +10,8 @@ from typing import Any
 
 import pytest
 
+from deeplaw import __version__
+
 REPOSITORY = Path(__file__).resolve().parents[1]
 PLUGIN_ROOT = REPOSITORY / "plugins" / "deeplaw-knowledge-os"
 MANIFEST_PATH = PLUGIN_ROOT / ".codex-plugin" / "plugin.json"
@@ -68,7 +70,7 @@ def test_manifest_registers_hooks_and_states_owner_exact_hash_trust() -> None:
     hooks = json.loads(HOOKS_PATH.read_text(encoding="utf-8"))
 
     assert manifest["hooks"] == "./hooks/hooks.json"
-    assert manifest["version"] == "0.12.0"
+    assert manifest["version"] == __version__
     manifest_text = json.dumps(manifest, ensure_ascii=False).casefold()
     hooks_text = json.dumps(hooks, ensure_ascii=False).casefold()
     assert "owner" in manifest_text and "trust" in manifest_text

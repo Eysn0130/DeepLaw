@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -157,6 +158,10 @@ def test_host_connect_builds_read_only_config_without_owning_host_or_auth(
         assert plan["owner_local_binding"]["path_included"] is False
         assert plan["authentication_managed"] is False
         assert plan["host_runtime_managed"] is False
+        assert plan["task_binding_configured"] is False
+        assert plan["task_binding_sha256"] is None
+        assert plan["task_handle_configured"] is False
+        assert plan["task_handle_sha256"] is None
         assert plan["preflight"] == {
             "vault_ready": True,
             "canonical_valid": True,
@@ -171,13 +176,77 @@ def test_host_connect_builds_read_only_config_without_owning_host_or_auth(
         assert plan["context_preflight"]["provider_payload_bytes"] <= 65_536
         assert plan["context_preflight"]["write_performed"] is False
         assert plan["context_preflight"]["audit_head_unchanged"] is True
+        readiness = plan["readiness"]
+        assert readiness["schema_version"] == "deeplaw.host-product-readiness/v1"
+        assert readiness["autonomous_vault_ready"] is True
+        assert readiness["mcp"] == {
+            "mode": "compact_current_with_internal_compatibility",
+            "input_schema": "deeplaw.knowledge-support-input/v7",
+            "output_schema": "deeplaw.knowledge-support-output/v6",
+            "advertised_operations": ["query", "context", "explain"],
+            "compatibility_inputs": ["v1", "v2", "v3", "v4", "v5", "v6"],
+            "compatibility_outputs": ["v1", "v2", "v3", "v4", "v5"],
+        }
+        assert [item["host"] for item in readiness["hosts"]] == [host]
+        assert readiness["hosts"][0]["status"] == "owner_verification_required"
+        assert {gap["code"] for gap in readiness["hosts"][0]["gaps"]} == {
+            "host_plugin_load_unverified",
+            "mcp_registration_unverified",
+            "closed_environment_unverified",
+        }
         rendered = str(plan["configuration"])
         assert "knowledge" in rendered
         assert "mcp" in rendered
         assert "sink" not in rendered
+        assert "--task-binding" not in rendered
+        assert "--task-handle" not in rendered
 
     with AutonomousKnowledgeStore(vault, read_only=True) as store:
         assert store.audit_head == audit_before
+
+
+def test_host_connect_help_is_task_neutral_and_legacy_flags_fail_with_migration() -> None:
+    parser = cli._parser()
+    knowledge = _command_parser("knowledge")
+    host = _subparsers(knowledge).choices["host"]
+    connect = _subparsers(host).choices["connect"]
+    help_text = connect.format_help()
+    assert "--task-binding" not in help_text
+    assert "--task-handle" not in help_text
+
+    legacy = parser.parse_args(
+        [
+            "knowledge",
+            "host",
+            "connect",
+            "--host",
+            "codex",
+            "--vault",
+            "vault",
+            "--task-handle",
+            "taskh_opaque",
+        ]
+    )
+    with pytest.raises(ValueError, match=r"task-neutral.*enroll-host-session"):
+        from deeplaw.knowledge_cli import handle_knowledge_command
+
+        handle_knowledge_command(legacy)
+
+
+def test_host_connect_v2_contract_forbids_task_bound_static_configuration() -> None:
+    schema = json.loads(
+        (REPOSITORY / "contracts/host-connect-plan.v2.schema.json").read_bytes()
+    )
+    Draft202012Validator.check_schema(schema)
+    properties = schema["properties"]
+    assert properties["task_binding_configured"] == {"const": False}
+    assert properties["task_binding_sha256"] == {"type": "null"}
+    assert properties["task_handle_configured"] == {"const": False}
+    assert properties["task_handle_sha256"] == {"type": "null"}
+    assert "readiness" in schema["required"]
+    assert schema["$defs"]["stdioArguments"]["maxItems"] == 6
+    assert schema["$defs"]["fullCommand"]["maxItems"] == 7
+    assert schema["$defs"]["codexAddCommand"]["maxItems"] == 12
 
     schema = json.loads(
         (REPOSITORY / "contracts/host-connect-plan.v2.schema.json").read_bytes()
@@ -223,6 +292,10 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
         (REPOSITORY / "governance/product-surface-manifest.v1.json").read_bytes()
     )
     Draft202012Validator(schema).validate(manifest)
+    project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+    assert manifest["package_version"] == project["project"]["version"]
+    assert manifest["lifecycle_status"] == "source_candidate"
+    assert manifest["release_ready"] is False
     assert [item["name"] for item in manifest["default_product"]] == [
         "init",
         "doctor",
@@ -244,12 +317,49 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
     assert host_connect["lifecycle"] == "Active"
     assert "deeplaw knowledge host connect" in host_connect["bindings"]
     assert "contracts/host-connect-plan.v2.schema.json" in host_connect["bindings"]
+    task_continuity = next(
+        item
+        for item in manifest["surfaces"]
+        if item["surface_id"] == "default.task_continuity"
+    )
+    assert "enroll-host-session" in task_continuity["bindings"][0]
+    assert "contracts/host-session-route-result.v2.schema.json" in task_continuity[
+        "bindings"
+    ]
     compatibility_contracts = next(
         item
         for item in manifest["surfaces"]
         if item["surface_id"] == "compatibility.legacy_contracts"
     )["bindings"]
     assert "contracts/host-connect-plan.v1.schema.json" in compatibility_contracts
+    knowledge_support = next(
+        item
+        for item in manifest["external_callers"]
+        if item["caller"] == "knowledge_support"
+    )
+    assert knowledge_support["current_bindings"] == [
+        "knowledge_support leaf",
+        "contracts/knowledge-support.input.v7.schema.json",
+        "contracts/knowledge-support.output.v6.schema.json",
+        "advertised operations: query, context, explain",
+    ]
+    assert knowledge_support["compatibility_bindings"] == [
+        "contracts/knowledge-support.input.v1.schema.json through v6 (internal compatibility)",
+        "contracts/knowledge-support.output.v1.schema.json through v5 (internal compatibility)",
+    ]
+    tests_contracts = next(
+        item
+        for item in manifest["external_callers"]
+        if item["caller"] == "tests/contracts"
+    )
+    assert "benchmarks/release/v013-gate-classification-v8.json" in tests_contracts[
+        "current_bindings"
+    ]
+    assert all(
+        "knowledge_support operation=wiki" not in binding
+        for surface in manifest["surfaces"]
+        for binding in surface["bindings"]
+    )
     assert {item["product_role"] for item in manifest["surfaces"]} <= {
         "Core",
         "Driver",
@@ -278,3 +388,43 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
         "tests/contracts",
         "historical persisted data",
     }
+
+
+def test_current_documented_product_truth_cannot_drift_to_historical_state() -> None:
+    active = json.loads(
+        (REPOSITORY / "benchmarks/v013/active-qualification-v2.json").read_bytes()
+    )
+    assert active["schema_version"] == "deeplaw.v013-active-qualification/v2"
+    assert active["profile"] == "machine_evaluated_no_human_attestation"
+    project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+    version = project["project"]["version"]
+    assert active["candidate_version"] == version
+    assert active["candidate_binding"]["package_version"] == version
+    expected_stage = {
+        "0.12.0": ("machine_evaluation_pending", "machine_evaluation_not_executed"),
+        "0.13.0": (
+            "construction_candidate_machine_evaluation_pending",
+            "candidate_artifact_not_built",
+        ),
+    }
+    assert (active["status"], active["blocker"]) == expected_stage[version]
+    assert active["release_ready"] is False
+    assert active["claim_eligible"] is False
+
+    prd = (REPOSITORY / "docs/PRODUCT_REQUIREMENTS.md").read_text(encoding="utf-8")
+    architecture = (REPOSITORY / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+    chinese = (REPOSITORY / "README.md").read_text(encoding="utf-8")
+    english = (REPOSITORY / "README_EN.md").read_text(encoding="utf-8")
+    assert "PRD revision: **1.3.2**" in prd
+    assert "latest committed pass-specific disposition" not in prd
+    assert "Gate v6" not in architecture
+    assert "Pass 21" not in architecture
+    for readme in (chinese, english):
+        assert "V0_13_PASS" not in readme
+        assert "host connect --host codex --vault ./vault" in readme
+        assert "host connect --host codex --vault ./vault --task" not in readme
+        assert "knowledge sink enable --vault ./vault" in readme
+        assert "--operation record_run --operation remember --operation forget" in readme
+        assert "knowledge task checkpoint --vault ./vault" in readme
+        assert "knowledge task timeline --vault ./vault" in readme
+        assert "knowledge-support input v7 / output v6" in readme

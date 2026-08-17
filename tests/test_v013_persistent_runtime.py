@@ -11,6 +11,7 @@ from mcp.server.lowlevel.server import RequestContext, request_ctx
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, initialize_autonomous_core
 from deeplaw.knowledge_mcp_server import create_knowledge_mcp_server
 from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
+from deeplaw.persistent_read_runtime import PersistentReadRuntime
 from deeplaw.util import canonical_json
 
 
@@ -59,7 +60,7 @@ def test_runtime_reopens_after_autonomous_commit_and_reuses_afterward(tmp_path: 
                 server,
                 runtime,
                 1,
-                {"operation": "recall", "query": "runtime", "plane": "autonomous"},
+                {"operation": "query", "query": "runtime"},
             )
             assert first.root.isError is False
             first_snapshot = runtime.persistent.snapshot
@@ -69,7 +70,7 @@ def test_runtime_reopens_after_autonomous_commit_and_reuses_afterward(tmp_path: 
                 server,
                 runtime,
                 2,
-                {"operation": "recall", "query": "runtime", "plane": "autonomous"},
+                {"operation": "query", "query": "runtime"},
             )
             assert second.root.isError is False
             second_snapshot = runtime.persistent.snapshot
@@ -77,7 +78,7 @@ def test_runtime_reopens_after_autonomous_commit_and_reuses_afterward(tmp_path: 
                 server,
                 runtime,
                 3,
-                {"operation": "recall", "query": "runtime", "plane": "autonomous"},
+                {"operation": "query", "query": "runtime"},
             )
             assert third.root.isError is False
             return (
@@ -93,7 +94,7 @@ def test_runtime_reopens_after_autonomous_commit_and_reuses_afterward(tmp_path: 
     assert first_snapshot is not second_snapshot
 
 
-def test_runtime_manifest_tamper_fails_closed_before_recall(tmp_path: Path) -> None:
+def test_runtime_manifest_tamper_fails_closed_before_query(tmp_path: Path) -> None:
     root = _synthetic_vault(tmp_path)
     with AutonomousKnowledgeStore(root, read_only=False) as store:
         store.rebuild_derived()
@@ -105,7 +106,7 @@ def test_runtime_manifest_tamper_fails_closed_before_recall(tmp_path: Path) -> N
                 server,
                 runtime,
                 1,
-                {"operation": "recall", "query": "runtime", "plane": "autonomous"},
+                {"operation": "query", "query": "runtime"},
             )
             assert first.root.isError is False
             manifest_path = root / ".deeplaw" / "derived" / "manifest.json"
@@ -119,7 +120,7 @@ def test_runtime_manifest_tamper_fails_closed_before_recall(tmp_path: Path) -> N
                 server,
                 runtime,
                 2,
-                {"operation": "recall", "query": "runtime", "plane": "autonomous"},
+                {"operation": "query", "query": "runtime"},
             )
             return bool(second.root.isError)
 
@@ -137,7 +138,7 @@ def test_runtime_lifespan_close_is_deterministic(tmp_path: Path) -> None:
                 server,
                 runtime,
                 1,
-                {"operation": "recall", "query": "runtime", "plane": "autonomous"},
+                {"operation": "query", "query": "runtime"},
             )
             holder["runtime"] = runtime
             holder["snapshot"] = runtime.persistent.snapshot
@@ -167,22 +168,18 @@ def test_explicit_verify_bypasses_legacy_integrity_cache(tmp_path: Path, monkeyp
     monkeypatch.setattr(KnowledgeVault, "verify_audit_chain", counted_audit)
     monkeypatch.setattr(KnowledgeVault, "verify_state_integrity", counted_state)
 
-    async def exercise() -> None:
-        server = create_knowledge_mcp_server(vault_path=root)
-        async with server.lifespan(server) as runtime:
+    def exercise() -> None:
+        runtime = PersistentReadRuntime(root)
+        try:
             initial_audit = audit_calls
             initial_state = state_calls
-            response = await _call(
-                server,
-                runtime,
-                1,
-                {"operation": "verify", "plane": "autonomous"},
-            )
-            assert response.root.isError is False
+            runtime.get_snapshot(operation="verify")
             assert audit_calls == initial_audit + 1
             assert state_calls == initial_state + 1
+        finally:
+            runtime.close()
 
-    asyncio.run(exercise())
+    exercise()
 
 
 def test_root_manifest_tamper_invalidates_first_read_and_clears_cache(tmp_path: Path) -> None:

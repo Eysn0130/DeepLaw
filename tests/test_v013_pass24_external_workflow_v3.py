@@ -34,19 +34,44 @@ def test_external_dispatch_requires_one_candidate_full_run_id() -> None:
 
 
 def test_external_downloads_and_rebinds_both_candidate_full_artifacts() -> None:
+    parsed = _parsed()
+    jobs = parsed["jobs"]
+    assert set(jobs) == {
+        "candidate",
+        "reference_freezer",
+        "scorer_a",
+        "scorer_b",
+        "arbiter",
+        "assembly",
+    }
+    assert jobs["scorer_a"]["needs"] == ["candidate", "reference_freezer"]
+    assert jobs["scorer_b"]["needs"] == ["candidate", "reference_freezer"]
+    assert jobs["arbiter"]["needs"] == ["scorer_a", "scorer_b"]
+    assert jobs["assembly"]["needs"] == [
+        "candidate",
+        "reference_freezer",
+        "scorer_a",
+        "scorer_b",
+        "arbiter",
+    ]
     workflow = _workflow()
-    assert workflow.count("actions/download-artifact@") == 2
+    assert workflow.count("actions/download-artifact@") >= 8
     assert "name: verified-candidate-artifacts" in workflow
     assert "name: candidate-full-raw-evidence" in workflow
     assert "run-id: ${{ inputs.candidate_run_id }}" in workflow
     assert "candidate-full-run-receipt.json" in workflow
     assert "candidate-full-inventory-receipt.json" in workflow
-    assert "deeplaw.retained-candidate-artifacts/v1" in workflow
-    assert "git_commit" in workflow
-    assert "git_tree" in workflow
-    assert "lock_sha256" in workflow
-    assert "retained wheel hash differs" in workflow
+    assert "benchmarks.release.retained_artifact_manifest" in workflow
+    assert "--verify" in workflow
+    assert "shasum -a 256" in workflow
+    assert "candidate_full_raw_inventory" in workflow
+    assert "declared" in workflow
+    assert "observed" in workflow
     assert "Candidate Full raw inventory does not match retained bytes" in workflow
+    candidate_block = workflow[
+        workflow.index("  candidate:") : workflow.index("  reference_freezer:")
+    ]
+    assert "grep -F" not in candidate_block
 
 
 def test_external_executes_only_the_unique_downloaded_wheel() -> None:
@@ -58,7 +83,7 @@ def test_external_executes_only_the_unique_downloaded_wheel() -> None:
     assert "--expected-requirements-sha256" in workflow
     assert "--expected-version" in workflow
     assert "--repository \"${GITHUB_WORKSPACE}\"" in workflow
-    assert "external-exact-wheel-venv" in workflow
+    assert "exact-wheel-venv" in workflow
     assert "repository-external" in workflow
     assert "python -m build" not in workflow
     assert "uv build" not in workflow
@@ -67,6 +92,11 @@ def test_external_executes_only_the_unique_downloaded_wheel() -> None:
 
 def test_host_preflight_uses_exact_pins_and_never_reads_auth_material() -> None:
     workflow = _workflow()
+    candidate = workflow[
+        workflow.index("  candidate:") : workflow.index("  reference_freezer:")
+    ]
+    assert candidate.count("\n          import hashlib\n") == 2
+    assert candidate.count("\n          import json\n") == 2
     assert "codex-cli 0.148.0-alpha.9" in workflow
     assert "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f" in workflow
     assert "gpt-5.6-luna" in workflow
@@ -82,6 +112,16 @@ def test_host_preflight_uses_exact_pins_and_never_reads_auth_material() -> None:
     assert "DEEPLAW_OPENCODE_PACKAGE" in workflow
     assert "opencode_sha256" in workflow
     assert "opencode_package_sha256" in workflow
+    assert "DIST_ROOT" in workflow
+    assert "EXACT_WHEEL_RECEIPT" in workflow
+    assert "EXACT_WHEEL_VENV" in workflow
+    assert "owner_only" in workflow
+    assert "stat.S_IMODE" in workflow
+    assert "S_ISLNK" in workflow
+    assert "DEEPLAW_HOST_PROVIDER_ALLOWLIST" in workflow
+    assert "--network-policy host_provider_allowlist" in workflow
+    assert "--provider-allowlist" in workflow
+    assert "DEEPLAW_SECURITY_DOMAIN_ATTESTER_SHA256" in workflow
     assert "--opencode-sha256" in workflow
     assert "--opencode-package-sha256" in workflow
     assert "auth.json" in workflow  # negative path assertion is explicit in the workflow.
@@ -93,12 +133,26 @@ def test_host_preflight_uses_exact_pins_and_never_reads_auth_material() -> None:
 
 def test_dotenv_and_external_inputs_are_metadata_only() -> None:
     workflow = _workflow()
+    assert "! find " not in workflow
+    assert "! grep " not in workflow
+    assert workflow.count("forbidden_path=\"$(find ") == 4
+    assert all(
+        "-print -quit" in line
+        for line in workflow.splitlines()
+        if 'forbidden_path="$(find ' in line
+    )
+    assert workflow.count('test -z "${forbidden_path}"') == 4
+    assert 'if grep -Fq -- "$1" "$2"; then' in workflow
+    assert 'test "${grep_status}" -eq 1' in workflow
     assert "DEEPLAW_OPENCODE_DOTENV" in workflow
     assert "--dotenv \"${DEEPLAW_OPENCODE_DOTENV}\"" in workflow
-    assert "is_symlink()" in workflow
-    assert "has_symlink_component" in workflow
-    assert "owner_only" in workflow
-    assert "mode & 0o077" in workflow
+    assert "DEEPLAW_SECURITY_DOMAIN_ATTESTER" in workflow
+    assert "deeplaw-qualification-reference" in workflow
+    assert "deeplaw-qualification-candidate" in workflow
+    assert "deeplaw-qualification-scorer-a" in workflow
+    assert "deeplaw-qualification-scorer-b" in workflow
+    assert "deeplaw-qualification-arbiter" in workflow
+    assert "deeplaw-qualification-assembly" in workflow
     assert "DEEPLAW_REFERENCE_FREEZER" in workflow
     assert "DEEPLAW_REFERENCE_CASES" in workflow
     assert "DEEPLAW_REVIEWER_OUTPUT_1" in workflow
@@ -114,16 +168,98 @@ def test_dotenv_and_external_inputs_are_metadata_only() -> None:
     assert "cat \"${DEEPLAW_OPENCODE_DOTENV}\"" not in workflow
 
 
+def test_security_domains_use_five_role_handoff_and_attest_after_process() -> None:
+    workflow = _workflow()
+    assert "--role reference_freezer" in workflow
+    assert "--role candidate_host" in workflow
+    assert "--role scorer_a" in workflow
+    assert "--role scorer_b" in workflow
+    assert "--role arbiter" in workflow
+    assert "--role assembly" not in workflow
+    assert "security/assembly" not in workflow
+    assert "--process-receipt" in workflow
+    assert (
+        "--process-receipt candidate-output/codex/process.json" in workflow
+        and "--process-receipt candidate-output/opencode/process.json" in workflow
+    )
+    assert "--observed-root" in workflow
+    assert "--attester-executable-sha256" in workflow
+
+    def section(role: str, next_role: str) -> str:
+        start = workflow.index(f"  {role}:")
+        end = workflow.index(f"  {next_role}:", start)
+        return workflow[start:end]
+
+    candidate = section("candidate", "reference_freezer")
+    assert candidate.index("DEEPLAW_CODEX_CREDENTIAL_BROKER") < candidate.rindex(
+        "DEEPLAW_SECURITY_DOMAIN_ATTESTER"
+    )
+    reference = section("reference_freezer", "scorer_a")
+    assert reference.index("DEEPLAW_REFERENCE_DOMAIN_RUNNER") < reference.rindex(
+        "DEEPLAW_SECURITY_DOMAIN_ATTESTER"
+    )
+    scorer_a = section("scorer_a", "scorer_b")
+    assert scorer_a.index("DEEPLAW_SCORER_A") < scorer_a.rindex(
+        "DEEPLAW_SECURITY_DOMAIN_ATTESTER"
+    )
+    scorer_b = section("scorer_b", "arbiter")
+    assert scorer_b.index("DEEPLAW_SCORER_B") < scorer_b.rindex(
+        "DEEPLAW_SECURITY_DOMAIN_ATTESTER"
+    )
+    arbiter = section("arbiter", "assembly")
+    assert arbiter.index("DEEPLAW_DETERMINISTIC_ARBITER") < arbiter.rindex(
+        "DEEPLAW_SECURITY_DOMAIN_ATTESTER"
+    )
+    assembly = workflow[workflow.index("  assembly:") :]
+    assert "--role assembly" not in assembly
+    assert "name: candidate-qualification-inputs" in assembly
+    assert "--candidate-full-raw-root" in assembly
+    assert "--verified-dist" in assembly
+    assert "--exact-wheel-receipt" in assembly
+    assert "--active-qualification" in assembly
+    assert "--security-domain-root" in assembly
+
+
+def test_candidate_external_files_match_the_frozen_active_hashes() -> None:
+    workflow = _workflow()
+    assert 'check_path("DEEPLAW_QUALIFICATION_INPUTS", owner_only=True)' in workflow
+    assert 'check_path("DEEPLAW_FINAL_BLIND_INPUTS", owner_only=True)' in workflow
+    assert 'check_path("DEEPLAW_QUALIFICATION_INPUTS", directory=True' not in workflow
+    assert '"qualification_holdout_sha256"' in workflow
+    assert '"final_blind_holdout_sha256"' in workflow
+    assert '"isolation_sha256"' in workflow
+    assert '"executable_sha256"' in workflow
+    assert '"package_sha256"' in workflow
+    assert "external input differs from frozen active qualification" in workflow
+
+
+def test_forbidden_artifacts_are_not_downloaded_by_reference_or_scoring_domains() -> None:
+    workflow = _workflow()
+
+    def section(role: str, next_role: str) -> str:
+        start = workflow.index(f"  {role}:")
+        end = workflow.index(f"  {next_role}:", start)
+        return workflow[start:end]
+
+    reference = section("reference_freezer", "scorer_a")
+    assert "actions/checkout@" not in reference
+    assert "actions/download-artifact@" not in reference
+    scorer_a = section("scorer_a", "scorer_b")
+    scorer_b = section("scorer_b", "arbiter")
+    for scorer in (scorer_a, scorer_b):
+        assert "name: candidate-sanitized-output" in scorer
+        assert "name: sealed-reference" in scorer
+        assert "candidate-qualification-inputs" not in scorer
+        assert "name: arbiter-output" not in scorer
+
+
 def test_runner_receipt_is_sanitized_and_v4_validator_is_the_only_bundle_boundary() -> None:
     workflow = _workflow()
-    assert "--candidate-full-raw-root" in workflow
+    assert "--candidate-output-root" in workflow
     assert "--verified-dist" in workflow
-    assert "--exact-wheel-receipt" in workflow
-    assert "external runner replaced the exact-wheel execution receipt" in workflow
-    assert "typed exact-wheel source binding differs" in workflow
-    assert "bundle must contain one exact-wheel typed manifest" in workflow
-    assert "--candidate-run-id \"${CANDIDATE_RUN_ID}\"" in workflow
-    assert '--evidence-run-id "${GITHUB_RUN_ID}"' in workflow
+    assert "exact-wheel-receipt" in workflow
+    assert "--candidate-run-id" in workflow
+    assert '--evidence-run-id "${EVIDENCE_RUN_ID}"' in workflow
     assert "--qualification-run-id" not in workflow
     assert "--trusted-human-approver" not in workflow
     assert "bundle-manifest.json" in workflow
@@ -144,7 +280,7 @@ def test_runner_receipt_is_sanitized_and_v4_validator_is_the_only_bundle_boundar
 def test_current_v4_bundle_validator_is_loaded_without_making_a_gate_decision() -> None:
     workflow = _workflow()
     assert "benchmarks.release.external_qualification_bundle_v4" in workflow
-    assert "--root \"${bundle}\"" in workflow
+    assert '--root "${bundle}"' in workflow
     assert "--active-qualification \"${active}\"" in workflow
     assert "--candidate-run-id \"${CANDIDATE_RUN_ID}\"" in workflow
     assert "--evidence-run-id \"${EVIDENCE_RUN_ID}\"" in workflow

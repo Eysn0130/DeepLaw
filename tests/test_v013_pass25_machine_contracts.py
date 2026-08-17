@@ -15,6 +15,13 @@ SHA = "a" * 64
 OTHER_SHA = "b" * 64
 COMMIT = "1" * 40
 TREE = "2" * 40
+SECURITY_ROLES = (
+    "reference_freezer",
+    "candidate_host",
+    "scorer_a",
+    "scorer_b",
+    "arbiter",
+)
 
 
 def _schema(name: str) -> dict[str, Any]:
@@ -174,6 +181,25 @@ def _source(
     return {"relative_path": path, "byte_size": 10, "sha256": SHA, "media_type": media_type}
 
 
+def _security_domain_sources() -> list[dict[str, Any]]:
+    return [
+        _source(f"security/{role}.json")
+        for role in SECURITY_ROLES
+    ]
+
+
+def _process_receipt_sources() -> list[dict[str, Any]]:
+    return [
+        _source(f"process/{role}-{index + 1}.json")
+        for role in SECURITY_ROLES
+        for index in range(2 if role == "candidate_host" else 1)
+    ]
+
+
+def _role_digests(seed: str) -> dict[str, str]:
+    return {role: seed for role in SECURITY_ROLES}
+
+
 def _old_payload(kind: str) -> dict[str, Any]:
     if kind == "candidate_full_junit":
         return {"source": _source("candidate/junit.xml", "application/xml")}
@@ -285,6 +311,8 @@ def _typed(
             "agent_roster_source": _source("reference/roster.json"),
             "agent_consensus_source": _source("reference/consensus.json"),
             "agent_isolation_source": _source("reference/isolation.json"),
+            "security_domain_receipt_sources": _security_domain_sources(),
+            "process_receipt_sources": _process_receipt_sources(),
             "scorer_a_rows_source": _source("scorer/a-rows.json"),
             "scorer_b_rows_source": _source("scorer/b-rows.json"),
             "arbiter_consensus_rows_source": _source("scorer/arbiter-rows.json"),
@@ -377,6 +405,11 @@ def _bundle() -> dict[str, Any]:
             "agent_roster_sha256": SHA,
             "agent_consensus_sha256": OTHER_SHA,
             "agent_isolation_sha256": SHA,
+            "security_domains_sha256": SHA,
+            "security_domain_executable_sha256": _role_digests(OTHER_SHA),
+            "security_domain_process_tree_sha256": _role_digests(SHA),
+            "security_domain_process_receipt_sha256": _role_digests(OTHER_SHA),
+            "security_domain_observed_roots_sha256": _role_digests(SHA),
             "runner_sha256": OTHER_SHA,
             "scorer_panel_sha256": SHA,
             "arbiter_sha256": OTHER_SHA,
@@ -755,6 +788,12 @@ def test_typed_v2_preserves_kind_vocabulary_and_adds_machine_reference_scorer() 
         ),
     )
     _validate("typed-qualification-evidence.v2.schema.json", _typed())
+    assert {
+        source["relative_path"]
+        for source in _typed()["payload"]["security_domain_receipt_sources"]
+    } == {f"security/{role}.json" for role in SECURITY_ROLES}
+    assert len(_typed()["payload"]["security_domain_receipt_sources"]) == 5
+    assert len(_typed()["payload"]["process_receipt_sources"]) == 6
     machine = _typed()
     assert machine["scorer"] == {
         "identity": machine["arbiter"]["identity"],
@@ -803,6 +842,18 @@ def test_typed_v2_preserves_kind_vocabulary_and_adds_machine_reference_scorer() 
 def test_machine_bundle_excludes_trusted_human_descriptor_and_old_bundle_rejects_it() -> None:
     value = _bundle()
     _validate("external-qualification-bundle-manifest.v4.schema.json", value)
+    assert set(value["external_inputs"]["security_domain_executable_sha256"]) == set(
+        SECURITY_ROLES
+    )
+    assert set(value["external_inputs"]["security_domain_process_tree_sha256"]) == set(
+        SECURITY_ROLES
+    )
+    assert set(value["external_inputs"]["security_domain_process_receipt_sha256"]) == set(
+        SECURITY_ROLES
+    )
+    assert set(value["external_inputs"]["security_domain_observed_roots_sha256"]) == set(
+        SECURITY_ROLES
+    )
     singular_scorer = copy.deepcopy(value)
     singular_scorer["external_inputs"]["scorer_sha256"] = SHA
     _assert_invalid("external-qualification-bundle-manifest.v4.schema.json", singular_scorer)

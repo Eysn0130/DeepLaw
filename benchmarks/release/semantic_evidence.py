@@ -1,11 +1,11 @@
-"""Fail-closed validation for v0.13 commercial evidence.
+"""Fail-closed validation for the historical v0.13 v6 commercial envelope.
 
 ``commercial-evidence-report/v1`` records caller-authored observations. Its hashes prove only
 that those bytes are internally consistent; they do not prove that a command ran, that a model
 exists, or that reported metrics came from independent raw rows.  The v1 shape is retained as a
 diagnostic compatibility boundary, but it can no longer produce a passing Core Gate or a release
-or claim decision. The current v0.13 release path accepts only an exact Gate collection whose
-dedicated validators reproduce every Core result from its bound raw artifacts.
+or claim decision. The current v0.13 release path instead uses the v8 assembler and provenance
+verifier to reopen retained Candidate Full and external evidence.
 """
 
 from __future__ import annotations
@@ -327,15 +327,15 @@ def _classification_map(classification: Mapping[str, Any]) -> dict[str, dict[str
         "deeplaw.v013-release-gate-classification/v6"
     ):
         from benchmarks.release.release_policy import (
-            V013_CAPABILITY_GATE_IDS,
-            V013_COMPETITIVE_GATE_IDS,
-            V013_CORE_GATE_IDS,
+            V013_V6_CAPABILITY_GATE_IDS,
+            V013_V6_COMPETITIVE_GATE_IDS,
+            V013_V6_CORE_GATE_IDS,
         )
 
         expected_categories = {
-            "Core": set(V013_CORE_GATE_IDS),
-            "Capability": set(V013_CAPABILITY_GATE_IDS),
-            "Competitive Claim": set(V013_COMPETITIVE_GATE_IDS),
+            "Core": set(V013_V6_CORE_GATE_IDS),
+            "Capability": set(V013_V6_CAPABILITY_GATE_IDS),
+            "Competitive Claim": set(V013_V6_COMPETITIVE_GATE_IDS),
         }
     else:
         expected_categories = {

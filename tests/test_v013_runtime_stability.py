@@ -18,6 +18,7 @@ from benchmarks.v013.runtime_stability import (
     build_report,
     verify_report,
 )
+from deeplaw import __version__
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = REPOSITORY / "contracts/v013-runtime-stability-report.v1.schema.json"
@@ -37,7 +38,7 @@ def test_runtime_stability_smoke_is_schema_bound_and_read_only(tmp_path: Path) -
     assert report["schema_version"] == SCHEMA_VERSION
     assert report["claim_eligible"] is False
     assert report["release_gate_passed"] is False
-    assert report["candidate"]["package_version"] == "0.12.0"
+    assert report["candidate"]["package_version"] == __version__
     assert isinstance(report["candidate"]["working_tree_dirty"], bool)
     assert "src/deeplaw/knowledge_mcp_server.py" in report["candidate"]["source_hashes"]
     assert report["configuration"]["query_plan_version"] == "6"

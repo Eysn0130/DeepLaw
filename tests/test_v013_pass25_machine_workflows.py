@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -17,6 +18,79 @@ def _trigger(workflow: str) -> dict[str, object]:
     trigger = parsed.get("on", parsed.get(True))
     assert isinstance(trigger, dict)
     return trigger
+
+
+def _job_block(workflow: str, name: str) -> str:
+    matches = list(re.finditer(r"^  [a-z_]+:\n", workflow, re.MULTILINE))
+    marker = f"  {name}:\n"
+    for index, match in enumerate(matches):
+        if match.group(0) != marker:
+            continue
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(workflow)
+        return workflow[match.start() : end]
+    raise AssertionError(f"workflow job {name!r} is missing")
+
+
+def test_external_has_six_role_domains_and_one_way_security_handoffs() -> None:
+    workflow = _workflow("external-qualification-evidence.yml")
+    parsed = yaml.safe_load(workflow)
+    assert isinstance(parsed, dict)
+    jobs = parsed.get("jobs")
+    assert isinstance(jobs, dict)
+    assert set(jobs) == {
+        "candidate",
+        "reference_freezer",
+        "scorer_a",
+        "scorer_b",
+        "arbiter",
+        "assembly",
+    }
+    labels = {
+        "candidate": "deeplaw-qualification-candidate",
+        "reference_freezer": "deeplaw-qualification-reference",
+        "scorer_a": "deeplaw-qualification-scorer-a",
+        "scorer_b": "deeplaw-qualification-scorer-b",
+        "arbiter": "deeplaw-qualification-arbiter",
+        "assembly": "deeplaw-qualification-assembly",
+    }
+    blocks = {name: _job_block(workflow, name) for name in labels}
+    for name, label in labels.items():
+        assert f"runs-on: [self-hosted, macOS, {label}]" in blocks[name]
+
+    assert "actions/checkout@" not in blocks["reference_freezer"]
+    assert '"${DEEPLAW_CODEX_CREDENTIAL_BROKER}"' in blocks["candidate"]
+    assert '"${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}"' in blocks["candidate"]
+    assert "--dotenv \"${DEEPLAW_OPENCODE_DOTENV}\"" in blocks["candidate"]
+    for name in ("reference_freezer", "scorer_a", "scorer_b", "arbiter", "assembly"):
+        assert '"${DEEPLAW_CODEX_CREDENTIAL_BROKER}"' not in blocks[name]
+        assert '"${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}"' not in blocks[name]
+        assert '"${DEEPLAW_OPENCODE_DOTENV}"' not in blocks[name]
+
+    assert "candidate-sanitized-output" in blocks["scorer_a"]
+    assert "sealed-reference" in blocks["scorer_a"]
+    assert "path: scorer-inputs/scorer-b-output" not in blocks["scorer_a"]
+    assert "path: scorer-inputs/arbiter-output" not in blocks["scorer_a"]
+    assert "candidate-sanitized-output" in blocks["scorer_b"]
+    assert "sealed-reference" in blocks["scorer_b"]
+    assert "path: scorer-inputs/scorer-a-output" not in blocks["scorer_b"]
+    assert "path: scorer-inputs/arbiter-output" not in blocks["scorer_b"]
+    assert "scorer-a-output" in blocks["arbiter"]
+    assert "scorer-b-output" in blocks["arbiter"]
+    assert "path: arbiter-inputs/candidate-sanitized-output" not in blocks["arbiter"]
+    assert "path: arbiter-inputs/sealed-reference" not in blocks["arbiter"]
+    assert "DEEPLAW_SECURITY_DOMAIN_ATTESTER" in blocks["candidate"]
+    for name in ("candidate", "reference_freezer", "scorer_a", "scorer_b", "arbiter"):
+        assert "--attester-executable-sha256" in blocks[name]
+        assert "--observed-root" in blocks[name]
+        assert "--process-receipt" in blocks[name]
+
+    assembly = blocks["assembly"]
+    assert '"${DEEPLAW_SECURITY_DOMAIN_ATTESTER}"' not in assembly
+    assert '"${DEEPLAW_CODEX_CREDENTIAL_BROKER}"' not in assembly
+    assert '"${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}"' not in assembly
+    assert "--process-receipt" not in assembly
+    assert "--exact-wheel-receipt" in assembly
+    assert "candidate-qualification-inputs" in assembly
 
 
 def test_candidate_full_freezes_construction_machine_only_active_v2() -> None:
@@ -98,14 +172,21 @@ def test_external_interface_is_machine_only_and_has_no_legacy_human_or_singular_
 def test_external_inputs_are_owner_controlled_regular_paths_with_closed_env() -> None:
     workflow = _workflow("external-qualification-evidence.yml")
 
-    assert "has_symlink_component" in workflow
-    assert "is_symlink()" in workflow
-    assert "os.lstat" in workflow
+    assert "def check_path(" in workflow
+    assert "current.lstat()" in workflow
+    assert "path.is_symlink()" in workflow
     assert "stat.S_ISREG" in workflow
-    assert "outside the checkout" in workflow
-    assert "must be outside the checkout" in workflow
+    assert "stat.S_ISDIR" in workflow
+    assert "stat.S_ISLNK" in workflow
     assert "mode & 0o077" in workflow
     assert "owner_only=True" in workflow
+    assert (
+        'check_path("DEEPLAW_SECURITY_DOMAIN_ATTESTER", executable=True, owner_only=True)'
+        in workflow
+    )
+    assert 'check_path("DEEPLAW_OPENCODE_DOTENV", owner_only=True)' in workflow
+    assert 'check_path("DEEPLAW_QUALIFICATION_INPUTS", owner_only=True)' in workflow
+    assert 'check_path("DEEPLAW_FINAL_BLIND_INPUTS", owner_only=True)' in workflow
     assert "source \"${DEEPLAW_OPENCODE_DOTENV}\"" not in workflow
     assert 'cat "${DEEPLAW_OPENCODE_DOTENV}"' not in workflow
     assert "auth.json" in workflow
@@ -117,27 +198,29 @@ def test_external_inputs_are_owner_controlled_regular_paths_with_closed_env() ->
 def test_external_requires_distinct_executable_scorer_a_b_and_arbiter_hashes() -> None:
     workflow = _workflow("external-qualification-evidence.yml")
 
-    assert 'regular_file("DEEPLAW_SCORER_A", executable=True)' in workflow
-    assert 'regular_file("DEEPLAW_SCORER_B", executable=True)' in workflow
-    assert 'regular_file("DEEPLAW_DETERMINISTIC_ARBITER", executable=True)' in workflow
-    assert "scorer_a_sha256" in workflow
-    assert "scorer_b_sha256" in workflow
-    assert "arbiter_sha256" in workflow
-    assert 'test "${scorer_a_sha256}" != "${scorer_b_sha256}"' in workflow
-    assert 'test "${scorer_a_sha256}" != "${arbiter_sha256}"' in workflow
-    assert 'test "${scorer_b_sha256}" != "${arbiter_sha256}"' in workflow
-    assert '"${DEEPLAW_SCORER_A}" \\' in workflow
-    assert '"${DEEPLAW_SCORER_B}" \\' in workflow
-    assert '"${DEEPLAW_DETERMINISTIC_ARBITER}" \\' in workflow
-    assert '--process-receipt "${scorer_a}/process.json"' in workflow
-    assert '--process-receipt "${scorer_b}/process.json"' in workflow
-    assert '--process-receipt "${arbitration}/process.json"' in workflow
-    assert "exact_wheel_receipt_sha256" in workflow
-    assert "external runner replaced the exact-wheel execution receipt" in workflow
+    for name in (
+        "DEEPLAW_SCORER_A",
+        "DEEPLAW_SCORER_B",
+        "DEEPLAW_DETERMINISTIC_ARBITER",
+    ):
+        assert f'test -f "${{{name}}}"' in workflow
+        assert f'test ! -L "${{{name}}}"' in workflow
+    assert "shasum -a 256 \"${DEEPLAW_SCORER_A}\"" in workflow
+    assert "shasum -a 256 \"${DEEPLAW_SCORER_B}\"" in workflow
+    assert "expected_scorer_sha256" in workflow
+    assert "expected_arbiter_sha256" in workflow
+    assert '["external_inputs"]["arbitration_sha256"]' in workflow
+    assert workflow.count("frozen-active-qualification.json") >= 8
+    assert "cmp -s" in workflow
+    assert "--process-receipt scorer-a-output/result/process.json" in workflow
+    assert "--process-receipt scorer-b-output/result/process.json" in workflow
+    assert "--process-receipt arbiter-output/result/process.json" in workflow
+    assert "--attester-executable-sha256" in workflow
 
 
 def test_external_candidate_runner_cannot_receive_reference_scorer_or_dotenv_domains() -> None:
     workflow = _workflow("external-qualification-evidence.yml")
+    candidate = workflow.split("  reference_freezer:", 1)[0]
     forbidden_tokens = {
         "--semantic-reference",
         "--agent-roster",
@@ -146,25 +229,62 @@ def test_external_candidate_runner_cannot_receive_reference_scorer_or_dotenv_dom
         "--scorer-a",
         "--scorer-b",
         "--deterministic-arbiter",
-        "--dotenv",
-        "DEEPLAW_OPENCODE_DOTENV",
     }
-    before_mode, after_mode = workflow.split("--mode non-host", 1)
-    candidate_invocation = before_mode.rsplit("          env -i", 1)[1]
-    candidate_invocation += "--mode non-host"
-    candidate_invocation += after_mode.split("          env -i", 1)[0]
-    assert "--candidate-full-raw-root" in candidate_invocation
-    assert "--verified-dist" in candidate_invocation
-    assert all(token not in candidate_invocation for token in forbidden_tokens)
-    assert '"${DEEPLAW_REFERENCE_FREEZER}" \\' in workflow
-    assert '--candidate-visible false' in workflow
-    assert '"${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \\' in workflow
-    assert '"${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \\' in workflow
+    assert all(token not in candidate for token in forbidden_tokens)
+    assert '"${DEEPLAW_REFERENCE_FREEZER}"' not in candidate
+    assert '"${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \\' in candidate
+    assert '"${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \\' in candidate
+    assert "--candidate-inputs" in candidate
+    assert "--verified-dist" in candidate
+    assert "--provider-allowlist" in candidate
+    assert "--network-policy host_provider_allowlist" in candidate
+    assert "--process-receipt candidate-output/codex/process.json" in candidate
+    assert "--process-receipt candidate-output/opencode/process.json" in candidate
+    assert "--attester-executable-sha256" in candidate
+    assert "--observed-root candidate-output" in candidate
+    assert "DEEPLAW_OPENCODE_DOTENV" in candidate
+    assert '--dotenv "${DEEPLAW_OPENCODE_DOTENV}"' in candidate
     assert "benchmarks.release.external_qualification_bundle_v4" in workflow
     assert "--qualification-run-id" not in workflow
     assert "python -m build" not in workflow
     assert "uv build" not in workflow
     assert "hatch build" not in workflow
+
+
+def test_external_role_guards_are_deletion_sensitive() -> None:
+    workflow = _workflow("external-qualification-evidence.yml")
+    blocks = {
+        name: _job_block(workflow, name)
+        for name in (
+            "candidate",
+            "reference_freezer",
+            "scorer_a",
+            "scorer_b",
+            "arbiter",
+            "assembly",
+        )
+    }
+    for token in (
+        "DEEPLAW_REFERENCE_FREEZER",
+        "DEEPLAW_REFERENCE_DOMAIN_RUNNER",
+        "DEEPLAW_SCORER_A",
+        "DEEPLAW_SCORER_B",
+        "DEEPLAW_DETERMINISTIC_ARBITER",
+    ):
+        assert token in blocks["candidate"].split("test -n", 1)[0]
+    for name in ("reference_freezer", "scorer_a", "scorer_b", "arbiter", "assembly"):
+        prefix = blocks[name].split("test -n", 1)[0]
+        assert "DEEPLAW_OPENCODE_DOTENV" in prefix
+        assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in prefix
+        assert "DEEPLAW_OPENCODE_CREDENTIAL_BROKER" in prefix
+    assert "test ! -e scorer-inputs/scorer-b-output" in blocks["scorer_a"]
+    assert "test ! -e scorer-inputs/arbiter-output" in blocks["scorer_a"]
+    assert "test ! -e scorer-inputs/scorer-a-output" in blocks["scorer_b"]
+    assert "test ! -e scorer-inputs/arbiter-output" in blocks["scorer_b"]
+    assert "test ! -e arbiter-inputs/candidate-sanitized-output" in blocks["arbiter"]
+    assert "test ! -e arbiter-inputs/sealed-reference" in blocks["arbiter"]
+    assert "expected_arbiter_sha256" in blocks["arbiter"]
+    assert "cmp -s" in blocks["arbiter"]
 
 
 def test_external_keeps_exact_host_pins_and_delegates_auth_to_brokers() -> None:
@@ -197,8 +317,8 @@ def test_repository_host_runners_accept_only_external_broker_launchers() -> None
     assert '"runner_dotenv_path_received": False' in opencode
 
     workflow = _workflow("external-qualification-evidence.yml")
-    broker_invocation = workflow.rsplit(
-        '            "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \\', 1
+    broker_invocation = workflow.split(
+        '          "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \\', 1
     )[1]
     broker_invocation = broker_invocation.split("          test -s", 1)[0]
     assert '--dotenv "${DEEPLAW_OPENCODE_DOTENV}"' in broker_invocation

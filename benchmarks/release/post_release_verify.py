@@ -1,3 +1,9 @@
+"""Replay the historical v5/v6 post-release envelope verification path.
+
+The current v0.13 release workflow reopens the v8 manifest with
+``benchmarks.release.release_provenance_v8`` and performs its own public redownload check.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -17,8 +23,8 @@ from benchmarks.release.evidence import (
 from benchmarks.release.release_policy import (
     V5_MANIFEST_SCHEMA,
     ReleasePolicyError,
-    required_manifest_schema_version,
-    validate_manifest_for_release,
+    required_legacy_manifest_schema_version,
+    validate_legacy_manifest_for_release,
 )
 
 SCHEMA_VERSION = "deeplaw.post-release-verification/v1"
@@ -55,8 +61,8 @@ def verify(
     manifest = load_json(manifest_path)
     verify_record_digest(manifest, field="commercial release manifest")
     try:
-        expected_schema = required_manifest_schema_version(version)
-        validate_manifest_for_release(manifest, release_version=version)
+        expected_schema = required_legacy_manifest_schema_version(version)
+        validate_legacy_manifest_for_release(manifest, release_version=version)
     except ReleasePolicyError as error:
         raise PostReleaseError(str(error)) from error
     release = manifest.get("release", {})

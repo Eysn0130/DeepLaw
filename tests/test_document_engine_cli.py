@@ -193,7 +193,7 @@ def test_openvex_records_the_exact_reviewed_transformers_exceptions() -> None:
     for statement in statements:
         assert statement["products"] == [
             {
-                "@id": "pkg:pypi/deeplaw@0.12.0",
+                "@id": f"pkg:pypi/deeplaw@{project['project']['version']}",
                 "subcomponents": [{"@id": "pkg:pypi/transformers@4.57.6"}],
             }
         ]

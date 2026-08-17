@@ -45,6 +45,18 @@ from benchmarks.release.qualification_evidence_core import (
 from benchmarks.release.qualification_evidence_core import (
     strict_json_bytes as _core_strict_json_bytes,
 )
+from benchmarks.release.security_domain_receipt import (
+    ROLES as _SECURITY_DOMAIN_ROLES,
+)
+from benchmarks.release.security_domain_receipt import (
+    SecurityDomainReceiptError as _SecurityDomainReceiptError,
+)
+from benchmarks.release.security_domain_receipt import (
+    security_domain_set_sha256 as _security_domain_set_sha256,
+)
+from benchmarks.release.security_domain_receipt import (
+    validate_security_domain_receipt as _validate_security_domain_receipt,
+)
 
 MAX_FILES = 10_000
 MAX_FILE_BYTES = 64 * 1024 * 1024
@@ -67,6 +79,7 @@ SEMANTIC_REFERENCE_SCHEMA = REPOSITORY / "contracts/semantic-machine-reference.v
 MACHINE_REVIEWER_OUTPUT_SCHEMA = (
     REPOSITORY / "contracts/machine-reviewer-output.v1.schema.json"
 )
+SECURITY_DOMAIN_SCHEMA = REPOSITORY / "contracts/security-domain-receipt.v1.schema.json"
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT = re.compile(r"^[0-9a-f]{40}$")
@@ -111,6 +124,7 @@ _SAFE_FALSE_FIELDS = frozenset(
 _SAFE_LITERAL_FIELDS = {
     "auth_material_access": {"forbidden", False},
     "secret_visibility": {"forbidden"},
+    "secret_policy": {"forbidden", "broker_only_exact_host"},
     "human_authenticity": {"not_claimed"},
     "reference_provenance": {"agent_consensus"},
     "auth_status_command": {"codex login status"},
@@ -170,6 +184,7 @@ _JSON_KINDS = frozenset(
         "agent_isolation",
         "machine_reviewer_output",
         "sanitized_supporting_receipt",
+        "security_domain_receipt",
     }
 )
 _TEXT_KINDS = frozenset({"sanitized_text", "original_legal_html", "original_legal_markdown"})
@@ -834,6 +849,8 @@ def _validate_semantic_reference(
             _error("semantic machine reviewer process/output identities are not distinct")
         process_ids.add(process_id)
         output_ids.add(output_id)
+        # Legacy semantic-panel metadata only; OS-domain isolation is checked
+        # independently by _validate_security_domains below.
         if (
             reviewer.get("conclusions_hidden_from_peers") is not True
             or reviewer.get("separate_process") is not True
@@ -944,12 +961,26 @@ def _validate_machine_scorer(
     ids = [process.get(key) for key in process_keys]
     if any(not isinstance(item, str) for item in ids) or len(set(ids)) != 4:
         _error("machine reference scorer processes are not distinct")
-    if (
-        process.get("scorer_processes_distinct") is not True
-        or process.get("arbiter_process_distinct") is not True
-        or process.get("separate_processes") is not True
-    ):
-        _error("machine reference scorer process isolation is incomplete")
+    domain_sources = payload.get("security_domain_receipt_sources")
+    if not isinstance(domain_sources, list) or len(domain_sources) != len(_SECURITY_DOMAIN_ROLES):
+        _error("machine reference scorer security-domain receipts are incomplete")
+    _check_source_refs(
+        {"security_domain_receipt_sources": domain_sources},
+        references=references,
+        actual=actual,
+    )
+    domain_digests = {
+        source.get("sha256")
+        for source in domain_sources
+        if isinstance(source, Mapping)
+    }
+    retained_domain_digests = {
+        reference.get("sha256")
+        for reference in references.values()
+        if reference.get("evidence_kind") == "security_domain_receipt"
+    }
+    if domain_digests != retained_domain_digests:
+        _error("machine reference scorer security-domain receipt binding differs")
     panel = candidate_binding["scorer_panel"]
     arbiter = candidate_binding["arbiter"]
     runner = candidate_binding["runner"]
@@ -1239,6 +1270,223 @@ def _validate_reviewer_outputs(
     return output_sha256s, unanimous, derived_disagreements
 
 
+def _validate_security_domains(
+    references: Mapping[str, Mapping[str, Any]],
+    actual: Mapping[str, bytes],
+    *,
+    manifest: Mapping[str, Any],
+    candidate_binding: Mapping[str, Any],
+) -> dict[str, Mapping[str, Any]]:
+    """Require OS-observed, role-specific security domains for current v4.
+
+    The old v1 ``agent_isolation`` booleans remain historical evidence.  They
+    are not accepted as a substitute for these five self-bound receipts.
+    """
+
+    external = manifest.get("external_inputs")
+    if not isinstance(external, Mapping):
+        _error("bundle external inputs are missing")
+    aggregate = external.get("security_domains_sha256")
+    if not isinstance(aggregate, str) or not _SHA256.fullmatch(aggregate):
+        _error("security domain receipt set digest is missing")
+    security_schema = _load_schema(SECURITY_DOMAIN_SCHEMA, label="security domain receipt contract")
+    paths = [
+        (path, reference)
+        for path, reference in references.items()
+        if reference.get("evidence_kind") == "security_domain_receipt"
+    ]
+    if len(paths) != len(_SECURITY_DOMAIN_ROLES):
+        _error("security domain receipt inventory must contain five roles")
+    parsed: dict[str, Mapping[str, Any]] = {}
+    for path, reference in paths:
+        value = _strict_json_bytes(actual[path], label="security domain receipt")
+        if not isinstance(value, Mapping):
+            _error("security domain receipt must be an object")
+        _validate_schema(value, security_schema, label="security domain receipt")
+        try:
+            receipt = _validate_security_domain_receipt(value)
+        except _SecurityDomainReceiptError as error:
+            raise ExternalQualificationBundleV4Error(str(error)) from error
+        role = receipt["role"]
+        if role in parsed:
+            _error("security domain receipt roles are duplicated")
+        if reference.get("sha256") != _sha256_bytes(actual[path]):
+            _error("security domain receipt hash differs from retained bytes")
+        parsed[role] = receipt
+    if set(parsed) != set(_SECURITY_DOMAIN_ROLES):
+        _error("security domain receipt roles are incomplete")
+    for field, label in (
+        ("domain_id", "domain"),
+        ("ephemeral_runner_id", "runner"),
+        ("namespace_id", "mount namespace"),
+    ):
+        values = [
+            (
+                receipt[field]
+                if field == "domain_id"
+                else receipt["runner"][field]
+                if field == "ephemeral_runner_id"
+                else receipt["mount"][field]
+            )
+            for receipt in parsed.values()
+        ]
+        if len(values) != len(set(values)):
+            _error(f"security domain {label} identities are not distinct")
+    ipc_namespaces = [receipt["ipc"]["namespace_id"] for receipt in parsed.values()]
+    if len(ipc_namespaces) != len(set(ipc_namespaces)):
+        _error("security domain IPC namespaces are shared")
+    principal_ids = [receipt["principal"]["principal_id"] for receipt in parsed.values()]
+    if len(principal_ids) != len(set(principal_ids)):
+        _error("security domain principals are shared")
+    for field, observed_key, label in (
+        (
+            "security_domain_executable_sha256",
+            "executable_sha256",
+            "executable",
+        ),
+        (
+            "security_domain_process_tree_sha256",
+            "process_tree_sha256",
+            "process tree",
+        ),
+        (
+            "security_domain_process_receipt_sha256",
+            "process_receipt_sha256",
+            "process receipt",
+        ),
+        (
+            "security_domain_observed_roots_sha256",
+            "observed_roots_sha256",
+            "observed roots",
+        ),
+    ):
+        expected = external.get(field)
+        if not isinstance(expected, Mapping) or set(expected) != set(_SECURITY_DOMAIN_ROLES):
+            _error(f"security domain {label} bindings are missing")
+        for role, receipt in parsed.items():
+            digest = expected.get(role)
+            if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+                _error(f"security domain {label} binding is invalid")
+            observed = (
+                receipt["executable"][observed_key]
+                if observed_key in receipt["executable"]
+                else receipt[observed_key]
+            )
+            if observed != digest:
+                _error(f"security domain {label} hash drifted for {role}")
+    retained_process_receipts = {
+        reference.get("sha256")
+        for reference in references.values()
+        if reference.get("evidence_kind") == "sanitized_supporting_receipt"
+    }
+    for role, receipt in parsed.items():
+        process_receipts = receipt["process_receipt_sha256s"]
+        expected_count = 2 if role == "candidate_host" else 1
+        if len(process_receipts) != expected_count:
+            _error(f"security domain {role} process receipt inventory is incomplete")
+        if not set(process_receipts) <= retained_process_receipts:
+            _error(f"security domain {role} process receipt bytes are not retained")
+    attester_digest = external.get("compiler_scorer_isolation_sha256")
+    if not isinstance(attester_digest, str) or not _SHA256.fullmatch(attester_digest):
+        _error("security domain attester executable binding is missing")
+    for role, receipt in parsed.items():
+        if receipt["attester_executable_sha256"] != attester_digest:
+            _error(f"security domain attester executable hash drifted for {role}")
+
+    expected_names = {
+        "reference_freezer": ({"reference-cases", "reviewer-inputs"}, {"sealed-reference"}),
+        "candidate_host": (
+            {"verified-candidate-artifacts", "qualification-inputs", "final-blind-inputs"},
+            {"candidate-sanitized-output"},
+        ),
+        "scorer_a": ({"candidate-sanitized-output", "sealed-reference"}, {"scorer-a-output"}),
+        "scorer_b": ({"candidate-sanitized-output", "sealed-reference"}, {"scorer-b-output"}),
+        "arbiter": ({"scorer-a-output", "scorer-b-output"}, {"arbiter-output"}),
+    }
+    producers: dict[str, tuple[str, str]] = {}
+    for role, receipt in parsed.items():
+        for artifact in receipt["egress"]:
+            name = artifact["name"]
+            identity = (role, artifact["sha256"])
+            if name in producers:
+                _error("security domain artifact has multiple producers")
+            producers[name] = identity
+    for _role, receipt in parsed.items():
+        for artifact in receipt["ingress"]:
+            produced = producers.get(artifact["name"])
+            if produced is not None and produced[1] != artifact["sha256"]:
+                _error("security domain producer/consumer artifact hash differs")
+    forbidden_names = {
+        "reference_freezer": {
+            "candidate-sanitized-output",
+            "scorer-a-output",
+            "scorer-b-output",
+            "arbiter-output",
+        },
+        "candidate_host": {
+            "sealed-reference",
+            "scorer-a-output",
+            "scorer-b-output",
+            "arbiter-output",
+        },
+        "scorer_a": {"scorer-b-output", "arbiter-output"},
+        "scorer_b": {"scorer-a-output", "arbiter-output"},
+        "arbiter": {"candidate-sanitized-output", "sealed-reference"},
+    }
+    for role, receipt in parsed.items():
+        ingress = {item["name"] for item in receipt["ingress"]}
+        egress = {item["name"] for item in receipt["egress"]}
+        expected_ingress, expected_egress = expected_names[role]
+        if ingress != expected_ingress or egress != expected_egress:
+            _error(f"security domain {role} artifact visibility is not role-bounded")
+        if role == "candidate_host":
+            if receipt["secret_policy"] != "broker_only_exact_host":
+                _error("candidate security domain Secret policy is not broker-only")
+        elif receipt["secret_policy"] != "forbidden":
+            _error("non-candidate security domain may receive Secret material")
+        if role == "candidate_host":
+            if receipt["network"]["policy"] != "host_provider_allowlist":
+                _error("candidate security domain network policy is not provider allowlisted")
+        elif receipt["network"]["policy"] != "deny_all":
+            _error(f"security domain {role} network policy is not deny-all")
+        canary_targets = {
+            item["name"] for item in receipt["negative_canary"]["targets"]
+        }
+        if canary_targets != forbidden_names[role]:
+            _error(f"security domain {role} prohibited artifact visibility is incomplete")
+    scorer_panel = candidate_binding.get("scorer_panel")
+    arbiter_binding = candidate_binding.get("arbiter")
+    runner_binding = candidate_binding.get("runner")
+    if (
+        not isinstance(scorer_panel, Mapping)
+        or not isinstance(arbiter_binding, Mapping)
+        or not isinstance(runner_binding, Mapping)
+    ):
+        _error("security domain executable candidate bindings are incomplete")
+    scorer_a_binding = scorer_panel.get("scorer_a")
+    scorer_b_binding = scorer_panel.get("scorer_b")
+    if not isinstance(scorer_a_binding, Mapping) or not isinstance(
+        scorer_b_binding, Mapping
+    ):
+        _error("security domain scorer executable bindings are incomplete")
+    executable_bindings = {
+        "candidate_host": runner_binding.get("sha256"),
+        "scorer_a": scorer_a_binding.get("sha256"),
+        "scorer_b": scorer_b_binding.get("sha256"),
+        "arbiter": arbiter_binding.get("sha256"),
+    }
+    for role, expected in executable_bindings.items():
+        if parsed[role]["executable"]["executable_sha256"] != expected:
+            _error(f"security domain executable is not the frozen {role} input")
+    try:
+        observed_aggregate = _security_domain_set_sha256(list(parsed.values()))
+    except _SecurityDomainReceiptError as error:
+        raise ExternalQualificationBundleV4Error(str(error)) from error
+    if observed_aggregate != aggregate:
+        _error("security domain receipt set digest differs")
+    return parsed
+
+
 def _validate_auxiliary_sources(
     references: Mapping[str, Mapping[str, Any]],
     actual: Mapping[str, bytes],
@@ -1451,6 +1699,12 @@ def validate_external_bundle(
         actual=actual,
         manifest=manifest,
         binding_path=binding_path,
+    )
+    _validate_security_domains(
+        references,
+        actual,
+        manifest=manifest,
+        candidate_binding=candidate_binding,
     )
     inventory_paths = [
         path

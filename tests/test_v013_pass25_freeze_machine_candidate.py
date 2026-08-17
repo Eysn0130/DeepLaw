@@ -149,11 +149,15 @@ def test_freeze_rejects_the_pending_012_template(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     paths = _seed(tmp_path, monkeypatch)
-    pending = json.loads(
-        (REPOSITORY / "benchmarks/v013/active-qualification-v2.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    pending = _construction_template()
+    pending["status"] = "machine_evaluation_pending"
+    pending["candidate_version"] = "0.12.0"
+    pending["candidate_binding"]["package_version"] = "0.12.0"
+    pending["candidate_binding"]["lock_sha256"] = hashlib.sha256(
+        (REPOSITORY / "uv.lock").read_bytes()
+    ).hexdigest()
+    pending["external_inputs"] = {key: None for key in pending["external_inputs"]}
+    pending["blocker"] = "machine_evaluation_not_executed"
     _write(paths["template"], pending)
 
     with pytest.raises(freeze.QualificationFreezeV2Error, match="construction state"):

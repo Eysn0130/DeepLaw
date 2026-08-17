@@ -59,7 +59,7 @@ def test_machine_protocol_and_active_binding_validate() -> None:
     _assert_valid(V2_ACTIVE_SCHEMA, active)
     assert protocol["profile"] == "machine_evaluated_no_human_attestation"
     assert active["profile"] == protocol["profile"]
-    assert active["candidate_version"] == "0.12.0"
+    assert active["candidate_version"] in {"0.12.0", "0.13.0"}
     assert active["release_ready"] is False
     assert active["claim_eligible"] is False
     assert active["machine_qualification_claim_eligible"] is False
@@ -190,10 +190,12 @@ def test_exact_host_pins_are_frozen() -> None:
     assert opencode["dotenv_policy"] == "owner_only_external_strict_parser"
 
 
-def test_active_v2_has_no_candidate_or_external_evidence_claims() -> None:
+def test_active_v2_is_release_closed_and_stage_consistent() -> None:
     active = _read_json(V2_ACTIVE)
     candidate = active["candidate_binding"]
-    assert candidate["package_version"] == "0.12.0"
+    version = active["candidate_version"]
+    assert version in {"0.12.0", "0.13.0"}
+    assert candidate["package_version"] == version
     for field in (
         "source_commit",
         "source_tree",
@@ -204,9 +206,20 @@ def test_active_v2_has_no_candidate_or_external_evidence_claims() -> None:
         "artifact_manifest_sha256",
     ):
         assert candidate[field] is None
-    assert candidate["lock_sha256"] == LOCK_SHA256
-    assert all(value is None for value in active["external_inputs"].values())
-    assert active["blocker"] == "machine_evaluation_not_executed"
+    observed_lock = hashlib.sha256((REPOSITORY / "uv.lock").read_bytes()).hexdigest()
+    assert candidate["lock_sha256"] == observed_lock
+    if version == "0.12.0":
+        assert observed_lock == LOCK_SHA256
+        assert active["status"] == "machine_evaluation_pending"
+        assert all(value is None for value in active["external_inputs"].values())
+        assert active["blocker"] == "machine_evaluation_not_executed"
+    else:
+        assert active["status"] == "construction_candidate_machine_evaluation_pending"
+        assert all(
+            re.fullmatch(r"[0-9a-f]{64}", value)
+            for value in active["external_inputs"].values()
+        )
+        assert active["blocker"] == "candidate_artifact_not_built"
     assert active["owner_tag_release_confirmation"] == "required_at_release_decision"
 
 
