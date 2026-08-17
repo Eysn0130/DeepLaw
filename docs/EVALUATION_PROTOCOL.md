@@ -1,6 +1,18 @@
 # DeepLaw Evaluation Protocol
 
-Status: **v1 historical boundary; v2 current repository-visible development protocol**.
+Status: **v2 current repository-visible development protocol; package/main 0.12.0 Beta**.
+Reviewed 2026-08-17. Active qualification is
+[`benchmarks/v013/active-qualification-v2.json`](../benchmarks/v013/active-qualification-v2.json)
+with `status=machine_evaluation_pending`, profile
+`machine_evaluated_no_human_attestation`, and Gate classification v8. The 14 v8 Core gates remain
+required; `release_ready=false`, `claim_eligible=false`, and no `0.13.0` tag/release follows from
+this document.
+
+The current Provider advertisement is `knowledge-support` input v7/output v6 and exposes only
+`query`, `context`, and `explain`. Input v1-v6 and output v1-v5 remain internal compatibility
+contracts. Evaluation never treats transcript, prompt, raw log, hidden reasoning, Secret, local
+path, or unadmitted content as Provider evidence. Task Continuity uses explicit task and Host
+session seams; automatic transcript memory is out of scope.
 
 ## Decision
 

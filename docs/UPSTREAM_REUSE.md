@@ -1,6 +1,16 @@
 # Upstream Reuse Review
 
-Reviewed: 2026-08-11
+Reviewed: 2026-08-17
+
+Current boundary: package/main remain `0.12.0 Beta`; the active qualification profile is
+`machine_evaluated_no_human_attestation`, status `machine_evaluation_pending`, and Gate
+classification v8. This review is not release evidence and does not authorize a `0.13.0` tag or
+release. DeepLaw's three product roles—Task Continuity / Governed Project Knowledge, Source-native
+Evidence Library, and Living Wiki—share one governed kernel and one Context Compiler. Upstream
+research cannot add another product, database, Knowledge kind, Relation predicate, page family,
+Host adapter, Agent runtime, connector or telemetry path. Automatic transcript memory remains out
+of scope. The current Provider advertisement is input v7/output v6 with only `query`, `context`,
+and `explain`; older Provider versions remain internal compatibility.
 
 The full v0.7 product-system and parser comparison, including dependency,
 network, data-boundary and benchmark fields, is maintained in
@@ -29,7 +39,7 @@ DeepLaw accepts upstream work only when it preserves all of these invariants:
 - derived data is replaceable and cannot change legal validity.
 
 Current decision: none of the reviewed knowledge platforms is a DeepLaw runtime
-authority. Pass 8 records an Owner-authorized sibling-reuse path for OpenWiki
+authority. The historical Pass 8 record contains an Owner-authorized sibling-reuse path for OpenWiki
 and Tolaria; this supersedes the prior blanket no-code-reuse decision. A bounded
 implementation may directly reuse a named file or symbol when that is the
 smallest correct solution; it does not require a separate research pass or a

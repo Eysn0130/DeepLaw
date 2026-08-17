@@ -1,63 +1,48 @@
 # DeepLaw Autonomous Knowledge OS
 
-Status: **Current v0.12.0 contract**, 2026-07-30. This document defines the released Autonomous
-Knowledge Core and 0.9 Living Wiki / Knowledge Intelligence implementation. Historical v0.7
-proposal/review documents remain source-governance and migration evidence, not the default policy
-for new Agent-derived knowledge.
+Status: **Current v0.12.0 Beta contract; source candidate**, reviewed 2026-08-17. This document is
+the autonomous kernel contract for three frozen product roles: **Task Continuity / Governed Project
+Knowledge**, **Source-native Evidence Library**, and **Living Wiki**. They share one identity,
+provenance, Ledger, governance and Context Compiler; none is a separate knowledge engine.
+Historical pass documents and reports are immutable evidence links, not current status.
 
-## Continuity Pass 2 (development kernel; source candidate, not released)
+## Frozen product and qualification boundary
 
-Pass 2 is the follow-up to the retained **Pass 1** continuity remediation. Pass 1's reviewed
-implementation, historical Gold/protocol inputs, and local evidence remain intact; this section
-binds the continuity correction commit `2f31bff4069e6cf01edf017134e5a760becb5360` and semantic
-release-evidence commit `d7da1869287fd590d820f7dd60506abdcb826ad4`. A tracked note cannot
-bind its own final tree, and no qualification wheel/report hash exists. The correction is not
-external qualification and does not lower a Core gate.
+The shared Context Compiler is:
 
-Three reproduced root causes have bounded repairs:
+```text
+Discovery → Admission → Selection
+→ Bounded Verifiable Knowledge Capsule
+→ thin Codex / OpenCode / other Host drivers
+```
 
-- **Route reservation:** an exact task-route candidate is a separate, bounded admission partition
-  reserved before ordinary Statement selection. The no-route ceiling remains `512`; with one
-  reserved route slot at most `511` ordinary candidates remain, so the final global/combined
-  budget is unchanged and unrelated task-line content is not admitted.
-- **Task/goal identity:** retrieval query text is `task + goal` when a goal is present. The task
-  route digest is generated only from the canonical task inside this domain, not by a Host adapter
-  or caller, so adding a goal never changes the route key.
-- **Single current head:** the first checkpoint on a route creates one Knowledge Object. A later
-  checkpoint for that object creates a new Knowledge Revision and requires the current
-  `expected_revision` CAS. Stale or concurrent writes fail as `checkpoint_head_conflict`. If a
-  pre-fix projection contains multiple current heads, reads fail closed with only a sanitized Gap;
-  the Owner uses the existing `forget`/withdraw lifecycle and projection rebuild to reconcile the
-  state. There is no last-writer-wins path and no historical in-place rewrite.
+It is not a fourth product or a second retrieval engine. Professional and legal sources remain
+source-native immutable evidence; the Living Wiki is a bounded, rebuildable projection and never a
+complete editable canonical copy. Task Continuity persists only explicitly authorized,
+content-minimized Run/Checkpoint/Artifact identities. Transcript, prompt, raw log and hidden
+reasoning are never automatically ingested as memory.
 
-No new canonical Knowledge table, migration, or sink schema is introduced by the continuity
-correction. The route projection is derived and rebuildable, while `knowledge-sink.input/v2` bytes
-remain unchanged. This is a semantic
-compatibility boundary: new writes enforce one route/one current head, and legacy bytes/history
-remain immutable and verifiable.
+The package and main remain `0.12.0 Beta` with `release_ready=false`. The active qualification
+binding is [`benchmarks/v013/active-qualification-v2.json`](../benchmarks/v013/active-qualification-v2.json):
+`status=machine_evaluation_pending`, `profile=machine_evaluated_no_human_attestation`, and Gate
+classification v8. Required Core evidence is source-specific and remains `not_executed` until a
+fresh exact candidate, artifact, inputs and receipts are bound. Machine reviewers are not Human
+Gold, legal experts, `human_verified`, or a release decision.
 
-Gate labels stay separate: active Gate v6 **Core** gates, including Timeline, Codex, and OpenCode,
-remain required and are not reduced; **Capability** gates may be `not_claimed` when not declared
-(semantic restore and Claude remain deferred); and the **Competitive Claim** gate is independent
-of kernel evidence. For the affected rows, Pass 2 records `kernel=Implemented`, `E2E=Target`, and
-`external qualification=not_executed`.
+The current Provider advertisement is `knowledge-support.input/v7` plus
+`knowledge-support.output/v6`. It advertises only the read operations `query`, `context`, and
+`explain`; input v1-v6 and output v1-v5 remain internal compatibility contracts. Provider output
+is bounded and contains no paths, session/task identities, receipts beyond opaque joins, raw logs,
+transcripts, reasoning, Secrets or unadmitted material.
 
-### Pass 21 task identity projection
+## Task continuity seam
 
-The current source candidate exposes owner-local `task locate`, `task inspect`, and `task timeline`
-operations through `task_continuity.py`. They reuse `knowledge_run_records_v4`,
-`knowledge_checkpoint_routes_v1`, and related `autonomous_events_v3` identities. Timeline is a
-bounded content-minimized projection, not a new canonical table: it returns only route-related
-identity, status, recorded time, and opaque Artifact identity. A global or unrelated Ledger head
-is not inserted into another task's timeline.
-
-Workspace binding hashes bounded non-sensitive untracked file content so same-size/same-metadata
-changes cannot alias. Secret-looking tracked, untracked, or direct ignored candidates are classified
-by bounded path metadata only and return `workspace_secret_unverifiable`; their bytes are not opened.
-Ignored directory contents are collapsed instead of recursively enumerated, and ordinary ignored
-state does not contribute to route or snapshot identity. Per-file, total byte, and path-count limits
-return `workspace_snapshot_bound`. Provider Capsules never receive workspace
-metadata, raw diffs, local paths, or these local inspection details.
+Static `knowledge host connect` is task-neutral. The first-session and recovery flow uses the
+existing owner-local task seams: `task start`, `task locate`, `task resume`, `task timeline`,
+`task bind-host-session`, and `task resolve-host-continuity`. A Host session ID is an untrusted
+opaque hint; binding validates the selected Vault, project, repository/worktree, task line and
+workspace snapshot. Wrong, stale or ambiguous state returns a structured Gap. Read operations do
+not write the Ledger; checkpoint/forget use the explicit owner-granted `knowledge_sink` path.
 
 ## 1. Product boundary
 
@@ -66,7 +51,8 @@ own models, conversations, generic tool execution, legal adjudication, or a remo
 It compiles durable local knowledge into bounded, auditable context for an explicitly activated
 host.
 
-The implementation has two semantic knowledge planes:
+The implementation has one shared governed kernel with three product roles and two semantic
+content domains:
 
 1. **Immutable evidence**: exact official or user-provided bytes, content-addressed revisions,
    fragments, locators, parser provenance, and lifecycle records.
@@ -74,7 +60,9 @@ The implementation has two semantic knowledge planes:
    experiences, preferences, syntheses, comparisons, memory, relations, Wiki navigation, and
    versioned Skill knowledge.
 
-SQLite and derived indexes support those planes. They do not create a third authority class.
+The product roles are Task Continuity / Governed Project Knowledge, Source-native Evidence Library,
+and Living Wiki. SQLite and derived indexes support all three roles; they do not create another
+authority class, database, Knowledge kind, Relation predicate, page family, or retrieval engine.
 
 ## 2. Current storage contract
 
@@ -419,7 +407,10 @@ rechecked against current immutable source bytes. Changed or missing bytes fail 
 interval, and bounded evidence references; an endpoint-only contested marker is used only when no
 admitted typed relation represents the selected object.
 
-Provider Capsule v2 and its nested projection use typed Source references and Source evidence. A
+Provider Capsule v2 and its nested projection use typed Source references and Source evidence. The
+advertised `knowledge_support` wire surface is input v7/output v6 and exposes only `query`,
+`context`, and `explain`; the broader local operation inventory below is internal compatibility,
+not a second public Provider surface. A
 Source evidence card binds one exact Source Revision, fragment, locator and quote hash. If the
 complete passage cannot fit the evidence budget, the passage is withheld and the applicable duty
 stays an explicit Gap; a truncated excerpt cannot satisfy an exact-evidence duty.
@@ -491,11 +482,11 @@ evidence, Ledger identity, or Authority.
 - separate local stdio process;
 - one leaf named `knowledge_support`;
 - read-only MCP annotations;
-- v3 contract after autonomous migration, frozen v2 contract for the initial autonomous seam, and
-  v1 compatibility contract for untouched v0.7 Vaults;
-- search/recall, get, context, verify, inspect, lineage, graph, Wiki lookup, identity lookup, and
-  bounded gap discovery;
-- an `explain` operation for Query Plan, admission/selection receipts, gaps, and budgets;
+- current advertisement: `contracts/knowledge-support.input.v7.schema.json` plus
+  `contracts/knowledge-support.output.v6.schema.json`;
+- advertised operations are only `query`, `context`, and `explain`;
+- input v1-v6 and output v1-v5 remain internal compatibility contracts for existing callers and
+  persisted receipts; they are not advertised as current product operations;
 - no remember, relation mutation, forget, grant, import, legal-source write, or arbitrary path.
 
 ### `knowledge_sink`

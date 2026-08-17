@@ -1,7 +1,28 @@
 # DeepLaw comparative evaluation and independent replication
 
-Status: **Optional v0.11 comparative track**. This document does not define the core release or
-quality gate; see [`EVALUATION_PROTOCOL.md`](EVALUATION_PROTOCOL.md).
+Status: **Optional comparative track; current v0.13 qualification boundary**, reviewed 2026-08-17.
+This document does not define the core release or quality gate; see
+[`EVALUATION_PROTOCOL.md`](EVALUATION_PROTOCOL.md). Package/main remain `0.12.0 Beta`; the active
+profile is `machine_evaluated_no_human_attestation`, status `machine_evaluation_pending`, and Gate
+classification v8. No comparative or qualification result is implied by this protocol.
+
+The current Provider advertisement is `knowledge-support` input v7/output v6 with only `query`,
+`context`, and `explain`; input v1-v6 and output v1-v5 are internal compatibility. The shared
+Context Compiler and three product roles (Task Continuity / Governed Project Knowledge,
+Source-native Evidence Library, Living Wiki) are evaluated through the same bounded, source-bound
+Capsule. Transcript, prompt, raw log and hidden reasoning are not automatically persisted.
+
+## Current machine-only qualification boundary
+
+The active machine profile requires the candidate Host, reference freezer, scorer A, scorer B and
+arbiter to run in separate OS-enforced security domains with no shared filesystem, IPC or
+transcript. Candidate
+processes cannot read references or scorer outputs; scorers receive only sanitized candidate output
+and sealed reference inputs. Credential brokers deliver Secrets only to the exact Host process; the
+DeepLaw runner, scorers and arbiter receive neither the Secret nor its `.env`. Retained evidence must bind
+executable/process/mount/ACL/network/IPC policy and negative canaries. Machine reviewers may produce
+machine audit evidence, but it is never Human Gold, legal-expert attestation or `human_verified`.
+Missing inputs or failed isolation remain `not_executed`/blocked and cannot be converted to a pass.
 
 ## Corrected decision
 

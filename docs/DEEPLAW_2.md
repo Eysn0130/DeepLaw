@@ -1,15 +1,29 @@
 # DeepLaw 2.0 Legal Pack 技术设计：面向 Agent 的可验证法律知识
 
-Status: **v0.12.0 Legal Pack architecture and research roadmap**, reviewed 2026-07-30.
+Status: **v0.12.0 Beta Legal Pack architecture and research roadmap**, reviewed 2026-08-17.
 
 > **Files in. Verifiable knowledge out.**
 > 文件进入，Agent 得到可验证的知识。
 
 `DeepLaw 2.0` 是产品名；仓库名保持 `DeepLaw`，Python 包、CLI 和本地目录保持 `deeplaw`。
-当前软件版本是 `v0.12.0`。本文记录独立 Legal Pack；通用自主知识内核见
+当前 package/main 仍是 `v0.12.0 Beta`。本文记录 Evidence Library 中独立的 Legal Pack 策略面；
+它不是第四知识引擎，也不拥有独立的通用身份、Ledger 或 Context Compiler。通用自主知识内核见
 [`AUTONOMOUS_KNOWLEDGE_OS.md`](AUTONOMOUS_KNOWLEDGE_OS.md)，v0.7 source-derived 兼容面见
 [`KNOWLEDGE_OS.md`](KNOWLEDGE_OS.md)。下文标注 `v0.7.0` 的段落是仍由 v0.9 保留的 Legal Pack
 实现基线，不代表当前包版本或 Agent 派生知识仍走统一 Review。
+
+DeepLaw 的三个冻结产品角色共享一个治理内核：Task Continuity / Governed Project Knowledge、
+Source-native Evidence Library（Legal Pack 属于此策略面）和 Living Wiki。三者共同使用
+`Discovery → Admission → Selection → Bounded Verifiable Knowledge Capsule`；专业来源始终保留
+原生 bytes、Document/Version/Fragment/Locator 与时态证据，Wiki 只提供受治理导航和精确回链。
+任务 transcript、prompt、raw log 和 hidden reasoning 不自动进入 memory。当前 Provider
+advertisement 由 general `knowledge_support` input v7/output v6 仅暴露 query/context/explain；
+法律查询继续通过独立、只读的 `law_support` seam，不把法律管理或写入隐藏在查询中。
+
+当前资格状态诚实边界：active profile 为 `machine_evaluated_no_human_attestation`，status 为
+`machine_evaluation_pending`，Gate classification 为 v8，`release_ready=false`、`claim_eligible=false`；
+真实 Host、Legal exact-source、Wiki、Context、scale、platform 与供应链证据均以 source-specific
+receipts 记录，缺失时保持 `not_executed`。本状态不授权 `0.13.0` tag 或 release。
 
 ## DeepLaw 是什么
 

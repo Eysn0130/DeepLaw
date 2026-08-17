@@ -223,6 +223,9 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
         (REPOSITORY / "governance/product-surface-manifest.v1.json").read_bytes()
     )
     Draft202012Validator(schema).validate(manifest)
+    assert manifest["package_version"] == "0.12.0"
+    assert manifest["lifecycle_status"] == "source_candidate"
+    assert manifest["release_ready"] is False
     assert [item["name"] for item in manifest["default_product"]] == [
         "init",
         "doctor",
@@ -250,6 +253,34 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
         if item["surface_id"] == "compatibility.legacy_contracts"
     )["bindings"]
     assert "contracts/host-connect-plan.v1.schema.json" in compatibility_contracts
+    knowledge_support = next(
+        item
+        for item in manifest["external_callers"]
+        if item["caller"] == "knowledge_support"
+    )
+    assert knowledge_support["current_bindings"] == [
+        "knowledge_support leaf",
+        "contracts/knowledge-support.input.v7.schema.json",
+        "contracts/knowledge-support.output.v6.schema.json",
+        "advertised operations: query, context, explain",
+    ]
+    assert knowledge_support["compatibility_bindings"] == [
+        "contracts/knowledge-support.input.v1.schema.json through v6 (internal compatibility)",
+        "contracts/knowledge-support.output.v1.schema.json through v5 (internal compatibility)",
+    ]
+    tests_contracts = next(
+        item
+        for item in manifest["external_callers"]
+        if item["caller"] == "tests/contracts"
+    )
+    assert "benchmarks/release/v013-gate-classification-v8.json" in tests_contracts[
+        "current_bindings"
+    ]
+    assert all(
+        "knowledge_support operation=wiki" not in binding
+        for surface in manifest["surfaces"]
+        for binding in surface["bindings"]
+    )
     assert {item["product_role"] for item in manifest["surfaces"]} <= {
         "Core",
         "Driver",
@@ -278,3 +309,31 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
         "tests/contracts",
         "historical persisted data",
     }
+
+
+def test_current_documented_product_truth_cannot_drift_to_historical_state() -> None:
+    active = json.loads(
+        (REPOSITORY / "benchmarks/v013/active-qualification-v2.json").read_bytes()
+    )
+    assert active["schema_version"] == "deeplaw.v013-active-qualification/v2"
+    assert active["profile"] == "machine_evaluated_no_human_attestation"
+    assert active["status"] == "machine_evaluation_pending"
+    assert active["candidate_version"] == "0.12.0"
+    assert active["candidate_binding"]["package_version"] == "0.12.0"
+    assert active["blocker"] == "machine_evaluation_not_executed"
+    assert active["release_ready"] is False
+    assert active["claim_eligible"] is False
+
+    prd = (REPOSITORY / "docs/PRODUCT_REQUIREMENTS.md").read_text(encoding="utf-8")
+    architecture = (REPOSITORY / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+    chinese = (REPOSITORY / "README.md").read_text(encoding="utf-8")
+    english = (REPOSITORY / "README_EN.md").read_text(encoding="utf-8")
+    assert "PRD revision: **1.3.2**" in prd
+    assert "latest committed pass-specific disposition" not in prd
+    assert "Gate v6" not in architecture
+    assert "Pass 21" not in architecture
+    for readme in (chinese, english):
+        assert "V0_13_PASS" not in readme
+        assert "host connect --host codex --vault ./vault" in readme
+        assert "host connect --host codex --vault ./vault --task" not in readme
+        assert "knowledge-support input v7 / output v6" in readme
