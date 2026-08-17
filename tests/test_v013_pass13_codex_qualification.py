@@ -41,12 +41,17 @@ def test_pass13_runner_uses_a_closed_temporary_host_profile(
         monkeypatch.setenv(name, str(value))
     monkeypatch.setenv("OPENAI_API_KEY", "pass14-forbidden-openai-key")
     monkeypatch.setenv("DEEPLAW_UNRELATED_PLUGIN_STATE", "enabled")
+    monkeypatch.setenv("HTTP_PROXY", "https://user:password@example.invalid")
+    monkeypatch.setenv("SSL_CERT_FILE", "/private/credential/cert.pem")
 
     profile = tmp_path / "profile"
+    runtime_executable = tmp_path / "candidate" / "bin" / "deeplaw"
+    runtime_executable.parent.mkdir(parents=True)
     environment = qualification._host_environment(
         Path("/opt/codex"),
         profile,
         {"DEEPLAW_QUALIFICATION_SECRET_CANARY": "canary"},
+        runtime_executable=runtime_executable,
     )
 
     expected_roots = {
@@ -61,6 +66,9 @@ def test_pass13_runner_uses_a_closed_temporary_host_profile(
         assert environment[name] != os.environ[name]
     assert "OPENAI_API_KEY" not in environment
     assert "DEEPLAW_UNRELATED_PLUGIN_STATE" not in environment
+    assert "HTTP_PROXY" not in environment
+    assert "SSL_CERT_FILE" not in environment
+    assert environment["PATH"].split(os.pathsep)[0] == str(runtime_executable.parent)
 
     receipt = qualification._isolation_receipt(profile, environment)
     assert receipt == _isolation_receipt()
@@ -72,8 +80,9 @@ def test_app_server_argv_is_read_only_and_exposes_one_mcp_tool(tmp_path: Path) -
     argv = qualification._app_server_argv(
         codex_binary,
         mcp_wrapper=tmp_path / "deeplaw-mcp",
+        codex_launcher=tmp_path / "owner-broker",
     )
-    assert argv[:3] == [str(codex_binary), "app-server", "--stdio"]
+    assert argv[:3] == [str(tmp_path / "owner-broker"), "app-server", "--stdio"]
     rendered = " ".join(argv)
     assert 'approval_policy="never"' in rendered
     assert 'model="gpt-5.6-luna"' in rendered
@@ -84,11 +93,20 @@ def test_app_server_argv_is_read_only_and_exposes_one_mcp_tool(tmp_path: Path) -
     assert "mcp_servers={}" in rendered
 
 
+def test_qualification_prompt_uses_only_native_host_continuity() -> None:
+    prompt = qualification._prompt("cold_start")
+    assert "continuity capsule supplied by the native Host context" in prompt
+    assert "do not invoke any tool" in prompt
+    assert "Call knowledge_support" not in prompt
+    assert "task_binding" not in prompt
+
+
 def test_ambient_server_is_explicitly_disabled_and_nonempty_status_fails() -> None:
     argv = qualification._app_server_argv(
         Path("/opt/codex"),
         mcp_wrapper=Path("deeplaw-mcp"),
         ambient_servers=("node_repl", "openaiDeveloperDocs"),
+        codex_launcher=Path("owner-broker"),
     )
     assert "mcp_servers.node_repl.enabled=false" in argv
     assert "mcp_servers.openaiDeveloperDocs.enabled=false" in argv
@@ -117,6 +135,7 @@ def test_ambient_inventory_map_names_are_all_disabled_with_safe_keys() -> None:
         Path("/opt/codex"),
         mcp_wrapper=Path("deeplaw-mcp"),
         ambient_servers=[name for name in names if name != "deeplaw"],
+        codex_launcher=Path("owner-broker"),
     )
     assert "mcp_servers.node_repl.enabled=false" in argv
     assert "mcp_servers.openaiDeveloperDocs.enabled=false" in argv
@@ -130,15 +149,106 @@ def test_codex_login_receipt_hashes_status_without_reading_auth_file(
         stdout = b"Logged in using ChatGPT\n"
         stderr = b""
 
-    monkeypatch.setattr(qualification.subprocess, "run", lambda *args, **kwargs: Completed())
+    calls: list[list[str]] = []
+
+    def run(*args: object, **kwargs: object) -> Completed:
+        calls.append(list(args[0]))
+        return Completed()
+
+    monkeypatch.setattr(qualification.subprocess, "run", run)
     receipt = qualification._codex_authentication_receipt(
-        Path("/opt/codex"), {"PATH": "/usr/bin"}
+        Path("/opt/owner-broker"), {"PATH": "/usr/bin"}
     )
     assert receipt == {
         "checked": True,
         "raw_sha256": qualification._sha256(Completed.stdout),
         "raw_bytes": len(Completed.stdout),
     }
+    assert calls == [["/opt/owner-broker", "login", "status"]]
+
+
+def test_owner_broker_launcher_is_external_owner_only_and_process_separated(
+    tmp_path: Path,
+) -> None:
+    host = tmp_path / "codex"
+    host.write_bytes(b"codex-host")
+    host.chmod(0o700)
+    launcher = tmp_path / "owner-broker"
+    launcher.write_bytes(b"credential-broker")
+    launcher.chmod(0o700)
+    repository = tmp_path / "repository"
+    repository.mkdir()
+
+    assert qualification._validate_owner_broker_launcher(
+        launcher,
+        host_binary=host,
+        repository=repository,
+    ) == qualification._sha256_file(launcher)
+
+    launcher.chmod(0o750)
+    with pytest.raises(qualification.QualificationFailure, match="owner-only"):
+        qualification._validate_owner_broker_launcher(
+            launcher,
+            host_binary=host,
+            repository=repository,
+        )
+    launcher.chmod(0o700)
+    launcher.write_bytes(host.read_bytes())
+    with pytest.raises(qualification.QualificationFailure, match="process-separated"):
+        qualification._validate_owner_broker_launcher(
+            launcher,
+            host_binary=host,
+            repository=repository,
+        )
+
+    inside = repository / "owner-broker"
+    inside.write_bytes(b"credential-broker")
+    inside.chmod(0o700)
+    with pytest.raises(qualification.QualificationFailure, match="outside the repository"):
+        qualification._validate_owner_broker_launcher(
+            inside,
+            host_binary=host,
+            repository=repository,
+        )
+
+
+def test_owner_broker_launcher_symlink_is_rejected(tmp_path: Path) -> None:
+    host = tmp_path / "codex"
+    host.write_bytes(b"codex-host")
+    host.chmod(0o700)
+    target = tmp_path / "owner-broker-target"
+    target.write_bytes(b"credential-broker")
+    target.chmod(0o700)
+    launcher = tmp_path / "owner-broker"
+    try:
+        launcher.symlink_to(target)
+    except OSError:
+        pytest.skip("symbolic links are unavailable")
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    with pytest.raises(qualification.QualificationFailure, match="owner-only"):
+        qualification._validate_owner_broker_launcher(
+            launcher,
+            host_binary=host,
+            repository=repository,
+        )
+
+
+def test_returned_model_identity_does_not_promote_request_model_pin() -> None:
+    assert qualification._returned_model_identity(
+        {
+            "model": qualification.MODEL,
+            "actual_response_provider_id": "openai",
+            "actual_response_model_id": "gpt-5.6-luna",
+        }
+    ) == ("openai", "gpt-5.6-luna")
+    assert qualification._returned_model_identity(
+        {"model": qualification.MODEL, "effort": qualification.REASONING_EFFORT}
+    ) == (None, None)
+    with pytest.raises(qualification.QualificationFailure, match="model identity"):
+        qualification._returned_model_identity(
+            {"actual_response_model_id": "/private/auth/model"}
+        )
 
 
 def test_checkpoint_body_has_exact_governed_labels() -> None:
@@ -170,26 +280,29 @@ def test_installed_cli_parser_accepts_pretty_printed_public_json() -> None:
 def test_seed_vault_uses_owner_mutations_expiry_and_binding_distractors(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    requests: list[dict[str, object]] = []
-    remember_count = 0
+    calls: list[list[str]] = []
+    checkpoint_count = 0
 
     def fake_cli(executable: Path, arguments: list[str], *, cwd: Path, environment=None):
-        nonlocal remember_count
+        nonlocal checkpoint_count
+        calls.append([str(item) for item in arguments])
         if arguments[1:3] == ["sink", "enable"]:
             return {"grant_id": "grant_pass13"}
-        if arguments[1:3] == ["sink", "apply"]:
-            request_path = Path(arguments[arguments.index("--request") + 1])
-            request = json.loads(request_path.read_text(encoding="utf-8"))
-            requests.append(request)
-            if request["operation"] == "remember":
-                remember_count += 1
-                return {
-                    "knowledge_id": f"knowledge_{remember_count:024x}",
-                    "revision_id": f"knowledgerev_{remember_count:024x}",
-                }
-            return {}
+        if arguments[1:3] == ["task", "start"]:
+            return {
+                "status": "ready",
+                "task_handle": f"handle_{len(calls):024x}",
+            }
+        if arguments[1:3] == ["task", "checkpoint"]:
+            checkpoint_count += 1
+            return {
+                "status": "checkpointed",
+                "knowledge_id": f"knowledge_{checkpoint_count:024x}",
+                "revision_id": f"knowledgerev_{checkpoint_count:024x}",
+                "run_id": f"run_{checkpoint_count:024x}",
+            }
         if arguments[1:3] == ["autonomy", "status"]:
-            return {"audit_head": f"{len(requests) + 1:064x}"}
+            return {"audit_head": f"{len(calls) + 1:064x}"}
         return {}
 
     monkeypatch.setattr(qualification, "_run_installed_cli", fake_cli)
@@ -200,26 +313,13 @@ def test_seed_vault_uses_owner_mutations_expiry_and_binding_distractors(
         work_dir=tmp_path,
     )
     assert seeded["grant_id"] == "grant_pass13"
-    record_runs = [request for request in requests if request["operation"] == "record_run"]
-    remembers = [request for request in requests if request["operation"] == "remember"]
-    assert len(record_runs) == 4
-    assert len(remembers) == 5
-    assert all(request["memory_type"] == "working" for request in remembers)
-    assert all(request["expires_at"] == "2099-01-01T00:00:00Z" for request in remembers)
-    assert all(
-        [line.split(":", 1)[0] for line in request["body"].splitlines()]
-        == [
-            "GOAL",
-            "CONFIRMED_DECISION",
-            "CONSTRAINT",
-            "VERIFIED_FACT",
-            "OPEN_GAP",
-            "NEXT_ACTION",
-            "ARTIFACT_REF",
-        ]
-        for request in remembers
-    )
-    assert all("task_binding" in request.get("run_metadata", {}) for request in record_runs)
+    starts = [call for call in calls if call[1:3] == ["task", "start"]]
+    checkpoints = [call for call in calls if call[1:3] == ["task", "checkpoint"]]
+    assert len(starts) == 3
+    assert len(checkpoints) == 4
+    assert all("--confirm-no-case-data" in call for call in checkpoints)
+    assert not any(call[1:3] == ["sink", "apply"] for call in calls)
+    assert all("task_binding" not in " ".join(call) for call in calls)
 
 
 def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
@@ -321,6 +421,7 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
             }
 
     turn_params: list[dict[str, object]] = []
+    resolved_sessions: list[str] = []
 
     class FakeClient:
         def initialize(self):
@@ -328,7 +429,13 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
 
         def thread_start(self, *args, **kwargs):
             calls.append("thread/start")
-            return {"thread": {"id": "t1"}}
+            return {
+                "thread": {
+                    "id": "t1",
+                    "sessionId": "session-root",
+                    "forkedFromId": None,
+                }
+            }
 
         def turn_start(self, *args, **kwargs):
             calls.append("turn/start")
@@ -337,11 +444,23 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
 
         def thread_resume(self, *args, **kwargs):
             calls.append("thread/resume")
-            return {"thread": {"id": "t1"}}
+            return {
+                "thread": {
+                    "id": "t1",
+                    "sessionId": "session-root",
+                    "forkedFromId": None,
+                }
+            }
 
         def thread_fork(self, *args, **kwargs):
             calls.append("thread/fork")
-            return {"thread": {"id": "t2"}}
+            return {
+                "thread": {
+                    "id": "t2",
+                    "sessionId": "session-root",
+                    "forkedFromId": "t1",
+                }
+            }
 
         def thread_compact_start(self, *args, **kwargs):
             calls.append("thread/compact/start")
@@ -351,7 +470,7 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
             calls.append("close")
 
     monkeypatch.setattr(qualification, "CodexAppServerClient", FakeClient)
-    with pytest.raises(qualification.QualificationFailure, match="safe read"):
+    with pytest.raises(qualification.QualificationFailure, match="did not complete"):
         qualification._run_scenario(
             client=FakeClient(),
             scenario="cold_start",
@@ -371,8 +490,13 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
                     "target_sha256": "4" * 64,
                 }
             },
+            bind_host_session=lambda *_args: {"status": "bound"},
+            resolve_continuity=lambda session_id: (
+                resolved_sessions.append(session_id) or {"status": "admitted"}
+            ),
         )
     assert turn_params == [{"outputSchema": qualification._FINAL_RESPONSE_SCHEMA}]
+    assert resolved_sessions == ["session-root"]
 
 
 @pytest.mark.parametrize(
@@ -392,6 +516,36 @@ def test_only_resume_lifecycles_use_persisted_threads(
     assert qualification._thread_is_ephemeral(scenario, development=development) is expected
 
 
+def test_persisted_fork_keeps_hook_session_root_and_records_thread_lineage() -> None:
+    assert qualification._persisted_fork_identity(
+        {
+            "thread": {
+                "id": "thread-child",
+                "sessionId": "session-root",
+                "forkedFromId": "thread-parent",
+            }
+        },
+        parent_thread_id="thread-parent",
+        root_session_id="session-root",
+    ) == ("thread-child", "session-root", "thread-parent")
+
+    with pytest.raises(
+        qualification.QualificationFailure,
+        match="preserve the root session",
+    ):
+        qualification._persisted_fork_identity(
+            {
+                "thread": {
+                    "id": "thread-child",
+                    "sessionId": "session-child",
+                    "forkedFromId": "thread-parent",
+                }
+            },
+            parent_thread_id="thread-parent",
+            root_session_id="session-root",
+        )
+
+
 def test_codex_failure_codes_are_safe_constant_labels() -> None:
     assert qualification._safe_failure_code(
         qualification.QualificationFailure(
@@ -406,10 +560,6 @@ def test_codex_failure_codes_are_safe_constant_labels() -> None:
 def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    binding = qualification._make_binding("cold_start")
-    binding_sha256 = qualification._sha256(
-        qualification.canonical_json(binding).encode("utf-8")
-    )
     monkeypatch.setattr(
         qualification,
         "analyze_safe_read_calls",
@@ -447,7 +597,6 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
                 "argument_task_present": True,
                 "argument_confirm_no_case_data": True,
                 "argument_query_plan_version": "6",
-                "argument_task_binding_sha256": binding_sha256,
             }
         ],
         "tool_outputs": [{}],
@@ -466,7 +615,6 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
         "prompt": "fixture",
         "ledger_before": "a" * 64,
         "ledger_after": "a" * 64,
-        "expected_task_binding": binding,
     }
     with pytest.raises(qualification.QualificationFailure, match="did not complete"):
         qualification._turn_record(result, **kwargs)
@@ -475,18 +623,16 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
     observation = result["tool_call_observations"][0]
     for required_field in ("argument_task_present", "argument_query_plan_version"):
         retained = observation.pop(required_field)
-        with pytest.raises(qualification.QualificationFailure, match="did not bind"):
+        with pytest.raises(qualification.QualificationFailure, match="safe read"):
             qualification._turn_record(result, **kwargs)
         observation[required_field] = retained
 
-    retained_binding = observation.pop("argument_task_binding_sha256")
-    unbound_record, _ = qualification._turn_record(
-        result,
-        **kwargs,
-        require_task_binding=False,
-    )
+    unbound_record, _ = qualification._turn_record(result, **kwargs)
     assert unbound_record["status"] == "passed"
-    observation["argument_task_binding_sha256"] = retained_binding
+    observation["argument_task_binding_sha256"] = "a" * 64
+    with pytest.raises(qualification.QualificationFailure, match="exposed"):
+        qualification._turn_record(result, **kwargs)
+    observation.pop("argument_task_binding_sha256")
 
     result["events"] = [
         {
@@ -532,6 +678,180 @@ def test_turn_record_rejects_failed_turn_prohibited_capability_and_path(
     )
     with pytest.raises(qualification.QualificationFailure, match="prohibited data"):
         qualification._turn_record(result, **kwargs)
+
+
+def test_turn_record_requires_exact_native_hook_delivery_and_zero_tools() -> None:
+    capsule = {
+        "schema_version": "deeplaw.host-continuity-capsule/v1",
+        "status": "admitted",
+        "statements": [],
+        "gaps": [],
+        "conflicts": [],
+        "write_performed": False,
+    }
+    capsule_text = pass13_evidence.canonical_json(capsule)
+    context = qualification._CONTINUITY_CONTEXT_PREFIX + capsule_text
+    encoded = context.encode("utf-8")
+    expected = {
+        "status": "admitted",
+        "capsule_sha256": hashlib.sha256(capsule_text.encode("utf-8")).hexdigest(),
+        "capsule_bytes": len(capsule_text.encode("utf-8")),
+        "context_sha256": hashlib.sha256(encoded).hexdigest(),
+        "context_bytes": len(encoded),
+        "statement_count": 0,
+        "gap_codes": [],
+        "conflict_count": 0,
+        "_capsule": capsule,
+        "_context_text": context,
+        "_provider_payload": {
+            "operation": "resolve-host-continuity",
+            "provider_bytes": len(encoded),
+            "provider_sha256": hashlib.sha256(encoded).hexdigest(),
+            "structured_output_bytes": None,
+            "structured_output_sha256": None,
+            "delivery_match": True,
+            "write_performed": False,
+            "statement_count": 0,
+            "gap_count": 0,
+            "gap_codes": [],
+            "relevant_chars": 0,
+            "context_chars": len(context),
+            "relevant_chars_context_chars": 0.0,
+            "evidence_count": 0,
+            "duplicate_evidence_count": 0,
+            "duplicate_evidence_rate": None,
+            "conflict_count": 0,
+        },
+    }
+    delivery = {
+        "method": "hook/completed",
+        "hook_event_name": "userPromptSubmit",
+        "hook_status": "completed",
+        "hook_source": "plugin",
+        "hook_handler_type": "command",
+        "continuity_context_sha256": expected["context_sha256"],
+        "continuity_context_bytes": expected["context_bytes"],
+        "continuity_status": "admitted",
+        "continuity_statement_count": 0,
+        "continuity_gap_codes": [],
+        "continuity_conflict_count": 0,
+    }
+    result = {
+        "status": "completed",
+        "thread_id": "thread-1",
+        "turn_id": "turn-1",
+        "final_text": json.dumps(
+            {
+                "summary": "bounded",
+                "next_step": "next",
+                "preserved_decisions": [],
+                "open_gaps": [],
+            }
+        ),
+        "tool_call_observations": [],
+        "tool_outputs": [],
+        "usage": {
+            "input_tokens": 10,
+            "cached_input_tokens": 2,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 5,
+            "reasoning_output_tokens": 1,
+            "total_tokens": 15,
+        },
+        "events": [delivery],
+    }
+    kwargs = {
+        "lifecycle_method": "thread/start",
+        "prompt": "fixture",
+        "ledger_before": "a" * 64,
+        "ledger_after": "a" * 64,
+        "expected_continuity": expected,
+    }
+    record, _payload = qualification._turn_record(result, **kwargs)
+    assert record["safe_read"]["call_count"] == 0
+    assert record["safe_read"]["safe_read_operations"] == [
+        "resolve-host-continuity"
+    ]
+    assert record["safe_read"]["provider_payloads"][0]["delivery_match"] is True
+
+    result["tool_call_observations"] = [{"tool_name": "knowledge_support"}]
+    with pytest.raises(qualification.QualificationFailure, match="Provider-side tool"):
+        qualification._turn_record(result, **kwargs)
+    result["tool_call_observations"] = []
+
+    result["events"] = []
+    with pytest.raises(qualification.QualificationFailure, match="not observed exactly once"):
+        qualification._turn_record(result, **kwargs)
+    result["events"] = [{**delivery, "continuity_context_sha256": "f" * 64}]
+    with pytest.raises(qualification.QualificationFailure, match="did not match"):
+        qualification._turn_record(result, **kwargs)
+
+
+def test_precompact_delivery_binds_the_checkpoint_gap_and_exact_context() -> None:
+    capsule = {
+        "schema_version": "deeplaw.host-continuity-capsule/v1",
+        "status": "admitted",
+        "statements": [
+            {
+                "content": "Continue the bounded plan.",
+                "authority": "agent_derived",
+                "legal_authority": False,
+                "valid_from": None,
+                "valid_to": None,
+                "citations": [],
+            }
+        ],
+        "gaps": [],
+        "conflicts": [],
+        "write_performed": False,
+    }
+    raw = pass13_evidence.canonical_json(capsule).encode("utf-8")
+    context = qualification._CONTINUITY_CONTEXT_PREFIX + raw.decode("utf-8")
+    continuity = {
+        "status": "admitted",
+        "capsule_sha256": hashlib.sha256(raw).hexdigest(),
+        "capsule_bytes": len(raw),
+        "context_sha256": hashlib.sha256(context.encode()).hexdigest(),
+        "context_bytes": len(context.encode()),
+        "statement_count": 1,
+        "gap_codes": [],
+        "conflict_count": 0,
+        "_capsule": capsule,
+        "_context_text": context,
+        "_provider_payload": {
+            "provider_bytes": len(context.encode()),
+            "provider_sha256": hashlib.sha256(context.encode()).hexdigest(),
+            "gap_count": 0,
+            "gap_codes": [],
+            "context_chars": len(context),
+            "statement_count": 1,
+            "conflict_count": 0,
+        },
+    }
+    expected = qualification._continuity_with_checkpoint_gap(continuity)
+    assert expected["gap_codes"] == ["checkpoint_grant_missing"]
+    delivery = {
+        "method": "hook/completed",
+        "hook_event_name": "preCompact",
+        "hook_status": "completed",
+        "hook_source": "plugin",
+        "hook_handler_type": "command",
+        "continuity_context_sha256": expected["context_sha256"],
+        "continuity_context_bytes": expected["context_bytes"],
+        "continuity_status": expected["status"],
+        "continuity_statement_count": expected["statement_count"],
+        "continuity_gap_codes": expected["gap_codes"],
+        "continuity_conflict_count": expected["conflict_count"],
+    }
+    assert qualification._require_codex_continuity_delivery(
+        [delivery], expected_continuity=expected, event_name="preCompact"
+    ) == delivery
+    with pytest.raises(qualification.QualificationFailure, match="did not match"):
+        qualification._require_codex_continuity_delivery(
+            [{**delivery, "continuity_context_sha256": "f" * 64}],
+            expected_continuity=expected,
+            event_name="preCompact",
+        )
 
 
 def test_artifact_writer_is_used_before_bundle_manifest(

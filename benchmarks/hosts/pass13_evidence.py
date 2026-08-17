@@ -627,12 +627,13 @@ _NATIVE_REQUESTS = {
     "codex": {
         "cold_start": {"thread/start"},
         "resume_fork": {"thread/start", "thread/resume", "thread/fork"},
-        "compaction_forget": {"thread/start", "thread/compact/start"},
+        "compaction_forget": {"thread/start", "thread/compact/start", "preCompact"},
         "development_diagnostic": {
             "thread/start",
             "thread/resume",
             "thread/fork",
             "thread/compact/start",
+            "preCompact",
         },
     },
     "opencode": {
@@ -648,7 +649,8 @@ _NATIVE_REQUESTS = {
             "cli.run.session",
             "session.get",
             "session.summarize",
-            "session.messages",
+            "message.updated.metadata",
+            "experimental.session.compacting",
         },
         "development_diagnostic": {
             "cli.run",
@@ -656,7 +658,8 @@ _NATIVE_REQUESTS = {
             "cli.run.fork",
             "session.get",
             "session.summarize",
-            "session.messages",
+            "message.updated.metadata",
+            "experimental.session.compacting",
         },
     },
 }
@@ -669,6 +672,7 @@ _NATIVE_OBSERVATIONS = {
             "thread/compact/start",
             "item/started",
             "item/completed",
+            "hook/completed",
         },
         "development_diagnostic": {
             "thread/start",
@@ -677,6 +681,7 @@ _NATIVE_OBSERVATIONS = {
             "thread/compact/start",
             "item/started",
             "item/completed",
+            "hook/completed",
         },
     },
     "opencode": {
@@ -686,13 +691,15 @@ _NATIVE_OBSERVATIONS = {
             "cli.run.json",
             "session.get",
             "session.summarize",
-            "session.messages",
+            "message.updated.metadata",
+            "experimental.session.compacting",
         },
         "development_diagnostic": {
             "cli.run.json",
             "session.get",
             "session.summarize",
-            "session.messages",
+            "message.updated.metadata",
+            "experimental.session.compacting",
         },
     },
 }
@@ -709,6 +716,7 @@ _NATIVE_RECEIPT_SEQUENCE = {
             ("thread/compact/start", "thread/compact/start"),
             ("thread/compact/start", "item/started"),
             ("thread/compact/start", "item/completed"),
+            ("preCompact", "hook/completed"),
         ),
         "development_diagnostic": (
             ("thread/start", "thread/start"),
@@ -717,6 +725,7 @@ _NATIVE_RECEIPT_SEQUENCE = {
             ("thread/compact/start", "thread/compact/start"),
             ("thread/compact/start", "item/started"),
             ("thread/compact/start", "item/completed"),
+            ("preCompact", "hook/completed"),
         ),
     },
     "opencode": {
@@ -736,7 +745,8 @@ _NATIVE_RECEIPT_SEQUENCE = {
             ("cli.run", "cli.run.json"),
             ("session.get", "session.get"),
             ("session.summarize", "session.summarize"),
-            ("session.messages", "session.messages"),
+            ("message.updated.metadata", "message.updated.metadata"),
+            ("experimental.session.compacting", "experimental.session.compacting"),
             ("cli.run.session", "cli.run.json"),
             ("session.get", "session.get"),
             ("cli.run.session", "cli.run.json"),
@@ -750,7 +760,8 @@ _NATIVE_RECEIPT_SEQUENCE = {
             ("cli.run.fork", "cli.run.json"),
             ("session.get", "session.get"),
             ("session.summarize", "session.summarize"),
-            ("session.messages", "session.messages"),
+            ("message.updated.metadata", "message.updated.metadata"),
+            ("experimental.session.compacting", "experimental.session.compacting"),
             ("cli.run.session", "cli.run.json"),
             ("session.get", "session.get"),
         ),
@@ -791,6 +802,13 @@ _NATIVE_RECEIPT_RULES = {
                 "item/completed",
             },
             "observation_kind": None,
+            "relation": "same_session",
+        },
+        "preCompact": {
+            "transport": "codex_plugin_hook",
+            "request_seams": {"hook/completed"},
+            "observations": {"hook/completed"},
+            "observation_kind": "native_event",
             "relation": "same_session",
         },
     },
@@ -835,6 +853,20 @@ _NATIVE_RECEIPT_RULES = {
             "request_seams": {"GET session/:sessionID/message"},
             "observations": {"session.messages"},
             "observation_kind": "native_response",
+            "relation": "same_session",
+        },
+        "message.updated.metadata": {
+            "transport": "opencode_project_plugin",
+            "request_seams": {"message.updated metadata receipt"},
+            "observations": {"message.updated.metadata"},
+            "observation_kind": "native_event",
+            "relation": "same_session",
+        },
+        "experimental.session.compacting": {
+            "transport": "opencode_project_plugin",
+            "request_seams": {"experimental.session.compacting"},
+            "observations": {"experimental.session.compacting"},
+            "observation_kind": "native_event",
             "relation": "same_session",
         },
     },
@@ -962,6 +994,12 @@ def _metric_evidence(run: Mapping[str, Any]) -> str:
                 "actual_provider_usage": receipt.get("actual_provider_usage"),
             }
             for receipt in run.get("native_receipts", [])
+            if isinstance(receipt, Mapping)
+        ]
+    if "route_receipts" in run:
+        payload["route_receipts"] = [
+            dict(receipt)
+            for receipt in run.get("route_receipts", [])
             if isinstance(receipt, Mapping)
         ]
     return _sha256(_encoded(payload))
@@ -1387,8 +1425,11 @@ def _validate_native_lineage_sequence(
                 )
         elif requested in {
             "thread/compact/start",
+            "preCompact",
             "session.summarize",
             "session.messages",
+            "message.updated.metadata",
+            "experimental.session.compacting",
         } and (active is None or current != active):
             raise EvidenceValidationError("native compaction lineage is invalid")
 
@@ -1422,6 +1463,25 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
         raise EvidenceValidationError(
             "Host receipt is not bound to the current v2 contract bytes"
         )
+    host_attestation = report.get("host_attestation")
+    current_runtime_evidence = (
+        isinstance(host_attestation, Mapping)
+        and host_attestation.get("model_identity_semantics")
+        == "request_pin_and_returned_runtime_id_not_weight_identity"
+    )
+    if current_runtime_evidence:
+        contract_root = current_contract.parent
+        for contract_name in (
+            "host-continuity-capsule.v1.schema.json",
+            "host-session-route-result.v2.schema.json",
+        ):
+            if contract_digests.get(contract_name) != _sha256(
+                (contract_root / contract_name).read_bytes()
+            ):
+                raise EvidenceValidationError(
+                    "qualification Host receipt is not bound to the current "
+                    f"{contract_name} bytes"
+                )
     expected_scenarios = (
         _QUALIFICATION_SCENARIOS if mode == "qualification" else _DIAGNOSTIC_SCENARIOS
     )
@@ -1507,9 +1567,13 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                 raise EvidenceValidationError("native receipt changed semantic task family")
             transport = receipt.get("transport")
             allowed_transports = (
-                {"codex_app_server_jsonrpc"}
+                {"codex_app_server_jsonrpc", "codex_plugin_hook"}
                 if host == "codex"
-                else {"opencode_cli", "opencode_loopback_http"}
+                else {
+                    "opencode_cli",
+                    "opencode_loopback_http",
+                    "opencode_project_plugin",
+                }
             )
             if transport not in allowed_transports:
                 raise EvidenceValidationError("native receipt used another Host transport")
@@ -1553,7 +1617,11 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                 and requested in {"thread/start", "thread/resume", "thread/fork"}
             ) or (
                 host == "opencode"
-                and (requested.startswith("cli.run") or requested == "session.messages")
+                and (
+                    requested.startswith("cli.run")
+                    or requested
+                    in {"session.messages", "message.updated.metadata"}
+                )
             )
             if usage_required:
                 if not isinstance(usage, Mapping):
@@ -1572,6 +1640,29 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             if isinstance(root_sha256, str):
                 run_roots.add(root_sha256)
         expected_receipt_sequence = _NATIVE_RECEIPT_SEQUENCE[host][scenario]
+        if not current_runtime_evidence:
+            expected_receipt_sequence = tuple(
+                item
+                for item in expected_receipt_sequence
+                if item
+                not in {
+                    ("preCompact", "hook/completed"),
+                    (
+                        "experimental.session.compacting",
+                        "experimental.session.compacting",
+                    ),
+                }
+            )
+        if host == "opencode" and not current_runtime_evidence:
+            expected_receipt_sequence = tuple(
+                (
+                    ("session.messages", "session.messages")
+                    if item
+                    == ("message.updated.metadata", "message.updated.metadata")
+                    else item
+                )
+                for item in expected_receipt_sequence
+            )
         if run_passed and tuple(receipt_sequence) != expected_receipt_sequence:
             raise EvidenceValidationError("passed Host run lacks exact native receipt sequence")
         if not run_passed and tuple(receipt_sequence) != expected_receipt_sequence[
@@ -1580,6 +1671,24 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             raise EvidenceValidationError("failed Host run claims a non-native receipt prefix")
         expected_requests = _NATIVE_REQUESTS[host][scenario]
         expected_observations = _NATIVE_OBSERVATIONS[host][scenario]
+        if not current_runtime_evidence:
+            expected_requests = expected_requests - {
+                "preCompact",
+                "experimental.session.compacting",
+            }
+            expected_observations = expected_observations - {
+                "hook/completed",
+                "experimental.session.compacting",
+            }
+        if host == "opencode" and not current_runtime_evidence:
+            expected_requests = {
+                "session.messages" if item == "message.updated.metadata" else item
+                for item in expected_requests
+            }
+            expected_observations = {
+                "session.messages" if item == "message.updated.metadata" else item
+                for item in expected_observations
+            }
         if run_passed and (
             run_requested != expected_requests or run_observed != expected_observations
         ):
@@ -1663,17 +1772,32 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
             payloads = safe_read.get("provider_payloads")
             if not isinstance(operations, list) or not isinstance(payloads, list):
                 raise EvidenceValidationError("safe-read arrays are invalid")
-            if count != len(operations) or count != len(payloads):
+            native_delivery = current_runtime_evidence and mode == "qualification"
+            if native_delivery:
+                if (
+                    count != 0
+                    or operations != ["resolve-host-continuity"]
+                    or len(payloads) != 1
+                ):
+                    raise EvidenceValidationError(
+                        "native Host delivery must have zero Provider tool calls and one payload"
+                    )
+            elif count != len(operations) or count != len(payloads):
                 raise EvidenceValidationError("safe-read call count is inconsistent")
-            if turn.get("status") == "passed" and count not in {1, 2}:
-                raise EvidenceValidationError("passed turn requires one or two safe reads")
-            if safe_read.get("bounded_retry_used") is not (count == 2):
+            if turn.get("status") == "passed" and (
+                (native_delivery and count != 0)
+                or (not native_delivery and count not in {1, 2})
+            ):
+                raise EvidenceValidationError("passed turn has an invalid safe-read count")
+            if safe_read.get("bounded_retry_used") is not (
+                count == 2 and not native_delivery
+            ):
                 raise EvidenceValidationError("bounded retry flag is inconsistent")
             if turn.get("status") == "passed" and safe_read.get("first_call_valid") is not True:
                 raise EvidenceValidationError("passed turn lacks first-call validity")
             if first_read is None:
                 first_read = safe_read
-            retried = retried or count == 2
+            retried = retried or (count == 2 and not native_delivery)
             for payload in payloads:
                 if not isinstance(payload, Mapping):
                     raise EvidenceValidationError("Provider payload measurement is invalid")
@@ -1703,6 +1827,36 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
                         "Provider character or duplicate-evidence accounting is inconsistent"
                     )
                 provider_bytes += int(payload.get("provider_bytes", 0))
+            if native_delivery and turn.get("status") == "passed":
+                continuity = turn.get("host_continuity_capsule")
+                expected_source = {
+                    "codex": "codex_hook_completed",
+                    "opencode": "opencode_project_plugin",
+                }[host]
+                if (
+                    not isinstance(continuity, Mapping)
+                    or continuity.get("delivery_source") != expected_source
+                    or not isinstance(continuity.get("delivery_sha256"), str)
+                    or len(payloads) != 1
+                    or not isinstance(payloads[0], Mapping)
+                    or continuity.get("provider_sha256")
+                    != payloads[0].get("provider_sha256")
+                    or continuity.get("provider_bytes")
+                    != payloads[0].get("provider_bytes")
+                    or continuity.get("status")
+                    not in {"admitted", "gap"}
+                ):
+                    raise EvidenceValidationError(
+                        "native continuity delivery is not bound to the Provider payload"
+                    )
+                if host == "opencode" and (
+                    turn.get("actual_response_provider_id") != "deepseek"
+                    or turn.get("actual_response_model_id") != "deepseek-v4-flash"
+                    or not isinstance(turn.get("actual_response_model_receipt"), Mapping)
+                ):
+                    raise EvidenceValidationError(
+                        "OpenCode turn lacks returned-model and delivery receipt binding"
+                    )
             usage = turn.get("usage")
             if turn.get("status") == "passed":
                 if not isinstance(usage, Mapping):

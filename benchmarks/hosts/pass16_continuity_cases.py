@@ -153,7 +153,12 @@ def marker_values(case: Mapping[str, Any]) -> dict[str, str]:
     return values
 
 
-def candidate_prompt(case: Mapping[str, Any], *, phase: str = "current") -> str:
+def candidate_prompt(
+    case: Mapping[str, Any],
+    *,
+    phase: str = "current",
+    native_host: bool = False,
+) -> str:
     """Build a model prompt from the frozen neutral task text.
 
     Checkpoint bodies and expected scores are deliberately not copied into the
@@ -171,10 +176,18 @@ def candidate_prompt(case: Mapping[str, Any], *, phase: str = "current") -> str:
         if phase == "post_forget"
         else ""
     )
+    context_instruction = (
+        "Use only the continuity capsule supplied by the native Host context; do not invoke "
+        "any tool or request additional context."
+        if native_host
+        else (
+            "Use exactly one safe read-only knowledge_support context call; retry at most once "
+            "only when the first bounded Provider Capsule is insufficient. Set "
+            "confirm_no_case_data=true and do not invoke any other tool."
+        )
+    )
     result = (
-        f"{prompt.strip()} Use exactly one safe read-only knowledge_support context call; "
-        "retry at most once only when the first bounded Provider Capsule is insufficient. "
-        "Set confirm_no_case_data=true and do not invoke any other tool. Return exactly one "
+        f"{prompt.strip()} {context_instruction} Return exactly one "
         "JSON object and no Markdown: "
         '{"summary":"string","next_step":"string","preserved_decisions":["string"],'
         '"open_gaps":["string"]}. Use no other keys. Keep every string non-empty and at most '

@@ -28,16 +28,21 @@ native `chat.message`, `event`, `experimental.chat.system.transform`, and
 `experimental.session.compacting` seams. The `event` seam accepts only
 `session.created`, `session.updated`, and `session.compacted` lifecycle events.
 
-The plugin reads only opaque session/event identity metadata. It never inspects `output.parts`,
-prompt text, transcript/auth material, or model output. It injects at most 2 KiB of route status,
-digests, explicit Gaps, and a prompt to call the existing read-only `knowledge_support` tool.
+The plugin reads only opaque session/event identity metadata. It never inspects message parts,
+prompt text, transcript/auth material, response text, or reasoning. It observes only bounded
+`message.updated` assistant metadata (returned provider/model identity and numeric usage), and it
+injects at most 2 KiB containing the provider-safe
+`deeplaw.host-continuity-capsule/v1` projection and explicit Gaps. During isolated qualification,
+the exact system-transform delivery is recorded to an owner-only temporary receipt as hashes,
+byte/counter fields, status, and Gap codes; no capsule text or model text is written.
 Compaction is read-only by default and reports `checkpoint_grant_missing`; it never binds a new
 session, writes a checkpoint, starts a service, creates a database, or logs an event. Existing
-session bindings are resolved through the read-only `deeplaw knowledge task resolve-host-session`
-CLI seam when available; every context and compaction callback re-resolves that route so a stale,
-forgotten, or wrong-worktree binding fails closed on the next call. When the session digest is
-valid, the injected prompt requires `knowledge_support` `query` or `context` with the opaque
-`host_route={host:opencode,session_sha256:<digest>}`; a Gap never claims an exact task binding.
+session bindings and checkpoint admission are resolved through the read-only
+`deeplaw knowledge task resolve-host-continuity` CLI seam; every context and compaction callback
+re-resolves the route so a stale, forgotten, or wrong-worktree binding fails closed on the next
+call. Session/repository/worktree/task/binding/snapshot hashes, task handles, receipt/selection
+identities, paths and logs remain local and are never rendered into provider context. A Gap never
+claims an exact task binding or checkpoint.
 `bind-host-session` is never called by this plugin. Its child environment is closed and does not
 carry the DeepSeek key.
 

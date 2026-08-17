@@ -97,6 +97,10 @@ packages = ["src/deeplaw"]
 "governance" = "deeplaw/governance"
 "trust" = "deeplaw/trust"
 "security/openvex.json" = "deeplaw/security/openvex.json"
+".agents/plugins/marketplace.json" = "deeplaw/codex_marketplace/.agents/plugins/marketplace.json"
+"plugins/deeplaw" = "deeplaw/codex_marketplace/plugins/deeplaw"
+"plugins/deeplaw-knowledge-os" = "deeplaw/codex_marketplace/plugins/deeplaw-knowledge-os"
+"adapters/opencode" = "deeplaw/opencode_adapter"
 
 [tool.hatch.build.targets.sdist]
 exclude = [

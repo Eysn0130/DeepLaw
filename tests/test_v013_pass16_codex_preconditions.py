@@ -37,15 +37,17 @@ def test_execute_and_cli_require_an_explicit_profile_root(tmp_path: Path) -> Non
             *required,
             "--profile-root",
             str(_profile(tmp_path)),
-            "--human-gold",
-            str(tmp_path / "human-gold.json"),
+            "--codex-binary",
+            "/opt/codex",
+            "--codex-launcher",
+            "/opt/codex-owner-broker",
         ]
     )
     assert parsed.profile_root
-    assert parsed.human_gold
+    assert parsed.human_gold is None
 
 
-def test_missing_external_human_gold_blocks_before_candidate_or_codex_start(
+def test_candidate_runner_rejects_human_gold_before_candidate_or_codex_start(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     called = False
@@ -53,27 +55,28 @@ def test_missing_external_human_gold_blocks_before_candidate_or_codex_start(
     def prepare_candidate(*args: object, **kwargs: object) -> object:
         nonlocal called
         called = True
-        raise AssertionError("candidate preparation must not run before Human Gold")
+        raise AssertionError("candidate preparation must not receive Human Gold")
 
     monkeypatch.setattr(
         qualification.QualificationOrchestrator,
         "prepare_candidate",
         prepare_candidate,
     )
-    with pytest.raises(qualification.QualificationFailure, match="frozen external Human Gold"):
+    with pytest.raises(qualification.QualificationFailure, match="must not receive Human Gold"):
         qualification.execute(
             candidate_wheel=tmp_path / "candidate.whl",
             deeplaw_executable=tmp_path / "deeplaw",
             output_dir=tmp_path / "output",
             profile_root=_profile(tmp_path),
             human_gold_path=tmp_path / "missing-human-gold.json",
-            codex_command="codex",
+            codex_binary=tmp_path / "codex",
+            codex_launcher=tmp_path / "codex-owner-broker",
         )
     assert called is False
 
 
 @pytest.mark.parametrize("ambient_name", ["HOME", "USERPROFILE", "CODEX_HOME"])
-def test_default_or_ambient_profile_roots_are_rejected(
+def test_explicit_profile_validation_does_not_consult_ambient_login_roots(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     ambient_name: str,
@@ -83,72 +86,15 @@ def test_default_or_ambient_profile_roots_are_rejected(
     repository = tmp_path / "repository"
     repository.mkdir()
     monkeypatch.setenv(ambient_name, str(ambient))
-    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
-        qualification._validate_profile_root(ambient, repository=repository)
+    profile = _profile(tmp_path)
 
+    def reject_home(cls: type[Path]) -> Path:
+        raise AssertionError("candidate runner consulted the ambient home")
 
-def test_default_codex_home_is_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    home = tmp_path / "home"
-    default_codex = home / ".codex"
-    default_codex.mkdir(parents=True)
-    platform_home = tmp_path / "platform-home"
-    platform_home.mkdir()
-    repository = tmp_path / "repository"
-    repository.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: platform_home))
-    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
-        qualification._validate_profile_root(default_codex, repository=repository)
-
-
-@pytest.mark.parametrize("default_codex", [False, True])
-def test_path_home_and_its_default_codex_home_are_rejected(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    default_codex: bool,
-) -> None:
-    platform_home = tmp_path / "platform-home"
-    candidate = platform_home / ".codex" if default_codex else platform_home
-    candidate.mkdir(parents=True)
-    repository = tmp_path / "repository"
-    repository.mkdir()
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: platform_home))
-    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
-        qualification._validate_profile_root(candidate, repository=repository)
-
-
-def test_userprofile_default_codex_home_is_rejected(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    userprofile = tmp_path / "userprofile"
-    default_codex = userprofile / ".codex"
-    default_codex.mkdir(parents=True)
-    repository = tmp_path / "repository"
-    repository.mkdir()
-    monkeypatch.setenv("USERPROFILE", str(userprofile))
-    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
-        qualification._validate_profile_root(default_codex, repository=repository)
-
-
-def test_default_codex_home_symlink_target_is_rejected(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    default_codex_target = tmp_path / "ambient-codex"
-    default_codex_target.mkdir()
-    try:
-        (home / ".codex").symlink_to(default_codex_target, target_is_directory=True)
-    except OSError:
-        pytest.skip("symbolic links are unavailable")
-    platform_home = tmp_path / "platform-home"
-    platform_home.mkdir()
-    repository = tmp_path / "repository"
-    repository.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: platform_home))
-    with pytest.raises(qualification.QualificationFailure, match="ambient HOME/CODEX_HOME"):
-        qualification._validate_profile_root(default_codex_target, repository=repository)
+    monkeypatch.setattr(Path, "home", classmethod(reject_home))
+    assert qualification._validate_profile_root(
+        profile, repository=repository
+    ) == profile.resolve()
 
 
 def test_profile_inside_repository_is_rejected(tmp_path: Path) -> None:

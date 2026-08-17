@@ -429,8 +429,14 @@ def test_codex_qualification_shim_delegates_to_production_closed_launcher(
     fake_deeplaw = runtime_bin / "deeplaw"
     fake_deeplaw.write_text(
         f"#!{Path(sys.executable).resolve()}\n"
-        "import json, sys\n"
-        "print(json.dumps({'argv': sys.argv}, sort_keys=True))\n",
+        "import json, os, sys\n"
+        "blocked = ('CODEX_HOME', 'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', "
+        "'DEEPLAW_QUALIFICATION_SECRET_CANARY', "
+        "'DEEPLAW_QUALIFICATION_PROVIDER_CANARY', "
+        "'DEEPLAW_CREDENTIAL_PATH_CANARY')\n"
+        "print(json.dumps({'argv': sys.argv, "
+        "'blocked_names_present': sorted(name for name in blocked if name in os.environ)}, "
+        "sort_keys=True))\n",
         encoding="utf-8",
     )
     fake_deeplaw.chmod(0o700)
@@ -488,7 +494,8 @@ def test_codex_qualification_shim_delegates_to_production_closed_launcher(
             "--stdio",
             "--expected-vault-id",
             vault_id,
-        ]
+        ],
+        "blocked_names_present": [],
     }
     assert receipt == {
         "schema_version": "deeplaw.closed-mcp-environment-receipt/v1",

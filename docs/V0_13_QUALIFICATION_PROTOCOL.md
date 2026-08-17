@@ -38,7 +38,7 @@ must bind all of the following before any real qualification execution:
 - the `retained-candidate-artifacts.v1` manifest bytes and its exact wheel/sdist hashes;
 - repository-external Human Gold, qualification holdout, final-blind holdout, and
   compiler/scorer-isolation manifest SHA-256 values;
-- Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` / `reasoning=max` and OpenCode `1.18.16` /
+- Codex `0.148.0-alpha.9` / `gpt-5.6-luna` / `reasoning=max` and OpenCode `1.18.16` /
   `deepseek/deepseek-v4-flash`.
 
 The tracked document remains `candidate_version=0.12.0`, `status=construction_candidate`, and
@@ -84,7 +84,7 @@ mapped existing Core gates; there is no generic `parity` gate.
 | Tolaria `v2026-08-11` / `cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` | Read Markdown/Wikilinks; perform controlled edits; detect conflict and reconcile; preserve source-successor identity and reject a wrong merge | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `secret_host_isolation`; real-file/editor receipts | Tolaria Desktop GUI, visual design, and its Tauri/React runtime |
 | Obsidian official public format/API help, accessed 2026-08-11; API snapshot `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | Preserve Markdown, Wikilinks, aliases, backlinks/outlinks, rename/move identity, and edit/reconcile behavior on real files | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `human_gold_isolation`; real-file/editor receipts | Obsidian UI, commercial Sync, plugin marketplace, and complete Canvas UX |
 | LLM Wiki behavior category (not a comparator project) | An Agent can generate and update knowledge while provenance, revision, Authority, scope, sensitivity, and Ledger state remain explicit; the original Source Revision is never rewritten | `canonical_integrity`, `secret_host_isolation`, `source_citation_locator`, `human_gold_isolation` | Any named-product or superiority statement unless an exact project and version are separately frozen |
-| Codex `0.147.0-alpha.1.2` / `gpt-5.6-luna` | Three real task families: cold/new; resume/fork/concurrent-worktree; compaction/forget, including stale-checkpoint and wrong-task-line rejection | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget`; First Correct Action, Decision Preservation, Wrong-State Admission, and actual Provider bytes/tokens from `deeplaw.host-continuity-qualification/v2` | Codex Agent Runtime ownership, UI, marketplace, or a static/no-model Host smoke |
+| Codex `0.148.0-alpha.9` / `gpt-5.6-luna` | Three real task families: cold/new; resume/fork/concurrent-worktree; compaction/forget, including stale-checkpoint and wrong-task-line rejection | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget`; First Correct Action, Decision Preservation, Wrong-State Admission, and actual Provider bytes/tokens from `deeplaw.host-continuity-qualification/v2` | Codex Agent Runtime ownership, UI, marketplace, or a static/no-model Host smoke |
 | OpenCode `1.18.16` / `deepseek/deepseek-v4-flash` | The same three real Host task families and wrong-state challenges as Codex, under independently isolated configuration and Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget`; the same outcome metrics and actual Provider bytes/tokens through the shared Host continuity contract | OpenCode runtime, UI, ecosystem, or a projection/configuration-only smoke |
 
 The Codex and OpenCode Host task mechanics may use different public lifecycle methods, but they
@@ -200,6 +200,26 @@ separate owner-granted Sink at an explicit successful boundary (`record_run` the
 Wrong, stale, ambiguous and forgotten state must fail closed. The no-model Pass 19 acceptance
 fixture is development regression evidence only; it cannot satisfy any real-Host, Human Gold or
 blind-review gate.
+
+## Pass 26 active machine-only Host boundary
+
+The active v2 protocol and gate-classification v8 supersede the old Pass 17 Human-Gold
+precondition for the `machine_evaluated_no_human_attestation` profile. The candidate compiler and
+Host runners must not receive Human Gold, machine-reference labels, scorer source, or any dotenv
+path. Three process-separated machine reviewers, the deterministic reconciler/reference freezer,
+candidate Host runner, and scorers remain separate security domains. Machine evidence is never
+described as human review, Human Gold, `human_verified`, or legal-expert attestation.
+
+Host route v2 separates stable project/repository/worktree/task-lineage/session identity from the
+mutable base-revision and dirty snapshot. A normal edit preserves route identity; checkpoint
+admission independently returns `workspace_diverged`/`stale_checkpoint` and withholds stale
+content. Codex formal turns use the App Server `thread/start`, `thread/resume`, `thread/fork`, and
+`forkedFromId` lineage plus public `hook/completed` output entries for `userPromptSubmit` and
+`preCompact`. OpenCode formal turns use the exact `1.18.16` project plugin and require receipts from
+both its system-transform and experimental compaction hooks. In both cases the observed injection
+hash and canonical byte count must match the independently rederived provider-safe continuity
+capsule, and a formal turn has zero Provider-side continuity tool calls. Request-model pins and
+returned runtime model IDs are recorded separately and do not claim immutable model weights.
 
 ## Three isolated data layers
 

@@ -1,11 +1,29 @@
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
 
 import yaml
 
 from deeplaw import __version__
+
+
+def test_wheel_packages_the_exact_local_codex_marketplace() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    project = tomllib.loads((repository / "pyproject.toml").read_text(encoding="utf-8"))
+    included = project["tool"]["hatch"]["build"]["targets"]["wheel"][
+        "force-include"
+    ]
+
+    assert included[".agents/plugins/marketplace.json"] == (
+        "deeplaw/codex_marketplace/.agents/plugins/marketplace.json"
+    )
+    for plugin_name in ("deeplaw", "deeplaw-knowledge-os"):
+        assert included[f"plugins/{plugin_name}"] == (
+            f"deeplaw/codex_marketplace/plugins/{plugin_name}"
+        )
+    assert included["adapters/opencode"] == "deeplaw/opencode_adapter"
 
 
 def test_optional_knowledge_plugin_is_explicit_read_only_and_separate() -> None:

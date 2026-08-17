@@ -2805,6 +2805,13 @@
         },
         {
           "junit": {
+            "classname": "tests.test_knowledge_plugin",
+            "name": "test_wheel_packages_the_exact_local_codex_marketplace"
+          },
+          "node_id": "tests/test_knowledge_plugin.py::test_wheel_packages_the_exact_local_codex_marketplace"
+        },
+        {
+          "junit": {
             "classname": "tests.test_knowledge_sink_mcp",
             "name": "test_agent_interfaces_default_to_the_selected_vault_scope"
           },
@@ -7146,9 +7153,23 @@
         {
           "junit": {
             "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_completed_hook_projects_exact_continuity_delivery_without_text"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_completed_hook_projects_exact_continuity_delivery_without_text"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
             "name": "test_completed_mcp_result_is_memory_only_and_hashed_in_projection"
           },
           "node_id": "tests/test_v013_codex_app_server_client.py::test_completed_mcp_result_is_memory_only_and_hashed_in_projection"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_completed_precompact_hook_projects_only_the_exact_context_digest"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_completed_precompact_hook_projects_only_the_exact_context_digest"
         },
         {
           "junit": {
@@ -7170,6 +7191,13 @@
             "name": "test_forbidden_output_value_is_detected_without_entering_events"
           },
           "node_id": "tests/test_v013_codex_app_server_client.py::test_forbidden_output_value_is_detected_without_entering_events"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_fork_requires_official_forked_from_id_lineage"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_fork_requires_official_forked_from_id_lineage"
         },
         {
           "junit": {
@@ -8511,6 +8539,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_owner_broker_launcher_is_external_owner_only_and_process_separated"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_owner_broker_launcher_is_external_owner_only_and_process_separated"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_owner_broker_launcher_symlink_is_rejected"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_owner_broker_launcher_symlink_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
             "name": "test_pass13_runner_uses_a_closed_temporary_host_profile"
           },
           "node_id": "tests/test_v013_pass13_codex_qualification.py::test_pass13_runner_uses_a_closed_temporary_host_profile"
@@ -8518,9 +8560,37 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_persisted_fork_keeps_hook_session_root_and_records_thread_lineage"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_persisted_fork_keeps_hook_session_root_and_records_thread_lineage"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_precompact_delivery_binds_the_checkpoint_gap_and_exact_context"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_precompact_delivery_binds_the_checkpoint_gap_and_exact_context"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_qualification_prompt_uses_only_native_host_continuity"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_qualification_prompt_uses_only_native_host_continuity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
             "name": "test_report_builder_is_schema_bound_and_claim_false"
           },
           "node_id": "tests/test_v013_pass13_codex_qualification.py::test_report_builder_is_schema_bound_and_claim_false"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_returned_model_identity_does_not_promote_request_model_pin"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_returned_model_identity_does_not_promote_request_model_pin"
         },
         {
           "junit": {
@@ -8542,6 +8612,13 @@
             "name": "test_turn_record_rejects_failed_turn_prohibited_capability_and_path"
           },
           "node_id": "tests/test_v013_pass13_codex_qualification.py::test_turn_record_rejects_failed_turn_prohibited_capability_and_path"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_turn_record_requires_exact_native_hook_delivery_and_zero_tools"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_turn_record_requires_exact_native_hook_delivery_and_zero_tools"
         },
         {
           "junit": {
@@ -8637,6 +8714,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_actual_assistant_response_model_comes_from_plugin_metadata"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_actual_assistant_response_model_comes_from_plugin_metadata"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_analyzer_accepts_native_hook_capsule_without_mcp_tool_call"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_analyzer_accepts_native_hook_capsule_without_mcp_tool_call"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
             "name": "test_analyzer_accepts_one_or_two_safe_reads_and_rejects_three"
           },
           "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_analyzer_accepts_one_or_two_safe_reads_and_rejects_three"
@@ -8679,9 +8770,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
-            "name": "test_compaction_usage_comes_from_one_public_summary_message"
+            "name": "test_compaction_delivery_adds_one_checkpoint_gap_to_canonical_bytes"
           },
-          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_compaction_usage_comes_from_one_public_summary_message"
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_compaction_delivery_adds_one_checkpoint_gap_to_canonical_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_compaction_usage_comes_from_one_sanitized_metadata_observation"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_compaction_usage_comes_from_one_sanitized_metadata_observation"
         },
         {
           "junit": {
@@ -8770,6 +8868,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_owner_broker_launcher_must_be_owner_only_and_process_separated"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_owner_broker_launcher_must_be_owner_only_and_process_separated"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
             "name": "test_permission_and_config_are_exactly_read_only"
           },
           "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_permission_and_config_are_exactly_read_only"
@@ -8777,16 +8882,30 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
-            "name": "test_preflight_keeps_provider_secret_out_of_static_inspection_commands"
+            "name": "test_plugin_delivery_receipt_must_match_exact_native_context"
           },
-          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_preflight_keeps_provider_secret_out_of_static_inspection_commands"
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_plugin_delivery_receipt_must_match_exact_native_context"
         },
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
-            "name": "test_preflight_rejects_a_secret_resolved_into_debug_config"
+            "name": "test_preflight_keeps_owner_broker_out_of_static_inspection_commands"
           },
-          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_preflight_rejects_a_secret_resolved_into_debug_config"
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_preflight_keeps_owner_broker_out_of_static_inspection_commands"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_preflight_rejects_a_canary_resolved_into_debug_config"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_preflight_rejects_a_canary_resolved_into_debug_config"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_prepare_scenario_state_installs_exact_plugin_bytes_and_receipt"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_prepare_scenario_state_installs_exact_plugin_bytes_and_receipt"
         },
         {
           "junit": {
@@ -8798,9 +8917,23 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_project_plugin_mode_has_no_legacy_pure_or_project_config_bypass"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_project_plugin_mode_has_no_legacy_pure_or_project_config_bypass"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
             "name": "test_report_validation_requires_three_runs_and_path_free_artifacts"
           },
           "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_report_validation_requires_three_runs_and_path_free_artifacts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_resolved_config_must_bind_the_unique_installed_project_plugin"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_resolved_config_must_bind_the_unique_installed_project_plugin"
         },
         {
           "junit": {
@@ -8812,9 +8945,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
-            "name": "test_secret_parser_is_exact_and_never_accepts_ambient_or_duplicates"
+            "name": "test_runner_has_no_dotenv_or_provider_secret_input_surface"
           },
-          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_secret_parser_is_exact_and_never_accepts_ambient_or_duplicates"
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_runner_has_no_dotenv_or_provider_secret_input_surface"
         },
         {
           "junit": {
@@ -8857,6 +8990,13 @@
             "name": "test_public_compilation_status_seams_agree_across_mixed_history"
           },
           "node_id": "tests/test_v013_pass14_compilation_status.py::test_public_compilation_status_seams_agree_across_mixed_history"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass14_host_orchestrator",
+            "name": "test_current_host_runtime_binds_route_and_capsule_contract_bytes"
+          },
+          "node_id": "tests/test_v013_pass14_host_orchestrator.py::test_current_host_runtime_binds_route_and_capsule_contract_bytes"
         },
         {
           "junit": {
@@ -8980,6 +9120,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass16_codex_preconditions",
+            "name": "test_candidate_runner_rejects_human_gold_before_candidate_or_codex_start"
+          },
+          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_candidate_runner_rejects_human_gold_before_candidate_or_codex_start"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass16_codex_preconditions",
             "name": "test_codex_version_drift_is_rejected[codex-cli 0.147.0-alpha.1.1\\n]"
           },
           "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_codex_version_drift_is_rejected[codex-cli 0.147.0-alpha.1.1\\n]"
@@ -9001,41 +9148,6 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass16_codex_preconditions",
-            "name": "test_default_codex_home_is_rejected"
-          },
-          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_default_codex_home_is_rejected"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass16_codex_preconditions",
-            "name": "test_default_codex_home_symlink_target_is_rejected"
-          },
-          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_default_codex_home_symlink_target_is_rejected"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass16_codex_preconditions",
-            "name": "test_default_or_ambient_profile_roots_are_rejected[CODEX_HOME]"
-          },
-          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_default_or_ambient_profile_roots_are_rejected[CODEX_HOME]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass16_codex_preconditions",
-            "name": "test_default_or_ambient_profile_roots_are_rejected[HOME]"
-          },
-          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_default_or_ambient_profile_roots_are_rejected[HOME]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass16_codex_preconditions",
-            "name": "test_default_or_ambient_profile_roots_are_rejected[USERPROFILE]"
-          },
-          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_default_or_ambient_profile_roots_are_rejected[USERPROFILE]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass16_codex_preconditions",
             "name": "test_exact_codex_version_is_accepted"
           },
           "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_exact_codex_version_is_accepted"
@@ -9050,30 +9162,30 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass16_codex_preconditions",
+            "name": "test_explicit_profile_validation_does_not_consult_ambient_login_roots[CODEX_HOME]"
+          },
+          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_explicit_profile_validation_does_not_consult_ambient_login_roots[CODEX_HOME]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass16_codex_preconditions",
+            "name": "test_explicit_profile_validation_does_not_consult_ambient_login_roots[HOME]"
+          },
+          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_explicit_profile_validation_does_not_consult_ambient_login_roots[HOME]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass16_codex_preconditions",
+            "name": "test_explicit_profile_validation_does_not_consult_ambient_login_roots[USERPROFILE]"
+          },
+          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_explicit_profile_validation_does_not_consult_ambient_login_roots[USERPROFILE]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass16_codex_preconditions",
             "name": "test_host_environment_uses_only_owner_profile_roots_without_reading_auth"
           },
           "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_host_environment_uses_only_owner_profile_roots_without_reading_auth"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass16_codex_preconditions",
-            "name": "test_missing_external_human_gold_blocks_before_candidate_or_codex_start"
-          },
-          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_missing_external_human_gold_blocks_before_candidate_or_codex_start"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass16_codex_preconditions",
-            "name": "test_path_home_and_its_default_codex_home_are_rejected[False]"
-          },
-          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_path_home_and_its_default_codex_home_are_rejected[False]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass16_codex_preconditions",
-            "name": "test_path_home_and_its_default_codex_home_are_rejected[True]"
-          },
-          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_path_home_and_its_default_codex_home_are_rejected[True]"
         },
         {
           "junit": {
@@ -9088,13 +9200,6 @@
             "name": "test_profile_symlink_is_rejected"
           },
           "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_profile_symlink_is_rejected"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass16_codex_preconditions",
-            "name": "test_userprofile_default_codex_home_is_rejected"
-          },
-          "node_id": "tests/test_v013_pass16_codex_preconditions.py::test_userprofile_default_codex_home_is_rejected"
         },
         {
           "junit": {
@@ -9365,9 +9470,30 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass16_opencode_cases",
+            "name": "test_candidate_runner_rejects_human_gold_before_candidate_or_provider_start"
+          },
+          "node_id": "tests/test_v013_pass16_opencode_cases.py::test_candidate_runner_rejects_human_gold_before_candidate_or_provider_start"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass16_opencode_cases",
             "name": "test_concurrent_worktree_changes_only_the_worktree_route_component"
           },
           "node_id": "tests/test_v013_pass16_opencode_cases.py::test_concurrent_worktree_changes_only_the_worktree_route_component"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass16_opencode_cases",
+            "name": "test_formal_candidate_prompt_uses_only_native_capsule_and_no_internal_route_data"
+          },
+          "node_id": "tests/test_v013_pass16_opencode_cases.py::test_formal_candidate_prompt_uses_only_native_capsule_and_no_internal_route_data"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass16_opencode_cases",
+            "name": "test_formal_fixture_does_not_call_raw_sink_apply"
+          },
+          "node_id": "tests/test_v013_pass16_opencode_cases.py::test_formal_fixture_does_not_call_raw_sink_apply"
         },
         {
           "junit": {
@@ -9393,16 +9519,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass16_opencode_cases",
-            "name": "test_missing_external_human_gold_blocks_before_candidate_or_provider_start"
+            "name": "test_opencode_uses_the_frozen_three_case_matrix_and_neutral_prompts"
           },
-          "node_id": "tests/test_v013_pass16_opencode_cases.py::test_missing_external_human_gold_blocks_before_candidate_or_provider_start"
+          "node_id": "tests/test_v013_pass16_opencode_cases.py::test_opencode_uses_the_frozen_three_case_matrix_and_neutral_prompts"
         },
         {
           "junit": {
             "classname": "tests.test_v013_pass16_opencode_cases",
-            "name": "test_opencode_uses_the_frozen_three_case_matrix_and_neutral_prompts"
+            "name": "test_public_session_create_uses_post_session_and_validates_identity"
           },
-          "node_id": "tests/test_v013_pass16_opencode_cases.py::test_opencode_uses_the_frozen_three_case_matrix_and_neutral_prompts"
+          "node_id": "tests/test_v013_pass16_opencode_cases.py::test_public_session_create_uses_post_session_and_validates_identity"
         },
         {
           "junit": {
@@ -9449,16 +9575,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass17_native_host_receipts",
-            "name": "test_codex_context_prompt_uses_the_complete_public_v6_call_shape"
+            "name": "test_codex_context_prompt_uses_native_host_delivery_without_tool_arguments"
           },
-          "node_id": "tests/test_v013_pass17_native_host_receipts.py::test_codex_context_prompt_uses_the_complete_public_v6_call_shape"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass17_native_host_receipts",
-            "name": "test_codex_diagnostic_inherits_existing_login_but_keeps_other_roots_closed"
-          },
-          "node_id": "tests/test_v013_pass17_native_host_receipts.py::test_codex_diagnostic_inherits_existing_login_but_keeps_other_roots_closed"
+          "node_id": "tests/test_v013_pass17_native_host_receipts.py::test_codex_context_prompt_uses_native_host_delivery_without_tool_arguments"
         },
         {
           "junit": {
@@ -9466,6 +9585,13 @@
             "name": "test_codex_event_receipt_is_bound_before_metric_digest"
           },
           "node_id": "tests/test_v013_pass17_native_host_receipts.py::test_codex_event_receipt_is_bound_before_metric_digest"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass17_native_host_receipts",
+            "name": "test_codex_modes_use_owner_broker_and_keep_all_roots_closed"
+          },
+          "node_id": "tests/test_v013_pass17_native_host_receipts.py::test_codex_modes_use_owner_broker_and_keep_all_roots_closed"
         },
         {
           "junit": {
@@ -10107,9 +10233,30 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_admitted_core_capsule_is_injected_without_local_identity"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_admitted_core_capsule_is_injected_without_local_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
             "name": "test_all_five_hooks_are_bounded_and_redact_untrusted_input"
           },
           "node_id": "tests/test_v013_pass24_codex_hooks.py::test_all_five_hooks_are_bounded_and_redact_untrusted_input"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_hook_rejects_noncanonical_or_sensitive_core_capsule"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_hook_rejects_noncanonical_or_sensitive_core_capsule"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_hook_resolves_through_closed_child_environment"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_hook_resolves_through_closed_child_environment"
         },
         {
           "junit": {
@@ -10135,6 +10282,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_precompact_checkpoint_gap_is_idempotent_and_fail_closed_at_gap_bound"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_precompact_checkpoint_gap_is_idempotent_and_fail_closed_at_gap_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
             "name": "test_precompact_is_explicitly_read_only_without_checkpoint_grant"
           },
           "node_id": "tests/test_v013_pass24_codex_hooks.py::test_precompact_is_explicitly_read_only_without_checkpoint_grant"
@@ -10142,9 +10296,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_codex_hooks",
-            "name": "test_reason_source_and_trigger_are_reduced_to_safe_route_metadata"
+            "name": "test_reason_source_and_trigger_are_not_provider_visible"
           },
-          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_reason_source_and_trigger_are_reduced_to_safe_route_metadata"
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_reason_source_and_trigger_are_not_provider_visible"
         },
         {
           "junit": {
@@ -10464,6 +10618,48 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Continue from /Users/private/checkpoint.txt.]"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Continue from /Users/private/checkpoint.txt.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Continue from /custom/private/checkpoint.txt.]"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Continue from /custom/private/checkpoint.txt.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Continue from /tmp.]"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Continue from /tmp.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Continue from C:\\\\private.]"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Continue from C:\\\\private.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Use Authorization: secret-material-value.]"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Use Authorization: secret-material-value.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Use Bearer secret-material-value.]"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_continuity_capsule_blocks_sensitive_checkpoint_text[Use Bearer secret-material-value.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
             "name": "test_host_session_binding_rejects_unfrozen_hosts[Codex]"
           },
           "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_binding_rejects_unfrozen_hosts[Codex]"
@@ -10509,6 +10705,20 @@
             "name": "test_host_session_route_commands_are_explicit_cli_seams"
           },
           "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_route_commands_are_explicit_cli_seams"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_session_route_v1_compatibility_fixture_remains_valid"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_route_v1_compatibility_fixture_remains_valid"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_host_session_binding",
+            "name": "test_host_session_route_v2_keeps_route_identity_across_edit_and_blocks_old_checkpoint"
+          },
+          "node_id": "tests/test_v013_pass24_host_session_binding.py::test_host_session_route_v2_keeps_route_identity_across_edit_and_blocks_old_checkpoint"
         },
         {
           "junit": {
@@ -10681,23 +10891,37 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_opencode_plugin",
-            "name": "test_bun_context_re_resolves_route_and_binds_provider_hint_to_opaque_host_route"
+            "name": "test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys"
           },
-          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_context_re_resolves_route_and_binds_provider_hint_to_opaque_host_route"
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys"
         },
         {
           "junit": {
             "classname": "tests.test_v013_pass24_opencode_plugin",
-            "name": "test_bun_helpers_cover_parent_identity_and_all_native_seams"
+            "name": "test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env"
           },
-          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_helpers_cover_parent_identity_and_all_native_seams"
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env"
         },
         {
           "junit": {
             "classname": "tests.test_v013_pass24_opencode_plugin",
-            "name": "test_bun_route_resolution_uses_argv_no_shell_and_only_read_only_result"
+            "name": "test_bun_default_export_keeps_v1_loader_shape"
           },
-          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_route_resolution_uses_argv_no_shell_and_only_read_only_result"
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_default_export_keeps_v1_loader_shape"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_hooks_re_resolve_capsule_and_precompact_only_adds_gap"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_hooks_re_resolve_capsule_and_precompact_only_adds_gap"
         },
         {
           "junit": {
@@ -10716,9 +10940,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_opencode_plugin",
-            "name": "test_plugin_source_is_thin_and_does_not_touch_prompt_parts_or_bind"
+            "name": "test_plugin_source_is_thin_and_never_injects_route_identity"
           },
-          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_plugin_source_is_thin_and_does_not_touch_prompt_parts_or_bind"
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_plugin_source_is_thin_and_never_injects_route_identity"
         },
         {
           "junit": {
@@ -11653,6 +11877,13 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_repository_host_runners_accept_only_external_broker_launchers"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_repository_host_runners_accept_only_external_broker_launchers"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_pass25_qualification_assembler_v8",
             "name": "test_cli_parser_does_not_accept_human_approver_argument"
           },
@@ -11762,6 +11993,13 @@
             "name": "test_v8_classification_is_exactly_machine_only_and_fourteen_core_gates"
           },
           "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_v8_classification_is_exactly_machine_only_and_fourteen_core_gates"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass26_opencode_real_loader",
+            "name": "test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event"
+          },
+          "node_id": "tests/test_v013_pass26_opencode_real_loader.py::test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event"
         },
         {
           "junit": {
@@ -14480,9 +14718,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2053,
+      "count": 2087,
       "selection": "not qualification and not windows_native",
-      "sha256": "64f31ad6b81898580d812e5de1e822660cba87a5004d59dd841b807e370b4638"
+      "sha256": "03282ec6877a23f3f1d465c629fb0872b58ca9c17999b8c08d97cb1678314948"
     },
     "windows": {
       "additional_cases": [
@@ -14515,13 +14753,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2057,
+      "count": 2091,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "bd6229e9094ee56761ba625cc508f40260005fa54092a649732bc7f42bd6c365"
+      "sha256": "4d019d91e8e2e84379021cdeb3d15efcff6587fbda7a208dd3b2aca1e9c8190b"
     }
   },
-  "manifest_sha256": "28956eb11e2615ced855513c16e3cc6aaf943cc8b10f923d7be2a3c9ee12d450",
+  "manifest_sha256": "cc4cb2544042c52428f95090b7997a012dac07201cc507a8df65ad72454decc5",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

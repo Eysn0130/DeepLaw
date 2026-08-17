@@ -34,6 +34,8 @@ RUNTIME_CONTRACT_NAMES = (
     "host-continuity-human-gold.v2.schema.json",
     "host-continuity-pass17-blind-review.v2.schema.json",
     "host-continuity-pass17-run-score.v2.schema.json",
+    "host-continuity-capsule.v1.schema.json",
+    "host-session-route-result.v2.schema.json",
     "host-qualification-bundle-manifest.v1.schema.json",
     "knowledge-support.input.v6.schema.json",
     "knowledge-support.output.v6.schema.json",

@@ -26,6 +26,7 @@ import urllib.request
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from jsonschema import Draft202012Validator, ValidationError
 
@@ -54,9 +55,15 @@ RUN_COUNT = 3
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 PROVIDER_HARD_LIMIT_BYTES = 65_536
 TIMEOUT_SECONDS = 300
-MAX_DOTENV_BYTES = 64 * 1024
 _ISOLATED_ROOT_PREFIX = "deeplaw-pass17-opencode-"
+_PLUGIN_SOURCE_RELATIVE = Path(
+    "deeplaw/opencode_adapter/plugins/deeplaw-native.ts"
+)
+_PLUGIN_RESOURCE_RELATIVE = Path("opencode_adapter/plugins/deeplaw-native.ts")
+_PLUGIN_INSTALLED_RELATIVE = Path(".opencode/plugins/deeplaw-native.ts")
+_OPENCODE_PLUGIN_API_PACKAGE = "@opencode-ai/plugin"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_GAP_CODE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,99}$")
 _GIT_OID = re.compile(r"^[0-9a-f]{40}$")
 _SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$")
 _ABSOLUTE_PATH = re.compile(
@@ -75,6 +82,7 @@ _FORBIDDEN_FIELDS = (
     b'"transcript"',
 )
 _PROVIDER_ENV_NAME = "DEEPSEEK_API_KEY"
+_MODEL_RECEIPT_ENV_NAME = "DEEPLAW_OPENCODE_MODEL_RECEIPT"
 _CANARY_NAMES = (
     "DEEPLAW_QUALIFICATION_SECRET_CANARY",
     "DEEPLAW_QUALIFICATION_PATH_CANARY",
@@ -102,12 +110,10 @@ EXPECTED_HOST_ENVIRONMENT_NAMES = frozenset(
         "OPENCODE_DISABLE_AUTOUPDATE",
         "OPENCODE_DISABLE_CLAUDE_CODE",
         "OPENCODE_DISABLE_DEFAULT_PLUGINS",
-        "OPENCODE_DISABLE_PROJECT_CONFIG",
-        "OPENCODE_PURE",
-        "DEEPSEEK_API_KEY",
         "NO_COLOR",
         "GIT_TERMINAL_PROMPT",
         "DEEPLAW_KNOWLEDGE_VAULT",
+        _MODEL_RECEIPT_ENV_NAME,
         "CI",
         *_CANARY_NAMES,
     }
@@ -172,23 +178,37 @@ def _context_call_arguments(
 
 def _candidate_prompt(
     case: Mapping[str, Any],
-    task_binding: Mapping[str, Any],
+    _legacy_binding: Mapping[str, Any] | None = None,
     *,
     phase: str = "current",
 ) -> str:
-    """Bind a neutral frozen task prompt to the exact current worktree."""
+    """Build the formal Host prompt without route or evaluator material.
 
-    normalized = pass16_continuity_cases.binding_sha256(task_binding)
-    if normalized != task_binding.get("binding_sha256"):
-        raise QualificationError("candidate task binding is inconsistent")
+    The native OpenCode plugin receives a provider-safe continuity capsule from
+    the local Host hook.  The model therefore must not be handed a task
+    binding, session identity, route digest, MCP argument object, or path in
+    its user prompt.  ``_legacy_binding`` is retained only so old development
+    callers do not fail at import time; it is intentionally ignored.
+    """
+
+    del _legacy_binding
+    task = case.get("task_prompt")
+    if not isinstance(task, str) or not task.strip():
+        raise QualificationError("Host fixture task prompt is invalid")
+    if phase not in {"current", "post_forget"}:
+        raise QualificationError("unsupported candidate prompt phase")
+    suffix = (
+        " After the owner-directed forget, report the resulting gap explicitly."
+        if phase == "post_forget"
+        else ""
+    )
     return (
-        pass16_continuity_cases.candidate_prompt(case, phase=phase)
-        + " Use this complete JSON object as the exact knowledge_support arguments: "
-        + _canonical(_context_call_arguments(case, task_binding))
-        + ". Copy every key and value unchanged; do not add, remove, rename, infer, or "
-        "rewrite any field"
-        + ". End with the required bare four-key JSON object only; do not use a code fence, "
-        "prefix, or suffix."
+        f"{task.strip()} Use only the continuity capsule supplied by the native Host "
+        "context; do not invoke any tool or request additional context. Return exactly one "
+        "JSON object and no Markdown: "
+        '{"summary":"string","next_step":"string","preserved_decisions":["string"],'
+        '"open_gaps":["string"]}. Use no other keys. Keep every string non-empty and at most '
+        f"200 characters; keep each array to one through three items.{suffix}"
     )
 
 
@@ -237,54 +257,6 @@ def _forbid_values(data: bytes, forbidden_values: Sequence[str] = ()) -> None:
             raise QualificationError("evidence contains a forbidden value")
 
 
-def load_deepseek_key(path: Path) -> str:
-    """Read one exact ``DEEPSEEK_API_KEY`` assignment without interpolation."""
-
-    selected: str | None = None
-    try:
-        if path.is_symlink():
-            raise ValueError
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-        details = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(details.st_mode)
-            or details.st_size > MAX_DOTENV_BYTES
-            or details.st_nlink != 1
-            or (os.name != "nt" and stat.S_IMODE(details.st_mode) != 0o600)
-            or (
-                hasattr(os, "geteuid")
-                and os.geteuid() != details.st_uid
-            )
-        ):
-            os.close(descriptor)
-            raise ValueError
-        with os.fdopen(descriptor, "r", encoding="utf-8", errors="strict", newline="") as stream:
-            for raw_line in stream:
-                line = raw_line.rstrip("\r\n").strip()
-                if not line or line.startswith("#"):
-                    continue
-                match = re.fullmatch(r"DEEPSEEK_API_KEY=(.*)", line)
-                if match is None or selected is not None:
-                    raise ValueError
-                value = match.group(1).strip()
-                if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-                    value = value[1:-1]
-                if (
-                    not value
-                    or any(c in value for c in ("$", "`", "\\", "\x00"))
-                    or any(c.isspace() for c in value)
-                    or value.startswith(('"', "'"))
-                    or value.endswith(('"', "'"))
-                ):
-                    raise ValueError
-                selected = value
-        if selected is None:
-            raise ValueError
-        return selected
-    except (OSError, UnicodeError, ValueError) as exc:
-        raise ValueError("DeepSeek credential file is invalid") from exc
-
-
 def build_permission() -> dict[str, str]:
     return {"*": "deny", TOOL_NAME: "allow"}
 
@@ -293,6 +265,21 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
     if agent_name not in {"qualification", "development"}:
         raise QualificationError("OpenCode agent mode is invalid")
     permission = build_permission()
+    agent_prompt = (
+        "Use only the bounded continuity capsule supplied by the native Host context; "
+        "do not invoke any tool or request additional context. Return only the requested "
+        "bare JSON response object. Keep every response string non-empty and at most 200 "
+        "characters, and each response array to one through three items."
+        if agent_name == "qualification"
+        else (
+            "When the user supplies a complete JSON object for knowledge_support "
+            "arguments, copy every key and value unchanged. Do not add, remove, "
+            "rename, infer, or rewrite fields. Invoke only knowledge_support, and "
+            "return only the requested bare JSON response object. Keep every response "
+            "string non-empty and at most 200 characters, and each response array to "
+            "one through three items."
+        )
+    )
     return {
         "$schema": "https://opencode.ai/config.json",
         "model": MODEL,
@@ -304,7 +291,6 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
         "share": "disabled",
         "autoupdate": False,
         "snapshot": False,
-        "plugin": [],
         "instructions": [],
         "permission": permission,
         "agent": {
@@ -319,14 +305,7 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
                 "variant": VARIANT,
                 "steps": 4,
                 "permission": permission,
-                "prompt": (
-                    "When the user supplies a complete JSON object for knowledge_support "
-                    "arguments, copy every key and value unchanged. Do not add, remove, "
-                    "rename, infer, or rewrite fields. Invoke only knowledge_support, and "
-                    "return only the requested bare JSON response object. Keep every response "
-                    "string non-empty and at most 200 characters, and each response array to "
-                    "one through three items."
-                ),
+                "prompt": agent_prompt,
             }
         },
         "mcp": {
@@ -347,7 +326,6 @@ def build_host_environment(
     root: Path,
     opencode_binary: Path,
     node_binary: Path,
-    provider_key: str,
     canaries: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     """Build an allowlisted host environment; ambient values never flow through."""
@@ -376,9 +354,6 @@ def build_host_environment(
         "OPENCODE_DISABLE_AUTOUPDATE": "1",
         "OPENCODE_DISABLE_CLAUDE_CODE": "1",
         "OPENCODE_DISABLE_DEFAULT_PLUGINS": "1",
-        "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
-        "OPENCODE_PURE": "1",
-        "DEEPSEEK_API_KEY": provider_key,
         "NO_COLOR": "1",
         "GIT_TERMINAL_PROMPT": "0",
         "DEEPLAW_KNOWLEDGE_VAULT": "vault",
@@ -928,6 +903,63 @@ def _native_tool_observation(
     return observation, payload
 
 
+def _native_hook_observation(
+    capsule: Mapping[str, Any], provider_text: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Measure the provider-safe capsule injected by the native Host hook.
+
+    The formal OpenCode path deliberately has no ``knowledge_support`` tool
+    event.  The plugin resolves the same public DeepLaw route in its local
+    hook, while the runner independently resolves it below and binds this
+    observation to the exact canonical bytes returned by that public seam.
+    """
+
+    statements = capsule.get("statements")
+    gaps = capsule.get("gaps")
+    conflicts = capsule.get("conflicts")
+    if not all(isinstance(value, list) for value in (statements, gaps, conflicts)):
+        raise QualificationError("native Host continuity capsule is invalid")
+    provider_bytes = provider_text.encode("utf-8")
+    evidence_count = 0
+    duplicate_evidence_count = 0
+    observation = {
+        "call_id_sha256": _sha256(b"opencode-native-continuity-hook"),
+        "server": "deeplaw",
+        "tool_name": "native_host_continuity_hook",
+        "status": "completed",
+        "arguments_sha256": None,
+        "arguments_bytes": 0,
+        "result_sha256": _sha256(provider_bytes),
+        "result_bytes": len(provider_bytes),
+    }
+    payload = {
+        "operation": "resolve-host-continuity",
+        "provider_bytes": len(provider_bytes),
+        "provider_sha256": _sha256(provider_bytes),
+        "structured_output_bytes": None,
+        "structured_output_sha256": None,
+        "delivery_match": True,
+        "write_performed": False,
+        "statement_count": len(statements),
+        "gap_count": len(gaps),
+        "gap_codes": sorted(
+            {
+                item["code"]
+                for item in gaps
+                if isinstance(item, Mapping) and isinstance(item.get("code"), str)
+            }
+        ),
+        "relevant_chars": 0,
+        "context_chars": len(provider_text),
+        "relevant_chars_context_chars": 0.0 if provider_text else None,
+        "evidence_count": evidence_count,
+        "duplicate_evidence_count": duplicate_evidence_count,
+        "duplicate_evidence_rate": None,
+        "conflict_count": len(conflicts),
+    }
+    return observation, payload
+
+
 def _analyze_native_safe_reads(
     observations: Sequence[Mapping[str, Any]], payloads: Sequence[Mapping[str, Any]]
 ) -> dict[str, Any]:
@@ -938,11 +970,20 @@ def _analyze_native_safe_reads(
         raise QualificationError("safe read call identities must be unique")
     if len(payloads) == 2 and payloads[0].get("gap_count") == 0:
         raise QualificationError("bounded retry requires an insufficient first Provider Capsule")
+    native_delivery = all(
+        observation.get("tool_name") == "native_host_continuity_hook"
+        for observation in observations
+    )
     return {
-        "call_count": len(observations),
+        # A native Host delivery is not a Provider-side tool invocation.
+        "call_count": 0 if native_delivery else len(observations),
         "first_call_valid": True,
-        "bounded_retry_used": len(observations) == 2,
-        "safe_read_operations": ["context"] * len(observations),
+        "bounded_retry_used": not native_delivery and len(observations) == 2,
+        "safe_read_operations": [
+            str(payload.get("operation", "context"))
+            for payload in payloads
+            if isinstance(payload, Mapping)
+        ],
         "provider_payloads": [dict(payload) for payload in payloads],
     }
 
@@ -1027,18 +1068,41 @@ def _normalize_usage(part: Mapping[str, Any]) -> dict[str, int | str]:
 def analyze_opencode_events(
     data: bytes,
     *,
-    expected_task_binding: Mapping[str, Any],
+    expected_task_binding: Mapping[str, Any] | None = None,
     expected_task: str | None = None,
+    continuity_capsule: Mapping[str, Any] | None = None,
+    continuity_text: str | None = None,
     forbidden_values: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Parse only the bounded event fields needed for Pass 16 qualification."""
 
     if not isinstance(data, bytes) or len(data) > MAX_OUTPUT_BYTES:
         raise QualificationError("OpenCode output exceeds the bounded limit")
-    # The raw in-memory Host event must carry the exact task_binding argument
-    # so admission can be verified. Retained sanitized evidence still forbids
-    # every task-binding field and never preserves the raw tool arguments.
-    _forbid_sensitive(data, forbidden_values, allow_task_binding=True)
+    # Formal Host turns use the native continuity hook and must not expose an
+    # MCP task-binding argument.  ``allow_task_binding`` remains limited to
+    # historical analyzer fixtures that explicitly provide the legacy binding.
+    _forbid_sensitive(
+        data,
+        forbidden_values,
+        allow_task_binding=expected_task_binding is not None,
+    )
+    if continuity_capsule is not None:
+        if continuity_text is None or continuity_text != _canonical(continuity_capsule):
+            raise QualificationError("native Host continuity bytes are not canonical")
+        capsule_contract_path = (
+            Path(__file__).resolve().parents[2]
+            / "contracts"
+            / "host-continuity-capsule.v1.schema.json"
+        )
+        try:
+            capsule_contract = json.loads(capsule_contract_path.read_text(encoding="utf-8"))
+            Draft202012Validator(capsule_contract).validate(dict(continuity_capsule))
+        except (OSError, TypeError, ValueError, ValidationError) as exc:
+            raise QualificationError("native Host continuity capsule is invalid") from exc
+        _forbid_sensitive(
+            continuity_text.encode("utf-8"),
+            forbidden_values,
+        )
     observations: list[dict[str, Any]] = []
     payloads: list[dict[str, Any]] = []
     provider_values: list[Mapping[str, Any]] = []
@@ -1063,6 +1127,10 @@ def analyze_opencode_events(
         if message_id := _event_identity(event, "messageID", "messageId", "message_id"):
             message_ids.add(message_id)
         if event_type == "tool_use":
+            if continuity_capsule is not None:
+                raise QualificationError(
+                    "knowledge_support tool call is not allowed for native continuity"
+                )
             part = event.get("part")
             if not isinstance(part, Mapping):
                 raise QualificationError("tool event part is invalid")
@@ -1075,6 +1143,8 @@ def analyze_opencode_events(
             # Validate public tool arguments even when OpenCode reports an
             # error state.  This separates model call-shape failures from an
             # execution failure without reading or retaining the error text.
+            if expected_task_binding is None:
+                raise QualificationError("legacy MCP task binding is missing")
             _native_tool_arguments(
                 event,
                 expected_task_binding=expected_task_binding,
@@ -1162,6 +1232,28 @@ def analyze_opencode_events(
             raise QualificationError("unknown OpenCode event type")
     if text_count != 1 or final_value is None:
         raise QualificationError("OpenCode must emit exactly one bounded final response")
+    if continuity_capsule is not None:
+        if observations:
+            raise QualificationError(
+                "native continuity turn unexpectedly included a tool observation"
+            )
+        if continuity_text is None:
+            raise QualificationError("native Host continuity text is missing")
+        hook_observation, hook_payload = _native_hook_observation(
+            continuity_capsule, continuity_text
+        )
+        observations.append(hook_observation)
+        payloads.append(hook_payload)
+        provider_values.append(continuity_capsule)
+        provider_texts.append(continuity_text)
+        sanitized.append(
+            {
+                "type": "native_host_continuity",
+                "status": "completed",
+                "result_sha256": hook_observation["result_sha256"],
+                "result_bytes": hook_observation["result_bytes"],
+            }
+        )
     if len(session_ids) != 1 or not message_ids:
         raise QualificationError("OpenCode session or message identity is missing")
     usage = _require_actual_usage(_sum_usages(usages))
@@ -1406,6 +1498,10 @@ def _create_git_task_repository(
 ) -> tuple[Path, Path, dict[str, Any], dict[str, Any]]:
     """Create a real temporary Git task repo and an independent concurrent worktree."""
 
+    # DeepLaw's public Vault resolver rejects symlinked ancestors.  Resolve the
+    # runner-owned temporary root once so the public task seams receive the
+    # canonical path while no path is retained in qualification evidence.
+    root = root.resolve()
     repository = root / "task-repository"
     repository.mkdir(parents=True, exist_ok=True)
 
@@ -1475,10 +1571,18 @@ def _seed_continuity_fixture(
     case: Mapping[str, Any],
     primary_binding: Mapping[str, Any],
     concurrent_binding: Mapping[str, Any],
+    concurrent_workspace: Path,
     environment: Mapping[str, str],
     cwd: Path,
 ) -> dict[str, Any]:
-    """Seed current, superseded, wrong-task, and wrong-worktree routes via CLI."""
+    """Seed continuity through the public task driver and explicit grants.
+
+    Qualification must exercise the same owner/public task seams used by a
+    real Host.  In particular, no raw ``sink apply`` request is used here:
+    ``task start`` creates opaque route handles and each checkpoint goes
+    through the explicit ``knowledge_sink`` grant enforced by the public
+    ``task checkpoint`` command.
+    """
 
     _run_public_cli(
         deeplaw_executable,
@@ -1527,171 +1631,186 @@ def _seed_continuity_fixture(
     scenario = str(case["scenario"])
     current = case["current_checkpoint"]
     stale = case["stale_checkpoint"]
-    if not isinstance(current, Mapping) or not isinstance(stale, Mapping):
+    challenges = case.get("wrong_state_challenges")
+    if (
+        not isinstance(current, Mapping)
+        or not isinstance(stale, Mapping)
+        or not isinstance(challenges, list)
+    ):
         raise QualificationError("task case checkpoints are invalid")
     seed_before = _ledger_head(
         deeplaw_executable, vault, environment=environment, cwd=cwd
     )
     receipts: list[Mapping[str, Any]] = []
-    run_id = f"run-pass16-{scenario}"
-    current_run = _run_sink_request(
-        deeplaw_executable,
-        vault=vault,
-        grant_id=grant_id,
-        request={
-            "operation": "record_run",
-            "idempotency_key": f"pass16-{scenario}-current-run",
-            "confirm_no_case_data": True,
-            "run_id": run_id,
-            "task": f"Pass 16 {scenario} qualification.",
-            "host_id": "opencode-local-server-pass16",
-            "model_id": MODEL,
-            "status": "succeeded",
-            "scope": "project",
-            "sensitivity": "private",
-            "run_metadata": {"task_binding": dict(primary_binding)},
-        },
-        environment=environment,
-        cwd=cwd,
+
+    def task_start(*, task: str, workspace: Path, suffix: str) -> str:
+        result = _run_public_cli(
+            deeplaw_executable,
+            (
+                "knowledge",
+                "task",
+                "start",
+                "--vault",
+                vault,
+                "--project",
+                "DeepLaw Pass 16 OpenCode",
+                "--task",
+                task,
+                "--workspace",
+                workspace,
+            ),
+            vault=vault,
+            environment=environment,
+            cwd=cwd,
+        )
+        handle = _extract_value(result, "task_handle", "taskHandle")
+        if not isinstance(handle, str) or not handle:
+            raise QualificationError(f"public task start omitted the {suffix} handle")
+        return handle
+
+    def task_checkpoint(
+        *,
+        handle: str,
+        workspace: Path,
+        checkpoint: Mapping[str, Any],
+        key: str,
+        task_text: str | None = None,
+    ) -> Mapping[str, Any]:
+        marker = checkpoint.get("marker")
+        decision = checkpoint.get("decision")
+        next_action = checkpoint.get("next_action")
+        open_gap = checkpoint.get("open_gap")
+        if not all(
+            isinstance(item, str) and item
+            for item in (marker, decision, next_action, open_gap)
+        ):
+            raise QualificationError("public task checkpoint input is invalid")
+        checkpoint_args: list[str | Path] = [
+            "knowledge",
+            "task",
+            "checkpoint",
+            "--vault",
+            vault,
+            "--task-handle",
+            handle,
+            "--workspace",
+            workspace,
+            "--grant-id",
+            grant_id,
+            "--idempotency-key",
+            key,
+            "--summary",
+            f"Pass 16 {scenario} governed checkpoint.",
+            "--next-action",
+            next_action,
+            "--expires-at",
+            "2099-01-01T00:00:00Z",
+            "--decision",
+            decision,
+            "--decision",
+            f"ROUTE_MARKER: {marker}",
+            "--gap",
+            open_gap,
+            "--confirm-no-case-data",
+        ]
+        if task_text is not None:
+            # Keep the optional task override adjacent to the handle.  The
+            # public parser treats ``--workspace`` as a value-taking option;
+            # inserting before that value would make the wrong-task fixture
+            # fail before it reaches the public checkpoint seam.
+            checkpoint_args[7:7] = ["--task", task_text]
+        result = _run_public_cli(
+            deeplaw_executable,
+            checkpoint_args,
+            vault=vault,
+            environment=environment,
+            cwd=cwd,
+        )
+        if result.get("status") != "checkpointed":
+            raise QualificationError("public task checkpoint did not complete")
+        receipts.append(result)
+        return result
+
+    primary_handle = task_start(
+        task=str(case["task_case"]), workspace=cwd, suffix="primary"
     )
-    receipts.append(current_run)
-    stale_run = _run_sink_request(
-        deeplaw_executable,
-        vault=vault,
-        grant_id=grant_id,
-        request={
-            "operation": "remember",
-            "idempotency_key": f"pass16-{scenario}-stale",
-            "confirm_no_case_data": True,
-            "title": f"Pass 16 {scenario} superseded checkpoint",
-            "body": _checkpoint_body(case, stale, route="stale", binding=primary_binding),
-            "kind": "memory",
-            "memory_type": "working",
-            "semantic_key": f"checkpoint:pass16:{scenario}",
-            "expires_at": "2099-01-01T00:00:00Z",
-            "scope": "project",
-            "sensitivity": "private",
-            "run_id": run_id,
-            "model_id": MODEL,
-            "tool_id": "opencode-local-server-pass16",
-            "tags": ["pass16", "qualification", scenario, "stale"],
-        },
-        environment=environment,
-        cwd=cwd,
+    stale_result = task_checkpoint(
+        handle=primary_handle,
+        workspace=cwd,
+        checkpoint=stale,
+        key=f"pass16-{scenario}-stale",
     )
-    receipts.append(stale_run)
-    stale_knowledge_id = _extract_value(stale_run, "knowledge_id", "knowledgeId")
-    stale_revision_id = _extract_value(stale_run, "revision_id", "revisionId")
-    if not isinstance(stale_knowledge_id, str) or not isinstance(stale_revision_id, str):
-        raise QualificationError("stale checkpoint omitted its CAS identity")
-    current_checkpoint = _run_sink_request(
-        deeplaw_executable,
-        vault=vault,
-        grant_id=grant_id,
-        request={
-            "operation": "remember",
-            "idempotency_key": f"pass16-{scenario}-current",
-            "confirm_no_case_data": True,
-            "title": f"Pass 16 {scenario} current checkpoint",
-            "body": _checkpoint_body(case, current, route="current", binding=primary_binding),
-            "kind": "memory",
-            "memory_type": "working",
-            "semantic_key": f"checkpoint:pass16:{scenario}",
-            "expires_at": "2099-01-01T00:00:00Z",
-            "knowledge_id": stale_knowledge_id,
-            "expected_revision_id": stale_revision_id,
-            "scope": "project",
-            "sensitivity": "private",
-            "run_id": run_id,
-            "model_id": MODEL,
-            "tool_id": "opencode-local-server-pass16",
-            "tags": ["pass16", "qualification", scenario],
-        },
-        environment=environment,
-        cwd=cwd,
+    current_result = task_checkpoint(
+        handle=primary_handle,
+        workspace=cwd,
+        checkpoint=current,
+        key=f"pass16-{scenario}-current",
     )
-    receipts.append(current_checkpoint)
-    knowledge_id = _extract_value(current_checkpoint, "knowledge_id", "knowledgeId")
-    revision_id = _extract_value(current_checkpoint, "revision_id", "revisionId")
-    if not isinstance(knowledge_id, str) or not isinstance(revision_id, str):
-        raise QualificationError("current checkpoint omitted its CAS identity")
-    for challenge in case["wrong_state_challenges"]:
+    knowledge_id = _extract_value(current_result, "knowledge_id", "knowledgeId")
+    revision_id = _extract_value(current_result, "revision_id", "revisionId")
+    stale_knowledge_id = _extract_value(stale_result, "knowledge_id", "knowledgeId")
+    stale_revision_id = _extract_value(stale_result, "revision_id", "revisionId")
+    if not all(
+        isinstance(value, str)
+        for value in (knowledge_id, revision_id, stale_knowledge_id, stale_revision_id)
+    ):
+        raise QualificationError("public task checkpoint omitted its canonical identity")
+
+    wrong_handles: dict[str, str] = {}
+    for challenge in challenges:
         if not isinstance(challenge, Mapping):
             raise QualificationError("wrong-state challenge is invalid")
-        name = str(challenge["challenge"])
-        # The stale checkpoint is already a superseded revision of the exact
-        # current semantic identity above. Seeding another active stale route
-        # with the current binding would make correct admission impossible.
+        name = str(challenge.get("challenge"))
         if name == "stale_checkpoint":
             continue
-        binding = (
-            concurrent_binding if name == "wrong_worktree" else primary_binding
-        )
-        if name == "wrong_task_line":
-            binding = pass16_continuity_cases.git_binding(
-                cwd, task_line=f"pass16-{scenario}-wrong-task-line"
-            )
-        route_run = _run_sink_request(
-            deeplaw_executable,
-            vault=vault,
-            grant_id=grant_id,
-            request={
-                "operation": "record_run",
-                "idempotency_key": f"pass16-{scenario}-{name}-run",
-                "confirm_no_case_data": True,
-                "run_id": f"{run_id}-{name}",
-                "task": f"Pass 16 unrelated {name} route.",
-                "host_id": "opencode-local-server-pass16",
-                "model_id": MODEL,
-                "status": "succeeded",
-                "scope": "project",
-                "sensitivity": "private",
-                "run_metadata": {"task_binding": dict(binding)},
-            },
-            environment=environment,
-            cwd=cwd,
-        )
-        receipts.append(route_run)
         route_checkpoint = dict(current)
-        route_checkpoint["marker"] = challenge["marker"]
-        route_checkpoint["decision"] = f"Do not admit {challenge['marker']} into this route."
-        route_checkpoint["next_action"] = f"Reject unrelated {name} state."
-        route_checkpoint["verified_fact"] = f"The {name} route is unrelated to this task."
-        route_checkpoint["open_gap"] = "The current route remains owner-authorized."
-        route = _run_sink_request(
-            deeplaw_executable,
-            vault=vault,
-            grant_id=grant_id,
-            request={
-                "operation": "remember",
-                "idempotency_key": f"pass16-{scenario}-{name}",
-                "confirm_no_case_data": True,
-                "title": f"Pass 16 {scenario} {name} route",
-                "body": _checkpoint_body(case, route_checkpoint, route=name, binding=binding),
-                "kind": "memory",
-                "memory_type": "working",
-                "semantic_key": f"checkpoint:pass16:{scenario}:{name}",
-                "expires_at": "2099-01-01T00:00:00Z",
-                "scope": "project",
-                "sensitivity": "private",
-                "run_id": f"{run_id}-{name}",
-                "model_id": MODEL,
-                "tool_id": "opencode-local-server-pass16",
-                "tags": ["pass16", "qualification", scenario, name],
-            },
-            environment=environment,
-            cwd=cwd,
+        route_checkpoint.update(
+            {
+                "marker": challenge.get("marker"),
+                "decision": f"Do not admit {challenge.get('marker')} into this route.",
+                "next_action": f"Reject unrelated {name} state.",
+                "open_gap": "The current route remains owner-authorized.",
+            }
         )
-        receipts.append(route)
+        if name == "wrong_worktree":
+            workspace = concurrent_workspace
+            handle = task_start(
+                task=str(case["task_case"]), workspace=workspace, suffix=name
+            )
+        elif name == "wrong_task_line":
+            workspace = cwd
+            handle = task_start(
+                task=f"Pass 16 unrelated {scenario} task line.",
+                workspace=workspace,
+                suffix=name,
+            )
+        else:
+            raise QualificationError("unsupported wrong-state challenge")
+        wrong_handles[name] = handle
+        task_checkpoint(
+            handle=handle,
+            workspace=workspace,
+            checkpoint=route_checkpoint,
+            key=f"pass16-{scenario}-{name}",
+            task_text=(
+                f"Pass 16 unrelated {scenario} task line."
+                if name == "wrong_task_line"
+                else None
+            ),
+        )
     seed_after = _ledger_head(
         deeplaw_executable, vault, environment=environment, cwd=cwd
     )
     return {
         "grant_id": grant_id,
+        "task_handle": primary_handle,
         "knowledge_id": knowledge_id,
         "revision_id": revision_id,
+        "stale_knowledge_id": stale_knowledge_id,
+        "stale_revision_id": stale_revision_id,
+        "wrong_task_handles": wrong_handles,
         "seed_boundary": {
-            "kind": "seed_checkpoint",
+            "kind": "public_task_checkpoint",
             "owner_enabled": True,
             "read_mcp_write_performed": False,
             "audit_changed": seed_before != seed_after,
@@ -1861,18 +1980,30 @@ def _forget_checkpoint(
     environment: Mapping[str, str],
     cwd: Path,
 ) -> Mapping[str, Any]:
-    return _run_sink_request(
+    task_handle = fixture.get("task_handle")
+    if not isinstance(task_handle, str) or not task_handle:
+        raise QualificationError("public task forget handle is missing")
+    return _run_public_cli(
         deeplaw_executable,
+        (
+            "knowledge",
+            "task",
+            "forget",
+            "--vault",
+            vault,
+            "--task-handle",
+            task_handle,
+            "--workspace",
+            cwd,
+            "--grant-id",
+            str(fixture["grant_id"]),
+            "--idempotency-key",
+            "pass16-compaction-forget",
+            "--reason",
+            "Owner-directed Pass 16 checkpoint forgetting.",
+            "--confirm-no-case-data",
+        ),
         vault=vault,
-        grant_id=str(fixture["grant_id"]),
-        request={
-            "operation": "forget",
-            "idempotency_key": "pass16-compaction-forget",
-            "confirm_no_case_data": True,
-            "knowledge_id": fixture["knowledge_id"],
-            "expected_revision_id": fixture["revision_id"],
-            "reason": "Owner-directed Pass 16 checkpoint forgetting.",
-        },
         environment=environment,
         cwd=cwd,
     )
@@ -1880,6 +2011,32 @@ def _forget_checkpoint(
 
 def _validate_binary(binary: Path) -> str:
     return _sha256_file(binary)
+
+
+def _validate_owner_broker_launcher(launcher: Path, *, host_binary: Path) -> str:
+    """Bind an external owner-only launcher without reading its credential source."""
+
+    try:
+        details = launcher.lstat()
+    except OSError as exc:
+        raise QualificationError("OpenCode credential broker launcher is unavailable") from exc
+    if (
+        not stat.S_ISREG(details.st_mode)
+        or details.st_nlink != 1
+        or not os.access(launcher, os.X_OK)
+        or (
+            os.name != "nt"
+            and (
+                stat.S_IMODE(details.st_mode) & 0o077
+                or (hasattr(os, "geteuid") and details.st_uid != os.geteuid())
+            )
+        )
+    ):
+        raise QualificationError("OpenCode credential broker launcher is not owner-only")
+    launcher_sha256 = _sha256_file(launcher)
+    if launcher_sha256 == _sha256_file(host_binary):
+        raise QualificationError("OpenCode credential broker launcher is not process-separated")
+    return launcher_sha256
 
 
 def _run_opencode_command(
@@ -1904,12 +2061,11 @@ def _opencode_cli_turn_args(
     fork: bool = False,
     agent_name: str = "qualification",
 ) -> tuple[str, ...]:
-    """Return the pinned ``--pure run --format json`` task command."""
+    """Return the pinned project-plugin-enabled ``run --format json`` command."""
 
     if agent_name not in {"qualification", "development"}:
         raise QualificationError("OpenCode CLI agent mode is invalid")
     args: list[str] = [
-        "--pure",
         "run",
         "--format",
         "json",
@@ -1985,7 +2141,6 @@ class _OpenCodeLocalServer:
         self.process = subprocess.Popen(
             [
                 str(self.binary),
-                "--pure",
                 "serve",
                 "--hostname",
                 "127.0.0.1",
@@ -2037,6 +2192,15 @@ class _OpenCodeLocalServer:
             raise QualificationError("OpenCode local server response is not JSON")
         return value
 
+    def create(self) -> str:
+        """Create one native OpenCode session through POST /session."""
+
+        value = self.request("POST", "/session", {})
+        selected = _extract_value(value, "id", "sessionID", "sessionId")
+        if not isinstance(selected, str) or _SESSION_ID.fullmatch(selected) is None:
+            raise QualificationError("OpenCode session create omitted a safe session identity")
+        return selected
+
     def summarize(self, session_id: str) -> bool:
         if _SESSION_ID.fullmatch(session_id) is None:
             raise QualificationError("OpenCode compaction session identity is missing")
@@ -2048,14 +2212,6 @@ class _OpenCodeLocalServer:
         if value is not True:
             raise QualificationError("OpenCode summarize response is invalid")
         return True
-
-    def messages(self, session_id: str) -> list[Any]:
-        if _SESSION_ID.fullmatch(session_id) is None:
-            raise QualificationError("OpenCode session identity is invalid")
-        value = self.request("GET", f"/session/{session_id}/message")
-        if not isinstance(value, list):
-            raise QualificationError("OpenCode session messages response is invalid")
-        return value
 
     def resume(self, session_id: str) -> Mapping[str, Any]:
         if _SESSION_ID.fullmatch(session_id) is None:
@@ -2087,16 +2243,145 @@ class _OpenCodeLocalServer:
         self.process = None
 
 
+def _bind_public_host_session(
+    deeplaw_executable: Path,
+    *,
+    vault: Path,
+    session_id: str,
+    task_handle: str,
+    grant_id: str,
+    workspace: Path,
+    environment: Mapping[str, str],
+    cwd: Path,
+    idempotency_key: str,
+) -> Mapping[str, Any]:
+    if _SESSION_ID.fullmatch(session_id) is None:
+        raise QualificationError("OpenCode bind session identity is invalid")
+    session_sha256 = _sha256(session_id.encode("utf-8"))
+    result = _run_public_cli(
+        deeplaw_executable,
+        (
+            "knowledge",
+            "task",
+            "bind-host-session",
+            "--vault",
+            vault,
+            "--host",
+            "opencode",
+            "--session-sha256",
+            session_sha256,
+            "--task-handle",
+            task_handle,
+            "--workspace",
+            workspace,
+            "--grant-id",
+            grant_id,
+            "--idempotency-key",
+            idempotency_key,
+            "--confirm-no-case-data",
+        ),
+        vault=vault,
+        environment=environment,
+        cwd=cwd,
+    )
+    if result.get("status") != "bound" or result.get("write_performed") is not True:
+        raise QualificationError("public Host session bind did not complete")
+    return result
+
+
+def _resolve_public_host_continuity(
+    deeplaw_executable: Path,
+    *,
+    vault: Path,
+    session_id: str,
+    workspace: Path,
+    environment: Mapping[str, str],
+    cwd: Path,
+    forbidden_values: Sequence[str],
+) -> tuple[Mapping[str, Any], str]:
+    if _SESSION_ID.fullmatch(session_id) is None:
+        raise QualificationError("OpenCode resolve session identity is invalid")
+    result = _run_public_cli(
+        deeplaw_executable,
+        (
+            "knowledge",
+            "task",
+            "resolve-host-continuity",
+            "--vault",
+            vault,
+            "--host",
+            "opencode",
+            "--session-sha256",
+            _sha256(session_id.encode("utf-8")),
+            "--workspace",
+            workspace,
+        ),
+        vault=vault,
+        environment=environment,
+        cwd=cwd,
+    )
+    contract_path = (
+        Path(__file__).resolve().parents[2]
+        / "contracts"
+        / "host-continuity-capsule.v1.schema.json"
+    )
+    try:
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        Draft202012Validator(contract).validate(dict(result))
+    except (OSError, TypeError, ValueError, ValidationError) as exc:
+        raise QualificationError("public Host continuity response is invalid") from exc
+    text = _canonical(result)
+    _forbid_sensitive(text.encode("utf-8"), forbidden_values)
+    return result, text
+
+
+def _continuity_with_checkpoint_gap(
+    capsule: Mapping[str, Any],
+) -> tuple[dict[str, Any], str]:
+    """Mirror the project plugin's compaction-only checkpoint gap exactly."""
+
+    gaps = capsule.get("gaps")
+    if not isinstance(gaps, list):
+        raise QualificationError("OpenCode continuity capsule gaps are invalid")
+    if any(
+        isinstance(gap, Mapping) and gap.get("code") == "checkpoint_grant_missing"
+        for gap in gaps
+    ):
+        selected = dict(capsule)
+    elif len(gaps) >= 8:
+        selected = {
+            "schema_version": "deeplaw.host-continuity-capsule/v1",
+            "status": "gap",
+            "statements": [],
+            "gaps": [{"code": "checkpoint_grant_missing"}],
+            "conflicts": [],
+            "write_performed": False,
+        }
+    else:
+        selected = {**capsule, "gaps": [*gaps, {"code": "checkpoint_grant_missing"}]}
+    text = _canonical(selected)
+    if len(text.encode("utf-8")) > 1400:
+        selected = {
+            "schema_version": "deeplaw.host-continuity-capsule/v1",
+            "status": "gap",
+            "statements": [],
+            "gaps": [{"code": "continuity_capsule_bound"}],
+            "conflicts": [],
+            "write_performed": False,
+        }
+        text = _canonical(selected)
+    return selected, text
+
+
 def _probe_model_availability(
-    binary: Path,
+    host_launcher: Path,
     *,
     environment: Mapping[str, str],
     cwd: Path,
 ) -> dict[str, Any]:
     result = _run_opencode_command(
-        binary,
+        host_launcher,
         args=(
-            "--pure",
             "run",
             "--format",
             "json",
@@ -2121,7 +2406,7 @@ def _probe_model_availability(
         forbidden_values=tuple(
             value
             for name, value in environment.items()
-            if name == _PROVIDER_ENV_NAME or name in _CANARY_NAMES
+            if name in _CANARY_NAMES
         ),
     )
 
@@ -2129,26 +2414,37 @@ def _probe_model_availability(
 def preflight_opencode(
     *,
     binary: Path,
+    host_launcher: Path,
+    deeplaw_executable: Path,
     environment: Mapping[str, str],
     cwd: Path,
-    provider_key: str | None = None,
+    project_root: Path | None = None,
+    plugin_receipt: Mapping[str, Any] | None = None,
     agent_name: str = "qualification",
 ) -> dict[str, Any]:
+    if project_root is None or plugin_receipt is None:
+        raise QualificationError("OpenCode plugin preflight binding is required")
+    inspection_cwd = project_root
+    plugin_target, plugin_sha256 = _validate_plugin_receipt(
+        plugin_receipt,
+        repository=project_root,
+        deeplaw_executable=deeplaw_executable,
+    )
     forbidden_values = tuple(
         value
         for name, value in environment.items()
-        if name == _PROVIDER_ENV_NAME or name in _CANARY_NAMES
+        if name in _CANARY_NAMES
     )
     inspection_environment = {
         name: value
         for name, value in environment.items()
-        if name != _PROVIDER_ENV_NAME and name not in _CANARY_NAMES
+        if name not in _CANARY_NAMES
     }
     version = _run_opencode_command(
         binary,
         args=("--version",),
         environment=inspection_environment,
-        cwd=cwd,
+        cwd=inspection_cwd,
     )
     _forbid_sensitive(version["stdout"] + version["stderr"], forbidden_values)
     version_text = version["stdout"].decode("utf-8", errors="replace").strip()
@@ -2159,9 +2455,9 @@ def preflight_opencode(
         raise QualificationError("OpenCode version is not exactly 1.18.16")
     models = _run_opencode_command(
         binary,
-        args=("--pure", "models", "deepseek"),
+        args=("models", "deepseek"),
         environment=inspection_environment,
-        cwd=cwd,
+        cwd=inspection_cwd,
     )
     _forbid_sensitive(
         bytes(models["stdout"]) + bytes(models["stderr"]),
@@ -2170,9 +2466,9 @@ def preflight_opencode(
     model_inventory = parse_model_inventory(models["stdout"], returncode=int(models["returncode"]))
     config = _run_opencode_command(
         binary,
-        args=("--pure", "debug", "config"),
+        args=("debug", "config"),
         environment=inspection_environment,
-        cwd=cwd,
+        cwd=inspection_cwd,
     )
     if config["returncode"] != 0:
         raise QualificationError("OpenCode resolved config command failed")
@@ -2186,6 +2482,8 @@ def preflight_opencode(
         raise QualificationError("resolved OpenCode config is not JSON") from exc
     if not isinstance(resolved, Mapping):
         raise QualificationError("resolved OpenCode config is not an object")
+    if not _resolved_plugin_matches(resolved, target=plugin_target):
+        raise QualificationError("resolved config did not load the exact project plugin")
     resolved_mcp = resolved.get("mcp")
     if not isinstance(resolved_mcp, Mapping) or set(resolved_mcp) != {"deeplaw_knowledge"}:
         raise QualificationError("resolved config enabled an unexpected MCP")
@@ -2209,7 +2507,6 @@ def preflight_opencode(
         or resolved.get("enabled_providers") != ["deepseek"]
         or resolved.get("share") != "disabled"
         or resolved.get("snapshot") is not False
-        or resolved.get("plugin") != []
         or resolved.get("permission") != build_permission()
         or not isinstance(resolved_selected_agent, Mapping)
         or resolved_selected_agent.get("variant") != VARIANT
@@ -2220,29 +2517,30 @@ def preflight_opencode(
         "raw_sha256": _sha256(config_bytes),
         "raw_bytes": len(config_bytes),
     }
-    availability = None
-    if provider_key is not None:
-        availability_config = cwd / "availability-opencode.json"
-        no_tools_config = build_opencode_config(agent_name=agent_name)
-        no_tools_config["mcp"] = {}
-        availability_config.write_text(_canonical(no_tools_config) + "\n", encoding="utf-8")
-        availability = _probe_model_availability(
-            binary,
-            environment={
-                **environment,
-                _PROVIDER_ENV_NAME: provider_key,
-                "OPENCODE_CONFIG": str(availability_config),
-            },
-            cwd=cwd,
-        )
-        if availability["status"] != "available":
-            raise QualificationError("DeepSeek model availability probe failed")
+    availability_config = cwd / "availability-opencode.json"
+    no_tools_config = build_opencode_config(agent_name=agent_name)
+    no_tools_config["mcp"] = {}
+    availability_config.write_text(_canonical(no_tools_config) + "\n", encoding="utf-8")
+    availability = _probe_model_availability(
+        host_launcher,
+        environment={
+            **environment,
+            "OPENCODE_CONFIG": str(availability_config),
+        },
+        cwd=inspection_cwd,
+    )
+    if availability["status"] != "available":
+        raise QualificationError("DeepSeek model availability probe failed")
     return {
         "version": OPENCODE_VERSION,
         "version_sha256": _sha256(version["stdout"]),
         "version_bytes": len(version["stdout"]),
         "model_inventory": model_inventory,
         "resolved_config": config_receipt,
+        "external_plugin": {
+            **dict(plugin_receipt),
+            "resolved_installed_sha256": plugin_sha256,
+        },
         "availability": availability,
     }
 
@@ -2308,14 +2606,229 @@ def _final_metrics(
     }
 
 
+def _require_regular_path(path: Path, *, label: str) -> None:
+    """Reject symlinks and non-regular paths at the plugin boundary."""
+
+    try:
+        mode = path.lstat().st_mode
+    except OSError as exc:
+        raise QualificationError(f"{label} is unavailable") from exc
+    if not stat.S_ISREG(mode):
+        raise QualificationError(f"{label} is not a regular file")
+
+
+def _require_directory(path: Path, *, label: str) -> None:
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        path.mkdir()
+        return
+    except OSError as exc:
+        raise QualificationError(f"{label} is unavailable") from exc
+    if not stat.S_ISDIR(mode):
+        raise QualificationError(f"{label} is not a directory")
+
+
+def _freeze_local_plugin_dependency_state(directory: Path) -> None:
+    """Keep exact local-plugin loading offline and prevent Host workspace mutation."""
+
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "node_modules").mkdir(exist_ok=True)
+    dependency = {_OPENCODE_PLUGIN_API_PACKAGE: OPENCODE_VERSION}
+    (directory / "package.json").write_text(
+        _canonical({"dependencies": dependency}) + "\n",
+        encoding="utf-8",
+    )
+    (directory / "package-lock.json").write_text(
+        _canonical({"packages": {"": {"dependencies": dependency}}}) + "\n",
+        encoding="utf-8",
+    )
+    (directory / ".gitignore").write_text(
+        "node_modules\npackage.json\npackage-lock.json\nbun.lock\n.gitignore",
+        encoding="utf-8",
+    )
+
+
+def _installed_opencode_plugin_bytes(deeplaw_executable: Path) -> bytes:
+    """Read the plugin only from the isolated candidate-wheel installation."""
+
+    runtime_python = deeplaw_executable.parent / "python"
+    _require_regular_path(runtime_python, label="candidate runtime Python")
+    resource = _PLUGIN_RESOURCE_RELATIVE.as_posix()
+    script = (
+        "import importlib.resources, sys\n"
+        "root = importlib.resources.files('deeplaw')\n"
+        f"sys.stdout.buffer.write(root.joinpath({resource!r}).read_bytes())\n"
+    )
+    result = _run_bounded_process(
+        [runtime_python, "-I", "-c", script],
+        environment={
+            "PATH": str(runtime_python.parent),
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "PYTHONNOUSERSITE": "1",
+        },
+        cwd=deeplaw_executable.parent,
+        timeout=30,
+    )
+    source_bytes = bytes(result["stdout"])
+    if (
+        result["returncode"] != 0
+        or result["timed_out"]
+        or result["output_overflow"]
+        or result["stderr"]
+        or not source_bytes
+    ):
+        raise QualificationError(
+            "candidate wheel did not provide the exact OpenCode plugin"
+        )
+    return source_bytes
+
+
+def _install_exact_opencode_plugin(
+    *, repository: Path, run_root: Path, deeplaw_executable: Path
+) -> tuple[dict[str, Any], Path]:
+    """Install candidate-wheel plugin bytes and retain a path-free binding receipt."""
+
+    try:
+        repository_mode = repository.lstat().st_mode
+    except OSError as exc:
+        raise QualificationError("OpenCode scenario repository is unavailable") from exc
+    if not stat.S_ISDIR(repository_mode):
+        raise QualificationError("OpenCode scenario repository is not a directory")
+
+    source_bytes = _installed_opencode_plugin_bytes(deeplaw_executable)
+
+    opencode_dir = repository / ".opencode"
+    plugins_dir = opencode_dir / "plugins"
+    _require_directory(opencode_dir, label="OpenCode project plugin directory")
+    _freeze_local_plugin_dependency_state(opencode_dir)
+    _require_directory(plugins_dir, label="OpenCode project plugin directory")
+    target = repository / _PLUGIN_INSTALLED_RELATIVE
+    if target.exists() or target.is_symlink():
+        _require_regular_path(target, label="OpenCode installed plugin")
+    try:
+        target.write_bytes(source_bytes)
+    except OSError as exc:
+        raise QualificationError("OpenCode plugin cannot be installed") from exc
+    _require_regular_path(target, label="OpenCode installed plugin")
+    try:
+        installed_bytes = target.read_bytes()
+    except OSError as exc:
+        raise QualificationError("OpenCode installed plugin cannot be read") from exc
+
+    source_sha256 = _sha256(source_bytes)
+    installed_sha256 = _sha256(installed_bytes)
+    receipt: dict[str, Any] = {
+        "source_relative": _PLUGIN_SOURCE_RELATIVE.as_posix(),
+        "source_sha256": source_sha256,
+        "source_bytes": len(source_bytes),
+        "installed_relative": _PLUGIN_INSTALLED_RELATIVE.as_posix(),
+        "installed_sha256": installed_sha256,
+        "installed_bytes": len(installed_bytes),
+        "exact_match": source_bytes == installed_bytes,
+    }
+    if (
+        receipt["exact_match"] is not True
+        or source_sha256 != installed_sha256
+        or receipt["source_bytes"] != receipt["installed_bytes"]
+    ):
+        raise QualificationError("OpenCode installed plugin bytes do not match the source")
+    receipt_path = run_root / "opencode-plugin-receipt.json"
+    try:
+        receipt_path.write_text(_canonical(receipt) + "\n", encoding="utf-8")
+    except OSError as exc:
+        raise QualificationError("OpenCode plugin receipt cannot be written") from exc
+    return receipt, receipt_path
+
+
+def _validate_plugin_receipt(
+    receipt: Mapping[str, Any], *, repository: Path, deeplaw_executable: Path
+) -> tuple[Path, str]:
+    """Revalidate candidate-wheel/install binding before trusting resolved config."""
+
+    expected_keys = {
+        "source_relative",
+        "source_sha256",
+        "source_bytes",
+        "installed_relative",
+        "installed_sha256",
+        "installed_bytes",
+        "exact_match",
+    }
+    if not isinstance(receipt, Mapping) or set(receipt) != expected_keys:
+        raise QualificationError("OpenCode plugin receipt is incomplete")
+    if receipt.get("source_relative") != _PLUGIN_SOURCE_RELATIVE.as_posix():
+        raise QualificationError("OpenCode plugin source binding is unexpected")
+    if receipt.get("installed_relative") != _PLUGIN_INSTALLED_RELATIVE.as_posix():
+        raise QualificationError("OpenCode plugin install binding is unexpected")
+    source_sha256 = _require_sha(receipt.get("source_sha256"), "plugin_source_sha256")
+    installed_sha256 = _require_sha(
+        receipt.get("installed_sha256"), "plugin_installed_sha256"
+    )
+    source_bytes = receipt.get("source_bytes")
+    installed_bytes = receipt.get("installed_bytes")
+    if (
+        not isinstance(source_bytes, int)
+        or isinstance(source_bytes, bool)
+        or source_bytes <= 0
+        or not isinstance(installed_bytes, int)
+        or isinstance(installed_bytes, bool)
+        or installed_bytes <= 0
+        or receipt.get("exact_match") is not True
+        or source_sha256 != installed_sha256
+        or source_bytes != installed_bytes
+    ):
+        raise QualificationError("OpenCode plugin receipt is inconsistent")
+    target = repository / _PLUGIN_INSTALLED_RELATIVE
+    _require_regular_path(target, label="OpenCode installed plugin")
+    try:
+        installed_data = target.read_bytes()
+    except OSError as exc:
+        raise QualificationError("OpenCode plugin bytes cannot be read") from exc
+    source_data = _installed_opencode_plugin_bytes(deeplaw_executable)
+    if (
+        len(source_data) != source_bytes
+        or len(installed_data) != installed_bytes
+        or _sha256(source_data) != source_sha256
+        or _sha256(installed_data) != installed_sha256
+        or source_data != installed_data
+    ):
+        raise QualificationError("OpenCode plugin bytes changed after installation")
+    return target, installed_sha256
+
+
+def _resolved_plugin_matches(
+    resolved: Mapping[str, Any], *, target: Path
+) -> bool:
+    """Require the exact one project plugin emitted by OpenCode 1.18.16."""
+
+    plugins = resolved.get("plugin")
+    if not isinstance(plugins, list) or len(plugins) != 1 or not isinstance(plugins[0], str):
+        return False
+    parsed = urlparse(plugins[0])
+    if parsed.scheme != "file" or parsed.netloc or parsed.query or parsed.fragment:
+        return False
+    try:
+        raw_path = unquote(parsed.path)
+        if os.name == "nt" and re.match(r"^/[A-Za-z]:[\\/]", raw_path):
+            raw_path = raw_path[1:]
+        resolved_path = Path(raw_path).resolve(strict=True)
+        target_path = target.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return resolved_path == target_path
+
+
 def _prepare_scenario_state(
     *,
     base_environment: Mapping[str, str],
     run_root: Path,
+    repository: Path,
     deeplaw_executable: Path,
     node_binary: Path,
     agent_name: str = "qualification",
-) -> tuple[dict[str, str], Path]:
+) -> tuple[dict[str, str], Path, dict[str, Any]]:
     """Give each scenario a distinct OpenCode state tree and MCP wrapper."""
 
     for name in (
@@ -2346,7 +2859,22 @@ def _prepare_scenario_state(
         ]
     config_path = run_root / "opencode.json"
     config_path.write_text(_canonical(config) + "\n", encoding="utf-8")
+    model_receipt_path = run_root / "tmp" / "opencode-model-observations.jsonl"
+    model_receipt_path.touch(mode=0o600, exist_ok=False)
+    plugin_receipt, _plugin_receipt_path = _install_exact_opencode_plugin(
+        repository=repository,
+        run_root=run_root,
+        deeplaw_executable=deeplaw_executable,
+    )
     environment = dict(base_environment)
+    environment["PATH"] = os.pathsep.join(
+        dict.fromkeys(
+            (
+                str(deeplaw_executable.parent),
+                environment.get("PATH", os.defpath),
+            )
+        )
+    )
     environment.update(
         {
             "HOME": str(run_root / "home"),
@@ -2362,10 +2890,18 @@ def _prepare_scenario_state(
             "LOCALAPPDATA": str(run_root / "localappdata"),
             "OPENCODE_CONFIG": str(config_path),
             "OPENCODE_CONFIG_DIR": str(run_root / "opencode-config"),
-            "DEEPLAW_KNOWLEDGE_VAULT": "vault",
+            _MODEL_RECEIPT_ENV_NAME: str(model_receipt_path),
+            # The native plugin accepts only an explicit absolute Vault path;
+            # keeping this local to the scenario prevents ambient resolution
+            # from selecting a checkout or another user's Vault.
+            "DEEPLAW_KNOWLEDGE_VAULT": str((repository / "vault").resolve()),
         }
     )
-    return environment, receipt
+    _freeze_local_plugin_dependency_state(
+        Path(environment["XDG_CONFIG_HOME"]) / "opencode"
+    )
+    _freeze_local_plugin_dependency_state(Path(environment["OPENCODE_CONFIG_DIR"]))
+    return environment, receipt, plugin_receipt
 
 
 def _empty_analysis(code: str) -> dict[str, Any]:
@@ -2554,27 +3090,266 @@ def _safe_failure_code(exc: QualificationError) -> str:
     return known.get(str(exc), "host_qualification_failure")
 
 
-def _compaction_usage_from_messages(messages: Sequence[Any]) -> dict[str, int]:
-    """Read actual AI-compaction usage from the public session message API."""
+_MODEL_OBSERVATION_KEYS = frozenset(
+    {
+        "schema_version",
+        "event_type",
+        "session_sha256",
+        "message_sha256",
+        "role",
+        "provider_id",
+        "model_id",
+        "summary",
+        "mode",
+        "finish",
+        "tokens",
+    }
+)
+_CONTINUITY_DELIVERY_KEYS = frozenset(
+    {
+        "schema_version",
+        "event_type",
+        "session_sha256",
+        "context_sha256",
+        "context_bytes",
+        "status",
+        "statement_count",
+        "gap_codes",
+        "conflict_count",
+    }
+)
 
-    matches: list[Mapping[str, Any]] = []
-    for row in messages:
-        if not isinstance(row, Mapping):
+
+def _model_receipt_offset(path: Path) -> int:
+    if path.is_symlink() or not path.is_file():
+        raise QualificationError("OpenCode model observation receipt is unavailable")
+    details = path.stat()
+    if os.name != "nt" and (
+        stat.S_IMODE(details.st_mode) & 0o077
+        or (hasattr(os, "geteuid") and details.st_uid != os.geteuid())
+    ):
+        raise QualificationError("OpenCode model observation receipt is not owner-only")
+    return details.st_size
+
+
+def _read_host_observations(
+    path: Path,
+    *,
+    offset: int,
+    forbidden_values: Sequence[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    current = _model_receipt_offset(path)
+    if offset < 0 or offset > current:
+        raise QualificationError("OpenCode model observation offset is invalid")
+    with path.open("rb") as stream:
+        stream.seek(offset)
+        raw = stream.read(MAX_OUTPUT_BYTES + 1)
+    if not raw or len(raw) > MAX_OUTPUT_BYTES or not raw.endswith(b"\n"):
+        raise QualificationError("OpenCode model observation receipt is incomplete")
+    _forbid_sensitive(raw, forbidden_values)
+    model_observations: list[dict[str, Any]] = []
+    delivery_observations: list[dict[str, Any]] = []
+    for line in raw.splitlines():
+        value = _strict_json(line)
+        if not isinstance(value, Mapping):
+            raise QualificationError("OpenCode Host observation shape is invalid")
+        if set(value) == _CONTINUITY_DELIVERY_KEYS:
+            gap_codes = value.get("gap_codes")
+            if (
+                value.get("schema_version")
+                != "deeplaw.opencode-continuity-delivery-observation/v1"
+                or value.get("event_type")
+                not in {
+                    "experimental.chat.system.transform",
+                    "experimental.session.compacting",
+                }
+                or value.get("status") not in {"admitted", "gap"}
+                or not isinstance(value.get("session_sha256"), str)
+                or _SHA256.fullmatch(str(value.get("session_sha256"))) is None
+                or not isinstance(value.get("context_sha256"), str)
+                or _SHA256.fullmatch(str(value.get("context_sha256"))) is None
+                or isinstance(value.get("context_bytes"), bool)
+                or not isinstance(value.get("context_bytes"), int)
+                or not 1 <= int(value["context_bytes"]) <= 2048
+                or any(
+                    isinstance(value.get(field), bool)
+                    or not isinstance(value.get(field), int)
+                    or int(value[field]) < 0
+                    for field in ("statement_count", "conflict_count")
+                )
+                or not isinstance(gap_codes, list)
+                or gap_codes != sorted(set(gap_codes))
+                or any(
+                    not isinstance(code, str) or _GAP_CODE.fullmatch(code) is None
+                    for code in gap_codes
+                )
+            ):
+                raise QualificationError("OpenCode continuity delivery observation is invalid")
+            delivery_observations.append(dict(value))
             continue
-        info = row.get("info")
-        if not isinstance(info, Mapping):
-            continue
+        if set(value) != _MODEL_OBSERVATION_KEYS:
+            raise QualificationError("OpenCode model observation shape is invalid")
+        tokens = value.get("tokens")
+        cache = tokens.get("cache") if isinstance(tokens, Mapping) else None
         if (
-            info.get("role") == "assistant"
-            and (info.get("summary") is True or info.get("mode") == "compaction")
-            and isinstance(info.get("tokens"), Mapping)
+            value.get("schema_version")
+            != "deeplaw.opencode-model-observation/v1"
+            or value.get("event_type") != "message.updated"
+            or value.get("role") != "assistant"
+            or not isinstance(value.get("provider_id"), str)
+            or not isinstance(value.get("model_id"), str)
+            or not isinstance(value.get("summary"), bool)
+            or not (
+                value.get("mode") is None or isinstance(value.get("mode"), str)
+            )
+            or not (
+                value.get("finish") is None or isinstance(value.get("finish"), str)
+            )
+            or any(
+                not isinstance(value.get(field), str)
+                or _SHA256.fullmatch(str(value.get(field))) is None
+                for field in ("session_sha256", "message_sha256")
+            )
+            or not isinstance(tokens, Mapping)
+            or set(tokens) != {"input", "output", "reasoning", "total", "cache"}
+            or not isinstance(cache, Mapping)
+            or set(cache) != {"read", "write"}
+            or any(
+                isinstance(item, bool) or not isinstance(item, int) or item < 0
+                for item in (
+                    tokens.get("input"),
+                    tokens.get("output"),
+                    tokens.get("reasoning"),
+                    tokens.get("total"),
+                    cache.get("read"),
+                    cache.get("write"),
+                )
+            )
         ):
-            matches.append(info["tokens"])
-    if len(matches) != 1:
+            raise QualificationError("OpenCode model observation value is invalid")
+        model_observations.append(dict(value))
+    return model_observations, delivery_observations
+
+
+def _read_model_observations(
+    path: Path,
+    *,
+    offset: int,
+    forbidden_values: Sequence[str],
+) -> list[dict[str, Any]]:
+    """Compatibility helper returning only sanitized response-model rows."""
+
+    model_observations, _delivery_observations = _read_host_observations(
+        path,
+        offset=offset,
+        forbidden_values=forbidden_values,
+    )
+    return model_observations
+
+
+def _continuity_delivery_from_observations(
+    observations: Sequence[Mapping[str, Any]],
+    *,
+    session_id: str,
+    continuity_capsule: Mapping[str, Any],
+    continuity_text: str,
+    event_type: str = "experimental.chat.system.transform",
+) -> dict[str, Any]:
+    """Require one plugin-observed delivery matching the independently resolved bytes."""
+
+    session_sha256 = _sha256(session_id.encode("utf-8"))
+    selected = [
+        item
+        for item in observations
+        if item.get("session_sha256") == session_sha256
+        and item.get("event_type") == event_type
+    ]
+    if len(selected) != 1:
         raise QualificationError(
-            "OpenCode public session messages omitted one actual compaction usage"
+            "OpenCode continuity delivery was not observed exactly once"
         )
-    return _require_actual_usage(_normalize_usage({"tokens": matches[0]}))
+    delivery = selected[0]
+    encoded = continuity_text.encode("utf-8")
+    statements = continuity_capsule.get("statements")
+    gaps = continuity_capsule.get("gaps")
+    conflicts = continuity_capsule.get("conflicts")
+    if not all(isinstance(value, list) for value in (statements, gaps, conflicts)):
+        raise QualificationError("OpenCode continuity delivery capsule is invalid")
+    expected = {
+        "context_sha256": _sha256(encoded),
+        "context_bytes": len(encoded),
+        "status": continuity_capsule.get("status"),
+        "statement_count": len(statements),
+        "gap_codes": sorted(
+            {
+                str(item["code"])
+                for item in gaps
+                if isinstance(item, Mapping) and isinstance(item.get("code"), str)
+            }
+        ),
+        "conflict_count": len(conflicts),
+    }
+    if any(delivery.get(key) != value for key, value in expected.items()):
+        raise QualificationError(
+            "OpenCode continuity delivery did not match the resolver"
+        )
+    return {
+        "event_type": event_type,
+        "session_sha256": session_sha256,
+        **expected,
+    }
+
+
+def _response_model_from_observations(
+    observations: Sequence[Mapping[str, Any]],
+    *,
+    session_id: str,
+) -> tuple[str, str, int]:
+    """Validate completed assistant model metadata without reading message parts."""
+
+    session_sha256 = _sha256(session_id.encode("utf-8"))
+    completed = [
+        item
+        for item in observations
+        if item.get("session_sha256") == session_sha256
+        and item.get("summary") is False
+        and item.get("mode") != "compaction"
+        and isinstance(item.get("finish"), str)
+    ]
+    models = {
+        (str(item.get("provider_id")), str(item.get("model_id")))
+        for item in completed
+    }
+    if models != {("deepseek", "deepseek-v4-flash")}:
+        raise QualificationError("assistant response model identity is missing or unexpected")
+    messages = {str(item.get("message_sha256")) for item in completed}
+    if len(messages) != 1:
+        raise QualificationError("assistant response model observation is ambiguous")
+    provider_id, model_id = next(iter(models))
+    return provider_id, model_id, len(completed)
+
+
+def _compaction_usage_from_observations(
+    observations: Sequence[Mapping[str, Any]],
+    *,
+    session_id: str,
+) -> dict[str, int]:
+    """Read compaction usage only from sanitized ``message.updated`` metadata."""
+
+    session_sha256 = _sha256(session_id.encode("utf-8"))
+    completed = [
+        item
+        for item in observations
+        if item.get("session_sha256") == session_sha256
+        and (item.get("summary") is True or item.get("mode") == "compaction")
+        and isinstance(item.get("finish"), str)
+    ]
+    messages = {str(item.get("message_sha256")) for item in completed}
+    if len(messages) != 1 or not completed:
+        raise QualificationError(
+            "OpenCode model observations omitted one actual compaction usage"
+        )
+    return _require_actual_usage(_normalize_usage({"tokens": completed[-1]["tokens"]}))
 
 
 def _merge_usage(
@@ -2702,6 +3477,7 @@ def _run_one_scenario(
     run_index: int,
     scenario: str,
     opencode_binary: Path,
+    host_launcher: Path,
     deeplaw_executable: Path,
     environment: Mapping[str, str],
     run_root: Path,
@@ -2721,18 +3497,6 @@ def _run_one_scenario(
     semantic_task_family = reported_scenario or scenario
     development = semantic_task_family == "development_diagnostic"
     run_root.mkdir(parents=True, exist_ok=True)
-    scenario_environment, wrapper_receipt_path = _prepare_scenario_state(
-        base_environment=environment,
-        run_root=run_root,
-        deeplaw_executable=deeplaw_executable,
-        node_binary=opencode_binary,
-        agent_name=agent_name,
-    )
-    deeplaw_environment = {
-        name: value
-        for name, value in scenario_environment.items()
-        if name != _PROVIDER_ENV_NAME and name not in _CANARY_NAMES
-    }
     task_line = (
         str(selected_case["task_case"])
         if development
@@ -2745,6 +3509,38 @@ def _run_one_scenario(
             development=development,
         )
     )
+    scenario_environment, wrapper_receipt_path, plugin_receipt = _prepare_scenario_state(
+        base_environment=environment,
+        run_root=run_root,
+        repository=repository,
+        deeplaw_executable=deeplaw_executable,
+        node_binary=opencode_binary,
+        agent_name=agent_name,
+    )
+    _validate_plugin_receipt(
+        plugin_receipt,
+        repository=repository,
+        deeplaw_executable=deeplaw_executable,
+    )
+    model_receipt_value = scenario_environment.get(_MODEL_RECEIPT_ENV_NAME)
+    model_receipt_path = Path(model_receipt_value or "")
+    expected_model_receipt = run_root / "tmp" / "opencode-model-observations.jsonl"
+    try:
+        receipt_matches = (
+            model_receipt_path.resolve(strict=True)
+            == expected_model_receipt.resolve(strict=True)
+        )
+    except OSError:
+        receipt_matches = False
+    if not receipt_matches:
+        raise QualificationError("OpenCode model observation receipt path is invalid")
+    _model_receipt_offset(model_receipt_path)
+    deeplaw_environment = {
+        name: value
+        for name, value in scenario_environment.items()
+        if name not in {_PROVIDER_ENV_NAME, _MODEL_RECEIPT_ENV_NAME}
+        and name not in _CANARY_NAMES
+    }
     # OpenCode resolves the relative MCP command from its task repository.  A
     # byte-identical transient wrapper is placed there, while its receipt still
     # lands only in the isolated run root.
@@ -2777,6 +3573,7 @@ def _run_one_scenario(
             case=selected_case,
             primary_binding=primary_binding,
             concurrent_binding=concurrent_binding,
+            concurrent_workspace=concurrent,
             environment=deeplaw_environment,
             cwd=repository,
         )
@@ -2795,6 +3592,7 @@ def _run_one_scenario(
     marker_checks: list[dict[str, Any]] = []
     methods: list[str] = []
     native_receipts: list[dict[str, Any]] = []
+    route_receipts: list[dict[str, Any]] = []
     sanitized: list[bytes] = []
     wrapper_receipts: list[Mapping[str, Any]] = []
     session_id: str | None = None
@@ -2810,7 +3608,7 @@ def _run_one_scenario(
         + ". End with the required bare four-key JSON object only; do not use a code fence, "
         "prefix, or suffix."
         if development
-        else _candidate_prompt(selected_case, primary_binding)
+        else _candidate_prompt(selected_case)
     )
 
     def capture_wrapper_receipt() -> None:
@@ -2833,20 +3631,42 @@ def _run_one_scenario(
         *,
         fork: bool = False,
         post_forget: bool = False,
+        precreated: bool = False,
+        parent_session_id: str | None = None,
     ) -> None:
         nonlocal session_id, root_session_id, compaction_usage
         previous_session_id = session_id
+        expected_session_id = session_id
         before = _ledger_head(
             deeplaw_executable, vault, environment=deeplaw_environment, cwd=repository
         )
         started = time.monotonic()
         args = _opencode_cli_turn_args(
-            session_id=session_id,
-            fork=fork,
+            # Every formal session is created through POST /session before
+            # this call.  The compatibility ``fork`` argument is retained for
+            # development fixtures, but formal forks pass a pre-created child
+            # and never ask the CLI to synthesize one.
+            session_id=expected_session_id,
+            fork=fork and not precreated,
             agent_name=agent_name,
         )
+        continuity_capsule: Mapping[str, Any] | None = None
+        continuity_text: str | None = None
+        if not development:
+            if expected_session_id is None:
+                raise QualificationError("OpenCode Host session was not pre-created")
+            continuity_capsule, continuity_text = _resolve_public_host_continuity(
+                deeplaw_executable,
+                vault=vault,
+                session_id=expected_session_id,
+                workspace=repository,
+                environment=deeplaw_environment,
+                cwd=repository,
+                forbidden_values=forbidden_values,
+            )
+        model_observation_offset = _model_receipt_offset(model_receipt_path)
         result = _run_opencode_command(
-            opencode_binary,
+            host_launcher,
             args=args,
             environment=scenario_environment,
             cwd=repository,
@@ -2861,8 +3681,10 @@ def _run_one_scenario(
         try:
             analysis = analyze_opencode_events(
                 result["stdout"],
-                expected_task_binding=primary_binding,
-                expected_task=str(selected_case["task_case"]),
+                expected_task_binding=(primary_binding if development else None),
+                expected_task=(str(selected_case["task_case"]) if development else None),
+                continuity_capsule=continuity_capsule,
+                continuity_text=continuity_text,
                 forbidden_values=forbidden_values,
             )
         except QualificationError as exc:
@@ -2900,11 +3722,42 @@ def _run_one_scenario(
         except pass13_evidence.EvidenceValidationError as exc:
             raise QualificationError(str(exc)) from exc
         observed_session = _session_id_from_events(result["stdout"])
-        if session_id is not None and not fork and observed_session != session_id:
-            raise QualificationError("OpenCode resume changed the session identity")
+        if expected_session_id is not None and observed_session != expected_session_id:
+            raise QualificationError("OpenCode Host changed the pre-created session identity")
         session_id = observed_session
         if root_session_id is None:
             root_session_id = observed_session
+        if server is None:
+            raise QualificationError("OpenCode local session server is unavailable")
+        model_observations, delivery_observations = _read_host_observations(
+            model_receipt_path,
+            offset=model_observation_offset,
+            forbidden_values=forbidden_values,
+        )
+        actual_provider_id, actual_model_id, completed_observation_count = (
+            _response_model_from_observations(
+                model_observations,
+                session_id=observed_session,
+            )
+        )
+        response_model_observation = {
+            "observation_count": len(model_observations),
+            "completed_observation_count": completed_observation_count,
+            "actual_response_provider_id": actual_provider_id,
+            "actual_response_model_id": actual_model_id,
+            "source": "candidate_plugin_message.updated_metadata",
+        }
+        continuity_delivery_receipt: dict[str, Any] | None = None
+        if continuity_capsule is not None and continuity_text is not None:
+            continuity_delivery_receipt = _continuity_delivery_from_observations(
+                delivery_observations,
+                session_id=observed_session,
+                continuity_capsule=continuity_capsule,
+                continuity_text=continuity_text,
+            )
+            response_model_observation["continuity_delivery"] = (
+                continuity_delivery_receipt
+            )
         usage, native_turn_usage = _account_turn_usage(
             analysis["usage"], compaction_usage
         )
@@ -2918,6 +3771,24 @@ def _run_one_scenario(
                 post_forget=post_forget,
             )
             marker_checks.append(check)
+        continuity_observation: dict[str, Any] | None = None
+        if continuity_text is not None and continuity_capsule is not None:
+            known_markers = pass16_continuity_cases.marker_values(selected_case)
+            continuity_observation = {
+                "sha256": _sha256(continuity_text.encode("utf-8")),
+                "bytes": len(continuity_text.encode("utf-8")),
+                "status": continuity_capsule.get("status"),
+                "delivery_source": "opencode_project_plugin",
+                "delivery_sha256": _sha256(
+                    _encoded(continuity_delivery_receipt)
+                ),
+                "provider_sha256": _sha256(continuity_text.encode("utf-8")),
+                "provider_bytes": len(continuity_text.encode("utf-8")),
+                "marker_presence": {
+                    name: _contains_marker(continuity_capsule, marker)
+                    for name, marker in known_markers.items()
+                },
+            }
         events = analysis["sanitized_events"]
         sanitized.append(events)
         turns.append(
@@ -2931,10 +3802,17 @@ def _run_one_scenario(
                 "final_response_bytes": analysis["final_response_bytes"],
                 "host_elapsed_ms": max(0, int((time.monotonic() - started) * 1000)),
                 "usage": usage,
+                "actual_response_provider_id": actual_provider_id,
+                "actual_response_model_id": actual_model_id,
+                "actual_response_model_receipt": {
+                    "bytes": len(_encoded(response_model_observation)),
+                    "sha256": _sha256(_encoded(response_model_observation)),
+                },
                 "ledger_audit_head_before": before,
                 "ledger_audit_head_after": after,
                 "ledger_unchanged": before == after,
                 "safe_read": analysis["safe_read"],
+                "host_continuity_capsule": continuity_observation,
                 "sanitized_events": {
                     "name": f"opencode-run-{run_index}-turn-{len(turns)+1}.sanitized.jsonl",
                     "bytes": len(events),
@@ -2946,9 +3824,21 @@ def _run_one_scenario(
             raise QualificationError("read-only OpenCode turn changed the ledger")
         if root_session_id is None:
             raise QualificationError("OpenCode root session identity is missing")
-        relation = "new" if previous_session_id is None else "fork" if fork else "resume"
+        relation = (
+            "fork"
+            if parent_session_id is not None
+            else "new"
+            if precreated and root_session_id == observed_session
+            else "resume"
+        )
+        receipt_parent = parent_session_id if relation == "fork" else (
+            previous_session_id if relation == "resume" else None
+        )
         sanitized_args = [
-            "<session-sha256>" if item == previous_session_id else item for item in args
+            "<session-sha256>"
+            if isinstance(item, str) and item in {previous_session_id, expected_session_id}
+            else item
+            for item in args
         ]
         native_receipts.append(
             pass13_evidence.native_lifecycle_receipt(
@@ -2969,22 +3859,22 @@ def _run_one_scenario(
                 methods_observed=["cli.run.json"],
                 sanitized_observation=analysis["sanitized_events"],
                 current_identity=observed_session,
-                parent_identity=previous_session_id,
+                parent_identity=receipt_parent,
                 root_identity=root_session_id,
                 relation=relation,
                 actual_provider_usage=native_turn_usage,
             )
         )
-        if server is None:
-            raise QualificationError("OpenCode local session server is unavailable")
         session_info = server.resume(observed_session)
         response_session = _extract_value(session_info, "id", "sessionID", "sessionId")
         parent_session = _extract_value(session_info, "parentID", "parentId", "parent_id")
         # OpenCode 1.18.16 Session.fork clones the session without persisting a
-        # parentID.  The fork predecessor is therefore attested by the exact
-        # CLI request above; session.get must not be made to claim a native
-        # parent field that the pinned Host does not return.
-        if response_session != observed_session or (fork and parent_session is not None):
+        # parentID.  The fork predecessor is therefore attested by the explicit
+        # loopback POST receipt below; session.get cannot claim a parent field
+        # that the pinned Host does not return.
+        if response_session != observed_session or (
+            parent_session_id and parent_session is not None
+        ):
             raise QualificationError("OpenCode session.get lineage is invalid")
         native_receipts.append(
             pass13_evidence.native_lifecycle_receipt(
@@ -3009,7 +3899,9 @@ def _run_one_scenario(
                 },
                 current_identity=observed_session,
                 parent_identity=(
-                    parent_session
+                    parent_session_id
+                    if parent_session_id is not None
+                    else parent_session
                     if isinstance(parent_session, str) and parent_session
                     else None
                 ),
@@ -3023,9 +3915,36 @@ def _run_one_scenario(
         nonlocal compaction_usage
         if server is None or session_id is None or root_session_id is None:
             raise QualificationError("OpenCode compaction session identity is missing")
+        continuity_capsule, _continuity_text = _resolve_public_host_continuity(
+            deeplaw_executable,
+            vault=vault,
+            session_id=session_id,
+            workspace=repository,
+            environment=deeplaw_environment,
+            cwd=repository,
+            forbidden_values=forbidden_values,
+        )
+        compact_capsule, compact_text = _continuity_with_checkpoint_gap(
+            continuity_capsule
+        )
+        model_observation_offset = _model_receipt_offset(model_receipt_path)
         server.summarize(session_id)
-        messages = server.messages(session_id)
-        compaction_usage = _compaction_usage_from_messages(messages)
+        model_observations, delivery_observations = _read_host_observations(
+            model_receipt_path,
+            offset=model_observation_offset,
+            forbidden_values=forbidden_values,
+        )
+        compaction_delivery = _continuity_delivery_from_observations(
+            delivery_observations,
+            session_id=session_id,
+            continuity_capsule=compact_capsule,
+            continuity_text=compact_text,
+            event_type="experimental.session.compacting",
+        )
+        compaction_usage = _compaction_usage_from_observations(
+            model_observations,
+            session_id=session_id,
+        )
         native_receipts.extend(
             [
                 pass13_evidence.native_lifecycle_receipt(
@@ -3050,17 +3969,17 @@ def _run_one_scenario(
                 ),
                 pass13_evidence.native_lifecycle_receipt(
                     semantic_task_family=semantic_task_family,
-                    transport="opencode_loopback_http",
-                    request_seam="GET session/:sessionID/message",
-                    requested_operation="session.messages",
+                    transport="opencode_project_plugin",
+                    request_seam="message.updated metadata receipt",
+                    requested_operation="message.updated.metadata",
                     sanitized_request={
                         "session_id_sha256": _sha256(session_id.encode("utf-8"))
                     },
-                    observation_kind="native_response",
-                    methods_observed=["session.messages"],
+                    observation_kind="native_event",
+                    methods_observed=["message.updated.metadata"],
                     sanitized_observation={
-                        "response": "Message.Info[]",
-                        "message_count": len(messages),
+                        "response": "sanitized_message.updated_metadata",
+                        "observation_count": len(model_observations),
                         "compaction_usage_sha256": _sha256(
                             _encoded(compaction_usage)
                         ),
@@ -3071,12 +3990,29 @@ def _run_one_scenario(
                     relation="same_session",
                     actual_provider_usage=compaction_usage,
                 ),
+                pass13_evidence.native_lifecycle_receipt(
+                    semantic_task_family=semantic_task_family,
+                    transport="opencode_project_plugin",
+                    request_seam="experimental.session.compacting",
+                    requested_operation="experimental.session.compacting",
+                    sanitized_request={
+                        "session_id_sha256": _sha256(session_id.encode("utf-8"))
+                    },
+                    observation_kind="native_event",
+                    methods_observed=["experimental.session.compacting"],
+                    sanitized_observation={"delivery": compaction_delivery},
+                    current_identity=session_id,
+                    parent_identity=session_id,
+                    root_identity=root_session_id,
+                    relation="same_session",
+                    actual_provider_usage=None,
+                ),
             ]
         )
 
     try:
         server = _OpenCodeLocalServer(
-            binary=opencode_binary,
+            binary=host_launcher,
             environment=scenario_environment,
             cwd=repository,
             root=run_root,
@@ -3087,7 +4023,77 @@ def _run_one_scenario(
             ),
         )
         server.start()
-        turn("cli.run", prompt)
+        if development:
+            turn("cli.run", prompt)
+        else:
+            # The native session is created first.  Its opaque ID is hashed
+            # locally and bound through the public owner-granted route before
+            # the first model turn, so the plugin can inject the same capsule.
+            session_id = server.create()
+            root_session_id = session_id
+            _bind_public_host_session(
+                deeplaw_executable,
+                vault=vault,
+                session_id=session_id,
+                task_handle=str(fixture["task_handle"]),
+                grant_id=str(fixture["grant_id"]),
+                workspace=repository,
+                environment=deeplaw_environment,
+                cwd=repository,
+                idempotency_key=f"pass16-{scenario}-bind-root",
+            )
+            wrong_handles = fixture.get("wrong_task_handles", {})
+            if not isinstance(wrong_handles, Mapping):
+                raise QualificationError("public wrong-state task handles are invalid")
+            wrong_worktree_handle = wrong_handles.get("wrong_worktree")
+            if isinstance(wrong_worktree_handle, str):
+                wrong_session = server.create()
+                _bind_public_host_session(
+                    deeplaw_executable,
+                    vault=vault,
+                    session_id=wrong_session,
+                    task_handle=wrong_worktree_handle,
+                    grant_id=str(fixture["grant_id"]),
+                    workspace=concurrent,
+                    environment=deeplaw_environment,
+                    cwd=repository,
+                    idempotency_key=f"pass16-{scenario}-bind-wrong-worktree",
+                )
+                wrong_capsule, _wrong_text = _resolve_public_host_continuity(
+                    deeplaw_executable,
+                    vault=vault,
+                    session_id=wrong_session,
+                    workspace=repository,
+                    environment=deeplaw_environment,
+                    cwd=repository,
+                    forbidden_values=forbidden_values,
+                )
+                wrong_gaps = wrong_capsule.get("gaps", [])
+                wrong_gap_codes = {
+                    item.get("code")
+                    for item in wrong_gaps
+                    if isinstance(item, Mapping)
+                }
+                if wrong_capsule.get("status") != "gap" or (
+                    "route_wrong_worktree" not in wrong_gap_codes
+                ):
+                    raise QualificationError("wrong worktree route did not fail closed")
+                wrong_response = {
+                    "status": "gap",
+                    "gap_codes": sorted(str(code) for code in wrong_gap_codes),
+                }
+                route_receipts.append(
+                    {
+                        "operation": "wrong_worktree",
+                        "status": "gap",
+                        "session_sha256": _sha256(wrong_session.encode("utf-8")),
+                        "parent_session_sha256": None,
+                        "request_sha256": _sha256(b"resolve-host-continuity"),
+                        "response_sha256": _sha256(_encoded(wrong_response)),
+                        "gap_codes": wrong_response["gap_codes"],
+                    }
+                )
+            turn("cli.run", prompt, precreated=True)
         # The wrapper creates this receipt immediately before exec'ing the MCP
         # child.  It cannot exist before the first real Host turn starts the
         # configured server, so validate it at the first observable boundary.
@@ -3099,7 +4105,43 @@ def _run_one_scenario(
             turn("cli.run.session", prompt)
         elif scenario == "resume_fork":
             turn("cli.run.session", prompt)
-            turn("cli.run.fork", prompt, fork=True)
+            if server is None or session_id is None or root_session_id is None:
+                raise QualificationError("OpenCode fork parent session is missing")
+            parent_session_id = session_id
+            child_session_id = server.fork(parent_session_id)
+            fork_response = {
+                "child_session_sha256": _sha256(child_session_id.encode("utf-8")),
+                "forked_from_id_sha256": _sha256(parent_session_id.encode("utf-8")),
+            }
+            route_receipts.append(
+                {
+                    "operation": "fork",
+                    "status": "forked",
+                    "session_sha256": fork_response["child_session_sha256"],
+                    "parent_session_sha256": fork_response["forked_from_id_sha256"],
+                    "request_sha256": _sha256(_encoded({"operation": "session.fork"})),
+                    "response_sha256": _sha256(_encoded(fork_response)),
+                    "gap_codes": [],
+                }
+            )
+            _bind_public_host_session(
+                deeplaw_executable,
+                vault=vault,
+                session_id=child_session_id,
+                task_handle=str(fixture["task_handle"]),
+                grant_id=str(fixture["grant_id"]),
+                workspace=repository,
+                environment=deeplaw_environment,
+                cwd=repository,
+                idempotency_key=f"pass16-{scenario}-bind-child",
+            )
+            session_id = child_session_id
+            turn(
+                "cli.run.fork",
+                prompt,
+                precreated=True,
+                parent_session_id=parent_session_id,
+            )
         elif scenario == "compaction_forget":
             # No synthetic/estimated compaction usage is admissible.  The
             # public message result must expose actual provider accounting.
@@ -3138,7 +4180,7 @@ def _run_one_scenario(
             )
             turn(
                 "cli.run.session",
-                _candidate_prompt(selected_case, primary_binding, phase="post_forget"),
+                _candidate_prompt(selected_case, phase="post_forget"),
                 post_forget=True,
             )
         else:
@@ -3166,6 +4208,8 @@ def _run_one_scenario(
                 "final_response_bytes": 0,
                 "host_elapsed_ms": 0,
                 "usage": failure["usage"],
+                "actual_response_provider_id": None,
+                "actual_response_model_id": None,
                 "ledger_audit_head_before": before,
                 "ledger_audit_head_after": before,
                 "ledger_unchanged": True,
@@ -3276,6 +4320,8 @@ def _run_one_scenario(
         "new_thread": True,
         "methods_observed": methods,
         "native_receipts": native_receipts,
+        "route_receipts": route_receipts,
+        "plugin_receipt": plugin_receipt,
         "turns": turns,
         "metrics": metrics,
         "mutation_boundaries": mutation_boundaries,
@@ -3324,7 +4370,7 @@ def _execute_qualification_body(
     deeplaw_executable: Path,
     output_dir: Path,
     opencode_binary: Path,
-    dotenv: Path,
+    host_launcher: Path,
     human_gold_path: Path | None,
     root: Path,
     source_revision_id: str | None = None,
@@ -3337,30 +4383,10 @@ def _execute_qualification_body(
     repository = Path(__file__).resolve().parents[2]
     if mode not in {"qualification", "diagnostic"}:
         raise QualificationError("OpenCode execution mode is invalid")
-    if mode == "diagnostic" and human_gold_path is not None:
-        raise QualificationError("OpenCode diagnostic must not receive Human Gold")
-    if mode == "qualification":
-        # No candidate preparation or Provider/model process may start before
-        # the external frozen Gold satisfies its closed structural contract.
-        from benchmarks.evaluator.score_pass16_host_continuity import (
-            HumanGoldValidationError,
-            load_human_gold,
+    if human_gold_path is not None:
+        raise QualificationError(
+            "OpenCode candidate runner must not receive Human Gold or reference labels"
         )
-
-        if human_gold_path is None:
-            raise QualificationError(
-                "OpenCode qualification requires frozen external Human Gold"
-            )
-        try:
-            load_human_gold(
-                Path(human_gold_path),
-                repository=repository,
-                candidate_wheel_path=candidate_wheel,
-            )
-        except HumanGoldValidationError as exc:
-            raise QualificationError(
-                "OpenCode qualification requires frozen external Human Gold"
-            ) from exc
     agent_name = "qualification" if mode == "qualification" else "development"
     orchestrator = QualificationOrchestrator(
         host="opencode",
@@ -3373,7 +4399,6 @@ def _execute_qualification_body(
     )
     output_dir, binding, installed = orchestrator.prepare_candidate()
     output_dir.mkdir(parents=True)
-    provider_key = load_deepseek_key(dotenv)
     canaries = {name: _sha256(name.encode("utf-8")) for name in _CANARY_NAMES}
     if root.is_symlink() or not root.is_dir():
         raise QualificationError("isolated runtime root is unavailable")
@@ -3381,7 +4406,6 @@ def _execute_qualification_body(
         root=root,
         opencode_binary=opencode_binary,
         node_binary=opencode_binary,
-        provider_key=provider_key,
         canaries=canaries,
     )
     for name in (
@@ -3399,6 +4423,8 @@ def _execute_qualification_body(
         "mcp-tmp",
     ):
         (root / name).mkdir(parents=True, exist_ok=True)
+    _freeze_local_plugin_dependency_state(root / "xdg-config" / "opencode")
+    _freeze_local_plugin_dependency_state(root / "opencode-config")
     _write_mcp_wrapper(
         root / "deeplaw-closed-mcp",
         deeplaw_executable=deeplaw_executable,
@@ -3413,6 +4439,10 @@ def _execute_qualification_body(
     # This config is never retained as an artifact; it is regenerated in the
     # isolated directory for this invocation only.
     binary_sha = _validate_binary(opencode_binary)
+    broker_launcher_sha = _validate_owner_broker_launcher(
+        host_launcher,
+        host_binary=opencode_binary,
+    )
     runtime_check = _run_bounded_process(
         [deeplaw_executable, "--version"],
         environment={
@@ -3425,18 +4455,30 @@ def _execute_qualification_body(
     runtime_text = runtime_check["stdout"].decode("utf-8", errors="replace").strip()
     if runtime_check["returncode"] != 0 or PACKAGE_VERSION not in runtime_text:
         raise QualificationError("installed DeepLaw runtime is not version 0.12.0")
+    preflight_project = root / "preflight-project"
+    preflight_project.mkdir(parents=True, exist_ok=True)
+    preflight_plugin_receipt, _preflight_plugin_receipt_path = (
+        _install_exact_opencode_plugin(
+            repository=preflight_project,
+            run_root=root,
+            deeplaw_executable=deeplaw_executable,
+        )
+    )
     preflight = preflight_opencode(
         binary=opencode_binary,
+        host_launcher=host_launcher,
+        deeplaw_executable=deeplaw_executable,
         environment=environment,
         cwd=root,
-        provider_key=provider_key,
+        project_root=preflight_project,
+        plugin_receipt=preflight_plugin_receipt,
         agent_name=agent_name,
     )
     runs: list[dict[str, Any]] = []
     artifacts: dict[str, Path] = {}
     wrapper_receipts: list[Mapping[str, Any]] = []
     tool_schema_rows: list[dict[str, Any]] = []
-    forbidden_values = (provider_key, *canaries.values(), str(root))
+    forbidden_values = (*canaries.values(), str(root))
     diagnostic_fixture = (
         pass17_development_diagnostic.load_fixture() if mode == "diagnostic" else None
     )
@@ -3451,6 +4493,7 @@ def _execute_qualification_body(
             run_index=index,
             scenario=engine_scenario,
             opencode_binary=opencode_binary,
+            host_launcher=host_launcher,
             deeplaw_executable=deeplaw_executable,
             environment=environment,
             run_root=run_root,
@@ -3508,9 +4551,21 @@ def _execute_qualification_body(
             "version": OPENCODE_VERSION,
             "model": MODEL,
             "reasoning_effort": VARIANT,
+            "actual_response_provider_id": "deepseek",
+            "actual_response_model_id": "deepseek-v4-flash",
+            "model_identity_semantics": (
+                "request_pin_and_returned_runtime_id_not_weight_identity"
+            ),
+            "credential_broker_launcher_sha256": broker_launcher_sha,
+            "credential_boundary": {
+                "runner_secret_received": False,
+                "runner_dotenv_path_received": False,
+                "host_secret_injected_by": "owner_credential_broker",
+                "external_process_receipt_required": True,
+            },
             "authentication": {
                 "status": "provider_available",
-                "source": "process_environment",
+                "source": "owner_credential_broker",
                 "auth_file_read": False,
                 "checked": True,
                 "raw_sha256": preflight["availability"]["raw_sha256"],
@@ -3590,6 +4645,7 @@ def _execute_qualification_body(
         "opencode_version_bytes": preflight["version_bytes"],
         "model_inventory": preflight["model_inventory"],
         "resolved_config": preflight["resolved_config"],
+        "external_plugin": preflight["external_plugin"],
         "availability": preflight["availability"],
         "mcp_wrapper_receipts": wrapper_receipts,
     }
@@ -3617,7 +4673,7 @@ def execute_qualification(
     deeplaw_executable: Path,
     output_dir: Path,
     opencode_binary: Path,
-    dotenv: Path,
+    host_launcher: Path,
     human_gold_path: Path | None,
     source_revision_id: str | None = None,
     mode: str = "qualification",
@@ -3631,7 +4687,7 @@ def execute_qualification(
             deeplaw_executable=deeplaw_executable,
             output_dir=output_dir,
             opencode_binary=opencode_binary,
-            dotenv=dotenv,
+            host_launcher=host_launcher,
             human_gold_path=human_gold_path,
             root=root,
             source_revision_id=source_revision_id,
@@ -3652,7 +4708,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--deeplaw-executable", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--opencode-binary", type=Path, required=True)
-    parser.add_argument("--dotenv", type=Path, required=True)
+    parser.add_argument("--opencode-launcher", type=Path, required=True)
     parser.add_argument("--human-gold", type=Path)
     parser.add_argument("--source-revision-id")
     return parser.parse_args(argv)
@@ -3666,7 +4722,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             deeplaw_executable=args.deeplaw_executable,
             output_dir=args.output_dir,
             opencode_binary=args.opencode_binary,
-            dotenv=args.dotenv,
+            host_launcher=args.opencode_launcher,
             human_gold_path=args.human_gold,
             source_revision_id=args.source_revision_id,
             mode=args.mode,

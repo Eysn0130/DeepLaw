@@ -29,11 +29,17 @@ from .task_context import (
     task_route_sha256,
     task_snapshot_sha256,
 )
-from .util import canonical_json, sha256_bytes, strict_json_loads
+from .util import (
+    assert_provider_output_safe,
+    canonical_json,
+    sha256_bytes,
+    strict_json_loads,
+)
 
 TASK_HANDLE_SCHEMA_VERSION = "deeplaw.task-handle/v1"
 TASK_CONTINUITY_SCHEMA_VERSION = "deeplaw.task-continuity-result/v2"
-HOST_SESSION_ROUTE_SCHEMA_VERSION = "deeplaw.host-session-route-result/v1"
+HOST_SESSION_ROUTE_SCHEMA_VERSION = "deeplaw.host-session-route-result/v2"
+HOST_CONTINUITY_CAPSULE_SCHEMA_VERSION = "deeplaw.host-continuity-capsule/v1"
 WORKSPACE_SNAPSHOT_SCHEMA_VERSION = "deeplaw.workspace-snapshot-receipt/v1"
 
 _HANDLE_PREFIX = "taskh_"
@@ -61,6 +67,20 @@ _HOST_SESSION_ROUTE_TASK = (
 )
 _HOST_SESSION_ROUTE_KIND = "host_session_route"
 _HOST_SESSION_ROUTE_LIMIT = 100
+_HOST_CONTINUITY_CAPSULE_MAX_BYTES = 1400
+_HOST_CONTINUITY_TEXT_MAX_CHARS = 512
+_HOST_CONTINUITY_MESSAGE_MAX_CHARS = 160
+_HOST_CONTINUITY_SHA256_TEXT = re.compile(r"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])")
+_HOST_CONTINUITY_ABSOLUTE_PATH = re.compile(
+    r"(?<![A-Za-z0-9:/])/(?!/)[^\s<>\"'`]+"
+)
+_HOST_CONTINUITY_WINDOWS_PATH = re.compile(
+    r"(?i)(?<![A-Za-z0-9])[A-Z]:[\\/][^\s<>\"'`]+"
+)
+_HOST_CONTINUITY_SECRET_TEXT = re.compile(
+    r"(?i)\b(?:authorization|bearer)\b\s*[:=]?\s+[^\s\"']{8,}"
+)
+_HOST_CONTINUITY_GAP_CODE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,99}$")
 
 HostName = Literal["codex", "opencode"]
 
@@ -678,6 +698,36 @@ def _host_route_gap(
     }
 
 
+def _host_route_identity(
+    *,
+    session_sha256: str,
+    binding: dict[str, Any],
+) -> dict[str, str]:
+    """Return the stable route identity, excluding mutable workspace state."""
+
+    return {
+        "project_sha256": binding["project_sha256"],
+        "task_lineage_sha256": binding["task_lineage_sha256"],
+        "repository_sha256": binding["repository_sha256"],
+        "worktree_sha256": binding["worktree_sha256"],
+        "session_sha256": session_sha256,
+    }
+
+
+def _host_workspace_snapshot(binding: dict[str, Any]) -> dict[str, str]:
+    """Return only the mutable snapshot portion of a task binding."""
+
+    base_revision = binding["base_revision"]
+    dirty_state_sha256 = binding["dirty_state_sha256"]
+    if not isinstance(base_revision, str) or not isinstance(dirty_state_sha256, str):
+        raise RuntimeError("Host route workspace snapshot is unavailable")
+    return {
+        "base_revision": base_revision,
+        "dirty_state_sha256": dirty_state_sha256,
+        "snapshot_sha256": task_snapshot_sha256(binding),
+    }
+
+
 def bind_host_session(
     *,
     vault_path: str | Path | None,
@@ -755,6 +805,11 @@ def bind_host_session(
         "task_handle_sha256": handle["task_handle_sha256"],
         "repository_sha256": handle["repository_sha256"],
         "worktree_sha256": handle["worktree_sha256"],
+        "route_identity": _host_route_identity(
+            session_sha256=selected_session,
+            binding=binding,
+        ),
+        "workspace_snapshot": _host_workspace_snapshot(binding),
         "run_id": recorded["run_id"],
         "write_performed": True,
         "transcript_copied": False,
@@ -855,14 +910,6 @@ def resolve_host_session(
         base_revision=workspace_snapshot["base_revision"],
         dirty_state_sha256=workspace_snapshot["dirty_state_sha256"],
     )
-    if current_binding["binding_sha256"] != binding["binding_sha256"]:
-        return _host_route_gap(
-            operation="resolve",
-            host=selected_host,
-            session_sha256=selected_session,
-            code="route_stale",
-            candidate_count=1,
-        )
     with AutonomousKnowledgeStore(selected, read_only=True) as store:
         audit_before = store.audit_head
         route_history = store.locate_task_route_history(
@@ -903,10 +950,226 @@ def resolve_host_session(
         "task_handle_sha256": payload["task_handle_sha256"],
         "repository_sha256": payload["repository_sha256"],
         "worktree_sha256": payload["worktree_sha256"],
+        "route_identity": _host_route_identity(
+            session_sha256=selected_session,
+            binding=current_binding,
+        ),
+        "workspace_snapshot": _host_workspace_snapshot(current_binding),
         "binding_sha256": current_binding["binding_sha256"],
+        "checkpoint_status": str(route_history.get("status", "index_unavailable")),
         "write_performed": False,
         "transcript_copied": False,
     }
+
+
+def _host_continuity_gap(*codes: str) -> dict[str, Any]:
+    selected = list(dict.fromkeys(code for code in codes if code))[:8]
+    if not selected:
+        selected = ["continuity_unavailable"]
+    return {
+        "schema_version": HOST_CONTINUITY_CAPSULE_SCHEMA_VERSION,
+        "status": "gap",
+        "statements": [],
+        "gaps": [{"code": code} for code in selected],
+        "conflicts": [],
+        "write_performed": False,
+    }
+
+
+def _provider_safe_continuity_text(value: Any, *, maximum: int) -> str | None:
+    if not isinstance(value, str) or not value or len(value) > maximum:
+        return None
+    selected = value
+    try:
+        assert_provider_output_safe(selected, interface="Host continuity capsule")
+    except PermissionError:
+        return None
+    if (
+        _HOST_CONTINUITY_SHA256_TEXT.search(selected)
+        or _HOST_CONTINUITY_ABSOLUTE_PATH.search(selected)
+        or _HOST_CONTINUITY_WINDOWS_PATH.search(selected)
+        or _HOST_CONTINUITY_SECRET_TEXT.search(selected)
+    ):
+        return None
+    return selected
+
+
+def _host_continuity_projection(provider: dict[str, Any]) -> dict[str, Any]:
+    capsule = provider.get("capsule")
+    if not isinstance(capsule, dict):
+        return _host_continuity_gap("continuity_capsule_invalid")
+    source_statements = capsule.get("statements")
+    source_gaps = capsule.get("gaps")
+    source_conflicts = capsule.get("contradictions", [])
+    if not all(
+        isinstance(value, list)
+        for value in (source_statements, source_gaps, source_conflicts)
+    ):
+        return _host_continuity_gap("continuity_capsule_invalid")
+    projected_statements: list[dict[str, Any]] = []
+    projection_blocked = False
+    for item in source_statements:
+        if not isinstance(item, dict):
+            projection_blocked = True
+            break
+        content = _provider_safe_continuity_text(
+            item.get("statement_text"), maximum=_HOST_CONTINUITY_TEXT_MAX_CHARS
+        )
+        authority = _provider_safe_continuity_text(item.get("authority"), maximum=100)
+        legal_authority = item.get("legal_authority")
+        if content is None or authority is None or legal_authority is not False:
+            projection_blocked = True
+            break
+        valid_from_value = item.get("valid_from")
+        valid_to_value = item.get("valid_to")
+        valid_from = (
+            None
+            if valid_from_value is None
+            else _provider_safe_continuity_text(valid_from_value, maximum=100)
+        )
+        valid_to = (
+            None
+            if valid_to_value is None
+            else _provider_safe_continuity_text(valid_to_value, maximum=100)
+        )
+        if (valid_from_value is not None and valid_from is None) or (
+            valid_to_value is not None and valid_to is None
+        ):
+            projection_blocked = True
+            break
+        citations: list[dict[str, str]] = []
+        source_refs = item.get("source_refs", [])
+        if not isinstance(source_refs, list):
+            projection_blocked = True
+            break
+        for reference in source_refs[:2]:
+            if not isinstance(reference, dict):
+                projection_blocked = True
+                break
+            locator = _provider_safe_continuity_text(
+                reference.get("locator"), maximum=200
+            )
+            if locator is None:
+                projection_blocked = True
+                break
+            citations.append({"locator": locator})
+        if projection_blocked:
+            break
+        projected_statements.append(
+            {
+                "content": content,
+                "authority": authority,
+                "legal_authority": False,
+                "valid_from": valid_from,
+                "valid_to": valid_to,
+                "citations": citations,
+            }
+        )
+        if len(projected_statements) == 2:
+            break
+
+    projected_gaps: list[dict[str, str]] = []
+    for item in source_gaps:
+        if not isinstance(item, dict):
+            projection_blocked = True
+            break
+        code = _provider_safe_continuity_text(item.get("code"), maximum=100)
+        if code is None or _HOST_CONTINUITY_GAP_CODE.fullmatch(code) is None:
+            projection_blocked = True
+            break
+        projected: dict[str, str] = {"code": code}
+        message = _provider_safe_continuity_text(
+            item.get("message"), maximum=_HOST_CONTINUITY_MESSAGE_MAX_CHARS
+        )
+        if message is not None:
+            projected["message"] = message
+        projected_gaps.append(projected)
+        if len(projected_gaps) == 8:
+            break
+
+    projected_conflicts: list[dict[str, str]] = []
+    for item in source_conflicts:
+        if not isinstance(item, dict):
+            projection_blocked = True
+            break
+        summary = _provider_safe_continuity_text(
+            item.get("summary") or item.get("message"),
+            maximum=_HOST_CONTINUITY_MESSAGE_MAX_CHARS,
+        )
+        if summary is None:
+            projection_blocked = True
+            break
+        projected_conflicts.append({"summary": summary})
+        if len(projected_conflicts) == 4:
+            break
+
+    if projection_blocked:
+        return _host_continuity_gap("sensitive_content_blocked")
+    result = {
+        "schema_version": HOST_CONTINUITY_CAPSULE_SCHEMA_VERSION,
+        "status": "admitted" if projected_statements else "gap",
+        "statements": projected_statements,
+        "gaps": projected_gaps,
+        "conflicts": projected_conflicts,
+        "write_performed": False,
+    }
+    if not projected_statements and not projected_gaps:
+        result = _host_continuity_gap("continuity_unavailable")
+    try:
+        assert_provider_output_safe(result, interface="Host continuity capsule")
+    except PermissionError:
+        return _host_continuity_gap("sensitive_content_blocked")
+    if _HOST_CONTINUITY_SHA256_TEXT.search(canonical_json(result)):
+        return _host_continuity_gap("internal_identity_blocked")
+    if len(canonical_json(result).encode("utf-8")) > _HOST_CONTINUITY_CAPSULE_MAX_BYTES:
+        return _host_continuity_gap("continuity_capsule_bound")
+    return result
+
+
+def resolve_host_continuity_capsule(
+    *,
+    vault_path: str | Path | None,
+    host: str,
+    session_sha256: str,
+    workspace: str | Path,
+) -> dict[str, Any]:
+    """Resolve one Host route and project only provider-safe checkpoint semantics."""
+
+    route = resolve_host_session(
+        vault_path=vault_path,
+        host=host,
+        session_sha256=session_sha256,
+        workspace=workspace,
+    )
+    if route.get("status") != "exact":
+        gap = route.get("gap")
+        code = str(gap.get("code")) if isinstance(gap, dict) else "route_invalid"
+        return _host_continuity_gap(code)
+    checkpoint_status = str(route.get("checkpoint_status", "index_unavailable"))
+    if checkpoint_status != "exact":
+        codes = (
+            ("workspace_diverged", "stale_checkpoint")
+            if checkpoint_status == "workspace_diverged"
+            else (checkpoint_status,)
+        )
+        return _host_continuity_gap(*codes)
+    task_handle = route.get("task_handle")
+    if not isinstance(task_handle, str):
+        return _host_continuity_gap("route_invalid")
+    resumed = resume_task(
+        vault_path=vault_path,
+        task_handle=task_handle,
+        workspace=workspace,
+    )
+    provider = resumed.get("provider_capsule")
+    if resumed.get("status") != "admitted" or not isinstance(provider, dict):
+        codes = resumed.get("gap_codes")
+        return _host_continuity_gap(
+            *(str(code) for code in codes)
+            if isinstance(codes, list)
+            else ("continuity_unavailable",)
+        )
+    return _host_continuity_projection(provider)
 
 
 def locate_task(

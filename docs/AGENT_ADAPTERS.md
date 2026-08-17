@@ -421,7 +421,11 @@ selected path; the plan reports that write explicitly. The plan itself is path-f
 `--expected-vault-id`, and uses the fixed closed launcher. Static configuration cannot embed a task
 handle. At Host lifecycle time, a Host-local official session event supplies its current cwd plus
 an optional Host session/fork hint; the adapter passes the explicit workspace and DeepLaw
-re-resolves the Vault/project/task/workspace binding. The launcher never falls back to ambient
+re-resolves the Vault/project/task/workspace binding. Host route result v2 separates the stable
+project/repository/worktree/task-lineage/session route from the mutable base revision and dirty-state
+snapshot. A normal edit therefore preserves the route, while checkpoint admission independently
+returns `workspace_diverged` or `stale_checkpoint` and withholds the old checkpoint. The frozen v1
+result contract remains valid for retained receipts. The launcher never falls back to ambient
 `Path.cwd()`. The compatibility `--task-binding` form remains available for existing callers. A
 configured launcher binding is a fixed read boundary: a call cannot replace it with another line.
 
@@ -445,6 +449,24 @@ adjacent adapter READMEs, verified lineage, and cwd. Host IDs are untrusted rout
 DeepLaw identity or Authority: DeepLaw rebinds them to the owner-selected Vault, project, task, and
 workspace. Neither adapter stores transcript, hidden reasoning, authentication material, or Host
 private memory, and neither implements a second Agent runtime.
+
+OpenCode provider authentication is outside the DeepLaw runner. A repository-external,
+owner-only credential broker may read its owner-only dotenv and launches only the exact OpenCode
+Host process with the required provider variable. The DeepLaw runner receives a separate
+owner-only launcher path and never receives the dotenv path or Secret value; DeepLaw CLI/MCP and
+scorer processes use closed environments without that variable. Formal qualification additionally
+requires the external process receipt to bind the broker executable, Host executable, PID/process
+tree, environment-name allowlist, inputs/outputs, timestamps, and exit status. A launcher hash or
+self-reported JSON alone is not isolation evidence.
+
+The formal candidate Host runner receives no Human Gold, machine-reference labels, scorer source,
+or dotenv path. Codex delivery is observed from the public App Server `hook/completed` entry and
+must exactly match an independent read-only resolver result; OpenCode delivery is observed by the
+exact candidate project plugin at `experimental.chat.system.transform` and matched the same way.
+Both paths retain only delivery hashes, byte/counter fields, status and Gap codes. A formal turn
+must make zero Provider-side continuity tool calls. Reference freezing and scoring run later in
+separate processes and remain machine evaluation unless an independent human attestation actually
+exists.
 
 The disabled sidecars, owner-only enable/disable path, read-only boundary, and exact event
 mappings are documented in `adapters/codex/README.md` and `adapters/opencode/README.md`; static

@@ -48,9 +48,8 @@ def test_manifest_and_readme_freeze_exact_candidate_identity() -> None:
         "1.18.16",
         "a3647eb025c7615159d417dcc49fc39fdaeba65b",
         "deepseek/deepseek-v4-flash",
-        "knowledge_support",
         "checkpoint_grant_missing",
-        "resolve-host-session",
+        "resolve-host-continuity",
         "candidate seam",
     ):
         assert required in readme
@@ -68,7 +67,7 @@ def test_context_bridge_uses_the_exact_opencode_pin_and_marks_compaction_experim
     }
 
 
-def test_plugin_source_is_thin_and_does_not_touch_prompt_parts_or_bind() -> None:
+def test_plugin_source_is_thin_and_never_injects_route_identity() -> None:
     source = SOURCE_PATH.read_text(encoding="utf-8")
     for seam in (
         '"chat.message"',
@@ -79,33 +78,66 @@ def test_plugin_source_is_thin_and_does_not_touch_prompt_parts_or_bind() -> None
         "session.updated",
         "session.compacted",
         "Bun",
-        "knowledge_support",
         "checkpoint_grant_missing",
+        "deeplaw.host-continuity-capsule/v1",
+        "resolve-host-continuity",
     ):
         assert seam in source
     assert "output.parts" not in source
     assert "bind-host-session" not in source
-    assert "routeCache" not in source
+    assert "resolve-host-session" not in source
+    assert "host-session-route-result" not in source
+    assert "task_handle_sha256" not in source
+    assert "binding_sha256" not in source
+    assert "repository_sha256" not in source
+    assert "worktree_sha256" not in source
+    assert "host_route" not in source
     assert "console.log" not in source
     assert "DEEPSEEK_API_KEY" not in source
 
 
-def test_bun_helpers_cover_parent_identity_and_all_native_seams() -> None:
+def test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams() -> None:
     result = _bun_probe(
         """
         import { observeEvent, createOpenCodeHooks, childEnvironmentPolicy } from
           './adapters/opencode/plugins/deeplaw-native.ts'
 
         const withParent = observeEvent({
-          type: 'session.created',
-          info: { id: 'child-session', parentID: 'parent-session', title: 'fork title' },
+          event: {
+            id: 'event-1',
+            type: 'session.created',
+            properties: {
+              sessionID: 'child-session',
+              info: {
+                id: 'child-session',
+                parentID: 'parent-session',
+                title: 'fork title',
+              },
+            },
+          },
         })
         const withoutParent = observeEvent({
           type: 'session.created',
           info: { id: 'child-session', title: 'same order as another session' },
         })
         const unsupported = observeEvent({ type: 'session.deleted', info: { id: 'secret' } })
-        const hooks = await createOpenCodeHooks('/definitely/missing/deeplaw-worktree')
+        process.env.DEEPLAW_KNOWLEDGE_VAULT = '/tmp/deeplaw-vault'
+        process.env.DEEPSEEK_API_KEY = 'must-not-cross'
+        const capsule = {
+          schema_version: 'deeplaw.host-continuity-capsule/v1',
+          status: 'gap',
+          statements: [],
+          gaps: [{ code: 'vault_unavailable' }],
+          conflicts: [],
+          write_performed: false,
+        }
+        const resolve = async () => capsule
+        const modelObservations = []
+        const hooks = await createOpenCodeHooks(
+          '/tmp/opencode-worktree',
+          resolve,
+          async (value) => modelObservations.push(value),
+        )
         const system = { system: [] }
         const compact = { context: [] }
         await hooks['chat.message'](
@@ -119,6 +151,27 @@ def test_bun_helpers_cover_parent_identity_and_all_native_seams() -> None:
           { sessionID: 'chat-session' },
           compact,
         )
+        await hooks.event({
+          type: 'message.updated',
+          properties: {
+            info: {
+              id: 'message-secret',
+              sessionID: 'chat-session',
+              role: 'assistant',
+              providerID: 'deepseek',
+              modelID: 'deepseek-v4-flash',
+              summary: false,
+              finish: 'stop',
+              tokens: {
+                input: 10,
+                output: 4,
+                reasoning: 1,
+                cache: { read: 2, write: 0 },
+              },
+            },
+            parts: [{ type: 'reasoning', text: 'reasoning-canary' }],
+          },
+        })
         console.log(JSON.stringify({
           withParent,
           withoutParent,
@@ -126,6 +179,7 @@ def test_bun_helpers_cover_parent_identity_and_all_native_seams() -> None:
           hookKeys: Object.keys(hooks).sort(),
           system,
           compact,
+          modelObservations,
           env: childEnvironmentPolicy(),
         }))
         """
@@ -151,32 +205,94 @@ def test_bun_helpers_cover_parent_identity_and_all_native_seams() -> None:
         "experimental.session.compacting",
     ]
 
-    serialized = json.dumps(result, ensure_ascii=False, sort_keys=True)
+    system = result["system"]
+    compact = result["compact"]
+    assert isinstance(system, dict) and isinstance(compact, dict)
+    serialized = json.dumps(
+        {"system": system, "compact": compact}, ensure_ascii=False, sort_keys=True
+    )
     assert "prompt-canary" not in serialized
     assert "raw-prompt-canary" not in serialized
     assert "fork title" not in serialized
     assert "same order" not in serialized
-    assert "secret" not in serialized
-    system = result["system"]
-    compact = result["compact"]
-    assert isinstance(system, dict) and isinstance(compact, dict)
+    assert "must-not-cross" not in serialized
+    model_observations = result["modelObservations"]
+    assert isinstance(model_observations, list) and len(model_observations) == 3
+    delivery_observations = [
+        item
+        for item in model_observations
+        if item.get("schema_version")
+        == "deeplaw.opencode-continuity-delivery-observation/v1"
+    ]
+    assert [item["event_type"] for item in delivery_observations] == [
+        "experimental.chat.system.transform",
+        "experimental.session.compacting",
+    ]
+    assert all(
+        item["session_sha256"]
+        == hashlib.sha256(b"chat-session").hexdigest()
+        for item in delivery_observations
+    )
+    assert delivery_observations[0]["status"] == "gap"
+    assert delivery_observations[0]["gap_codes"] == ["vault_unavailable"]
+    assert delivery_observations[1]["gap_codes"] == [
+        "checkpoint_grant_missing",
+        "vault_unavailable",
+    ]
+    model_observation = next(
+        item
+        for item in model_observations
+        if item.get("schema_version") == "deeplaw.opencode-model-observation/v1"
+    )
+    assert isinstance(model_observation, dict)
+    assert model_observation["provider_id"] == "deepseek"
+    assert model_observation["model_id"] == "deepseek-v4-flash"
+    assert model_observation["session_sha256"] == hashlib.sha256(
+        b"chat-session"
+    ).hexdigest()
+    assert model_observation["message_sha256"] == hashlib.sha256(
+        b"message-secret"
+    ).hexdigest()
+    assert "parts" not in model_observation
+    assert "reasoning-canary" not in json.dumps(model_observation)
     assert len(json.dumps(system, ensure_ascii=False).encode("utf-8")) <= 2048
     assert len(json.dumps(compact, ensure_ascii=False).encode("utf-8")) <= 2048
-    assert "knowledge_support" in json.dumps(system)
-    assert "checkpoint_grant_missing" in json.dumps(compact)
-    assert "write_performed=false" in json.dumps(compact)
+    system_capsule = json.loads(system["system"][0])
+    compact_capsule = json.loads(compact["context"][0])
+    assert system["system"][0] == json.dumps(
+        system_capsule, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    assert compact["context"][0] == json.dumps(
+        compact_capsule, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    assert system_capsule["schema_version"] == "deeplaw.host-continuity-capsule/v1"
+    assert compact_capsule["schema_version"] == "deeplaw.host-continuity-capsule/v1"
+    assert {gap["code"] for gap in compact_capsule["gaps"]} == {
+        "vault_unavailable",
+        "checkpoint_grant_missing",
+    }
+    assert compact_capsule["write_performed"] is False
+    assert "session_sha256" not in serialized
+    assert "repository_sha256" not in serialized
+    assert "worktree_sha256" not in serialized
+    assert "task_handle" not in serialized
+    assert "receipt" not in serialized
+    assert "host_route" not in serialized
 
     env = result["env"]
     assert isinstance(env, dict)
-    assert set(env) <= {"PATH", "LANG", "LC_ALL"}
-    assert not any("DEEPSEEK" in key.upper() for key in env)
+    assert env == {
+        "PATH": env["PATH"],
+        "LANG": "C",
+        "LC_ALL": "C",
+        "DEEPLAW_KNOWLEDGE_VAULT": "/tmp/deeplaw-vault",
+    }
 
 
-def test_bun_route_resolution_uses_argv_no_shell_and_only_read_only_result() -> None:
+def test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env() -> None:
     result = _bun_probe(
         """
-        import { createHash } from 'node:crypto'
-        import { resolveHostSession } from
+        import { resolveHostContinuity } from
           './adapters/opencode/plugins/deeplaw-native.ts'
 
         const stream = (text) => new ReadableStream({
@@ -185,49 +301,45 @@ def test_bun_route_resolution_uses_argv_no_shell_and_only_read_only_result() -> 
             controller.close()
           },
         })
+        process.env.DEEPLAW_KNOWLEDGE_VAULT = '/tmp/deeplaw-vault'
+        process.env.OPENAI_API_KEY = 'must-not-cross'
         const session = 'a'.repeat(64)
-        const taskHandle = 'taskh_route_candidate'
-        const taskHandleSha = createHash('sha256').update(taskHandle).digest('hex')
         let observed
         const fakeSpawn = (argv, options) => {
           observed = { argv, options }
           return {
             stdout: stream(JSON.stringify({
-              schema_version: 'deeplaw.host-session-route-result/v1',
-              operation: 'resolve',
-              status: 'exact',
-              host: 'opencode',
-              session_sha256: session,
-              task_handle: taskHandle,
-              task_handle_sha256: taskHandleSha,
-              repository_sha256: 'c'.repeat(64),
-              worktree_sha256: 'd'.repeat(64),
-              binding_sha256: 'e'.repeat(64),
+              schema_version: 'deeplaw.host-continuity-capsule/v1',
+              status: 'gap',
+              statements: [],
+              gaps: [{ code: 'workspace_diverged', message: 'checkpoint withheld' }],
+              conflicts: [],
               write_performed: false,
-              transcript_copied: false,
             })),
             stderr: stream('ignored-error-output'),
             exited: Promise.resolve(0),
             kill() {},
           }
         }
-        const route = await resolveHostSession(session, '/tmp/opencode-worktree', fakeSpawn)
-        console.log(JSON.stringify({ route, observed }))
+        const capsule = await resolveHostContinuity(session, '/tmp/opencode-worktree', fakeSpawn)
+        console.log(JSON.stringify({ capsule, observed }))
         """
     )
-    route = result["route"]
+    capsule = result["capsule"]
     observed = result["observed"]
-    assert isinstance(route, dict) and route["status"] == "exact"
-    assert route["session_sha256"] == "a" * 64
-    assert route["task_handle_sha256"] == hashlib.sha256(
-        b"taskh_route_candidate"
-    ).hexdigest()
+    assert isinstance(capsule, dict)
+    assert capsule["status"] == "gap"
+    assert capsule["gaps"][0]["code"] == "workspace_diverged"
     assert isinstance(observed, dict)
     assert observed["argv"] == [
         "deeplaw",
         "knowledge",
+        "--format",
+        "jsonl",
         "task",
-        "resolve-host-session",
+        "resolve-host-continuity",
+        "--vault",
+        "/tmp/deeplaw-vault",
         "--host",
         "opencode",
         "--session-sha256",
@@ -235,60 +347,197 @@ def test_bun_route_resolution_uses_argv_no_shell_and_only_read_only_result() -> 
         "--workspace",
         "/tmp/opencode-worktree",
     ]
+    assert observed["options"]["cwd"] == "/tmp/opencode-worktree"
+    assert observed["options"]["stdin"] == "ignore"
     assert observed["options"]["stdout"] == "pipe"
     assert observed["options"]["stderr"] == "pipe"
-    assert "DEEPSEEK_API_KEY" not in observed["options"]["env"]
+    assert observed["options"]["env"] == {
+        "PATH": observed["options"]["env"]["PATH"],
+        "LANG": "C",
+        "LC_ALL": "C",
+        "DEEPLAW_KNOWLEDGE_VAULT": "/tmp/deeplaw-vault",
+    }
 
 
-def test_bun_context_re_resolves_route_and_binds_provider_hint_to_opaque_host_route() -> None:
+def test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys() -> None:
+    result = _bun_probe(
+        """
+        import { parseContinuityOutput } from
+          './adapters/opencode/plugins/deeplaw-native.ts'
+
+        const valid = {
+          schema_version: 'deeplaw.host-continuity-capsule/v1',
+          status: 'admitted',
+          statements: [{
+            content: [
+              'Continue the bounded implementation plan.',
+              'NEXT_ACTION: verify the public seam.',
+            ].join('\\n'),
+            authority: 'agent_derived',
+            legal_authority: false,
+            valid_from: null,
+            valid_to: null,
+            citations: [{ locator: 'section 1' }],
+          }],
+          gaps: [],
+          conflicts: [],
+          write_performed: false,
+        }
+        const parse = (value) => parseContinuityOutput(
+          new TextEncoder().encode(JSON.stringify(value)),
+        ) !== null
+        const route = {
+          schema_version: 'deeplaw.host-session-route-result/v2',
+          status: 'exact',
+          session_sha256: 'a'.repeat(64),
+        }
+        const withExtra = { ...valid, receipt_id: 'receipt-private' }
+        const withHash = {
+          ...valid,
+          statements: [{ ...valid.statements[0], content: 'id=' + 'a'.repeat(64) }],
+        }
+        const withPath = {
+          ...valid,
+          statements: [{
+            ...valid.statements[0],
+            content: 'Continue from /Users/private/task.txt',
+          }],
+        }
+        const withGenericPath = {
+          ...valid,
+          statements: [{
+            ...valid.statements[0],
+            content: 'Continue from /custom/private/task.txt',
+          }],
+        }
+        const withSecret = {
+          ...valid,
+          statements: [{ ...valid.statements[0], content: 'api_key=sk-test-secret-material' }],
+        }
+        const withAuthorization = {
+          ...valid,
+          statements: [{ ...valid.statements[0], content: 'Authorization: secret-material-value' }],
+        }
+        const withBearer = {
+          ...valid,
+          statements: [{ ...valid.statements[0], content: 'Bearer secret-material-value' }],
+        }
+        const withBadCode = {
+          ...valid,
+          status: 'gap',
+          statements: [],
+          gaps: [{ code: 'Bad code' }],
+        }
+        const tooManyStatements = {
+          ...valid,
+          statements: [valid.statements[0], valid.statements[0], valid.statements[0]],
+        }
+        console.log(JSON.stringify({
+          valid: parse(valid),
+          route: parse(route),
+          withExtra: parse(withExtra),
+          withHash: parse(withHash),
+          withPath: parse(withPath),
+          withGenericPath: parse(withGenericPath),
+          withSecret: parse(withSecret),
+          withAuthorization: parse(withAuthorization),
+          withBearer: parse(withBearer),
+          withBadCode: parse(withBadCode),
+          tooManyStatements: parse(tooManyStatements),
+        }))
+        """
+    )
+    assert result == {
+        "valid": True,
+        "route": False,
+        "withExtra": False,
+        "withHash": False,
+        "withPath": False,
+        "withGenericPath": False,
+        "withSecret": False,
+        "withAuthorization": False,
+        "withBearer": False,
+        "withBadCode": False,
+        "tooManyStatements": False,
+    }
+
+
+def test_bun_hooks_re_resolve_capsule_and_precompact_only_adds_gap() -> None:
     result = _bun_probe(
         """
         import { createOpenCodeHooks } from
           './adapters/opencode/plugins/deeplaw-native.ts'
 
-        const sessionID = 'session-for-route'
-        const session = await import('node:crypto').then(({ createHash }) =>
-          createHash('sha256').update(sessionID).digest('hex'))
         let calls = 0
         const exact = {
-          status: 'exact',
-          session_sha256: session,
-          gap: null,
-          task_handle_sha256: 'b'.repeat(64),
-          binding_sha256: 'c'.repeat(64),
-          repository_sha256: 'd'.repeat(64),
-          worktree_sha256: 'e'.repeat(64),
+          schema_version: 'deeplaw.host-continuity-capsule/v1',
+          status: 'admitted',
+          statements: [{
+            content: 'Continue the verified implementation plan.',
+            authority: 'agent_derived',
+            legal_authority: false,
+            valid_from: null,
+            valid_to: null,
+            citations: [],
+          }],
+          gaps: [],
+          conflicts: [],
+          write_performed: false,
         }
-        const gap = {
-          status: 'gap',
-          session_sha256: session,
-          gap: 'route_wrong_worktree',
-          task_handle_sha256: null,
-          binding_sha256: null,
-          repository_sha256: null,
-          worktree_sha256: null,
-        }
-        const resolve = async (_session, _workspace) => {
+        const resolve = async () => {
           calls += 1
-          return calls === 1 ? exact : gap
+          return calls === 1
+            ? exact
+            : {
+              ...exact,
+              status: 'gap',
+              statements: [],
+              gaps: [{ code: 'route_wrong_worktree' }],
+            }
         }
         const hooks = createOpenCodeHooks('/tmp/opencode-worktree', resolve)
         const first = { system: [] }
-        const second = { system: [] }
-        await hooks['experimental.chat.system.transform']({ sessionID }, first)
-        await hooks['experimental.chat.system.transform']({ sessionID }, second)
-        console.log(JSON.stringify({ calls, first, second }))
+        const compact = { context: [] }
+        await hooks['experimental.chat.system.transform']({ sessionID: 'session-for-route' }, first)
+        await hooks['experimental.session.compacting']({ sessionID: 'session-for-route' }, compact)
+        console.log(JSON.stringify({ calls, first, compact }))
         """
     )
     assert result["calls"] == 2
-    first = json.dumps(result["first"], ensure_ascii=False)
-    second = json.dumps(result["second"], ensure_ascii=False)
-    assert "route_status=exact" in first
-    assert "route_status=gap" in second
-    assert "route_wrong_worktree" in second
-    expected_hint = "host_route={host:opencode,session_sha256:" + hashlib.sha256(
-        b"session-for-route"
-    ).hexdigest() + "}"
-    assert expected_hint in first
-    assert expected_hint in second
-    assert "taskh_" not in first + second
+    first = result["first"]
+    compact = result["compact"]
+    assert isinstance(first, dict) and isinstance(compact, dict)
+    first_capsule = json.loads(first["system"][0])
+    compact_capsule = json.loads(compact["context"][0])
+    assert first_capsule["status"] == "admitted"
+    assert first_capsule["statements"][0]["content"] == (
+        "Continue the verified implementation plan."
+    )
+    assert compact_capsule["status"] == "gap"
+    assert compact_capsule["gaps"] == [
+        {"code": "route_wrong_worktree"},
+        {"code": "checkpoint_grant_missing"},
+    ]
+    serialized = json.dumps(result, ensure_ascii=False)
+    assert "session_sha256" not in serialized
+    assert "repository_sha256" not in serialized
+    assert "worktree_sha256" not in serialized
+    assert "task_handle" not in serialized
+    assert "receipt" not in serialized
+    assert "path" not in serialized
+    assert "log" not in serialized
+    assert "host_route" not in serialized
+    assert "checkpoint(" not in serialized
+
+
+def test_bun_default_export_keeps_v1_loader_shape() -> None:
+    result = _bun_probe(
+        """
+        import plugin from './adapters/opencode/plugins/deeplaw-native.ts'
+        console.log(JSON.stringify({
+          id: plugin.id,
+          server_type: typeof plugin.server,
+        }))
+        """
+    )
+    assert result == {"id": "deeplaw-native", "server_type": "function"}

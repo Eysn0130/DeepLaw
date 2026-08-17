@@ -186,6 +186,25 @@ def test_external_keeps_exact_host_pins_and_delegates_auth_to_brokers() -> None:
     assert "opencode run" not in workflow
 
 
+def test_repository_host_runners_accept_only_external_broker_launchers() -> None:
+    opencode = (
+        REPOSITORY / "benchmarks/hosts/run_pass13_opencode_continuity_qualification.py"
+    ).read_text(encoding="utf-8")
+    assert 'parser.add_argument("--opencode-launcher"' in opencode
+    assert "--dotenv" not in opencode
+    assert "load_deepseek_key" not in opencode
+    assert '"runner_secret_received": False' in opencode
+    assert '"runner_dotenv_path_received": False' in opencode
+
+    workflow = _workflow("external-qualification-evidence.yml")
+    broker_invocation = workflow.rsplit(
+        '            "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \\', 1
+    )[1]
+    broker_invocation = broker_invocation.split("          test -s", 1)[0]
+    assert '--dotenv "${DEEPLAW_OPENCODE_DOTENV}"' in broker_invocation
+    assert '--host-runner "${DEEPLAW_CANDIDATE_HOST_RUNNER}"' in broker_invocation
+
+
 def test_external_uploads_only_sanitized_v4_bundle_without_gate_claims() -> None:
     workflow = _workflow("external-qualification-evidence.yml")
 

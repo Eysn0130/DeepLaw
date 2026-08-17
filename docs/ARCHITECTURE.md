@@ -517,9 +517,21 @@ task handle is an optional exact optimization, not a static Host-configuration r
 no table, Knowledge kind, relation, Host runtime or daemon. Start/resume/compaction are read-only;
 checkpoint/forget enter only through a separate owner-granted `knowledge_sink` and an explicit
 success/idempotency boundary. Fork is either continue-parent or child-task. Host session/thread IDs
-remain untrusted optional route hints, never Knowledge identity, and compaction reacquires a verified
-Capsule rather than copying transcripts. This guarantees deterministic data-plane recovery, not
-native Host lifecycle continuity; the latter remains qualification work.
+remain untrusted route hints, never Knowledge identity. The current Host route contract separates
+stable project/repository/worktree/task-lineage/session identity from the mutable base-revision and
+dirty-state snapshot. Checkpoint admission validates the latter independently, so an ordinary edit
+preserves the task route while a stale checkpoint remains non-injectable. Compaction reacquires a
+verified Capsule rather than copying transcripts. These are runtime contracts and local behavioral
+evidence; real native Host lifecycle qualification remains separate.
+
+The local route v2 result never crosses the Provider boundary. The shared domain core projects it
+through `deeplaw.host-continuity-capsule/v1`, a 1,400-byte maximum read-only capsule containing only
+bounded continuity content, citation locators, Authority/time, Gaps, and conflicts. Internal route,
+session, task, checkpoint, receipt, selection, workspace and audit identities remain local. Codex
+and OpenCode hooks consume this same projection; they do not implement retrieval or checkpoint
+admission. A projection containing an absolute path, Secret-shaped text, a raw SHA-256 identity, or
+an unknown field fails closed to an explicit Gap. The surrounding native hook output remains at
+most 2 KiB.
 
 These isolated processes are deployment and trust boundaries within one governed Knowledge OS.
 They must not evolve into disconnected identity, graph, versioning, or retrieval implementations.
