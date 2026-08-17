@@ -34,6 +34,7 @@ HUMAN_REVIEW_POLICY = {
     "reason": "owner-approved deterministic machine-consensus release scope",
 }
 TRANSLATION_IDENTITY_VERSION = "deeplaw-owner-review-translation/1"
+CANDIDATE_VERSION = "0.12.0"
 
 
 def _repository() -> Path:
@@ -87,8 +88,10 @@ def candidate_binding(repository: Path) -> dict[str, Any]:
             repository / "benchmarks/semantic/semantic-gold-freeze-v1.json"
         ),
     }
-    if binding["version"] != "0.12.0":
-        raise ValueError("machine review candidate version must be 0.12.0")
+    if binding["version"] != CANDIDATE_VERSION:
+        raise ValueError(
+            f"machine review candidate version must be {CANDIDATE_VERSION}"
+        )
     return binding
 
 

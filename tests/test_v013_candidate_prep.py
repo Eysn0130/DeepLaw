@@ -244,6 +244,16 @@ def test_apply_updates_only_current_surfaces_and_preserves_history(tmp_path: Pat
     )
     assert claude_marketplace["version"] == "0.13.0"
     assert {item["version"] for item in claude_marketplace["plugins"]} == {"0.13.0"}
+    product_surface_schema = json.loads(
+        (
+            repository / "contracts/product-surface-manifest.v1.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert product_surface_schema["properties"]["package_version"]["const"] == "0.13.0"
+    machine_review_builder = (
+        repository / "benchmarks/semantic/build_machine_review_consensus.py"
+    ).read_text(encoding="utf-8")
+    assert 'CANDIDATE_VERSION = "0.13.0"' in machine_review_builder
     openvex = json.loads(
         (repository / "security/openvex.json").read_text(encoding="utf-8")
     )

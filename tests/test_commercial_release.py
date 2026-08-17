@@ -168,7 +168,7 @@ def test_authoritative_source_matrix_binds_exact_signed_catalog(
         matrix_path,
         {
             "schema_version": "deeplaw.authoritative-source-quality-decision-matrix/v2",
-            "release_target": "0.12.0",
+            "release_target": binding["package_version"],
             "status": "executed_and_verified",
             "candidate_binding": {
                 "commit": binding["commit"],

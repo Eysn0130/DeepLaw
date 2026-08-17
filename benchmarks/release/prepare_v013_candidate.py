@@ -65,6 +65,8 @@ CURRENT_SURFACE_FILES = (
     "adapters/obsidian/plugin/package.json",
     "adapters/obsidian/plugin/package-lock.json",
     "governance/product-surface-manifest.v1.json",
+    "contracts/product-surface-manifest.v1.schema.json",
+    "benchmarks/semantic/build_machine_review_consensus.py",
     "security/openvex.json",
     ACTIVE_RELATIVE,
 )
@@ -83,6 +85,8 @@ VERSION_SURFACE_FILES = (
     "adapters/obsidian/plugin/package.json",
     "adapters/obsidian/plugin/package-lock.json",
     "governance/product-surface-manifest.v1.json",
+    "contracts/product-surface-manifest.v1.schema.json",
+    "benchmarks/semantic/build_machine_review_consensus.py",
     "security/openvex.json",
 )
 
@@ -407,6 +411,22 @@ def _build_updates(
             if original[relative].count(old) != 2:
                 _fail(f"{relative} has an unexpected current version surface")
             updates[relative] = original[relative].replace(old, b'"version": "0.13.0"')
+            continue
+        if relative == "contracts/product-surface-manifest.v1.schema.json":
+            updates[relative] = _expect_once(
+                original[relative],
+                b'"package_version": {"const": "0.12.0"}',
+                b'"package_version": {"const": "0.13.0"}',
+                label=relative,
+            )
+            continue
+        if relative == "benchmarks/semantic/build_machine_review_consensus.py":
+            updates[relative] = _expect_once(
+                original[relative],
+                b'CANDIDATE_VERSION = "0.12.0"',
+                b'CANDIDATE_VERSION = "0.13.0"',
+                label=relative,
+            )
             continue
         old = (
             b'"package_version": "0.12.0"'

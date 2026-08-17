@@ -1885,7 +1885,7 @@ def test_phased_semantic_host_unavailable_binds_lifecycle() -> None:
     )
     assert report["schema_version"] == "deeplaw.real-semantic-host-report/v2"
     assert len(report["binding"]["commit"]) == 40
-    assert report["binding"]["package_version"] == "0.12.0"
+    assert report["binding"]["package_version"] == importlib.metadata.version("deeplaw")
     assert [item["phase"] for item in report["phases"]] == [
         "baseline",
         "successor",
