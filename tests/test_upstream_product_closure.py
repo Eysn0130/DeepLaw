@@ -77,6 +77,16 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
         "canonical_audit_head_unchanged": True,
     }
     assert report["base_journey"]["task_continuity"]["wrong_state_admission_count"] == 0
+    assert (
+        report["base_journey"]["source_evidence"][
+            "wiki_exact_source_coordinate_drill_down"
+        ]
+        is True
+    )
+    assert (
+        report["base_journey"]["source_evidence"]["source_content_read_status"]
+        == "withheld_pending_owner_review"
+    )
     assert report["scale_lanes"][0]["scale"] == 3
     assert report["scale_lanes"][0]["objects_staged"] == 3
     assert report["scale_lanes"][0]["rename_edit_reconcile"] is True
@@ -85,6 +95,7 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
     assert report["scale_lanes"][1]["objects_staged"] == 1000
     assert report["scale_lanes"][1]["status"] == "executed"
     assert report["scale_lanes"][1]["no_op_projection_equivalent"] is True
+    assert report["scale_lanes"][1]["rename_edit_reconcile"] is True
 
     rendered = json.dumps(report, ensure_ascii=False, sort_keys=True)
     for forbidden in (

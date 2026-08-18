@@ -28,6 +28,13 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 MAX_PROVIDER_BYTES = 65_536
 PACKET_SIZE = 100
 NOT_EXECUTED = (
+    "interruption injection and recovery",
+    "full-versus-incremental changed-input equivalence",
+    "PDF/DOCX/HTML exact-byte and locator task",
+    "exact Source/Fragment content read pending owner review",
+    "alias/same-name collision and Source successor task",
+    "backlink/outlink and wrong-merge task",
+    "effective-date/exception/proviso/cross-reference/wrong-version/false-Authority task",
     "real Codex Host/model task",
     "real OpenCode Host/model task",
     "Obsidian Desktop UI behavior",
@@ -124,6 +131,22 @@ def _run_cli(
     if not isinstance(value, dict):
         raise DiagnosticFailure("public CLI step did not return a JSON object")
     return value, float(completed.elapsed_seconds)  # type: ignore[attr-defined]
+
+
+def _expect_cli_permission_denied(
+    environment: dict[str, str],
+    *arguments: str,
+) -> None:
+    completed = _run_process(
+        [sys.executable, "-m", "deeplaw", *arguments],
+        cwd=REPOSITORY,
+        environment=environment,
+    )
+    if completed.returncode == 0 or (
+        "The Knowledge OS operation is outside its granted boundary."
+        not in completed.stderr
+    ):
+        raise DiagnosticFailure("Pending Source content did not fail closed")
 
 
 def _git(
@@ -296,6 +319,7 @@ def _compile_source_revision(
     staged = 0
     packet_count = 0
     stage_seconds = 0.0
+    first_fragment: dict[str, str] | None = None
     while True:
         packet, packet_seconds = _run_cli(
             environment,
@@ -312,6 +336,18 @@ def _compile_source_revision(
         stage_seconds += packet_seconds
         if packet.get("complete") is True:
             break
+        packet_fragments = packet.get("fragments")
+        if not isinstance(packet_fragments, list) or not packet_fragments:
+            raise DiagnosticFailure("Compilation Packet omitted its source fragments")
+        if first_fragment is None:
+            fragment = packet_fragments[0]
+            if not isinstance(fragment, dict):
+                raise DiagnosticFailure("Compilation Packet source fragment is invalid")
+            first_fragment = {
+                "fragment_id": str(fragment["fragment_id"]),
+                "locator": str(fragment["locator"]),
+                "text_sha256": str(fragment["text_sha256"]),
+            }
         plan = _compilation_plan(packet)
         plan_path = plan_root / f"plan-{packet_count:06d}.json"
         plan_path.write_text(_canonical(plan), encoding="utf-8")
@@ -375,13 +411,20 @@ def _compile_source_revision(
         "--project",
         "--confirm-no-case-data",
     )
+    if first_fragment is None:
+        raise DiagnosticFailure("Compilation Run did not expose an exact source fragment")
     return {
         "run_id": run_id,
+        "first_correct_action": (
+            "Begin one resumable Compilation Run for the exact Source Revision."
+        ),
+        "public_cli_steps": (2 * packet_count) + 5,
         "objects_staged": staged,
         "packet_count": packet_count,
         "validation_valid": True,
         "commit_status": commit.get("status"),
         "projection_status": projected.get("status"),
+        "first_fragment": first_fragment,
         "elapsed_seconds": round(
             begin_seconds + stage_seconds + validate_seconds + commit_seconds + project_seconds,
             6,
@@ -485,6 +528,8 @@ async def _run_mcp_task(
             raise DiagnosticFailure("MCP Provider byte accounting exceeded the hard bound")
         return {
             "advertised_operations": operations,
+            "first_correct_action": "List the current Provider advertisement before calling it.",
+            "provider_operation_steps": 3,
             "query_status": "executed",
             "context_status": "executed",
             "explain_status": "executed",
@@ -583,6 +628,49 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
         source_revision_id=source_revision_id,
         grant_id=compiler_grant,
         plan_root=root,
+    )
+    first_fragment = compilation["first_fragment"]
+    source_page = vault / "wiki" / "sources" / f"{source_revision_id}.md"
+    fragment_page = (
+        vault
+        / "wiki"
+        / "indexes"
+        / f"source-{source_revision_id}-fragments-0001.md"
+    )
+    source_projection = source_page.read_text(encoding="utf-8")
+    fragment_projection = fragment_page.read_text(encoding="utf-8")
+    exact_coordinates = all(
+        value in source_projection
+        for value in (source_revision_id, caller_sha256, "## Exact evidence drill-down")
+    ) and all(
+        value in fragment_projection
+        for value in (
+            str(first_fragment["fragment_id"]),
+            str(first_fragment["locator"]),
+            str(first_fragment["text_sha256"]),
+        )
+    )
+    if not exact_coordinates:
+        raise DiagnosticFailure("Living Wiki lost an exact Source evidence coordinate")
+    _expect_cli_permission_denied(
+        environment,
+        "knowledge",
+        "source",
+        "get",
+        "--vault",
+        str(vault),
+        "--source-id",
+        source_id,
+    )
+    _expect_cli_permission_denied(
+        environment,
+        "knowledge",
+        "source",
+        "fragment",
+        "--vault",
+        str(vault),
+        "--fragment-id",
+        str(first_fragment["fragment_id"]),
     )
 
     task_grant = _enable_grant(
@@ -860,6 +948,8 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
     return {
         "init_doctor": {
             "status": "executed",
+            "first_correct_action": "Initialize the Vault, then run doctor.",
+            "public_cli_steps": 2,
             "ready": True,
             "autonomous_vault_ready": doctor.get("product_readiness", {}).get(
                 "autonomous_vault_ready"
@@ -868,16 +958,28 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
         },
         "source_evidence": {
             "status": "executed",
+            "first_correct_action": "Register the exact source bytes before compiling knowledge.",
+            "public_cli_steps": 5,
+            "living_wiki_file_read_steps": 2,
             "exact_source_bytes_bound": True,
             "source_verify_valid": True,
             "source_only_gap_codes": sorted(gap_codes),
             "source_only_statements": 0,
+            "wiki_exact_source_coordinate_drill_down": True,
+            "locator_and_quote_sha256_preserved": True,
+            "source_content_read_status": "withheld_pending_owner_review",
+            "source_content_wrong_state_admission_count": 0,
             "elapsed_seconds": round(add_seconds, 6),
         },
-        "compilation": {key: value for key, value in compilation.items() if key != "run_id"},
+        "compilation": {
+            key: value
+            for key, value in compilation.items()
+            if key not in {"run_id", "first_fragment"}
+        },
         "task_continuity": {
             "status": "executed",
             "first_correct_action": "Review the retained development report.",
+            "public_cli_steps": 14,
             "decision_preserved": "Keep static Host Connect task-neutral." in provider_text,
             "wrong_state_admission_count": 0,
             "fork_admitted": True,
@@ -1021,50 +1123,49 @@ def _run_scale(scale: int, root: Path, environment: dict[str, str]) -> dict[str,
     if provider_bytes > MAX_PROVIDER_BYTES:
         raise DiagnosticFailure("Scale query exceeded the Provider byte bound")
 
-    reconcile_status: str = "not_executed"
-    edit_move_preserved: bool | str = "not_executed"
-    if scale <= 10:
-        managed = sorted(
-            path
-            for path in (vault / "knowledge").rglob("*.md")
-            if path.is_file() and path.name != user_file.name
-        )
-        if not managed:
-            raise DiagnosticFailure("Scale projection did not materialize governed Markdown")
-        original = managed[0]
-        renamed = original.with_name("renamed-" + original.name)
-        shutil.move(original, renamed)
-        renamed.write_text(
-            renamed.read_text(encoding="utf-8") + "\nExternal owner edit.\n",
-            encoding="utf-8",
-        )
-        reconcile_grant = _enable_grant(
-            environment,
-            vault,
-            writer="upstream-closure-reconcile",
-            operations=("remember",),
-            max_objects=100,
-        )
-        reconciled, _ = _run_cli(
-            environment,
-            "knowledge",
-            "reconcile",
-            "--vault",
-            str(vault),
-            "--grant-id",
-            reconcile_grant,
-            "--confirm-no-case-data",
-        )
-        reconcile_status = "executed"
-        edit_move_preserved = bool(reconciled.get("committed")) and renamed.exists()
-        if edit_move_preserved is not True or user_file.read_bytes() != user_bytes:
-            raise DiagnosticFailure("Rename/edit reconcile did not preserve identity or owner file")
+    managed = sorted(
+        path
+        for path in (vault / "knowledge").rglob("*.md")
+        if path.is_file() and path.name != user_file.name
+    )
+    if not managed:
+        raise DiagnosticFailure("Scale projection did not materialize governed Markdown")
+    original = managed[0]
+    renamed = original.with_name("renamed-" + original.name)
+    shutil.move(original, renamed)
+    renamed.write_text(
+        renamed.read_text(encoding="utf-8") + "\nExternal owner edit.\n",
+        encoding="utf-8",
+    )
+    reconcile_grant = _enable_grant(
+        environment,
+        vault,
+        writer="upstream-closure-reconcile",
+        operations=("remember",),
+        max_objects=100,
+    )
+    reconciled, _ = _run_cli(
+        environment,
+        "knowledge",
+        "reconcile",
+        "--vault",
+        str(vault),
+        "--grant-id",
+        reconcile_grant,
+        "--confirm-no-case-data",
+    )
+    edit_move_preserved = bool(reconciled.get("committed")) and renamed.exists()
+    if edit_move_preserved is not True or user_file.read_bytes() != user_bytes:
+        raise DiagnosticFailure("Rename/edit reconcile did not preserve identity or owner file")
 
     inventory = _file_inventory(vault)
     browse_items = browse.get("items", [])
     return {
         "scale": scale,
         "status": "executed",
+        "first_correct_action": "Register the exact scale source before compilation.",
+        "public_cli_steps": (2 * compilation["packet_count"]) + 13,
+        "workspace_edit_steps": 1,
         "source_add_elapsed_seconds": round(add_seconds, 6),
         "compilation_elapsed_seconds": compilation["elapsed_seconds"],
         "total_elapsed_seconds": round(time.perf_counter() - lane_started, 6),
@@ -1074,7 +1175,7 @@ def _run_scale(scale: int, root: Path, environment: dict[str, str]) -> dict[str,
         "no_op_projection_equivalent": no_op_equivalent,
         "user_file_exact_bytes_preserved": True,
         "rename_edit_reconcile": edit_move_preserved,
-        "reconcile_status": reconcile_status,
+        "reconcile_status": "executed",
         "query_status": "executed",
         "query_gap_codes": sorted(
             {str(item.get("code")) for item in capsule.get("gaps", []) if isinstance(item, dict)}
