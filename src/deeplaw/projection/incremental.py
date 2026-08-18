@@ -28,7 +28,11 @@ V3_MANIFEST_NAME = ".deeplaw/derived/wiki/v3/manifest.json"
 V3_NAMESPACE = ".deeplaw/derived/wiki/v3/"
 _MAX_FILES = 1_000_000
 _MAX_JOURNAL_BYTES = 64 * 1024 * 1024
-_MAX_MANIFEST_BYTES = 1024 * 1024
+# The v2 contract permits a bounded million-entry inventory, and the canonical
+# rebuild path already enforces the same 64 MiB local manifest ceiling.  Keep
+# incremental activation aligned so a valid standard-profile manifest does not
+# become unreadable just above 1 MiB.
+_MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 _MAX_PAYLOAD_BYTES = 256 * 1024
 _TXN_ROOT = PurePosixPath(".deeplaw/derived/tree/.projection-transactions")
 _ALLOWED_PREFIXES = ("wiki/", "canvas/", V3_NAMESPACE)

@@ -109,7 +109,14 @@ def _run_cli(
         input_text=input_text,
     )
     if completed.returncode != 0:
-        raise DiagnosticFailure(f"public CLI step failed with exit code {completed.returncode}")
+        detail = completed.stderr.strip().splitlines()[-1] if completed.stderr.strip() else ""
+        for candidate in (str(REPOSITORY), *arguments):
+            if "/" in candidate or "\\" in candidate:
+                detail = detail.replace(candidate, "<path>")
+        step = " ".join(arguments[:3])
+        raise DiagnosticFailure(
+            f"public CLI step {step} failed with exit code {completed.returncode}: {detail[:500]}"
+        )
     try:
         value = json.loads(completed.stdout)
     except json.JSONDecodeError as error:

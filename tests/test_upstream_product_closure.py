@@ -41,6 +41,8 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
             "benchmarks.v013.run_upstream_product_closure",
             "--scale",
             "3",
+            "--scale",
+            "1000",
             "--output",
             str(output),
         ],
@@ -48,7 +50,7 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
         check=False,
         capture_output=True,
         text=True,
-        timeout=180,
+        timeout=300,
     )
     assert completed.returncode == 0, completed.stderr
     report = json.loads(output.read_text(encoding="utf-8"))
@@ -79,6 +81,10 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
     assert report["scale_lanes"][0]["objects_staged"] == 3
     assert report["scale_lanes"][0]["rename_edit_reconcile"] is True
     assert report["scale_lanes"][0]["user_file_exact_bytes_preserved"] is True
+    assert report["scale_lanes"][1]["scale"] == 1000
+    assert report["scale_lanes"][1]["objects_staged"] == 1000
+    assert report["scale_lanes"][1]["status"] == "executed"
+    assert report["scale_lanes"][1]["no_op_projection_equivalent"] is True
 
     rendered = json.dumps(report, ensure_ascii=False, sort_keys=True)
     for forbidden in (
