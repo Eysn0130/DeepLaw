@@ -1,0 +1,209 @@
+{
+  "schema_version": "deeplaw.upstream-product-closure-development/v1",
+  "evidence_class": "development_diagnostic",
+  "generated_at": "2026-08-18T09:47:02Z",
+  "exact": {
+    "commit": "fd3fd3d61bf7a2f3f5f59f994b4cc35347322f2b",
+    "tree": "570347c783f5ae57f1b23a624f621a4a3b5c9bd1",
+    "package_version": "0.12.0",
+    "uv_lock_sha256": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082",
+    "worktree_clean": true
+  },
+  "upstream_research_anchors": {
+    "openwiki": "21746ce996f3a69898883da58b122770f7dbd668",
+    "tolaria": "40cc9f9479fef7bfe8a51a6df7e02fe11971f95e",
+    "obsidian_api": "cc1744324150c632416857c98964f87b1574a5fc",
+    "ekgardt_llm_wiki": "350eec8a284e159b2e4cfd068d808cbf203a6cc5"
+  },
+  "formal_claims": {
+    "qualification_evidence": false,
+    "release_ready": false,
+    "claim_eligible": false,
+    "human_gold": false,
+    "legal_attestation": false,
+    "competitive_claim": false
+  },
+  "base_journey": {
+    "init_doctor": {
+      "status": "executed",
+      "first_correct_action": "Initialize the Vault, then run doctor.",
+      "public_cli_steps": 2,
+      "ready": true,
+      "autonomous_vault_ready": true,
+      "elapsed_seconds": 0.735643
+    },
+    "source_evidence": {
+      "status": "executed",
+      "first_correct_action": "Register the exact source bytes before compiling knowledge.",
+      "public_cli_steps": 5,
+      "living_wiki_file_read_steps": 2,
+      "exact_source_bytes_bound": true,
+      "source_verify_valid": true,
+      "source_only_gap_codes": [
+        "duty_unresolved",
+        "no_answer",
+        "uncompiled_source"
+      ],
+      "source_only_statements": 0,
+      "wiki_exact_source_coordinate_drill_down": true,
+      "locator_and_quote_sha256_preserved": true,
+      "source_content_read_status": "withheld_pending_owner_review",
+      "source_content_wrong_state_admission_count": 0,
+      "elapsed_seconds": 0.390157
+    },
+    "compilation": {
+      "first_correct_action": "Begin one resumable Compilation Run for the exact Source Revision.",
+      "public_cli_steps": 7,
+      "objects_staged": 1,
+      "packet_count": 1,
+      "validation_valid": true,
+      "commit_status": "projection_pending",
+      "projection_status": "succeeded",
+      "elapsed_seconds": 2.898643
+    },
+    "task_continuity": {
+      "status": "executed",
+      "first_correct_action": "Review the retained development report.",
+      "public_cli_steps": 14,
+      "decision_preserved": true,
+      "wrong_state_admission_count": 0,
+      "fork_admitted": true,
+      "compaction_transcript_copied": false,
+      "stale_checkpoint_withheld": true,
+      "wrong_task_withheld": true,
+      "wrong_worktree_withheld": true,
+      "selective_forget_withheld": true,
+      "provider_content_bytes": 1624
+    },
+    "provider": {
+      "advertised_operations": [
+        "context",
+        "explain",
+        "query"
+      ],
+      "first_correct_action": "List the current Provider advertisement before calling it.",
+      "provider_operation_steps": 3,
+      "query_status": "executed",
+      "context_status": "executed",
+      "explain_status": "executed",
+      "provider_content_bytes": [
+        1404,
+        1404
+      ],
+      "max_provider_content_bytes": 1404,
+      "native_provider_tokens": "unavailable"
+    },
+    "read_no_write": {
+      "status": "executed",
+      "canonical_sequence_unchanged": true,
+      "canonical_audit_head_unchanged": true
+    },
+    "safety": {
+      "session_identifier_in_report": false,
+      "session_identifier_in_provider": false,
+      "transcript_or_reasoning_read": false,
+      "credential_or_env_file_read": false,
+      "child_environment_allowlisted": true
+    },
+    "initialization_schema": "deeplaw.knowledge-vault-initialization/v2"
+  },
+  "scale_lanes": [
+    {
+      "scale": 1000,
+      "status": "executed",
+      "first_correct_action": "Register the exact scale source before compilation.",
+      "public_cli_steps": 37,
+      "workspace_edit_steps": 1,
+      "source_add_elapsed_seconds": 0.488368,
+      "compilation_elapsed_seconds": 30.29241,
+      "total_elapsed_seconds": 63.014813,
+      "packet_count": 12,
+      "objects_staged": 1000,
+      "validation_valid": true,
+      "no_op_projection_equivalent": true,
+      "user_file_exact_bytes_preserved": true,
+      "rename_edit_reconcile": true,
+      "reconcile_status": "executed",
+      "query_status": "executed",
+      "query_gap_codes": [
+        "duty_unresolved",
+        "no_answer"
+      ],
+      "provider_content_bytes": 1342,
+      "wiki_browse_status": "executed",
+      "wiki_browse_returned": 20,
+      "query_elapsed_seconds": 10.759126,
+      "wiki_browse_elapsed_seconds": 10.726518,
+      "peak_child_rss_bytes": 244695040,
+      "file_count": 6149,
+      "storage_bytes": 34982338
+    },
+    {
+      "scale": 10000,
+      "status": "executed",
+      "first_correct_action": "Register the exact scale source before compilation.",
+      "public_cli_steps": 257,
+      "workspace_edit_steps": 1,
+      "source_add_elapsed_seconds": 1.561531,
+      "compilation_elapsed_seconds": 564.316078,
+      "total_elapsed_seconds": 883.279403,
+      "packet_count": 122,
+      "objects_staged": 10000,
+      "validation_valid": true,
+      "no_op_projection_equivalent": true,
+      "user_file_exact_bytes_preserved": true,
+      "rename_edit_reconcile": true,
+      "reconcile_status": "executed",
+      "query_status": "executed",
+      "query_gap_codes": [
+        "compiled_discovery_bound",
+        "duty_unresolved",
+        "no_answer"
+      ],
+      "provider_content_bytes": 1522,
+      "wiki_browse_status": "executed",
+      "wiki_browse_returned": 20,
+      "query_elapsed_seconds": 104.15014,
+      "wiki_browse_elapsed_seconds": 115.319551,
+      "peak_child_rss_bytes": 1333870592,
+      "file_count": 60934,
+      "storage_bytes": 328057546
+    }
+  ],
+  "executed": [
+    "public init and doctor",
+    "exact Markdown Source registration and verification",
+    "source-only Context Gap",
+    "public Compilation Run and Living Wiki projection",
+    "Task Continuity enrollment/resume/fork/compaction/wrong-state/forget",
+    "stdio MCP query/context/explain and read no-write audit",
+    "public 1000-object scale lane",
+    "public 10000-object scale lane"
+  ],
+  "failed": [],
+  "not_executed": [
+    "interruption injection and recovery",
+    "full-versus-incremental changed-input equivalence",
+    "PDF/DOCX/HTML exact-byte and locator task",
+    "exact Source/Fragment content read pending owner review",
+    "alias/same-name collision and Source successor task",
+    "backlink/outlink and wrong-merge task",
+    "effective-date/exception/proviso/cross-reference/wrong-version/false-Authority task",
+    "real Codex Host/model task",
+    "real OpenCode Host/model task",
+    "Obsidian Desktop UI behavior",
+    "signed Legal Pack qualification",
+    "3 OS and required Python matrix",
+    "reproducible wheel/sdist and supply-chain qualification",
+    "Human Gold or legal attestation",
+    "isolated external or commercial scoring"
+  ],
+  "limitations": [
+    "Synthetic local inputs only; no client or case material.",
+    "Provider bytes are measured from actual stdio MCP content.",
+    "Native Provider token usage is unavailable because no real Host/model ran.",
+    "Latency, RSS, and storage are one-machine development observations.",
+    "Upstream repositories were researched at exact commits but not executed here."
+  ],
+  "elapsed_seconds": 967.419489
+}

@@ -79,8 +79,92 @@ The report must record:
 - explicit `not_executed` for real Codex/OpenCode, desktop UI, signed Legal Pack, 3 OS, supply
   chain, Human Gold, and isolated formal scoring.
 
-The committed development report path and exact measured results are added after the runner passes
-its public-seam regression and the 1k/10k executions finish.
+The retained report is
+[`benchmarks/v013/upstream-product-closure-development-2026-08-18.json`](../benchmarks/v013/upstream-product-closure-development-2026-08-18.json),
+SHA-256 `95544b918579c96741606d06e85e0910fbd4f62209e5ed94de57cac2a4fb1e11`.
+It binds DeepLaw commit `fd3fd3d61bf7a2f3f5f59f994b4cc35347322f2b`, tree
+`570347c783f5ae57f1b23a624f621a4a3b5c9bd1`, package `0.12.0`, and `uv.lock`
+SHA-256 `e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082`.
+The runner observed a clean worktree before writing the report.
+
+## Observed development results
+
+The following is one-machine, synthetic, public-seam development evidence. It is not a named
+upstream performance comparison and does not establish formal qualification.
+
+| Task | Observed result |
+| --- | --- |
+| Init and readiness | 2 public CLI steps; ready and autonomous-vault ready; 0.735643 seconds. |
+| Exact Markdown evidence | Caller bytes and Source SHA verified. Living Wiki retained exact Source Revision, content SHA-256, Fragment, Locator, and quote SHA-256 coordinates. Raw Source/Fragment content reads were correctly withheld while the Source remained pending owner review; wrong-state admission was 0. |
+| Compilation | 1 object, 1 packet, 7 public CLI steps; validation valid; projection succeeded; 2.898643 seconds. |
+| Task Continuity | Enrollment, ordinary resume, fork, compaction, stale checkpoint, wrong task, wrong worktree, and selective forget executed in 14 public CLI steps. Decision preservation was true, Wrong-State Admission was 0, and no transcript was copied. The task Provider Capsule was 1,624 UTF-8 bytes. |
+| Current Provider | Advertised only `query`, `context`, and `explain`. Actual stdio MCP query/context content was 1,404/1,404 UTF-8 bytes. Canonical sequence and audit head were unchanged across reads. Native Provider tokens were unavailable because no real Host/model ran. |
+| 1k Wiki lane | 1,000 objects in 12 packets and 37 public CLI steps plus one external workspace edit. Total 63.014813 seconds; compile/project 30.292410 seconds; query 10.759126 seconds; browse 10.726518 seconds; peak child RSS 244,695,040 bytes; 6,149 files; 34,982,338 storage bytes; Capsule 1,342 bytes. No-op projection equivalence, rename/edit/reconcile, and unmanaged owner-file exact-byte protection were true. |
+| 10k Wiki lane | 10,000 objects in 122 packets and 257 public CLI steps plus one external workspace edit. Total 883.279403 seconds; compile/project 564.316078 seconds; query 104.150140 seconds; browse 115.319551 seconds; peak child RSS 1,333,870,592 bytes; 60,934 files; 328,057,546 storage bytes; Capsule 1,522 bytes. No-op projection equivalence, rename/edit/reconcile, and unmanaged owner-file exact-byte protection were true. |
+
+The full retained run took 967.419489 seconds. Query Gaps remained explicit: the 1k lane reported
+`duty_unresolved` and `no_answer`; the 10k lane additionally reported
+`compiled_discovery_bound`. These are not rewritten as answers or PASS labels.
+
+## Real P1 findings and minimal corrections
+
+Three public tasks failed before the retained run. Failed and manually interrupted attempts are
+excluded from the retained report.
+
+1. A valid 1k Living Wiki manifest exceeded the incremental reader's stale 1 MiB ceiling while
+   the canonical manifest contract allows 64 MiB. The reader now uses the existing 64 MiB bound;
+   no manifest contract or file limit was weakened.
+2. At 10k, one Source page and then `wiki/communities/index.md` exceeded the existing 256 KiB
+   derived-file bound because they inlined unbounded links. Source-bound and navigation links now
+   reuse the existing 200-item shard bound and emit an explicit omission message; the complete
+   objects remain available through existing kind shards, Ledger, query/context, and Source
+   coordinates. No page family or database was added.
+3. `knowledge reconcile` counted directories and unmanaged files against its 10,000 managed-file
+   limit and failed with `workspace reconcile exceeds its entry-count bound` at exactly 10k
+   governed objects. Managed Markdown remains capped at 10,000; a separate 11,000-entry scan bound
+   now reserves fixed overhead for kind/tier directories and owner files. The 256 MiB total-byte,
+   per-file, symlink, unsafe-entry, grant, and CAS checks remain unchanged.
+
+## Four-axis evidence boundary
+
+| Axis | Demonstrated here | Still unverified |
+| --- | --- | --- |
+| Continuity | Public Task start/locate, task-neutral Host connect, stdin enrollment, ordinary resume, fork, compaction, wrong-state withholding, and selective forget; Decision Preservation true and Wrong-State Admission 0. | Native Codex/OpenCode lifecycle behavior, actual returned model identity, and Host-native token usage. |
+| Evidence | Exact Markdown bytes and Source hash; Source Revision/Fragment/Locator/quote-hash coordinates; pending raw content fail-closed. | PDF/DOCX/HTML, owner-reviewed raw Source/Fragment read, effective dates, exceptions/provisos/cross-references, wrong-version/false-Authority fixtures, and signed Legal Pack. |
+| Context efficiency | Current Provider surface and actual UTF-8 bytes remained under the 65,536-byte hard limit; read operations did not change the canonical Ledger. | Actual native Provider tokens, duplicate/distractor comparative metrics, and any cross-product efficiency claim. |
+| Wiki integrity | Public 1k/10k compile/project, no-op equivalence, browse/query, rename/edit/reconcile, explicit bounded omissions, and unmanaged owner-file exact-byte preservation. | Interrupted changed-input recovery, full-versus-incremental changed-input equivalence, aliases/same-name collision, Source successor, backlink/outlink, wrong merge, Obsidian Desktop UI, and 100k/3 OS behavior. |
+
+## Executed, failed, and not executed
+
+- **Executed:** the retained report's init/doctor, exact Markdown registration/verification,
+  source-only Gap, Compilation Run/projection, Task Continuity journey, stdio MCP
+  query/context/explain, read no-write audit, and public 1k/10k lanes.
+- **Failed before repair:** stale manifest-reader ceiling, unbounded Source/community projection,
+  and 10k reconcile entry counting. Each was reproduced at a public seam, minimally corrected, and
+  covered by focused regression before the fresh retained run.
+- **Not executed:** interruption injection; changed-input full/incremental equivalence;
+  PDF/DOCX/HTML; owner-reviewed raw Source/Fragment content; alias/same-name/Source successor;
+  backlink/outlink/wrong merge; effective-date and legal-duty cases; real Codex/OpenCode;
+  Obsidian Desktop; signed Legal Pack; 3 OS/Python matrix; reproducible wheel/sdist and supply
+  chain; Human Gold/legal attestation; isolated external/commercial scoring.
+
+## Separate formal-qualification recovery inputs
+
+These inputs remain required by the release qualification Goal and are all `not_executed` here:
+
+1. owner-controlled external corpus/reference/Host/package inputs with exact SHA-256 identities;
+2. exact real Codex and OpenCode binaries, supported no-inspection authentication seams, at least
+   three distinct runs per Host, returned model identity, and native Provider usage;
+3. isolated reference freezer, candidate Host, scorer A, scorer B, arbiter/attester, credential
+   broker, executable/process/mount/network/IPC receipts, and negative canaries;
+4. frozen Evidence/Legal/Wiki/Context duties, owner-reviewed Source content, signed Legal Pack,
+   hard failures, and source-specific retained outputs;
+5. the required 1k/10k/100k release scale profile, 3 OS/required Python matrix, and exact artifact
+   public journey;
+6. one exact wheel/sdist pair with reproducibility, SBOM, licenses, OpenVEX, provenance, redownload,
+   and artifact SHA verification; and
+7. fresh Candidate Full, External, and Commercial qualification over the same artifact/input pair,
+   including all 14 Core Gates. No result in this document may be reused as those receipts.
 
 ## Scope decision
 
@@ -93,4 +177,3 @@ telemetry path, GUI, second retrieval engine, second Ledger, or second Authority
 Real Host/model calls remain `not_executed` in this Goal unless the owner already has a supported
 authentication seam that needs no credential inspection or copying. Their absence does not block
 this development comparison and cannot be rewritten as product evidence.
-
