@@ -1090,17 +1090,27 @@ def _source_pages(
                 ]
             )
         lines.extend(["", "## Compiled knowledge", ""])
+        remaining_inline_items = INDEX_SHARD_SIZE
         for kind in _KIND_DIRECTORIES:
             members = related_by_kind.get(kind, [])
             if not members:
                 continue
+            visible_members = members[:remaining_inline_items]
             lines.append(f"### {kind.title()}")
             lines.append("")
             lines.extend(
                 f"- {_wiki_link(page_paths[item['knowledge_id']], item['title'])} "
                 f"(`{item['knowledge_id']}`, `{item['freshness']}`)"
-                for item in members
+                for item in visible_members
             )
+            remaining_inline_items -= len(visible_members)
+            omitted_count = len(members) - len(visible_members)
+            if omitted_count:
+                lines.append(
+                    f"- Explicit bounded projection: {omitted_count} additional "
+                    f"source-bound {kind} revisions are not inlined; use bounded "
+                    "query/context and exact Source Revision drill-down."
+                )
             lines.append("")
         if not related:
             lines.append("- Explicit gap: no admitted source-bound Knowledge Revision.")
@@ -1585,7 +1595,14 @@ def _navigation_page(
             "revision": "not_applicable",
         },
     )
-    lines.extend([f"# {title}", "", *links])
+    visible_links = links[:INDEX_SHARD_SIZE]
+    lines.extend([f"# {title}", "", *visible_links])
+    omitted_count = len(links) - len(visible_links)
+    if omitted_count:
+        lines.append(
+            f"- Explicit bounded projection: {omitted_count} additional navigation "
+            "entries are not inlined; use bounded query/context for discovery."
+        )
     if not links:
         lines.append(f"- Explicit gap: {gap}")
     _write(
