@@ -1,7 +1,8 @@
 # DeepLaw v0.13 bounded upstream research
 
-Status: **design evidence only**, researched 2026-08-08 and reconciled with the 2026-08-17
-architecture freeze. This report records concepts considered for v0.13; it is not evidence that any
+Status: **design evidence only**, researched 2026-08-08, reconciled with the 2026-08-17
+architecture freeze, and augmented by the named 2026-08-18 product-closure review. This report
+records concepts considered for v0.13; it is not evidence that any
 target capability is shipped. Package/main remain `0.12.0 Beta`, active qualification is
 `machine_evaluation_pending` under profile `machine_evaluated_no_human_attestation`, and Gate v8
 remains pending. DeepLaw does not vendor or copy upstream implementation code in this work. The
@@ -13,6 +14,24 @@ research does not authorize a fourth product, database, Knowledge kind, Relation
 family, Host adapter, Agent runtime, connector, telemetry path or cloud control plane. Automatic
 transcript memory remains prohibited. The current Provider advertisement is input v7/output v6 with
 only `query`, `context`, and `explain`; older Provider versions remain internal compatibility.
+
+## 2026-08-18 named product-closure anchors
+
+The current named comparison is recorded in
+[`UPSTREAM_PRODUCT_CLOSURE_2026-08-18.md`](UPSTREAM_PRODUCT_CLOSURE_2026-08-18.md). It deliberately
+separates a frozen qualification coordinate from a moving upstream branch observation:
+
+| Upstream | Frozen v0.13 qualification coordinate | Exact 2026-08-18 research anchor | Observed moving branch at 2026-08-18 15:40 +08:00 | License posture |
+| --- | --- | --- | --- | --- |
+| OpenWiki | released v0.3.1, peeled commit `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc` | `21746ce996f3a69898883da58b122770f7dbd668` | `main` at the same research-anchor commit | MIT; behavior/reference review only |
+| Tolaria | `v2026-08-11`, commit `cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` | `40cc9f9479fef7bfe8a51a6df7e02fe11971f95e` | `main` at the same research-anchor commit | AGPL-3.0-or-later; no code copied |
+| Obsidian API | `obsidian@1.13.2`, commit `cc1744324150c632416857c98964f87b1574a5fc` | the same exact commit | `master` at the same commit | MIT type definitions; no Desktop implementation claim |
+| Ekgardt/llm-wiki | no named v0.13 qualification comparator; the protocol retains only an LLM-Wiki behavior category | `350eec8a284e159b2e4cfd068d808cbf203a6cc5` | `main` at the same research-anchor commit | MIT; behavior/reference review only |
+
+The moving branches happened to equal the exact research anchors when observed. That coincidence
+does not convert a branch name into an immutable input and does not rotate the qualification
+coordinates. Ekgardt/llm-wiki remains a named research comparator for this development review; it
+does not silently replace the protocol's broader LLM-Wiki behavior category.
 
 ## Frozen references
 

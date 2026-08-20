@@ -1298,6 +1298,17 @@ def test_living_wiki_shards_keep_more_than_300_objects_discoverable(
     assert len(fragment_indexes) == 5
     assert "## Exact evidence drill-down" in source_page
     assert f"`{begun['compilation_run_id']}` · `succeeded`" in source_page
+    assert (
+        "Explicit bounded projection: 105 additional source-bound claim revisions "
+        "are not inlined"
+    ) in source_page
+    community_index = (root / "wiki" / "communities" / "index.md").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "Explicit bounded projection: 105 additional navigation entries are not inlined"
+        in community_index
+    )
     assert all(
         f"[[{path.relative_to(root).with_suffix('').as_posix()}" in source_page
         for path in fragment_indexes

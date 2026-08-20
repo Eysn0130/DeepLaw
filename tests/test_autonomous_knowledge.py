@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+import deeplaw.knowledge_autonomy as knowledge_autonomy
 from deeplaw.knowledge_autonomy import (
     AUTONOMOUS_EVENT_SCHEMA,
     SINK_OPERATIONS,
@@ -766,6 +767,49 @@ def test_workspace_move_edit_stale_conflict_and_recovery_are_explicit(tmp_path: 
         assert recovery["recovered_revision_ids"] == [current["revision_id"]]
         assert current_path.is_file()
         assert store.verify()["valid"] is True
+
+
+def test_workspace_reconcile_separates_managed_files_from_entry_overhead(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = _grant(store, writer="bounded-reconcile")
+        store.remember(
+            grant_id=grant_id,
+            idempotency_key="bounded-reconcile-object",
+            title="Bounded reconcile object",
+            body="Directory overhead must not consume the governed Markdown limit.",
+            kind="concept",
+            operation="upsert_concept",
+            confirm_no_case_data=True,
+        )
+        entry_count = sum(
+            1
+            for root_name in ("knowledge", "memory", "skills")
+            for _ in (root / root_name).rglob("*")
+        )
+        assert entry_count > 1
+        monkeypatch.setattr(knowledge_autonomy, "_MAX_RECONCILE_FILES", 1)
+        monkeypatch.setattr(
+            knowledge_autonomy,
+            "_MAX_RECONCILE_ENTRIES",
+            entry_count,
+        )
+
+        report = store.reconcile_workspace(
+            grant_id=grant_id,
+            confirm_no_case_data=True,
+        )
+        assert report["committed"] == []
+
+        (root / "knowledge" / "concepts" / "bounded-extra-directory").mkdir()
+        with pytest.raises(ValueError, match="entry-count bound"):
+            store.reconcile_workspace(
+                grant_id=grant_id,
+                confirm_no_case_data=True,
+            )
 
 
 def test_startup_recovery_discards_uncommitted_staging_and_rejects_corruption(

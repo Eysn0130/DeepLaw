@@ -263,6 +263,11 @@ _MAX_LINT_OBJECTS = 10_000
 _MAX_LINT_RELATIONS = 10_000
 _MAX_LINT_LINKS = 10_000
 _MAX_RECONCILE_FILES = 10_000
+# Reconciliation must admit the 10k governed-object profile plus a bounded
+# number of kind/tier directories and unmanaged owner files.  Keep this
+# separate from the managed Markdown limit so directory-heavy trees cannot
+# turn the allowance into an unbounded scan.
+_MAX_RECONCILE_ENTRIES = _MAX_RECONCILE_FILES + 1_000
 _MAX_RECONCILE_BYTES = 256 * 1024 * 1024
 _MAX_STAGING_RECORDS = 10_000
 _MAX_STAGING_RECORD_BYTES = 64 * 1024
@@ -7118,6 +7123,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         unmanaged: list[str] = []
         restored: list[str] = []
         scanned_entries = 0
+        managed_files = 0
         scanned_bytes = 0
         markdown_paths: list[Path] = []
         for root_name in ("knowledge", "memory", "skills"):
@@ -7126,7 +7132,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 raise RuntimeError("workspace knowledge directory is missing or unsafe")
             for path in directory.rglob("*"):
                 scanned_entries += 1
-                if scanned_entries > _MAX_RECONCILE_FILES:
+                if scanned_entries > _MAX_RECONCILE_ENTRIES:
                     raise ValueError("workspace reconcile exceeds its entry-count bound")
                 if path.is_symlink():
                     raise RuntimeError("workspace contains a symbolic-link entry")
@@ -7154,6 +7160,12 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     if isinstance(existing_id, str) and existing_id in current_rows
                     else None
                 )
+                if existing is not None:
+                    managed_files += 1
+                    if managed_files > _MAX_RECONCILE_FILES:
+                        raise ValueError(
+                            "workspace reconcile exceeds its managed-file bound"
+                        )
                 markdown_schema = frontmatter.get("schema")
                 markdown_contract = (
                     "knowledge-object.v3.schema.json"

@@ -1,6 +1,6 @@
 # Upstream Reuse Review
 
-Reviewed: 2026-08-17
+Reviewed: 2026-08-18
 
 Current boundary: package/main remain `0.12.0 Beta`; the active qualification profile is
 `machine_evaluated_no_human_attestation`, status `machine_evaluation_pending`, and Gate
@@ -23,6 +23,16 @@ optional external build adapter/tool, possible future code extraction,
 architectural reference, and rejection. It does not assert that repository
 popularity or an upstream self-reported benchmark transfers to Chinese legal
 retrieval.
+
+The 2026-08-18 named product-closure review additionally inspected OpenWiki
+`21746ce996f3a69898883da58b122770f7dbd668`, Tolaria
+`40cc9f9479fef7bfe8a51a6df7e02fe11971f95e`, Obsidian API
+`cc1744324150c632416857c98964f87b1574a5fc`, and Ekgardt/llm-wiki
+`350eec8a284e159b2e4cfd068d808cbf203a6cc5`. The review is behavioral and
+reference-only: it copied no upstream source, added no dependency, and did not change the historical
+reuse manifest below. Exact branch observations, qualification-coordinate separation, and the
+Adopt/Already stronger/Defer/Reject/Unverified matrix are in
+[`UPSTREAM_PRODUCT_CLOSURE_2026-08-18.md`](UPSTREAM_PRODUCT_CLOSURE_2026-08-18.md).
 
 ## Decision Rules
 
