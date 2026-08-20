@@ -1,6 +1,6 @@
 {
   "schema_version": "deeplaw.opencode-adapter-manifest/v1",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "host": "opencode",
   "host_context_contract": "context-bridge.json",
   "agent_context_schema": "deeplaw.agent-context-envelope/v1",
