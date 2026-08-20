@@ -1093,6 +1093,11 @@ def _public_semantic_compile(
             )
         inventory = run.semantic_inventory(confirm_no_case_data=True)
         finalization = run.finalization_packet()
+        finalization_provider_bytes = len(canonical_json(finalization).encode("utf-8"))
+        if finalization_provider_bytes > PROVIDER_HARD_LIMIT_BYTES:
+            raise ScaleQualificationError(
+                "semantic finalization packet exceeds the provider hard bound"
+            )
         duty_reports: list[dict[str, Any]] = []
         for duty in finalization["duties"]:
             applicable = duty["applicability"]
@@ -1168,6 +1173,7 @@ def _public_semantic_compile(
             "publication_request_bytes": publication_bytes,
             "publication_request_sha256": publication_sha256,
             "publication_request_limit_bytes": MAX_COMPILATION_REQUEST_BYTES,
+            "finalization_provider_bytes": finalization_provider_bytes,
             "published_object_count": observed_count,
             "committed_object_count": observed_count,
             "committed_relation_count": 0,

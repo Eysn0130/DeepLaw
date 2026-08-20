@@ -27,6 +27,10 @@ Core evidence keeps `release_ready=false` and forbids the tag and Release.
 - More than 10,000 objects is experimental and unqualified for v0.13.
 - 100,000-object sharding/bundling is deferred to v0.14 design work.
 - Provider-visible Knowledge Capsules retain the existing 65,536-byte hard limit.
+- Semantic v3 finalization keeps the Vault-wide existing-identity sample local and
+  inventory-hash-bound; Provider context retains aggregate facts plus exact
+  observation-relevant canonical identities and a deterministic per-duty reference
+  sample within the same 65,536-byte limit.
 
 ## Separate non-claims
 

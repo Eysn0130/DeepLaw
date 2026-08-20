@@ -516,6 +516,33 @@ def test_v9_frozen_40_object_batch_stays_on_public_bounded_path(tmp_path: Path) 
     assert receipts[0]["publication_request_bytes"] <= MAX_COMPILATION_REQUEST_BYTES
 
 
+def test_v9_repeated_40_object_batches_keep_finalization_provider_bounded(
+    tmp_path: Path,
+) -> None:
+    receipts = _public_batch_smoke(
+        tmp_path,
+        batch_count=6,
+        fragments_per_source=FRAGMENTS_PER_SOURCE,
+    )
+    assert [item["global_offset"] for item in receipts] == [0, 40, 80, 120, 160, 200]
+    assert all(
+        0 < item["finalization_provider_bytes"] <= PROVIDER_HARD_LIMIT_BYTES
+        for item in receipts
+    )
+
+
+def test_v9_100_observation_finalization_stays_on_public_bounded_path(
+    tmp_path: Path,
+) -> None:
+    receipts = _public_batch_smoke(
+        tmp_path,
+        batch_count=1,
+        fragments_per_source=100,
+    )
+    assert receipts[0]["published_object_count"] == 100
+    assert 0 < receipts[0]["finalization_provider_bytes"] <= PROVIDER_HARD_LIMIT_BYTES
+
+
 def test_v9_public_rebuild_paths_have_real_modes_and_stable_standard_identity(
     tmp_path: Path,
 ) -> None:

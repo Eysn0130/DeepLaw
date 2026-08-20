@@ -631,6 +631,16 @@ def test_v3_packet_filters_existing_knowledge_by_grant_boundary(tmp_path: Path) 
         visible["knowledge_id"]
     ]
     assert inventory["coverage"]["runtime_facts"]["existing"]["relation_count"] == 0
+    assert "knowledge_ids" not in packet["inventory"]["coverage"]["runtime_facts"][
+        "existing"
+    ]
+    assert packet["inventory"]["coverage"]["runtime_facts"]["existing"]["count"] == 1
+    provider_facts = packet["inventory"]["coverage"]["runtime_facts"]
+    assert provider_facts["facts_sha256"] == sha256_bytes(
+        canonical_json(
+            {key: value for key, value in provider_facts.items() if key != "facts_sha256"}
+        ).encode("utf-8")
+    )
     assert [item["knowledge_id"] for item in packet["existing_canonical_knowledge"]] == [
         visible["knowledge_id"]
     ]
