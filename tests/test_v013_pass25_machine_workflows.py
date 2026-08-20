@@ -290,8 +290,8 @@ def test_external_role_guards_are_deletion_sensitive() -> None:
 def test_external_keeps_exact_host_pins_and_delegates_auth_to_brokers() -> None:
     workflow = _workflow("external-qualification-evidence.yml")
 
-    assert 'codex-cli 0.148.0-alpha.9' in workflow
-    assert "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f" in workflow
+    assert 'codex-cli 0.148.0-alpha.15' in workflow
+    assert "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7" in workflow
     assert "gpt-5.6-luna" in workflow
     assert 'login status' not in workflow
     assert "DEEPLAW_CODEX_CREDENTIAL_BROKER" in workflow

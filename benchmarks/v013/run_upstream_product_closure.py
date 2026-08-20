@@ -13,13 +13,16 @@ import importlib.metadata
 import json
 import math
 import os
+import platform
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape
 
 try:
     import resource
@@ -38,11 +41,10 @@ DEFAULT_WARM_ITERATIONS = 5
 OWNERSHIP_MANIFEST = Path(".deeplaw/derived/tree/living-wiki-manifest.json")
 V3_MANIFEST = Path(".deeplaw/derived/wiki/v3/manifest.json")
 NOT_EXECUTED = (
-    "interruption injection and recovery",
-    "PDF/DOCX/HTML exact-byte and locator task",
-    "exact Source/Fragment content read pending owner review",
-    "alias/same-name collision and Source successor task",
-    "backlink/outlink and wrong-merge task",
+    "real crash/kill interruption injection and recovery",
+    "positive OCR critical-token consensus and human review task",
+    "arbitrary semantic wrong-merge correctness against independent Gold",
+    "native Host duplicate/distractor outcome and actual token comparison",
     "effective-date/exception/proviso/cross-reference/wrong-version/false-Authority task",
     "real Codex Host/model task",
     "real OpenCode Host/model task",
@@ -63,6 +65,46 @@ def _canonical(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _mapping_contains_key(value: object, keys: set[str]) -> bool:
+    """Return whether a nested JSON value exposes one forbidden field name."""
+
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            normalized = str(key).replace("-", "_").replace(" ", "_").casefold()
+            if normalized in keys or _mapping_contains_key(nested, keys):
+                return True
+        return False
+    if isinstance(value, list):
+        return any(_mapping_contains_key(item, keys) for item in value)
+    return False
+
+
+def _provider_boundary_receipt(provider: dict[str, Any]) -> dict[str, Any]:
+    """Prove local trace/audit fields did not cross the Provider projection."""
+
+    forbidden_keys = {
+        "query_trace",
+        "querytrace",
+        "canonical_ledger",
+        "canonicalledger",
+        "audit_head",
+        "ledger_head",
+    }
+    query_trace_in_provider = _mapping_contains_key(provider, {"query_trace", "querytrace"})
+    canonical_ledger_in_provider = _mapping_contains_key(
+        provider,
+        {"canonical_ledger", "canonicalledger", "audit_head", "ledger_head"},
+    )
+    if query_trace_in_provider or canonical_ledger_in_provider:
+        raise DiagnosticFailure("Provider projection exposed local Query Trace or Canonical Ledger")
+    return {
+        "query_trace_in_provider": query_trace_in_provider,
+        "canonical_ledger_in_provider": canonical_ledger_in_provider,
+        "provider_internal_surface_leak": False,
+        "forbidden_provider_keys": sorted(forbidden_keys),
+    }
+
+
 def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -73,6 +115,21 @@ def _sha256_file(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _write_adjacent_checksums(output: Path) -> Path:
+    """Write a conventional sibling SHA256SUMS inventory without self-reference."""
+
+    checksum_path = output.parent / "SHA256SUMS"
+    if output.name == checksum_path.name:
+        raise DiagnosticFailure("Report output cannot also be the SHA256SUMS inventory")
+    if checksum_path.exists() or checksum_path.is_symlink():
+        raise DiagnosticFailure("Adjacent SHA256SUMS inventory already exists")
+    if output.is_symlink() or not output.is_file():
+        raise DiagnosticFailure("Report output is missing or unsafe for checksum inventory")
+    lines = [f"{_sha256_file(output)}  {output.name}"]
+    checksum_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return checksum_path
 
 
 def _open_file_count() -> int:
@@ -247,6 +304,38 @@ def _enable_grant(
     if not isinstance(grant_id, str):
         raise DiagnosticFailure("Sink grant did not return an opaque grant identity")
     return grant_id
+
+
+def _apply_sink_request(
+    environment: dict[str, str],
+    vault: Path,
+    *,
+    grant_id: str,
+    request: dict[str, Any],
+    request_path: Path,
+) -> tuple[dict[str, Any], float]:
+    request_path.write_text(_canonical(request), encoding="utf-8")
+    response, elapsed = _run_cli(
+        environment,
+        "knowledge",
+        "sink",
+        "apply",
+        "--vault",
+        str(vault),
+        "--grant-id",
+        grant_id,
+        "--request",
+        str(request_path),
+    )
+    result = response.get("result")
+    boundary = response.get("boundary")
+    if (
+        not isinstance(result, dict)
+        or not isinstance(boundary, dict)
+        or boundary.get("case_data_allowed") is not False
+    ):
+        raise DiagnosticFailure("Public Knowledge Sink response lost its closed boundary")
+    return result, elapsed
 
 
 def _compilation_plan(packet: dict[str, Any]) -> dict[str, Any]:
@@ -446,13 +535,25 @@ def _compile_source_revision(
             "Begin one resumable Compilation Run for the exact Source Revision."
         ),
         "public_cli_steps": (2 * packet_count) + 5,
+        "public_operation_count": (2 * packet_count) + 5,
         "owner_operation_steps": 5,
+        "host_internal_packet_count": packet_count,
         "host_internal_packet_steps": 2 * packet_count,
         "objects_staged": staged,
         "packet_count": packet_count,
         "validation_valid": True,
         "commit_status": commit.get("status"),
         "projection_status": projected.get("status"),
+        "process_boundary_recovery": {
+            "status": "executed",
+            "kind": "persisted_compilation_run_resume",
+            "commit_status_before_resume": commit.get("status"),
+            "resume_status": projected.get("status"),
+            "real_crash_or_kill_injection": {
+                "status": "not_executed",
+                "reason": "A diagnostic child was not forcibly terminated.",
+            },
+        },
         "first_fragment": first_fragment,
         "phase_elapsed_seconds": {
             "begin": round(begin_seconds, 6),
@@ -471,6 +572,514 @@ def _compile_source_revision(
             + project_seconds,
             6,
         ),
+    }
+
+
+def _write_docx_fixture(path: Path, text: str) -> None:
+    """Create the smallest public-test-compatible DOCX fixture with exact caller bytes."""
+
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f"<w:body><w:p><w:r><w:t>{escape(text)}</w:t></w:r></w:p><w:sectPr/></w:body>"
+        "</w:document>"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", document)
+
+
+def _write_native_pdf_fixture(path: Path) -> bool:
+    """Use the already-installed public test PDF generator when available."""
+
+    try:
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pdf = canvas.Canvas(str(path))
+    lines = [
+        "Native PDF fixture exact bytes and source identity are retained.",
+        "This source-free development paragraph is intentionally long enough for the",
+        "deterministic native-text PDF quality gate and locator extraction.",
+    ]
+    for index in range(5):
+        for line in lines:
+            pdf.drawString(48, 780 - ((index * len(lines)) + lines.index(line)) * 18, line)
+    pdf.showPage()
+    pdf.save()
+    return True
+
+
+def _expect_public_cli_failure(
+    environment: dict[str, str],
+    *arguments: str,
+    stderr_fragment: str,
+) -> None:
+    completed = _run_process(
+        [sys.executable, "-m", "deeplaw", *arguments],
+        cwd=REPOSITORY,
+        environment=environment,
+    )
+    if completed.returncode == 0 or stderr_fragment not in completed.stderr:
+        raise DiagnosticFailure("Public fail-closed probe did not return the expected rejection")
+
+
+def _review_source(
+    environment: dict[str, str],
+    vault: Path,
+    source_id: str,
+) -> tuple[dict[str, Any], float]:
+    manifest, manifest_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "review",
+        "manifest",
+        "--vault",
+        str(vault),
+        "--source-id",
+        source_id,
+    )
+    manifest_sha256 = manifest.get("review_manifest_sha256")
+    if not isinstance(manifest_sha256, str) or len(manifest_sha256) != 64:
+        raise DiagnosticFailure("Source review manifest did not return an exact SHA-256")
+    approved, approve_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "review",
+        "approve-source",
+        "--vault",
+        str(vault),
+        "--source-id",
+        source_id,
+        "--review-manifest-sha256",
+        manifest_sha256,
+        "--reviewer-id",
+        "upstream-closure-development-review",
+        "--reason",
+        "Synthetic source-free fixture review for exact read seam.",
+        "--confirm-reviewed",
+    )
+    if not isinstance(approved, dict):
+        raise DiagnosticFailure("Source review approval did not return a receipt")
+    return manifest, manifest_seconds + approve_seconds
+
+
+def _evidence_format_lane(root: Path, environment: dict[str, str]) -> dict[str, Any]:
+    """Register exact bytes for public text/document formats, then read after review."""
+
+    root.mkdir(parents=True)
+    vault = root / "vault"
+    _run_cli(
+        environment,
+        "knowledge",
+        "init",
+        "--vault",
+        str(vault),
+        "--name",
+        "upstream-closure-evidence-formats",
+        "--scope",
+        "project",
+    )
+    fixtures: dict[str, tuple[str, bytes | None]] = {
+        "markdown": (
+            "evidence.md",
+            b"# Evidence Markdown\nThe exact Markdown bytes are source-free.\n",
+        ),
+        "html": (
+            "evidence.html",
+            b"<html><body><h1>Evidence HTML</h1>"
+            b"<p>The exact HTML bytes are source-free.</p></body></html>",
+        ),
+        "docx": ("evidence.docx", None),
+        "native_text_pdf": ("evidence.pdf", None),
+    }
+    docx_path = root / "evidence.docx"
+    _write_docx_fixture(
+        docx_path,
+        "Evidence DOCX exact bytes are source-free and long enough for deterministic extraction.",
+    )
+    fixtures["docx"] = ("evidence.docx", docx_path.read_bytes())
+    pdf_path = root / "evidence.pdf"
+    pdf_available = _write_native_pdf_fixture(pdf_path)
+    fixtures["native_text_pdf"] = (
+        "evidence.pdf",
+        pdf_path.read_bytes() if pdf_available else None,
+    )
+
+    format_results: dict[str, Any] = {}
+    public_operation_count = 1
+    for name, (filename, fixture_bytes) in fixtures.items():
+        if fixture_bytes is None:
+            format_results[name] = {
+                "status": "not_executed",
+                "reason": "The installed PDF generation dependency was unavailable.",
+            }
+            continue
+        source_path = root / filename
+        if name in {"markdown", "html"}:
+            source_path.write_bytes(fixture_bytes)
+        caller_sha256 = _sha256_bytes(fixture_bytes)
+        added, add_seconds = _run_cli(
+            environment,
+            "knowledge",
+            "source",
+            "add",
+            "--vault",
+            str(vault),
+            "--source",
+            str(source_path),
+            "--typed-extraction",
+            "off",
+            "--pdf-fallback",
+            "off",
+            "--confirm-no-case-data",
+        )
+        source_card = added.get("source")
+        compiler = added.get("compiler")
+        if not isinstance(source_card, dict) or not isinstance(compiler, dict):
+            raise DiagnosticFailure(f"{name} source add omitted its source/compiler receipt")
+        source_id = str(source_card["source_id"])
+        if compiler.get("source_sha256") != caller_sha256:
+            raise DiagnosticFailure(f"{name} source add did not bind caller bytes")
+        verified, verify_seconds = _run_cli(
+            environment,
+            "knowledge",
+            "source",
+            "verify",
+            "--vault",
+            str(vault),
+            "--source-id",
+            source_id,
+        )
+        if verified.get("valid") is not True:
+            raise DiagnosticFailure(f"{name} public source verification failed")
+        manifest, review_seconds = _review_source(environment, vault, source_id)
+        read, read_seconds = _run_cli(
+            environment,
+            "knowledge",
+            "source",
+            "get",
+            "--vault",
+            str(vault),
+            "--source-id",
+            source_id,
+        )
+        read_card = read.get("source")
+        if (
+            not isinstance(read_card, dict)
+            or read_card.get("content_sha256") != caller_sha256
+            or read.get("write_performed") is not False
+        ):
+            raise DiagnosticFailure(f"{name} source get did not preserve exact caller bytes")
+        compiler_grant = _enable_grant(
+            environment,
+            vault,
+            writer=f"upstream-closure-evidence-{name}",
+            profile="compiler",
+            max_objects=10,
+        )
+        compilation = _compile_source_revision(
+            environment,
+            vault,
+            source_revision_id=str(added["identity"]["source_revision_id"]),
+            grant_id=compiler_grant,
+            plan_root=root,
+        )
+        fragment_id = str(compilation["first_fragment"]["fragment_id"])
+        fragment_read, fragment_seconds = _run_cli(
+            environment,
+            "knowledge",
+            "source",
+            "fragment",
+            "--vault",
+            str(vault),
+            "--fragment-id",
+            fragment_id,
+            "--max-chars",
+            "12000",
+        )
+        fragment_card = fragment_read.get("fragment")
+        if (
+            not isinstance(fragment_card, dict)
+            or fragment_read.get("write_performed") is not False
+            or fragment_card.get("source_revision_id")
+            != added["identity"]["source_revision_id"]
+            or not isinstance(fragment_card.get("locator"), str)
+            or not isinstance(fragment_card.get("text_sha256"), str)
+        ):
+            raise DiagnosticFailure(f"{name} fragment read omitted its locator identity")
+        format_results[name] = {
+            "status": "executed",
+            "source_id": source_id,
+            "source_revision_id": added["identity"]["source_revision_id"],
+            "source_sha256": caller_sha256,
+            "verify_valid": verified["valid"],
+            "read_content_sha256": read_card["content_sha256"],
+            "read_write_performed": read["write_performed"],
+            "review_manifest_sha256": manifest["review_manifest_sha256"],
+            "fragment_id": fragment_id,
+            "fragment_locator": fragment_card["locator"],
+            "fragment_text_sha256": fragment_card["text_sha256"],
+            "document_version_fragment_identity": True,
+            "fragment_read_write_performed": fragment_read["write_performed"],
+            "host_internal_packet_count": compilation["host_internal_packet_count"],
+            "elapsed_seconds": round(
+                add_seconds
+                + verify_seconds
+                + review_seconds
+                + read_seconds
+                + compilation["elapsed_seconds"]
+                + fragment_seconds,
+                6,
+            ),
+        }
+        public_operation_count += 7 + int(compilation["public_operation_count"])
+
+    ocr_probe: dict[str, Any]
+    if pdf_available:
+        scanned = root / "scanned.pdf"
+        # A blank page has no native text.  The public seam must stop at the OCR-needed gate.
+        try:
+            from reportlab.pdfgen import canvas
+        except ImportError:
+            ocr_probe = {
+                "status": "not_executed",
+                "reason": "The installed PDF generation dependency was unavailable.",
+            }
+        else:
+            pdf = canvas.Canvas(str(scanned))
+            pdf.showPage()
+            pdf.save()
+            _expect_public_cli_failure(
+                environment,
+                "knowledge",
+                "source",
+                "add",
+                "--vault",
+                str(vault),
+                "--source",
+                str(scanned),
+                "--typed-extraction",
+                "off",
+                "--pdf-fallback",
+                "off",
+                "--confirm-no-case-data",
+                stderr_fragment="PDF text quality gate failed",
+            )
+            ocr_probe = {
+                "status": "executed",
+                "kind": "blank_or_scanned_pdf",
+                "expected": "fail_closed_ocr_needed",
+                "positive_ocr": "not_executed",
+            }
+            public_operation_count += 1
+    else:
+        ocr_probe = {
+            "status": "not_executed",
+            "reason": "The installed PDF generation dependency was unavailable.",
+        }
+    return {
+        "status": "executed",
+        "format_results": format_results,
+        "ocr_needed_fail_closed": ocr_probe,
+        "fragment_identity_status": "executed_per_format_after_review",
+        "public_operation_count": public_operation_count,
+        "host_internal_packet_count": sum(
+            int(result.get("host_internal_packet_count", 0))
+            for result in format_results.values()
+            if isinstance(result, dict)
+        ),
+    }
+
+
+def _source_successor_lane(root: Path, environment: dict[str, str]) -> dict[str, Any]:
+    """Exercise stable aliases, an exact successor, and ambiguous parallel successors."""
+
+    root.mkdir(parents=True)
+    vault = root / "vault"
+    _run_cli(
+        environment,
+        "knowledge",
+        "init",
+        "--vault",
+        str(vault),
+        "--name",
+        "upstream-closure-source-successor",
+        "--scope",
+        "project",
+    )
+    original = root / "policy.md"
+    original.write_text(
+        "# Policy\nUse the source-free Atlas review path.\n",
+        encoding="utf-8",
+    )
+    first, _ = _run_cli(
+        environment,
+        "knowledge",
+        "source",
+        "add",
+        "--vault",
+        str(vault),
+        "--source",
+        str(original),
+        "--typed-extraction",
+        "off",
+        "--pdf-fallback",
+        "off",
+        "--confirm-no-case-data",
+    )
+    first_source = first.get("source")
+    if not isinstance(first_source, dict):
+        raise DiagnosticFailure("Initial Source successor fixture omitted its identity")
+    _review_source(environment, vault, str(first_source["source_id"]))
+
+    renamed = root / "renamed-policy.md"
+    renamed.write_bytes(original.read_bytes())
+    second, _ = _run_cli(
+        environment,
+        "knowledge",
+        "source",
+        "update",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--source",
+        str(renamed),
+        "--typed-extraction",
+        "off",
+        "--pdf-fallback",
+        "off",
+        "--confirm-no-case-data",
+    )
+    second_source = second.get("source")
+    if not isinstance(second_source, dict):
+        raise DiagnosticFailure("Source successor update omitted its identity")
+    if second_source.get("previous_source_id") != first_source["source_id"]:
+        raise DiagnosticFailure("Source successor did not bind its previous revision")
+    active_before, _ = _run_cli(
+        environment,
+        "knowledge",
+        "source",
+        "show",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--active",
+    )
+    latest, _ = _run_cli(
+        environment,
+        "knowledge",
+        "source",
+        "show",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--latest",
+    )
+    diff, _ = _run_cli(
+        environment,
+        "knowledge",
+        "source",
+        "diff",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--latest",
+    )
+    if (
+        active_before.get("source_id") != first_source["source_id"]
+        or latest.get("source_id") != second_source["source_id"]
+        or latest.get("status") != "pending"
+        or diff.get("unchanged_count") != 1
+    ):
+        raise DiagnosticFailure("Source successor selectors lost their active/latest boundary")
+
+    _review_source(environment, vault, str(second_source["source_id"]))
+    active_from_old_alias, _ = _run_cli(
+        environment,
+        "knowledge",
+        "source",
+        "show",
+        "--vault",
+        str(vault),
+        "--alias",
+        "policy.md",
+        "--active",
+    )
+    verified_from_new_alias, _ = _run_cli(
+        environment,
+        "knowledge",
+        "source",
+        "verify",
+        "--vault",
+        str(vault),
+        "--alias",
+        "renamed-policy.md",
+        "--active",
+    )
+    if (
+        active_from_old_alias.get("source_id") != second_source["source_id"]
+        or active_from_old_alias.get("logical_path") != "renamed-policy.md"
+        or verified_from_new_alias.get("valid") is not True
+    ):
+        raise DiagnosticFailure("Historical/current aliases did not resolve the exact successor")
+
+    for index in (1, 2):
+        renamed.write_text(
+            f"# Policy\nCandidate {index} remains pending for explicit review.\n",
+            encoding="utf-8",
+        )
+        _run_cli(
+            environment,
+            "knowledge",
+            "source",
+            "update",
+            "--vault",
+            str(vault),
+            "--alias",
+            "renamed-policy.md",
+            "--source",
+            str(renamed),
+            "--typed-extraction",
+            "off",
+            "--pdf-fallback",
+            "off",
+            "--confirm-no-case-data",
+        )
+    _expect_public_cli_failure(
+        environment,
+        "knowledge",
+        "source",
+        "show",
+        "--vault",
+        str(vault),
+        "--alias",
+        "renamed-policy.md",
+        "--latest",
+        stderr_fragment="multiple pending successors",
+    )
+    return {
+        "status": "executed",
+        "stable_logical_source_identity": True,
+        "historical_alias_resolved": True,
+        "current_alias_resolved": True,
+        "successor_previous_source_id": second_source["previous_source_id"],
+        "active_source_id_before_review": active_before["source_id"],
+        "active_source_id_after_review": active_from_old_alias["source_id"],
+        "latest_pending_source_id": latest["source_id"],
+        "unchanged_fragment_count": diff["unchanged_count"],
+        "parallel_pending_successor_rejection": {
+            "status": "executed",
+            "kind": "ambiguous_successor_not_arbitrary_semantic_merge_judgment",
+            "wrong_state_admission_count": 0,
+        },
+        "public_operation_count": 15,
+        "host_internal_packet_count": 0,
     }
 
 
@@ -811,6 +1420,7 @@ async def _run_mcp_task(
         )
         if context.isError or explained.isError:
             raise DiagnosticFailure("MCP context or explain failed")
+        provider_boundary = _provider_boundary_receipt(provider)
 
         for _ in range(max(0, warm_iterations)):
             warm_query_started = time.perf_counter()
@@ -825,6 +1435,10 @@ async def _run_mcp_task(
             warm_query_timings.append(time.perf_counter() - warm_query_started)
             if warm_query.isError or not isinstance(warm_query.structuredContent, dict):
                 raise DiagnosticFailure("Warm MCP query failed")
+            warm_query_provider = warm_query.structuredContent.get("result")
+            if not isinstance(warm_query_provider, dict):
+                raise DiagnosticFailure("Warm MCP query omitted its Provider result")
+            _provider_boundary_receipt(warm_query_provider)
             warm_context_started = time.perf_counter()
             warm_context = await session.call_tool(
                 "knowledge_support",
@@ -865,11 +1479,18 @@ async def _run_mcp_task(
             "advertised_operations": operations,
             "first_correct_action": "List the current Provider advertisement before calling it.",
             "provider_operation_steps": 3,
+            "public_operation_count": 3,
             "query_status": "executed",
             "context_status": "executed",
             "explain_status": "executed",
             "provider_content_bytes": provider_bytes,
             "max_provider_content_bytes": max(provider_bytes),
+            "provider_bytes": {
+                "status": "executed",
+                "values": provider_bytes,
+                "maximum": max(provider_bytes),
+                "hard_limit": MAX_PROVIDER_BYTES,
+            },
             "cold_query_timing_ms": round(cold_query_seconds * 1000, 3),
             "cold_context_timing_ms": round(cold_context_seconds * 1000, 3),
             "warm_query_timing_ms_p50": _percentile(warm_query_timings, 0.5),
@@ -882,6 +1503,12 @@ async def _run_mcp_task(
                 max(warm_provider_bytes) if warm_provider_bytes else None
             ),
             "native_provider_tokens": "unavailable",
+            "actual_provider_tokens": {
+                "status": "not_executed",
+                "value": None,
+                "reason": "No real Host/model usage receipt was available.",
+            },
+            **provider_boundary,
         }
 
 
@@ -906,8 +1533,12 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
 
     source = root / "source.md"
     source_bytes = (
-        b"# Synthetic retention decision\n"
-        b"The synthetic retention decision is exactly thirty days.\n"
+        b"# Synthetic retention decision A\n"
+        b"The synthetic retention decision is exactly thirty days.\n\n"
+        b"# Synthetic retention decision B\n"
+        b"The synthetic retention decision is exactly thirty days.\n\n"
+        b"# Unrelated distractor\n"
+        b"Tropical rainfall measurements concern monsoon regions.\n"
     )
     source.write_bytes(source_bytes)
     added, add_seconds = _run_cli(
@@ -961,6 +1592,43 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
     if "uncompiled_source" not in gap_codes or source_only.get("statements") != []:
         raise DiagnosticFailure("Source-only Context did not preserve its required Gap")
 
+    handoff, handoff_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "compile",
+        "handoff",
+        "--vault",
+        str(vault),
+        "--source-revision-id",
+        source_revision_id,
+    )
+    expected_boundaries = {
+        "read_leaf": "knowledge_support",
+        "write_leaf": "knowledge_sink",
+        "grant_required": True,
+        "grant_included": False,
+        "model_invoked": False,
+        "write_performed": False,
+    }
+    if (
+        handoff.get("boundaries") != expected_boundaries
+        or handoff.get("write_performed") is not False
+    ):
+        raise DiagnosticFailure("Compilation handoff did not preserve its no-write boundary")
+    handoff_steps = handoff.get("steps")
+    if not isinstance(handoff_steps, list) or not handoff_steps:
+        raise DiagnosticFailure("Compilation handoff omitted its public leaf steps")
+    for step in handoff_steps:
+        if not isinstance(step, dict):
+            raise DiagnosticFailure("Compilation handoff step is invalid")
+        leaf = step.get("leaf")
+        if leaf == "knowledge_support" and step.get("write") is not False:
+            raise DiagnosticFailure("Compilation handoff read leaf was marked writable")
+        if leaf == "knowledge_sink" and step.get("write") is not True:
+            raise DiagnosticFailure("Compilation handoff write leaf was not explicit")
+        if leaf not in {"knowledge_support", "knowledge_sink"}:
+            raise DiagnosticFailure("Compilation handoff exposed an unknown leaf")
+
     compiler_grant = _enable_grant(
         environment,
         vault,
@@ -998,6 +1666,7 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
     )
     if not exact_coordinates:
         raise DiagnosticFailure("Living Wiki lost an exact Source evidence coordinate")
+
     _expect_cli_permission_denied(
         environment,
         "knowledge",
@@ -1018,6 +1687,138 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
         "--fragment-id",
         str(first_fragment["fragment_id"]),
     )
+
+    review_manifest, review_manifest_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "review",
+        "manifest",
+        "--vault",
+        str(vault),
+        "--source-id",
+        source_id,
+    )
+    review_manifest_sha256 = review_manifest.get("review_manifest_sha256")
+    if not isinstance(review_manifest_sha256, str) or len(review_manifest_sha256) != 64:
+        raise DiagnosticFailure("Source review manifest did not return an exact SHA-256")
+    approved, approve_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "review",
+        "approve-source",
+        "--vault",
+        str(vault),
+        "--source-id",
+        source_id,
+        "--review-manifest-sha256",
+        review_manifest_sha256,
+        "--reviewer-id",
+        "upstream-closure-development-review",
+        "--reason",
+        "Synthetic source-free fixture review for exact read seam.",
+        "--confirm-reviewed",
+    )
+    if not isinstance(approved, dict):
+        raise DiagnosticFailure("Source review approval did not return a receipt")
+    source_read, source_read_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "source",
+        "get",
+        "--vault",
+        str(vault),
+        "--source-id",
+        source_id,
+    )
+    fragment_read, fragment_read_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "source",
+        "fragment",
+        "--vault",
+        str(vault),
+        "--fragment-id",
+        str(first_fragment["fragment_id"]),
+        "--max-chars",
+        "12000",
+    )
+    source_card = source_read.get("source")
+    fragment_card = fragment_read.get("fragment")
+    fragment_text = fragment_card.get("text") if isinstance(fragment_card, dict) else None
+    if (
+        not isinstance(source_card, dict)
+        or source_card.get("content_sha256") != caller_sha256
+        or source_read.get("write_performed") is not False
+        or not isinstance(fragment_card, dict)
+        or fragment_read.get("write_performed") is not False
+        or fragment_card.get("text_sha256") != first_fragment["text_sha256"]
+        or not isinstance(fragment_text, str)
+        or _sha256_bytes(fragment_text.encode("utf-8")) != first_fragment["text_sha256"]
+    ):
+        raise DiagnosticFailure("Reviewed Source/Fragment read did not preserve exact evidence")
+
+    applicable_duties = ("primary_answer", "source_evidence", "unresolved_gap")
+    duty_arguments = [
+        argument
+        for duty in applicable_duties
+        for argument in ("--applicable-duty", duty)
+    ]
+    duty_query, duty_query_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "query",
+        "--vault",
+        str(vault),
+        "--query",
+        "synthetic retention decision",
+        "--purpose",
+        "verify",
+        "--query-plan-version",
+        "6",
+        *duty_arguments,
+    )
+    duty_context, duty_context_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "context",
+        "--vault",
+        str(vault),
+        "--task",
+        "Verify the synthetic retention decision.",
+        "--purpose",
+        "verify",
+        "--query-plan-version",
+        "6",
+        *duty_arguments,
+        "--confirm-no-case-data",
+    )
+    expected_include = "The synthetic retention decision is exactly thirty days."
+    expected_exclude = "Tropical rainfall measurements concern monsoon regions."
+    selected_evidence = duty_query.get("evidence")
+    query_plan = duty_query.get("query_plan")
+    if not isinstance(selected_evidence, list) or not isinstance(query_plan, dict):
+        raise DiagnosticFailure("Duty Query omitted its evidence or Query Plan")
+    selected_text = _canonical(selected_evidence)
+    duty_statuses = {
+        str(item.get("duty")): item.get("status")
+        for item in query_plan.get("duties", [])
+        if isinstance(item, dict)
+    }
+    deduplication_reasons = {
+        str(item.get("reason"))
+        for item in duty_query.get("local_audit", {}).get("deduplications", [])
+        if isinstance(item, dict)
+    }
+    provider_capsule = duty_context.get("provider_capsule")
+    if (
+        selected_text.count(expected_include) != 1
+        or expected_exclude in selected_text
+        or deduplication_reasons != {"duplicate_source_reference"}
+        or any(duty_statuses.get(duty) != "satisfied" for duty in applicable_duties)
+        or not isinstance(provider_capsule, dict)
+        or provider_capsule.get("delivery", {}).get("write_performed") is not False
+    ):
+        raise DiagnosticFailure("Context selection admitted a duplicate/distractor or lost a duty")
 
     task_grant = _enable_grant(
         environment,
@@ -1262,9 +2063,107 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
         str(repository),
     )
 
+    same_name_title = "Shared qualification identity"
+    stable_alias = "First qualification identity alias"
+    identity_grant = _enable_grant(
+        environment,
+        vault,
+        writer="upstream-closure-identity",
+        operations=("upsert_concept",),
+        max_objects=10,
+    )
+    identity_results: list[dict[str, Any]] = []
+    identity_sink_seconds = 0.0
+    identity_aliases = (stable_alias, "Second qualification identity alias")
+    for index, alias in enumerate(identity_aliases, start=1):
+        result, elapsed = _apply_sink_request(
+            environment,
+            vault,
+            grant_id=identity_grant,
+            request={
+                "operation": "upsert_concept",
+                "idempotency_key": f"upstream-closure-same-name-{index}",
+                "title": same_name_title,
+                "body": f"Distinct source-free qualification identity {index}.",
+                "aliases": [alias],
+                "semantic_key": f"upstream-closure:same-name:{index}",
+                "scope": "project",
+                "sensitivity": "private",
+                "confirm_no_case_data": True,
+            },
+            request_path=root / f"identity-{index}.json",
+        )
+        identity_results.append(result)
+        identity_sink_seconds += elapsed
+    identity_ids = {str(result.get("knowledge_id")) for result in identity_results}
+    if (
+        len(identity_ids) != 2
+        or any(result.get("authority") != "agent_derived" for result in identity_results)
+        or any(result.get("legal_authority") is not False for result in identity_results)
+    ):
+        raise DiagnosticFailure("Same-name public writes lost distinct governed identities")
+    _, identity_rebuild_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "autonomy",
+        "rebuild",
+        "--vault",
+        str(vault),
+    )
+    identity_browse, identity_browse_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "wiki",
+        "browse-kind",
+        "--vault",
+        str(vault),
+        "--kind",
+        "concept",
+        "--limit",
+        "8",
+    )
+    browsed_by_id = {
+        str(item.get("knowledge_id")): item
+        for item in identity_browse.get("items", [])
+        if isinstance(item, dict)
+    }
+    if not identity_ids <= set(browsed_by_id):
+        raise DiagnosticFailure("Living Wiki browse lost a same-name governed identity")
+
     before_reads, _ = _run_cli(
         environment, "knowledge", "autonomy", "status", "--vault", str(vault)
     )
+    identity_page_seconds = 0.0
+    identity_page_paths: set[str] = set()
+    for result, alias in zip(identity_results, identity_aliases, strict=True):
+        knowledge_id = str(result["knowledge_id"])
+        wiki_path = browsed_by_id[knowledge_id].get("workspace_path")
+        if not isinstance(wiki_path, str):
+            raise DiagnosticFailure("Living Wiki browse omitted a governed identity path")
+        page, page_seconds = _run_cli(
+            environment,
+            "knowledge",
+            "wiki",
+            "page",
+            "--vault",
+            str(vault),
+            "--wiki-path",
+            wiki_path,
+        )
+        content = page.get("content")
+        if (
+            not isinstance(content, str)
+            or knowledge_id not in content
+            or same_name_title not in content
+            or alias not in content
+            or page.get("write_performed") is not False
+        ):
+            raise DiagnosticFailure("Living Wiki exact page lost identity, title, or alias")
+        identity_page_paths.add(wiki_path)
+        identity_page_seconds += page_seconds
+    if len(identity_page_paths) != 2:
+        raise DiagnosticFailure("Same-name identities resolved to one Living Wiki page")
+
     mcp = asyncio.run(_run_mcp_task(environment=environment, vault=vault))
     after_reads, _ = _run_cli(environment, "knowledge", "autonomy", "status", "--vault", str(vault))
     read_no_write = before_reads.get("sequence") == after_reads.get(
@@ -1306,6 +2205,7 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
             "status": "executed",
             "first_correct_action": "Register the exact source bytes before compiling knowledge.",
             "public_cli_steps": 5,
+            "public_operation_count": 5,
             "living_wiki_file_read_steps": 2,
             "exact_source_bytes_bound": True,
             "source_verify_valid": True,
@@ -1313,19 +2213,89 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
             "source_only_statements": 0,
             "wiki_exact_source_coordinate_drill_down": True,
             "locator_and_quote_sha256_preserved": True,
-            "source_content_read_status": "withheld_pending_owner_review",
+            "source_review_status": "executed_source_free_fixture_review",
+            "source_content_read_status": "executed_after_review",
+            "source_content_exact_sha256": caller_sha256,
+            "source_read_write_performed": source_read["write_performed"],
+            "fragment_read_write_performed": fragment_read["write_performed"],
+            "source_review_manifest_sha256": review_manifest_sha256,
             "source_content_wrong_state_admission_count": 0,
-            "elapsed_seconds": round(add_seconds, 6),
+            "public_review_operation_count": 2,
+            "public_read_operation_count": 2,
+            "elapsed_seconds": round(
+                add_seconds
+                + handoff_seconds
+                + review_manifest_seconds
+                + approve_seconds
+                + source_read_seconds
+                + fragment_read_seconds,
+                6,
+            ),
         },
         "compilation": {
             key: value
             for key, value in compilation.items()
             if key not in {"run_id", "first_fragment"}
         },
+        "compilation_handoff": {
+            "status": "executed",
+            "first_correct_action": "Inspect the read-only handoff before opening the sink saga.",
+            "public_operation_count": 1,
+            "host_internal_packet_count": 0,
+            "read_leaf": handoff["boundaries"]["read_leaf"],
+            "write_leaf": handoff["boundaries"]["write_leaf"],
+            "grant_required": handoff["boundaries"]["grant_required"],
+            "grant_included": handoff["boundaries"]["grant_included"],
+            "model_invoked": handoff["boundaries"]["model_invoked"],
+            "write_performed": handoff["write_performed"],
+            "read_step_count": len(
+                [step for step in handoff["steps"] if step["leaf"] == "knowledge_support"]
+            ),
+            "write_step_count": len(
+                [step for step in handoff["steps"] if step["leaf"] == "knowledge_sink"]
+            ),
+            "elapsed_seconds": round(handoff_seconds, 6),
+        },
+        "context_selection": {
+            "status": "executed",
+            "public_cli_steps": 2,
+            "public_operation_count": 2,
+            "expected_include": "executed_and_selected_once",
+            "expected_exclude": "executed_and_excluded",
+            "required_duties": {
+                duty: duty_statuses[duty] for duty in applicable_duties
+            },
+            "acceptable_gap": "uncompiled_source",
+            "duplicate_suppression_reasons": sorted(deduplication_reasons),
+            "distractor_suppressed": True,
+            "provider_write_performed": False,
+            "elapsed_seconds": round(duty_query_seconds + duty_context_seconds, 6),
+        },
+        "identity_ambiguity": {
+            "status": "executed",
+            "public_cli_steps": 7,
+            "public_mcp_steps": 0,
+            "public_operation_count": 7,
+            "host_internal_packet_count": 0,
+            "same_name_distinct_identity_count": 2,
+            "same_name_lookup_status": "wiki_browse_distinct",
+            "automatic_title_merge_rejected": True,
+            "alias_page_read_status": "exact_page_read",
+            "alias_resolved_exact_identity": True,
+            "wiki_distinct_identity_count": 2,
+            "legal_authority": False,
+            "elapsed_seconds": round(
+                identity_sink_seconds
+                + identity_rebuild_seconds
+                + identity_browse_seconds
+                + identity_page_seconds,
+                6,
+            ),
+        },
         "task_continuity": {
             "status": "executed",
             "first_correct_action": "Review the retained development report.",
-            "public_cli_steps": 14,
+            "public_cli_steps": 15,
             "decision_preserved": "Keep static Host Connect task-neutral." in provider_text,
             "wrong_state_admission_count": 0,
             "fork_admitted": True,
@@ -1339,6 +2309,8 @@ def _source_and_task_task(root: Path, environment: dict[str, str]) -> dict[str, 
         "provider": mcp,
         "read_no_write": {
             "status": "executed",
+            "public_operation_count": 2,
+            "host_internal_packet_count": 0,
             "canonical_sequence_unchanged": True,
             "canonical_audit_head_unchanged": True,
         },
@@ -1562,6 +2534,45 @@ def _run_scale(
     if user_file.read_bytes() != user_bytes:
         raise DiagnosticFailure("Full rebuild changed an unmanaged owner file")
 
+    renamed_wiki_path = renamed.relative_to(vault).as_posix()
+    exact_source_wiki_path = (
+        f"wiki/sources/{added['identity']['source_revision_id']}.md"
+    )
+    outlinks, outlinks_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "wiki",
+        "outlinks",
+        "--vault",
+        str(vault),
+        "--wiki-path",
+        renamed_wiki_path,
+        "--limit",
+        "20",
+    )
+    backlinks, backlinks_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "wiki",
+        "backlinks",
+        "--vault",
+        str(vault),
+        "--wiki-path",
+        exact_source_wiki_path,
+        "--limit",
+        "20",
+    )
+    if (
+        outlinks.get("index_used") is not True
+        or backlinks.get("index_used") is not True
+        or outlinks.get("write_performed") is not False
+        or backlinks.get("write_performed") is not False
+        or exact_source_wiki_path not in outlinks.get("links", [])
+        or not isinstance(backlinks.get("total_count"), int)
+        or backlinks["total_count"] < 1
+    ):
+        raise DiagnosticFailure("Living Wiki link index lost its exact Source edge")
+
     inventory = _file_inventory(vault)
     artifacts = _artifact_inventory(vault, owner_file=user_file)
     browse_items = browse.get("items", [])
@@ -1569,8 +2580,11 @@ def _run_scale(
         "scale": scale,
         "status": "executed",
         "first_correct_action": "Register the exact scale source before compilation.",
-        "public_cli_steps": (2 * compilation["packet_count"]) + 13,
-        "owner_operation_steps": 13,
+        "public_cli_steps": int(compilation["public_operation_count"]) + 13,
+        "public_operation_count": int(compilation["public_operation_count"]) + 13,
+        "compilation_public_operation_count": int(compilation["public_operation_count"]),
+        "owner_operation_steps": 18,
+        "host_internal_packet_count": compilation["packet_count"],
         "host_internal_packet_steps": 2 * compilation["packet_count"],
         "workspace_edit_steps": 1,
         "source_add_elapsed_seconds": round(add_seconds, 6),
@@ -1598,9 +2612,30 @@ def _run_scale(
             {str(item.get("code")) for item in capsule.get("gaps", []) if isinstance(item, dict)}
         ),
         "provider_content_bytes": provider_bytes,
+        "provider_bytes": {
+            "status": "executed",
+            "value": provider_bytes,
+            "hard_limit": MAX_PROVIDER_BYTES,
+        },
+        "actual_provider_tokens": {
+            "status": "not_executed",
+            "value": None,
+            "reason": "No real Host/model usage receipt was available.",
+        },
         "persistent_mcp": mcp,
         "wiki_browse_status": "executed",
         "wiki_browse_returned": len(browse_items) if isinstance(browse_items, list) else 0,
+        "wiki_link_index": {
+            "status": "executed",
+            "claim_wiki_path": renamed_wiki_path,
+            "exact_source_wiki_path": exact_source_wiki_path,
+            "outlink_resolved": True,
+            "backlink_resolved": True,
+            "backlink_total_count": backlinks["total_count"],
+            "index_used": True,
+            "write_performed": False,
+            "elapsed_seconds": round(outlinks_seconds + backlinks_seconds, 6),
+        },
         "query_elapsed_seconds": round(query_seconds, 6),
         "wiki_browse_elapsed_seconds": round(browse_seconds, 6),
         "peak_child_rss_bytes": _rss_bytes(),
@@ -1626,6 +2661,12 @@ def _git_identity(environment: dict[str, str]) -> dict[str, Any]:
         "tree": tree,
         "package_version": importlib.metadata.version("deeplaw"),
         "uv_lock_sha256": _sha256_file(REPOSITORY / "uv.lock"),
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "python": platform.python_version(),
+        },
         "worktree_clean": not bool(
             _git(environment, REPOSITORY, "status", "--porcelain", "--untracked-files=all")
         ),
@@ -1652,6 +2693,8 @@ def run_diagnostic(
         root = Path(temporary).resolve()
         environment = _child_environment(root)
         base = _source_and_task_task(root / "base", environment)
+        evidence_formats = _evidence_format_lane(root / "evidence-formats", environment)
+        source_identity = _source_successor_lane(root / "source-identity", environment)
         scale_results = [
             _run_scale(
                 scale,
@@ -1662,6 +2705,115 @@ def run_diagnostic(
             for scale in scales
         ]
         exact = _git_identity(environment)
+    executed = [
+        "public init and doctor",
+        "exact Markdown Source registration and verification",
+        "source-only Context Gap",
+        "read-only Compilation Handoff",
+        "public Compilation Run and Living Wiki projection",
+        "synthetic source review and exact Source/Fragment reads",
+        "Markdown/HTML/DOCX/native-text PDF exact-byte and locator lanes",
+        "blank PDF OCR-needed fail-closed probe",
+        "Source successor, historical/current alias, and ambiguous successor rejection",
+        "same-name distinct identity, exact alias page read, and automatic merge rejection",
+        "Living Wiki backlink/outlink exact Source resolution",
+        "Context expected include/exclude, duty, Gap, duplicate, and distractor lane",
+        "Task Continuity enrollment/resume/fork/compaction/wrong-state/forget",
+        "stdio MCP query/context/explain and read no-write audit",
+        *[f"public {scale}-object scale lane" for scale in scales],
+    ]
+    failed: list[str] = []
+    not_executed = list(NOT_EXECUTED)
+    not_executed.extend(
+        f"{name} exact-byte lane: {result.get('reason', 'unavailable')}"
+        for name, result in evidence_formats["format_results"].items()
+        if isinstance(result, dict) and result.get("status") == "not_executed"
+    )
+    public_operation_counts = {
+        "base": {
+            "cli_steps": sum(
+                int(base[section].get("public_cli_steps", 0))
+                for section in (
+                    "init_doctor",
+                    "source_evidence",
+                    "compilation",
+                    "context_selection",
+                    "identity_ambiguity",
+                    "task_continuity",
+                )
+            ),
+            "handoff_steps": int(base["compilation_handoff"]["public_operation_count"]),
+            "compilation_grant_steps": 1,
+            "source_review_and_read_steps": int(
+                base["source_evidence"]["public_review_operation_count"]
+                + base["source_evidence"]["public_read_operation_count"]
+            ),
+            "mcp_operations": int(base["provider"]["public_operation_count"]),
+            "read_audit_steps": int(base["read_no_write"]["public_operation_count"]),
+        },
+        "scale_lanes": {
+            str(lane["scale"]): {
+                "cli_steps": int(lane["public_operation_count"]),
+                "mcp_operations": int(lane["persistent_mcp"]["public_operation_count"]),
+            }
+            for lane in scale_results
+        },
+        "evidence_formats": int(evidence_formats["public_operation_count"]),
+        "source_identity": int(source_identity["public_operation_count"]),
+    }
+    public_operation_counts["total_cli_steps"] = int(
+        public_operation_counts["base"]["cli_steps"]
+        + public_operation_counts["base"]["handoff_steps"]
+        + public_operation_counts["base"]["compilation_grant_steps"]
+        + public_operation_counts["base"]["source_review_and_read_steps"]
+        + public_operation_counts["base"]["read_audit_steps"]
+        + public_operation_counts["evidence_formats"]
+        + public_operation_counts["source_identity"]
+        + sum(item["cli_steps"] for item in public_operation_counts["scale_lanes"].values())
+    )
+    public_operation_counts["total_mcp_operations"] = int(
+        public_operation_counts["base"]["mcp_operations"]
+        + sum(item["mcp_operations"] for item in public_operation_counts["scale_lanes"].values())
+    )
+    public_operation_counts["total_public_operations"] = int(
+        public_operation_counts["total_cli_steps"]
+        + public_operation_counts["total_mcp_operations"]
+    )
+    host_internal_packet_counts = {
+        "base": int(base["compilation"]["host_internal_packet_count"]),
+        "evidence_formats": int(evidence_formats["host_internal_packet_count"]),
+        "source_identity": int(source_identity["host_internal_packet_count"]),
+        "scale_lanes": {
+            str(lane["scale"]): int(lane["host_internal_packet_count"])
+            for lane in scale_results
+        },
+    }
+    host_internal_packet_counts["total"] = int(
+        host_internal_packet_counts["base"]
+        + host_internal_packet_counts["evidence_formats"]
+        + host_internal_packet_counts["source_identity"]
+        + sum(host_internal_packet_counts["scale_lanes"].values())
+    )
+    receipt = {
+        "schema_version": "deeplaw.upstream-product-closure-receipt/v1",
+        "status": "executed",
+        "executed": executed,
+        "failed": failed,
+        "not_executed": not_executed,
+        "counts": {
+            "executed": len(executed),
+            "failed": len(failed),
+            "not_executed": len(not_executed),
+        },
+        "public_operation_counts": public_operation_counts,
+        "host_internal_packet_counts": host_internal_packet_counts,
+        "provider": {
+            "bytes": base["provider"]["provider_bytes"],
+            "actual_tokens": base["provider"]["actual_provider_tokens"],
+            "query_trace_in_provider": base["provider"]["query_trace_in_provider"],
+            "canonical_ledger_in_provider": base["provider"]["canonical_ledger_in_provider"],
+        },
+    }
     report = {
         "schema_version": "deeplaw.upstream-product-closure-development/v1",
         "evidence_class": "development_diagnostic",
@@ -1702,19 +2854,14 @@ def run_diagnostic(
             "legal_attestation": False,
             "competitive_claim": False,
         },
+        "receipt": receipt,
         "base_journey": base,
+        "evidence_formats": evidence_formats,
+        "source_identity": source_identity,
         "scale_lanes": scale_results,
-        "executed": [
-            "public init and doctor",
-            "exact Markdown Source registration and verification",
-            "source-only Context Gap",
-            "public Compilation Run and Living Wiki projection",
-            "Task Continuity enrollment/resume/fork/compaction/wrong-state/forget",
-            "stdio MCP query/context/explain and read no-write audit",
-            *[f"public {scale}-object scale lane" for scale in scales],
-        ],
-        "failed": [],
-        "not_executed": list(NOT_EXECUTED),
+        "executed": executed,
+        "failed": failed,
+        "not_executed": not_executed,
         "limitations": [
             "Synthetic local inputs only; no client or case material.",
             "Provider bytes are measured from actual stdio MCP content.",
@@ -1766,7 +2913,14 @@ def main() -> int:
     )
     output = arguments.output.expanduser().absolute()
     output.parent.mkdir(parents=True, exist_ok=True)
+    if output.is_symlink():
+        raise DiagnosticFailure("Report output is a symlink")
+    if output.name == "SHA256SUMS" or (output.parent / "SHA256SUMS").exists() or (
+        output.parent / "SHA256SUMS"
+    ).is_symlink():
+        raise DiagnosticFailure("Adjacent SHA256SUMS inventory already exists")
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    checksum_path = _write_adjacent_checksums(output)
     print(
         _canonical(
             {
@@ -1775,6 +2929,8 @@ def main() -> int:
                 "scales": scales,
                 "failed": report["failed"],
                 "output_sha256": _sha256_file(output),
+                "sha256sums": checksum_path.name,
+                "sha256sums_sha256": _sha256_file(checksum_path),
             }
         )
     )

@@ -1,12 +1,29 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from benchmarks.v013.run_upstream_product_closure import (
+    DiagnosticFailure,
+    _write_adjacent_checksums,
+)
+
 REPOSITORY = Path(__file__).resolve().parents[1]
 RUNNER = REPOSITORY / "benchmarks/v013/run_upstream_product_closure.py"
+
+
+def test_adjacent_checksum_inventory_refuses_existing_file(tmp_path: Path) -> None:
+    output = tmp_path / "development-report.json"
+    output.write_text("{}\n", encoding="utf-8")
+    (tmp_path / "SHA256SUMS").write_text("retained\n", encoding="utf-8")
+
+    with pytest.raises(DiagnosticFailure, match="already exists"):
+        _write_adjacent_checksums(output)
 
 
 def test_named_upstream_research_does_not_rotate_frozen_qualification_inputs() -> None:
@@ -88,9 +105,17 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
     )
     assert completed.returncode == 0, completed.stderr
     report = json.loads(output.read_text(encoding="utf-8"))
+    checksums = tmp_path / "SHA256SUMS"
+    assert checksums.is_file()
+    checksum_lines = checksums.read_text(encoding="utf-8").splitlines()
+    assert checksum_lines == [
+        f"{hashlib.sha256(output.read_bytes()).hexdigest()}  {output.name}"
+    ]
+    assert "SHA256SUMS" not in checksums.read_text(encoding="utf-8")
 
     assert report["evidence_class"] == "development_diagnostic"
     assert report["exact"]["package_version"] == "0.12.0"
+    assert set(report["exact"]["platform"]) == {"system", "release", "machine", "python"}
     assert report["formal_claims"] == {
         "qualification_evidence": False,
         "release_ready": False,
@@ -105,12 +130,26 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
         "explain",
         "query",
     ]
+    assert report["base_journey"]["provider"]["public_operation_count"] == 3
     assert report["base_journey"]["read_no_write"] == {
         "status": "executed",
+        "public_operation_count": 2,
+        "host_internal_packet_count": 0,
         "canonical_sequence_unchanged": True,
         "canonical_audit_head_unchanged": True,
     }
     assert report["base_journey"]["task_continuity"]["wrong_state_admission_count"] == 0
+    assert report["base_journey"]["compilation_handoff"]["write_performed"] is False
+    assert report["base_journey"]["compilation_handoff"]["grant_included"] is False
+    assert report["base_journey"]["compilation_handoff"]["model_invoked"] is False
+    assert report["base_journey"]["compilation_handoff"]["read_leaf"] == "knowledge_support"
+    assert report["base_journey"]["compilation_handoff"]["write_leaf"] == "knowledge_sink"
+    assert report["base_journey"]["compilation"]["public_operation_count"] == report[
+        "base_journey"
+    ]["compilation"]["public_cli_steps"]
+    assert report["base_journey"]["compilation"]["host_internal_packet_count"] == report[
+        "base_journey"
+    ]["compilation"]["packet_count"]
     assert (
         report["base_journey"]["source_evidence"][
             "wiki_exact_source_coordinate_drill_down"
@@ -119,7 +158,98 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
     )
     assert (
         report["base_journey"]["source_evidence"]["source_content_read_status"]
-        == "withheld_pending_owner_review"
+        == "executed_after_review"
+    )
+    assert report["base_journey"]["source_evidence"]["source_read_write_performed"] is False
+    assert report["base_journey"]["source_evidence"]["fragment_read_write_performed"] is False
+    assert report["base_journey"]["provider"]["actual_provider_tokens"]["status"] == (
+        "not_executed"
+    )
+    assert report["base_journey"]["provider"]["actual_provider_tokens"]["value"] is None
+    assert report["base_journey"]["provider"]["query_trace_in_provider"] is False
+    assert report["base_journey"]["provider"]["canonical_ledger_in_provider"] is False
+    assert report["receipt"]["executed"] == report["executed"]
+    assert report["receipt"]["failed"] == report["failed"]
+    assert report["receipt"]["not_executed"] == report["not_executed"]
+    assert "exact Source/Fragment content read pending owner review" not in report[
+        "not_executed"
+    ]
+    assert report["receipt"]["host_internal_packet_counts"]["base"] == report[
+        "base_journey"
+    ]["compilation"]["packet_count"]
+    assert report["receipt"]["public_operation_counts"]["base"]["handoff_steps"] == 1
+    assert report["receipt"]["public_operation_counts"]["base"][
+        "compilation_grant_steps"
+    ] == 1
+    assert report["receipt"]["public_operation_counts"]["evidence_formats"] > 0
+    assert report["receipt"]["public_operation_counts"]["source_identity"] == 15
+    assert report["evidence_formats"]["ocr_needed_fail_closed"] == {
+        "status": "executed",
+        "kind": "blank_or_scanned_pdf",
+        "expected": "fail_closed_ocr_needed",
+        "positive_ocr": "not_executed",
+    }
+    for name in ("markdown", "html", "docx", "native_text_pdf"):
+        evidence = report["evidence_formats"]["format_results"][name]
+        assert evidence["status"] == "executed"
+        assert evidence["verify_valid"] is True
+        assert evidence["source_sha256"] == evidence["read_content_sha256"]
+        assert evidence["document_version_fragment_identity"] is True
+        assert evidence["fragment_locator"]
+        assert evidence["read_write_performed"] is False
+        assert evidence["fragment_read_write_performed"] is False
+    assert report["source_identity"]["stable_logical_source_identity"] is True
+    assert report["source_identity"]["historical_alias_resolved"] is True
+    assert report["source_identity"]["current_alias_resolved"] is True
+    assert report["source_identity"]["successor_previous_source_id"] == report[
+        "source_identity"
+    ]["active_source_id_before_review"]
+    assert report["source_identity"]["parallel_pending_successor_rejection"] == {
+        "status": "executed",
+        "kind": "ambiguous_successor_not_arbitrary_semantic_merge_judgment",
+        "wrong_state_admission_count": 0,
+    }
+    context_selection = report["base_journey"]["context_selection"]
+    assert {key: value for key, value in context_selection.items() if key != "elapsed_seconds"} == {
+        "status": "executed",
+        "public_cli_steps": 2,
+        "public_operation_count": 2,
+        "expected_include": "executed_and_selected_once",
+        "expected_exclude": "executed_and_excluded",
+        "required_duties": {
+            "primary_answer": "satisfied",
+            "source_evidence": "satisfied",
+            "unresolved_gap": "satisfied",
+        },
+        "acceptable_gap": "uncompiled_source",
+        "duplicate_suppression_reasons": ["duplicate_source_reference"],
+        "distractor_suppressed": True,
+        "provider_write_performed": False,
+    }
+    assert context_selection["elapsed_seconds"] > 0
+    assert {
+        key: value
+        for key, value in report["base_journey"]["identity_ambiguity"].items()
+        if key != "elapsed_seconds"
+    } == {
+        "status": "executed",
+        "public_cli_steps": 7,
+        "public_mcp_steps": 0,
+        "public_operation_count": 7,
+        "host_internal_packet_count": 0,
+        "same_name_distinct_identity_count": 2,
+        "same_name_lookup_status": "wiki_browse_distinct",
+        "automatic_title_merge_rejected": True,
+        "alias_page_read_status": "exact_page_read",
+        "alias_resolved_exact_identity": True,
+        "wiki_distinct_identity_count": 2,
+        "legal_authority": False,
+    }
+    assert report["base_journey"]["identity_ambiguity"]["elapsed_seconds"] > 0
+    assert not any("same-name entity collision" in item for item in report["not_executed"])
+    assert any(
+        "arbitrary semantic wrong-merge correctness" in item
+        for item in report["not_executed"]
     )
     assert report["scale_lanes"][0]["scale"] == 3
     assert report["scale_lanes"][0]["objects_staged"] == 3
@@ -128,6 +258,19 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
     assert report["scale_lanes"][1]["scale"] == 1000
     assert report["scale_lanes"][1]["objects_staged"] == 1000
     assert report["scale_lanes"][1]["status"] == "executed"
+    assert report["scale_lanes"][1]["wiki_link_index"]["outlink_resolved"] is True
+    assert report["scale_lanes"][1]["wiki_link_index"]["backlink_resolved"] is True
+    assert report["scale_lanes"][1]["wiki_link_index"]["index_used"] is True
+    assert report["scale_lanes"][1]["wiki_link_index"]["write_performed"] is False
+    assert report["scale_lanes"][1]["public_operation_count"] == report["scale_lanes"][1][
+        "public_cli_steps"
+    ]
+    assert report["scale_lanes"][1]["public_cli_steps"] == (
+        report["scale_lanes"][1]["compilation_public_operation_count"] + 13
+    )
+    assert report["scale_lanes"][1]["host_internal_packet_count"] == report["scale_lanes"][1][
+        "packet_count"
+    ]
     assert report["scale_lanes"][1]["no_op_projection_equivalent"] is True
     assert report["scale_lanes"][1]["no_op_canonical_ledger_unchanged"] is True
     assert report["scale_lanes"][1]["full_incremental_changed_input_equivalent"] is True
@@ -136,6 +279,8 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
     assert report["scale_lanes"][1]["persistent_mcp"]["warm_context_timing_samples"] == 5
     assert report["scale_lanes"][1]["persistent_mcp"]["warm_query_timing_ms_p95"] is not None
     assert report["scale_lanes"][1]["persistent_mcp"]["warm_context_timing_ms_p95"] is not None
+    assert report["scale_lanes"][1]["actual_provider_tokens"]["status"] == "not_executed"
+    assert report["scale_lanes"][1]["actual_provider_tokens"]["value"] is None
     assert report["scale_lanes"][1]["artifacts"]["canvas_file_count"] == 0
     assert report["scale_lanes"][1]["artifacts"]["ownership_manifest"][
         "wiki_object_markdown_count"

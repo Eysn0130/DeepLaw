@@ -142,7 +142,9 @@ Projection is deterministic and model-free. It produces:
 The named projection profile keeps the schema family name `deeplaw.projection-profile/v1`, with a
 closed profile `version` of `"1"` or `"2"`. Historical v1 profiles and v1/v2 Living Wiki
 manifests remain valid inputs for verification and projection recovery. Current named profile and
-build output uses version `"2"`; the compiler profile and its semantics are unchanged.
+build output uses version `"2"`. Source-to-Knowledge identity, governance and compilation
+semantics are unchanged, but named projection defaults and physical materialization semantics
+changed in v2 as described below.
 
 `standard` v2 is the default **Core Living Wiki**. It enables only root/overview/source/core/recent/
 gaps plus kind shards and kind indexes. Communities, global Canvas, kind Canvas, community Canvas,
@@ -164,7 +166,9 @@ relations and exact Source references between registered page identities. These 
 typed as governed relation links rather than invented textual Wikilinks; they provide bounded
 backlink/outlink and Source drill-down navigation without rewriting canonical Markdown or
 elevating Authority.
-per-object). No profile or page family is added by this contract change.
+This removes generated per-object page fan-out from `standard` and `minimal`; `full` retains the
+explicit advanced generated per-object views. No profile or page family is added by this contract
+change.
 
 The manifest binds the complete selected profile and its SHA-256 configuration digest. The same
 ownership manifest, rebuild and recovery path remains responsible for profile switches and
@@ -190,16 +194,29 @@ v3 top/component/shard verification, so neither path repeats a per-page schema w
 
 ## CLI workflow
 
-First create an owner-controlled least-privilege compiler grant. The built-in profile expands to
-only the seven Compilation Run operations; it does not allow ordinary `remember`, backfill, grant
-administration or Legal Pack mutation. The grant token stays outside source control.
+First initialize and inspect the Vault, add the owner-selected Source, complete its explicit source
+review, and request the read-only Host handoff. `handoff` does not invoke a model, include a grant,
+or write canonical state. The returned `source_revision_id` is then bound to the existing
+Compilation Coordinator flow.
 
 ```bash
+deeplaw knowledge init --vault ./vault --name my-project --scope project
+deeplaw knowledge doctor --vault ./vault
+deeplaw knowledge source add --vault ./vault --source ./guide.md \
+  --confirm-no-case-data
+deeplaw knowledge review manifest --vault ./vault --source-id source_REPLACE
+deeplaw knowledge review approve-source --vault ./vault --source-id source_REPLACE \
+  --review-manifest-sha256 REVIEW_MANIFEST_SHA256 \
+  --reviewer-id owner --reason "Reviewed the selected public source." \
+  --confirm-reviewed
+deeplaw knowledge compile handoff --vault ./vault \
+  --source-revision-id sourcerev_REPLACE
+
 deeplaw knowledge sink enable \
   --vault ./vault \
   --writer-id compiler-agent \
   --scope project \
-  --profile compiler
+  --profile semantic-compiler
 
 deeplaw knowledge compile profile --vault ./vault
 
@@ -232,7 +249,17 @@ deeplaw knowledge compile resume \
 
 deeplaw knowledge autonomy verify --vault ./vault
 deeplaw knowledge compile explain --vault ./vault --run-id compilationrun_REPLACE
+deeplaw knowledge query --vault ./vault \
+  --query "What governs admission?" --purpose answer
+deeplaw knowledge context --vault ./vault \
+  --task "Verify what governs admission." --purpose verify --confirm-no-case-data
+deeplaw knowledge wiki page --vault ./vault \
+  --wiki-path wiki/sources/sourcerev_REPLACE.md
 ```
+
+The `semantic-compiler` profile expands only to the existing compilation and synthesis-refresh
+operations. It does not allow ordinary `remember`, backfill, grant administration, Legal Pack
+mutation or any Authority upgrade. The grant token stays outside source control.
 
 `packet` returns one packet at a time and then a closed packet-end receipt. Every packet must be
 staged before full-Run validation. A staged packet may be atomically replaced before successful

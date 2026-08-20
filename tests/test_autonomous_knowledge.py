@@ -2105,7 +2105,7 @@ def test_doctor_includes_autonomous_canonical_integrity(tmp_path: Path) -> None:
         item["host"]: item["host_version_for_current_qualification"]
         for item in readiness["hosts"]
     } == {
-        "codex": "codex-cli 0.148.0-alpha.9",
+        "codex": "codex-cli 0.148.0-alpha.15",
         "claude-code": None,
         "opencode": "1.18.16",
     }

@@ -8,7 +8,7 @@
     "protocol_id": "deeplaw-v013-source-candidate-qualification",
     "schema_version": "deeplaw.v013-qualification-protocol/v2",
     "relative_path": "benchmarks/v013/qualification-protocol-v2.json",
-    "sha256": "4c68211923dd9b876cc201c55c119637c3e379c0177b6a7b617205766ddf5cff"
+    "sha256": "3099da40150301a301af3ff7a2b29df12f2748eb6d9b53e4afc2b1fd457a0c76"
   },
   "candidate_binding": {
     "package_version": "0.12.0",
@@ -34,8 +34,8 @@
   },
   "host_constraints": {
     "codex": {
-      "binary_version": "codex-cli 0.148.0-alpha.9",
-      "binary_sha256": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f",
+      "binary_version": "codex-cli 0.148.0-alpha.15",
+      "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
       "request_model": "gpt-5.6-luna",
       "reasoning_effort": "max",
       "auth_status_command": "codex login status",

@@ -447,9 +447,9 @@
         "auth_material_access"
       ],
       "properties": {
-        "binary_version": {"const": "codex-cli 0.148.0-alpha.9"},
+        "binary_version": {"const": "codex-cli 0.148.0-alpha.15"},
         "binary_sha256": {
-          "const": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f"
+          "const": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"
         },
         "request_model": {"const": "gpt-5.6-luna"},
         "reasoning_effort": {"const": "max"},

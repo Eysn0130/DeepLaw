@@ -153,23 +153,6 @@ _BASIC_KNOWLEDGE_COMMANDS = (
     "source",
     "compile",
     "reconcile",
-    "task",
-    "host",
-    "context",
-    "wiki",
-    "snapshot",
-    "forget",
-)
-# Keep the historical subparser metavar stable while making the existing
-# read-only query seam visible beside context in the default journey.  Query
-# remains the parser and handler already defined below; this list only
-# controls which existing choices are shown in default help.
-_DEFAULT_KNOWLEDGE_HELP_COMMANDS = (
-    "init",
-    "doctor",
-    "source",
-    "compile",
-    "reconcile",
     "query",
     "context",
     "wiki",
@@ -178,6 +161,7 @@ _DEFAULT_KNOWLEDGE_HELP_COMMANDS = (
     "host",
     "task",
 )
+_DEFAULT_KNOWLEDGE_HELP_COMMANDS = _BASIC_KNOWLEDGE_COMMANDS
 _KNOWLEDGE_HELP_TIERS = {
     "advanced": (
         "agent-context",

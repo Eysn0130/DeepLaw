@@ -62,7 +62,7 @@ For repository development:
 uv sync --all-extras
 ```
 
-## Primary real journey
+## Primary product journey
 
 Create and inspect the local Vault first. `doctor` must report canonical/autonomous readiness and
 an actionable Gap when a prerequisite is missing.
@@ -71,6 +71,20 @@ an actionable Gap when a prerequisite is missing.
 deeplaw knowledge init --vault ./vault --name my-project --scope project
 deeplaw knowledge doctor --vault ./vault
 ```
+
+The repository development environment includes one copyable, public, source-free, no-model
+shortest successful flow. In a new directory it performs Source add, owner source review, the
+read-only Host handoff, compilation through the existing Coordinator/MCP grant path, Query,
+Context, and Wiki drill-down to the exact Source Revision. Its JSON result reports every step:
+
+```bash
+uv run python -m examples.living_wiki.run_demo \
+  --workspace /tmp/deeplaw-living-wiki-demo
+```
+
+This is local development evidence, not real-Host, external-benchmark, qualification, or release
+evidence. See the complete CLI/Host packet workflow in
+[`docs/LIVING_WIKI_COMPILER.md`](docs/LIVING_WIKI_COMPILER.md#cli-workflow).
 
 Production MCP configuration uses the closed-environment launchers. These commands are for owner
 diagnostics; the later `host connect` step generates the same argv for static Host configuration:
@@ -124,15 +138,17 @@ Ordinary recovery does not require a task handle. Fork, compaction, stale checkp
 task/worktree, ambiguous binding, and selective forget must revalidate current state and fail closed
 with a structured Gap.
 
-After adding a source, use the same Context Compiler for bounded delivery. Exact citation tasks
-drill down to the Source Revision, Fragment, and Locator rather than copying the complete source
-into the Wiki or Provider context.
+Adding a source alone does not create compiled knowledge eligible for Admission. At that point
+`context` must return an `uncompiled_source` Gap; it is not a successful journey. After the source
+review, handoff, grant, and existing Coordinator compilation described above, use the same Context
+Compiler for bounded delivery. Exact citation tasks drill down to the Source Revision, Fragment,
+and Locator rather than copying the complete source into the Wiki or Provider context.
 
 ```bash
 deeplaw knowledge source add --vault ./vault --source ./guide.md \
   --confirm-no-case-data
-deeplaw knowledge context --vault ./vault --task 'Verify the guide.' \
-  --purpose verify --confirm-no-case-data
+deeplaw knowledge compile handoff --vault ./vault \
+  --source-revision-id sourcerev_REPLACE
 ```
 
 ## Fixed boundaries

@@ -62,8 +62,8 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
         ]
     assert gates["codex"]["constraints"] == {
         "host": "codex",
-        "tool_version": "codex-cli 0.148.0-alpha.9",
-        "binary_sha256": "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f",
+        "tool_version": "codex-cli 0.148.0-alpha.15",
+        "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
         "source_commit": None,
         "config_selector": None,
         "model_id": "gpt-5.6-luna",
@@ -180,7 +180,11 @@ def test_frozen_behavior_map_claim_boundary_and_candidate_status_are_explicit() 
         "qualification protocol."
     ) in " ".join(protocol.split())
     assert "Active gate classification: `v8`" in traceability
-    assert "Active qualification profile: `machine-only`" in traceability
+    assert (
+        "Active qualification profile: `machine_evaluated_no_human_attestation`"
+        in traceability
+    )
+    assert "public-seam, source-free development closure runner" in traceability
     assert "knowledge-support input v7/output v6" in traceability
     assert "Caller-authored PASS values" in traceability
 

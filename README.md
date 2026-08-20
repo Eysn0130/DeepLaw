@@ -60,7 +60,7 @@ deeplaw --version
 uv sync --all-extras
 ```
 
-## 真实首要旅程
+## 首要产品旅程
 
 先建立并检查本地 Vault。`doctor` 必须报告 canonical/autonomous readiness；缺失前置条件时应返回
 可操作 Gap，而不是继续连接 Host。
@@ -69,6 +69,19 @@ uv sync --all-extras
 deeplaw knowledge init --vault ./vault --name my-project --scope project
 deeplaw knowledge doctor --vault ./vault
 ```
+
+仓库开发环境提供一个可复制、公开、source-free、无模型的最短成功流程。它在新目录中执行
+Source add、owner source review、只读 Host handoff、现有 Coordinator/MCP grant 编译、Query、
+Context，以及 Wiki 到 exact Source Revision 的下钻，并在 JSON 中逐项报告结果：
+
+```bash
+uv run python -m examples.living_wiki.run_demo \
+  --workspace /tmp/deeplaw-living-wiki-demo
+```
+
+该流程是本地 development evidence，不是真实 Host、外部 benchmark、qualification 或 release
+evidence。完整的逐步 CLI/Host packet 工作流见
+[`docs/LIVING_WIKI_COMPILER.md`](docs/LIVING_WIKI_COMPILER.md#cli-workflow)。
 
 正式 MCP 配置必须使用闭合环境入口；以下命令用于 owner 诊断，静态 Host 配置由后续
 `host connect` 生成同一 argv：
@@ -118,14 +131,16 @@ deeplaw knowledge task timeline --vault ./vault \
 普通恢复不要求 task handle。fork、compaction、stale checkpoint、wrong task/worktree、ambiguous
 binding 和 selective forget 都必须重新校验当前状态并 fail closed 为结构化 Gap。
 
-导入来源后，通过同一 Context Compiler 获得有界上下文；精确引用任务按需下钻到 Source Revision、
-Fragment 和 Locator，而不是把整个来源复制进 Wiki 或 Provider。
+只导入来源尚未产生可 Admission 的编译知识。此时 `context` 必须返回
+`uncompiled_source` Gap；不能把它描述为成功旅程。完成上述 source review、handoff、grant 和现有
+Coordinator 编译后，再通过同一 Context Compiler 获得有界上下文；精确引用任务按需下钻到
+Source Revision、Fragment 和 Locator，而不是把整个来源复制进 Wiki 或 Provider。
 
 ```bash
 deeplaw knowledge source add --vault ./vault --source ./guide.md \
   --confirm-no-case-data
-deeplaw knowledge context --vault ./vault --task 'Verify the guide.' \
-  --purpose verify --confirm-no-case-data
+deeplaw knowledge compile handoff --vault ./vault \
+  --source-revision-id sourcerev_REPLACE
 ```
 
 ## 固定边界

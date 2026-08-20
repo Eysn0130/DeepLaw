@@ -116,8 +116,11 @@ asset is deleted.
 
 ## Host pins
 
-Codex is pinned to `codex-cli 0.148.0-alpha.9`, binary SHA-256
-`6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f`, request model
+The following executable coordinates were re-observed locally at `2026-08-20T12:38:48Z`. The
+observation is an exact input check, not a real-Host task result or qualification receipt.
+
+Codex is pinned to `codex-cli 0.148.0-alpha.15`, binary SHA-256
+`7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7`, request model
 `gpt-5.6-luna`, and `reasoning=max`. An owner-controlled credential broker uses the locally
 authenticated Codex Host without giving `HOME`, `CODEX_HOME`, auth files, or credential values to
 the DeepLaw runner, scorer, or evidence assembler. The returned response model identifier is
