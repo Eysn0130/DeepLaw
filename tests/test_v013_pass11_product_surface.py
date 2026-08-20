@@ -12,6 +12,7 @@ from deeplaw import cli
 from deeplaw.host_connect import build_host_connect_plan
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, initialize_autonomous_core
 from deeplaw.knowledge_store import initialize_knowledge_vault
+from examples.living_wiki.run_demo import run_demo
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 
@@ -61,7 +62,7 @@ def test_default_knowledge_help_shows_journey_not_state_machine() -> None:
     help_text = knowledge.format_help()
     assert "Basic journey" in help_text
     assert _subparsers(knowledge).metavar == (
-        "{init,doctor,source,compile,reconcile,task,host,context,wiki,snapshot,forget}"
+        "{init,doctor,source,compile,reconcile,query,context,wiki,snapshot,forget,host,task}"
     )
     for command in (
         "init",
@@ -71,6 +72,7 @@ def test_default_knowledge_help_shows_journey_not_state_machine() -> None:
         "reconcile",
         "host",
         "task",
+        "query",
         "context",
         "wiki",
         "snapshot",
@@ -104,6 +106,28 @@ def test_default_knowledge_help_shows_journey_not_state_machine() -> None:
         ]
     )
     assert reconcile.knowledge_command == "reconcile"
+
+
+def test_source_free_living_wiki_demo_completes_first_successful_journey(
+    tmp_path: Path,
+) -> None:
+    result = run_demo(tmp_path / "living-wiki-demo")
+
+    journey = result["journey"]
+    assert all(item["status"] == "executed" for item in journey.values())
+    assert journey["init_doctor"]["canonical_verification_valid"] is True
+    assert journey["compilation_handoff"] == {
+        "status": "executed",
+        "write_performed": False,
+        "grant_included": False,
+        "model_invoked": False,
+        "read_leaf": "knowledge_support",
+        "write_leaf": "knowledge_sink",
+    }
+    assert journey["query"]["selected_statement_count"] >= 1
+    assert journey["context"]["provider_content_bytes"] <= 65_536
+    assert journey["wiki_exact_source_drill_down"]["source_revision_present"] is True
+    assert result["compilation"]["compiler_profile_version"] == "3"
 
 
 def test_layered_help_exposes_advanced_and_admin_inventory(capsys) -> None:

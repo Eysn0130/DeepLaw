@@ -122,8 +122,8 @@ def test_host_preflight_uses_exact_pins_and_never_reads_auth_material() -> None:
     ]
     assert candidate.count("\n          import hashlib\n") == 2
     assert candidate.count("\n          import json\n") == 2
-    assert "codex-cli 0.148.0-alpha.9" in workflow
-    assert "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f" in workflow
+    assert "codex-cli 0.148.0-alpha.15" in workflow
+    assert "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7" in workflow
     assert "gpt-5.6-luna" in workflow
     assert "--reasoning-effort max" in workflow
     assert "login status" not in workflow

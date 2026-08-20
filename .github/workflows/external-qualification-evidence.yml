@@ -324,13 +324,13 @@ jobs:
                   raise SystemExit("external input differs from frozen active qualification")
           print("Candidate external input preflight and frozen hashes verified")
           PY
-          test "$("${DEEPLAW_CODEX_BINARY}" --version)" = "codex-cli 0.148.0-alpha.9"
+          test "$("${DEEPLAW_CODEX_BINARY}" --version)" = "codex-cli 0.148.0-alpha.15"
           test "$("${DEEPLAW_OPENCODE_BINARY}" --version)" = "1.18.16"
           codex_sha256="$(shasum -a 256 "${DEEPLAW_CODEX_BINARY}" | cut -d ' ' -f 1)"
           opencode_sha256="$(shasum -a 256 "${DEEPLAW_OPENCODE_BINARY}" | cut -d ' ' -f 1)"
           opencode_package_sha256="$(shasum -a 256 "${DEEPLAW_OPENCODE_PACKAGE}" | cut -d ' ' -f 1)"
           attester_sha256="$(shasum -a 256 "${DEEPLAW_SECURITY_DOMAIN_ATTESTER}" | cut -d ' ' -f 1)"
-          test "${codex_sha256}" = "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f"
+          test "${codex_sha256}" = "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"
           test "${attester_sha256}" = "${DEEPLAW_SECURITY_DOMAIN_ATTESTER_SHA256}"
           mkdir -p candidate-output/security candidate-output/codex candidate-output/opencode
           "${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \

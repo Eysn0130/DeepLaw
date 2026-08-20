@@ -50,7 +50,7 @@ from benchmarks.hosts.pass13_orchestrator import (
 
 MODEL = "gpt-5.6-luna"
 REASONING_EFFORT = "max"
-CODEX_VERSION = "codex-cli 0.148.0-alpha.9"
+CODEX_VERSION = "codex-cli 0.148.0-alpha.15"
 RUN_COUNT = 3
 TIMEOUT_SECONDS = 300.0
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024

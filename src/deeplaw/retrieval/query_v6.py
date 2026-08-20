@@ -1341,6 +1341,15 @@ def _source_evidence(
         if evidence_id in seen:
             deduplications.append({"source_key": key, "reason": "duplicate_source_reference"})
             continue
+        if any(
+            item.get("source_revision_id") == source_revision_id
+            and item.get("content_sha256") == row["text_sha256"]
+            for item in seen.values()
+        ):
+            deduplications.append(
+                {"source_key": key, "reason": "duplicate_source_reference"}
+            )
+            continue
         if key in represented_keys:
             deduplications.append(
                 {"source_key": key, "reason": "represented_source_reference"}

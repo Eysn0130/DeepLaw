@@ -68,7 +68,7 @@ _CREDENTIAL_FIELD = re.compile(
 
 EXPECTED_HOST = {
     "codex": {
-        "tool_version": "codex-cli 0.148.0-alpha.9",
+        "tool_version": "codex-cli 0.148.0-alpha.15",
         "model": "gpt-5.6-luna",
         "reasoning_effort": "max",
         "binary_name": "codex",

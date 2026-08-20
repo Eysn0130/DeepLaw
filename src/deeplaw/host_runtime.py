@@ -33,7 +33,7 @@ _HOST_READINESS_PROFILES: dict[str, dict[str, Any]] = {
     "codex": {
         "plugin_id": "deeplaw-knowledge-os@deeplaw",
         "load_options": ["direct_mcp_config", "codex_plugin"],
-        "host_version_for_current_qualification": "codex-cli 0.148.0-alpha.9",
+        "host_version_for_current_qualification": "codex-cli 0.148.0-alpha.15",
         "verification_command": ["codex", "mcp", "list"],
     },
     "claude-code": {

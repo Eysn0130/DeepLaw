@@ -21,7 +21,7 @@ V1_PROTOCOL = REPOSITORY / "benchmarks/v013/qualification-protocol-v1.json"
 V1_ACTIVE = REPOSITORY / "benchmarks/v013/active-qualification-v1.json"
 
 LOCK_SHA256 = "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082"
-CODEX_SHA256 = "6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f"
+CODEX_SHA256 = "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"
 OPENCODE_EXECUTABLE_SHA256 = (
     "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"
 )
@@ -172,7 +172,7 @@ def test_exact_host_pins_are_frozen() -> None:
     host = protocol["host_constraints"]
     codex = host["codex"]
     assert codex == {
-        "binary_version": "codex-cli 0.148.0-alpha.9",
+        "binary_version": "codex-cli 0.148.0-alpha.15",
         "binary_sha256": CODEX_SHA256,
         "request_model": "gpt-5.6-luna",
         "reasoning_effort": "max",

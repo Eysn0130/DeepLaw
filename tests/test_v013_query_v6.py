@@ -270,6 +270,113 @@ def test_v6_evidence_admission_normalizes_and_deduplicates_fragment_identity(
     )
 
 
+def test_v6_evidence_admission_deduplicates_exact_content_within_source_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_revision_id = "sourcerev_" + "a" * 24
+    text_sha256 = sha256_bytes(b"Same exact source passage.")
+    references = [
+        {
+            "source_revision_id": source_revision_id,
+            "fragment_id": f"fragment_{suffix * 24}",
+            "locator": f"section:{index}",
+            "quote_sha256": text_sha256,
+        }
+        for index, suffix in enumerate(("b", "c"), start=1)
+    ]
+
+    def canonical_reference(_store: object, reference: dict) -> tuple[dict, dict]:
+        return reference, {
+            "text": "Same exact source passage.",
+            "text_sha256": text_sha256,
+        }
+
+    class BoundStore:
+        @staticmethod
+        def _source_reference_is_bound(*_args: object, **_kwargs: object) -> bool:
+            return True
+
+    monkeypatch.setattr(
+        "deeplaw.retrieval.query_v6._canonical_source_reference",
+        canonical_reference,
+    )
+    deduplications: list[dict[str, str]] = []
+    selected, _ = _source_evidence(
+        object(),  # type: ignore[arg-type]
+        BoundStore(),  # type: ignore[arg-type]
+        references=references,
+        scope="project",
+        max_sensitivity="private",
+        max_sources=8,
+        max_chars=8_000,
+        reason="test_content_deduplication",
+        seen={},
+        represented_keys=set(),
+        deduplications=deduplications,
+        suppressions=[],
+    )
+
+    assert len(selected) == 1
+    assert deduplications == [
+        {
+            "source_key": _source_key(references[1]),
+            "reason": "duplicate_source_reference",
+        }
+    ]
+
+
+def test_v6_evidence_admission_preserves_exact_content_across_source_revisions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    text_sha256 = sha256_bytes(b"Same text from two independently governed sources.")
+    references = [
+        {
+            "source_revision_id": f"sourcerev_{source_suffix * 24}",
+            "fragment_id": f"fragment_{fragment_suffix * 24}",
+            "locator": "section:1",
+            "quote_sha256": text_sha256,
+        }
+        for source_suffix, fragment_suffix in (("a", "b"), ("c", "d"))
+    ]
+
+    def canonical_reference(_store: object, reference: dict) -> tuple[dict, dict]:
+        return reference, {
+            "text": "Same text from two independently governed sources.",
+            "text_sha256": text_sha256,
+        }
+
+    class BoundStore:
+        @staticmethod
+        def _source_reference_is_bound(*_args: object, **_kwargs: object) -> bool:
+            return True
+
+    monkeypatch.setattr(
+        "deeplaw.retrieval.query_v6._canonical_source_reference",
+        canonical_reference,
+    )
+    deduplications: list[dict[str, str]] = []
+    selected, _ = _source_evidence(
+        object(),  # type: ignore[arg-type]
+        BoundStore(),  # type: ignore[arg-type]
+        references=references,
+        scope="project",
+        max_sensitivity="private",
+        max_sources=8,
+        max_chars=8_000,
+        reason="test_cross_source_content_preservation",
+        seen={},
+        represented_keys=set(),
+        deduplications=deduplications,
+        suppressions=[],
+    )
+
+    assert len(selected) == 2
+    assert {item["source_revision_id"] for item in selected} == {
+        reference["source_revision_id"] for reference in references
+    }
+    assert deduplications == []
+
+
 @pytest.mark.parametrize("quote", [None, "0" * 64])
 def test_v6_evidence_admission_rejects_missing_or_wrong_quote(
     tmp_path: Path,

@@ -6887,6 +6887,13 @@
         {
           "junit": {
             "classname": "tests.test_upstream_product_closure",
+            "name": "test_adjacent_checksum_inventory_refuses_existing_file"
+          },
+          "node_id": "tests/test_upstream_product_closure.py::test_adjacent_checksum_inventory_refuses_existing_file"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_upstream_product_closure",
             "name": "test_named_upstream_research_does_not_rotate_frozen_qualification_inputs"
           },
           "node_id": "tests/test_upstream_product_closure.py::test_named_upstream_research_does_not_rotate_frozen_qualification_inputs"
@@ -8255,6 +8262,13 @@
             "name": "test_sink_apply_help_matches_additive_v2_through_v6_contracts"
           },
           "node_id": "tests/test_v013_pass11_product_surface.py::test_sink_apply_help_matches_additive_v2_through_v6_contracts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass11_product_surface",
+            "name": "test_source_free_living_wiki_demo_completes_first_successful_journey"
+          },
+          "node_id": "tests/test_v013_pass11_product_surface.py::test_source_free_living_wiki_demo_completes_first_successful_journey"
         },
         {
           "junit": {
@@ -13439,9 +13453,23 @@
         {
           "junit": {
             "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_evidence_admission_deduplicates_exact_content_within_source_revision"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_deduplicates_exact_content_within_source_revision"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
             "name": "test_v6_evidence_admission_normalizes_and_deduplicates_fragment_identity"
           },
           "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_normalizes_and_deduplicates_fragment_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_evidence_admission_preserves_exact_content_across_source_revisions"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_preserves_exact_content_across_source_revisions"
         },
         {
           "junit": {
@@ -15124,9 +15152,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2145,
+      "count": 2149,
       "selection": "not qualification and not windows_native",
-      "sha256": "9ba22af1afd1c13ceb2b5d6c584cd85cbdb8aaed96e8e9a73ce3ffdc4ed29b71"
+      "sha256": "f34960079918f898f632009b06eadd9b5966fc414ceb808d25cde6f45a9ff9ac"
     },
     "windows": {
       "additional_cases": [
@@ -15159,13 +15187,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2149,
+      "count": 2153,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "bd2385881b579d6fe2f23bcfd79272e9340ecc2da04a74cfc5f4aafdeb0cec2a"
+      "sha256": "6188ac85d85d62446f082bd56167d2ce8aeaf2f2a2ac877778cd7115c0228d73"
     }
   },
-  "manifest_sha256": "18c984e27e479c9b74a08b3aae4a82fa360473b69f98c966274f06aaefaea242",
+  "manifest_sha256": "b537fa94086b0ab2f97ccd2465dfb6673f24b5bfed7ede5f2f48c677a779e08e",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

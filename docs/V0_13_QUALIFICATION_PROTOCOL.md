@@ -120,7 +120,7 @@ It is derived from the following version-bound behavior tasks; there is no gener
 | Tolaria `v2026-08-11` / `cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` | Read Markdown/Wikilinks; perform controlled edits; detect conflict and reconcile; preserve source-successor identity and reject a wrong merge | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `secret_host_isolation`; real-file/editor receipts | Tolaria Desktop GUI, visual design, and its runtime |
 | Obsidian official public format/API help, accessed 2026-08-11; API snapshot `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | Preserve Markdown, Wikilinks, aliases, backlinks/outlinks, rename/move identity, and edit/reconcile behavior on real files | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `machine_reference_isolation`; real-file/editor receipts | Obsidian UI, Sync, marketplace, and complete Canvas UX |
 | LLM Wiki behavior category (not a comparator project) | Agent-generated or updated knowledge retains provenance, revision, Authority, scope, sensitivity, and Ledger state; Source Revision is never rewritten | `canonical_integrity`, `secret_host_isolation`, `source_citation_locator`, `machine_reference_isolation` | Any named-product or superiority claim without a separately frozen comparator |
-| Codex `0.148.0-alpha.9` / `gpt-5.6-luna` / `reasoning=max` | Three real task families: cold/new; resume/fork/concurrent-worktree; compaction/forget, including stale checkpoint and wrong task line | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget`; First Correct Action, Decision Preservation, Wrong-State Admission, and actual Provider bytes/tokens | Codex runtime ownership, UI, marketplace, or static/no-model smoke |
+| Codex `0.148.0-alpha.15` / `gpt-5.6-luna` / `reasoning=max` | Three real task families: cold/new; resume/fork/concurrent-worktree; compaction/forget, including stale checkpoint and wrong task line | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget`; First Correct Action, Decision Preservation, Wrong-State Admission, and actual Provider bytes/tokens | Codex runtime ownership, UI, marketplace, or static/no-model smoke |
 | OpenCode `1.18.16` / `deepseek/deepseek-v4-flash` | The same three real Host task families and wrong-state challenges with independently isolated Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget`; the same outcomes and actual Provider bytes/tokens | OpenCode runtime, UI, ecosystem, or config-only smoke |
 
 Before every mapped task and Core gate passes, the only permitted statement is:
@@ -139,11 +139,15 @@ that it is perfect, SOTA, leading, fully verified, RC, or GA.
 
 ### Host continuity
 
-Codex requires at least three distinct runs using exact `codex-cli 0.148.0-alpha.9`, binary
-SHA-256 `6170ff5578170ee9b74ad92bfcff96e6186f41d02b60815a7c2b01ad424c754f`, requested model
+Codex requires at least three distinct runs using exact `codex-cli 0.148.0-alpha.15`, binary
+SHA-256 `7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7`, requested model
 `gpt-5.6-luna`, and `reasoning=max`. Authentication uses the supported official existing-login
 seam without reading, copying, printing, or retaining auth. The receipt records the actual returned
 model identity and date; the selector is not represented as an immutable model snapshot.
+
+The Codex and OpenCode executable coordinates below were re-observed locally at
+`2026-08-20T12:38:48Z`; this observation rotates the current input contract but is not Host task or
+qualification evidence.
 
 OpenCode requires at least three distinct runs using exact `1.18.16`, source commit
 `a3647eb025c7615159d417dcc49fc39fdaeba65b`, selector
