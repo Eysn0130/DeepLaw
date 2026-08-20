@@ -206,15 +206,29 @@ def test_active_v3_pending_template_is_separate_and_release_closed() -> None:
     protocol_digest = hashlib.sha256(PROTOCOL.read_bytes()).hexdigest()
     classification_digest = hashlib.sha256(CLASSIFICATION.read_bytes()).hexdigest()
 
-    assert active["status"] == "machine_evaluation_pending"
-    assert active["candidate_version"] == "0.12.0"
+    current_stages = {
+        "machine_evaluation_pending": (
+            "0.12.0",
+            "machine_evaluation_not_executed",
+        ),
+        "construction_candidate_machine_evaluation_pending": (
+            "0.13.0",
+            "candidate_artifact_not_built",
+        ),
+    }
+    assert active["status"] in current_stages
+    expected_version, expected_blocker = current_stages[active["status"]]
+    assert active["candidate_version"] == expected_version
     assert active["construction_package_version"] == "0.12.0"
     assert active["release_target"] == "0.13.0"
-    assert active["blocker"] == "machine_evaluation_not_executed"
+    assert active["blocker"] == expected_blocker
     assert active["protocol_binding"]["sha256"] == protocol_digest
     assert active["classification_binding"]["sha256"] == classification_digest
     candidate = active["candidate_binding"]
-    assert candidate["package_version"] == "0.12.0"
+    assert candidate["package_version"] == expected_version
+    assert candidate["lock_sha256"] == hashlib.sha256(
+        (REPOSITORY / "uv.lock").read_bytes()
+    ).hexdigest()
     candidate_fields = (
         "source_commit",
         "source_tree",

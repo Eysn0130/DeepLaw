@@ -39,15 +39,26 @@ def _seed_repository(tmp_path: Path) -> Path:
         target = repository / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         raw = source.read_bytes()
-        if relative in prep.VERSION_SURFACE_FILES and relative not in {
-            "pyproject.toml",
-            "uv.lock",
-        }:
+        if relative == "pyproject.toml":
+            raw = raw.replace(
+                b'version = "0.13.0"', b'version = "0.12.0"', 1
+            )
+        elif relative == "uv.lock":
+            raw = raw.replace(
+                b'[[package]]\nname = "deeplaw"\nversion = "0.13.0"',
+                b'[[package]]\nname = "deeplaw"\nversion = "0.12.0"',
+                1,
+            )
+        elif relative in prep.VERSION_SURFACE_FILES:
             raw = raw.replace(b"0.13.0", b"0.12.0")
         target.write_bytes(raw)
         shutil.copymode(source, target)
     active_path = repository / prep.ACTIVE_RELATIVE
     active = json.loads(active_path.read_text(encoding="utf-8"))
+    active["status"] = "machine_evaluation_pending"
+    active["candidate_version"] = prep.OLD_VERSION
+    active["blocker"] = "machine_evaluation_not_executed"
+    active["candidate_binding"]["package_version"] = prep.OLD_VERSION
     active["candidate_binding"]["lock_sha256"] = hashlib.sha256(
         (repository / "uv.lock").read_bytes()
     ).hexdigest()
