@@ -77,7 +77,7 @@ def test_pre_freeze_version_deadlock_is_explicit_and_fail_closed() -> None:
     assert binding["release_ready"] is False
     assert binding["claim_eligible"] is False
     assert release_policy.required_manifest_schema_version("0.13.0") == (
-        "deeplaw.commercial-release-manifest/v8"
+        "deeplaw.commercial-release-manifest/v9"
     )
     assert release_policy.required_legacy_manifest_schema_version("0.13.0") == (
         "deeplaw.commercial-release-manifest/v6"

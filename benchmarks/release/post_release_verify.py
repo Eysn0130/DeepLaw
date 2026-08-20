@@ -1,7 +1,7 @@
 """Replay the historical v5/v6 post-release envelope verification path.
 
-The current v0.13 release workflow reopens the v8 manifest with
-``benchmarks.release.release_provenance_v8`` and performs its own public redownload check.
+The current v0.13 release workflow reopens the v9 manifest with
+``benchmarks.release.release_provenance_v9`` and performs its own public redownload check.
 """
 
 from __future__ import annotations

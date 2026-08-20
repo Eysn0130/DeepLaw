@@ -19,13 +19,14 @@ PRODUCER = REPOSITORY / ".github/workflows/external-qualification-evidence.yml"
 CONSUMER = REPOSITORY / ".github/workflows/commercial-qualification.yml"
 
 
-def test_external_qualification_workflow_matches_consumer_and_never_rebuilds() -> None:
+def test_external_qualification_workflow_is_retained_research_history_only() -> None:
     producer = PRODUCER.read_text(encoding="utf-8")
     consumer = CONSUMER.read_text(encoding="utf-8")
     assert yaml.safe_load(producer)["name"] == "External Qualification Evidence"
     assert "name: v013-qualification-evidence" in producer
-    assert "name: v013-qualification-evidence" in consumer
-    assert "external-qualification-evidence.yml" in consumer
+    assert "name: v013-qualification-evidence" not in consumer
+    assert "external-qualification-evidence.yml" not in consumer
+    assert "kernel-qualification-evidence.yml" in consumer
     assert "verified-candidate-artifacts" in producer
     assert "self-hosted" in producer
     assert "macOS" in producer
@@ -49,8 +50,7 @@ def test_external_qualification_workflow_matches_consumer_and_never_rebuilds() -
     assert "DEEPLAW_HUMAN_GOLD_ROOT" not in producer
     assert "DEEPLAW_TRUSTED_HUMAN_APPROVER" not in producer
     assert "bundle-manifest.json" in producer
-    assert '--evidence-run-id "${EVIDENCE_RUN_ID}"' in consumer
-    assert '--candidate-run-id "${CANDIDATE_RUN_ID}"' in consumer
+    assert 'benchmarks.release.assemble_commercial_qualification_v9' in consumer
     assert "if-no-files-found: error" in producer
     assert "python -m build" not in producer
     assert "uv build" not in producer

@@ -2,9 +2,9 @@
 
 This module deliberately uses only the Python standard library.  It is invoked by release
 workflow steps before project dependencies are installed, so it must remain importable from a
-clean checkout. The v0.12 manifest is a compatibility contract. The older v0.13 v6 envelope is
-also retained for historical validation, while the active machine-only classification is v8 and
-cannot be downgraded to either compatibility path.
+clean checkout. The v0.12 manifest is a compatibility contract. The older v0.13 v6 and v8
+envelopes remain historical evidence, while Gate classification v9 is the active Kernel Release
+Core policy and cannot be downgraded to a compatibility path.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from typing import Any
 V5_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v5"
 V6_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v6"
 V8_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v8"
+V9_MANIFEST_SCHEMA = "deeplaw.commercial-release-manifest/v9"
 V013_V6_CLASSIFICATION_PATH = Path(__file__).with_name(
     "v013-gate-classification-v6.json"
 )
@@ -31,15 +32,15 @@ V013_V6_CLASSIFICATION_SCHEMA_VERSION = (
 )
 V013_V6_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v6"
 V013_ACTIVE_CLASSIFICATION_PATH = Path(__file__).with_name(
-    "v013-gate-classification-v8.json"
+    "v013-gate-classification-v9.json"
 )
 V013_ACTIVE_CLASSIFICATION_SCHEMA_PATH = Path(__file__).resolve().parents[2] / (
-    "contracts/v013-release-gate-classification.v8.schema.json"
+    "contracts/v013-release-gate-classification.v9.schema.json"
 )
 V013_ACTIVE_CLASSIFICATION_SCHEMA_VERSION = (
-    "deeplaw.v013-release-gate-classification/v8"
+    "deeplaw.v013-release-gate-classification/v9"
 )
-V013_ACTIVE_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v8"
+V013_ACTIVE_CLASSIFICATION_ID = "deeplaw-v013-commercial-gates-v9"
 
 _SEMVER_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -95,10 +96,39 @@ V013_V6_COMPETITIVE_GATE_IDS = frozenset(
     {"comparative_incremental_benefit", "superiority", "sota"}
 )
 V013_CORE_GATE_IDS = frozenset(
-    (V013_V6_CORE_GATE_IDS - {"human_gold_isolation"}) | {"machine_reference_isolation"}
+    {
+        "canonical_integrity",
+        "migration_recovery",
+        "secret_host_isolation",
+        "bounded_context",
+        "source_citation_locator",
+        "living_wiki",
+        "scale_performance",
+        "supported_platforms",
+        "reproducible_supply_chain",
+        "codex",
+        "opencode",
+        "selective_forget",
+        "timeline",
+    }
 )
-V013_CAPABILITY_GATE_IDS = V013_V6_CAPABILITY_GATE_IDS
-V013_COMPETITIVE_GATE_IDS = V013_V6_COMPETITIVE_GATE_IDS
+V013_CAPABILITY_GATE_IDS = frozenset(
+    {"official_legal_pack", "semantic_restore", "claude", "gui_desktop_interoperability"}
+)
+V013_COMPETITIVE_GATE_IDS = frozenset(
+    {
+        "machine_reference_isolation",
+        "qualification_comparative_holdout",
+        "final_blind_comparative_holdout",
+        "agent_review_panel",
+        "scorer_a",
+        "scorer_b",
+        "arbiter",
+        "comparative_incremental_benefit",
+        "superiority",
+        "sota",
+    }
+)
 
 _V5_REQUIRED_TOP_LEVEL = frozenset(
     {
@@ -178,7 +208,7 @@ def required_manifest_schema_version(version: str) -> str:
     if (major, minor) < (0, 13):
         return V5_MANIFEST_SCHEMA
     if (major, minor) == (0, 13):
-        return V8_MANIFEST_SCHEMA
+        return V9_MANIFEST_SCHEMA
     raise ReleasePolicyError(f"no commercial release policy is defined for {version}")
 
 
@@ -548,10 +578,10 @@ def validate_manifest_for_release(
     """Validate a current release manifest, failing closed at the v0.13 evidence seam."""
 
     expected = required_manifest_schema_version(release_version)
-    if expected == V8_MANIFEST_SCHEMA:
+    if expected == V9_MANIFEST_SCHEMA:
         _fail(
-            "v0.13 release manifests require benchmarks.release.release_provenance_v8 "
-            "with the retained Candidate Full and external evidence roots"
+            "v0.13 release manifests require benchmarks.release.release_provenance_v9 "
+            "with the retained Candidate Full and Kernel qualification evidence roots"
         )
     validate_legacy_manifest_for_release(manifest, release_version=release_version)
 

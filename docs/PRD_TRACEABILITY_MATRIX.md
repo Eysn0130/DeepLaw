@@ -1,4 +1,4 @@
-# DeepLaw PRD 1.3.2 traceability matrix
+# DeepLaw PRD 1.3.3 traceability matrix
 
 Status: **current requirement-to-runtime mapping**
 Reviewed: **2026-08-20**
@@ -11,8 +11,8 @@ architecture constitution.
 
 ## Current machine-state pointer
 
-- Active gate classification: `v8`.
-- Active qualification profile: `machine_evaluated_no_human_attestation`.
+- Active gate classification: `v9`.
+- Active qualification profile: `kernel_release_core`.
 - Current package, exact integration commit/tree, candidate artifact hashes, external input hashes,
   and release decision are read from the active qualification records and their protocol; this
   matrix intentionally does not duplicate those mutable values.
@@ -21,13 +21,17 @@ architecture constitution.
 - `Qualified` requires capability-specific retained external evidence. `Released` requires a
   published artifact bound to that evidence. This matrix does not mark a capability `Qualified` or
   `Released` merely because local tests pass.
+- Kernel Release Core, Capability, and Competitive/Research Claim evidence are independent
+  categories. Missing optional Capability or research evidence suppresses only that claim; it may
+  not be promoted into a Kernel Core blocker. The exact inventories are owned by the versioned v9
+  classification, not duplicated here.
 
 ## Frozen architecture mapping
 
 | Frozen role or invariant | PRD location | Runtime and contract boundary | Evidence boundary |
 | --- | --- | --- | --- |
 | Task Continuity / Governed Project Knowledge | §1, §7.1, `PRD-CONT-*` | Existing Run, Checkpoint, task-lineage, workspace binding, Ledger, Coordinator, and owner-granted sink | Development regressions are local evidence; native Host and external task evidence remain separate |
-| Source-native Evidence Library | §1, §7.2, `PRD-SRC-*`, `PRD-EVID-*` | Source Revision, CAS/Registry, Document/Version/Fragment/Locator, parser provenance, source-first drill-down | Exact bytes, temporal duties, licensed/signed sources, and external legal tasks require retained evidence |
+| Source-native Evidence Library | §1, §7.2, `PRD-SRC-*`, `PRD-EVID-*` | Source Revision, CAS/Registry, Document/Version/Fragment/Locator, parser provenance, source-first drill-down | Generic professional-source Core evidence is independent of the signed official Legal Pack Capability claim |
 | Living Wiki | §1, §7.4, `PRD-WIKI-*` | Governed Markdown Revisions, Page Registry, Link Index, Resolver, rebuildable projections | Full/incremental equivalence, user-file protection, scale, and human/editor tasks qualify independently |
 | One shared Context Compiler | §1, §6, §7.5, `PRD-CTX-*` | Discovery → Admission → Selection → bounded Knowledge Capsule → thin Host driver | Provider bytes/usage and task outcomes must come from retained native observations |
 | One governed kernel | `PRD-PRINCIPLE-003`, §6, §14 | Shared identity, provenance, Authority, scope, sensitivity, lifecycle, bitemporal Ledger, grants, CAS, recovery | No parallel product engine, database, kind, predicate, page family, or Host runtime is admitted |
@@ -76,7 +80,7 @@ Evidence labels used below are repository-relative:
 | `PRD-CONT-010..014` | Vault/project/repository/worktree/lineage binding; fork/conflict; bounded Timeline; bootstrap/drill-down/checkpoint lifecycle | `KA`, `TC`, `TR`, `Q`, `CAP`, Coordinator | Wrong-line, stale snapshot, ambiguous route, fork, compaction, selective forget, Ledger-invariance tests, and `UPC` development receipt | Ambiguity remains a structured Gap; external First Correct Action and Decision Preservation require fresh retained tasks |
 | `PRD-SRC-001..006` | Immutable Source Revision, structural/locator preservation, deterministic validation, targeted invalidation, idempotence, explicit withdrawal/forget | `KS`, `KC`, CAS/Registry, lifecycle services | Source revision, parser, successor, invalidation, idempotency, recovery tests, and `UPC` development receipt | Source bytes remain canonical; changed input creates a successor |
 | `PRD-SRC-007..010` | Lossy compilation disclosure, targeted refinement, bounded acquisition, connector non-authority | `KC`, source adapters, admission, Gap/coverage services | Coverage, bounded fallback, allowlist, snapshot, provenance, and connector negative tests | No connector or Wiki projection can create identity or Authority |
-| `PRD-SRC-011..012` | Source-native professional material and revision-bound OCR/layout/search accelerators | Evidence Core, Document IR, `LEGAL`, derived manifests | PDF/DOCX/HTML/Markdown, OCR-risk, exact Locator, and rebuild tests | Exact licensed corpus and critical-token external evidence remain required for claims |
+| `PRD-SRC-011..012` | Source-native professional material and revision-bound OCR/layout/search accelerators | Evidence Core, Document IR, `LEGAL`, derived manifests | PDF/DOCX/HTML/Markdown, OCR-risk, exact Locator, and rebuild tests | Exact professional-source and critical-token evidence is Core; official Legal Pack status needs separate signed-pack evidence |
 | `PRD-KNOW-001..004` | Revision/event writes, owner-granted sink, read-only surfaces, stable identity and explicit split/merge lineage | `KA`, Coordinator, `SINK`, `KMCP` | CAS/CAS, idempotency, relation, conflict, and no-hidden-write tests | No read path appends canonical Ledger |
 | `PRD-KNOW-005..010` | Separate origin/Authority/time/scope dimensions, no ranking elevation, lineage-preserving consolidation, bounded maintenance, explicit Vault boundaries | Ledger, lifecycle, relation, scope/sensitivity admission | Authority, consolidation, duplicate, orphan, scope, and maintenance tests | Derived rankings and feedback remain discovery/ranking aids only |
 
@@ -113,7 +117,7 @@ not current public advertisement versions.
 
 | PRD IDs | Requirement family | Runtime/code seam | Contract and regression evidence | Current boundary |
 | --- | --- | --- | --- | --- |
-| `PRD-EVID-001..004` | Protected-source immutability, isolated `law_support`, official/private separation, exact document/version/quote/time/receipt | `LEGAL`, Source Core, trust and federation services | Source lifecycle, legal evidence, citation, temporal, and process-isolation tests | Signed/verified Pack and exact external source tasks are required evidence |
+| `PRD-EVID-001..004` | Protected-source immutability, isolated `law_support`, official/private separation, exact document/version/quote/time/receipt | `LEGAL`, Source Core, trust and federation services | Source lifecycle, professional evidence, citation, temporal, and process-isolation tests | Exact external source tasks qualify the generic Kernel; signed/verified Pack bytes are additionally required only for the official Legal Pack claim |
 | `PRD-EVID-005..009` | `legal_authority=false`, zero false Authority/wrong version/invalid locator, Gap on unverifiable chain, no adjudication, source-first duties | `LEGAL`, `Q`, evidence cards, duty planner | Authority, wrong-version, locator, exception/proviso/cross-reference, OCR, and Gap tests | DeepLaw provides evidence/context only; legal applicability and verdict stay outside |
 | `PRD-SEC-001..004` | Local canonical state, no implicit upload/telemetry, untrusted input, closed Host and read/write boundaries | Stores, source acquisition, launcher, `KMCP`, `SINK`, adapters | No-network, injection, environment, tool-list, grant, and no-write tests | OS enforcement and real Host isolation must be retained separately from fake-host diagnostics |
 | `PRD-SEC-005..008` | Client/case exclusion, release-blocking leakage/scope/mutation failures, non-malleable origin, cross-boundary deny-by-default | Sensitivity, provenance, lifecycle, scope, and process controls | Canary, ACL/mount/IPC, origin-transform, cross-Vault/worktree/task negative tests | No credential, case data, private path, transcript, or raw secret is admissible |

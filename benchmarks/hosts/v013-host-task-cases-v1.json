@@ -1,0 +1,95 @@
+{
+  "artifact_kind": "task_case_catalog",
+  "schema_version": "deeplaw.v013-host-task-cases/v1",
+  "status": "qualification_input_frozen",
+  "hosts": ["codex", "opencode"],
+  "task_cases": [
+    {
+      "task_case": "continuity",
+      "required_duties": [
+        "first_correct_action",
+        "decision_preservation",
+        "wrong_state_rejection",
+        "bounded_read_only_context",
+        "authority_boundary",
+        "failure_honesty",
+        "compaction_preservation",
+        "forget_semantics"
+      ],
+      "required_wrong_states": [
+        "stale",
+        "wrong_task_line",
+        "wrong_worktree",
+        "forgotten"
+      ],
+      "required_operations": [
+        "start",
+        "message",
+        "resume",
+        "fork",
+        "compaction_pre",
+        "compaction",
+        "compaction_post",
+        "end"
+      ],
+      "scenarios": ["cold_start", "resume_fork", "compaction_forget"]
+    },
+    {
+      "task_case": "living_wiki",
+      "required_duties": [
+        "alias_same_name_identity",
+        "rename_move",
+        "external_edit_reconcile",
+        "backlink_outlink",
+        "source_successor",
+        "wrong_merge_rejection",
+        "user_file_protection",
+        "full_incremental_noop_equivalence",
+        "wiki_exact_source_drill_down"
+      ],
+      "required_wrong_states": ["wrong_merge", "stale_revision", "hidden_mutation"],
+      "required_operations": ["wiki_read", "source_read", "query_context"]
+    },
+    {
+      "task_case": "professional_evidence",
+      "required_duties": [
+        "original_bytes",
+        "original_hash",
+        "document",
+        "version",
+        "fragment",
+        "locator",
+        "wrong_version_rejection",
+        "effective_date",
+        "exception",
+        "proviso",
+        "cross_reference",
+        "false_authority",
+        "ocr_critical_token_gap",
+        "wiki_exact_source_drill_down"
+      ],
+      "required_wrong_states": ["wrong_version", "false_authority", "ocr_critical_token"],
+      "required_operations": ["source_read", "fragment_read", "wiki_read", "query_context"]
+    }
+  ],
+  "host_constraints": {
+    "codex": {
+      "tool_version": "codex-cli 0.148.0-alpha.15",
+      "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
+      "model_id": "gpt-5.6-luna",
+      "expected_response_model_id": "gpt-5.6-luna",
+      "reasoning_effort": "max",
+      "argv_prefix": ["codex", "app-server", "--stdio"]
+    },
+    "opencode": {
+      "tool_version": "1.18.16",
+      "binary_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
+      "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+      "config_selector": "deepseek/deepseek-v4-flash",
+      "model_id": "deepseek-v4-flash",
+      "expected_response_model_id": "deepseek-v4-flash",
+      "reasoning_effort": null,
+      "argv_prefix": ["opencode", "--pure", "run", "--format", "json"]
+    }
+  }
+}

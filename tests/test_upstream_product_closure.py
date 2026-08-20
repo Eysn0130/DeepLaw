@@ -36,8 +36,8 @@ def test_named_upstream_research_does_not_rotate_frozen_qualification_inputs() -
     assert "40cc9f9479fef7bfe8a51a6df7e02fe11971f95e" in closure
     assert "cc1744324150c632416857c98964f87b1574a5fc" in closure
     assert "350eec8a284e159b2e4cfd068d808cbf203a6cc5" in closure
-    assert "630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc" in protocol
-    assert "cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d" in protocol
+    assert "f078160e248f889d66ee37dc0d431854f50d3294c" in protocol
+    assert "367a91416477c90bbfae766dc06add3de6ae75a7" in protocol
     assert "| [Ekgardt/llm-wiki]" in closure
     assert "| none; the protocol retains an unnamed LLM-Wiki behavior category |" in closure
     assert "qualification coordinate` and `research anchor`" in closure

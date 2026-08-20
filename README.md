@@ -32,16 +32,20 @@ Agent runtime。
 
 - 公开 package/main：`0.12.0 Beta`；最新 tag：`v0.12.0`。
 - Active qualification：`machine_evaluation_pending`，profile：
-  `machine_evaluated_no_human_attestation`，Gate classification：v8。
+  `kernel_release_core`，Gate classification：v9。
 - `release_ready=false`，尚无 `0.13.0` tag 或 release。
 - 当前 Provider advertisement：knowledge-support input v7 / output v6，仅 `query`、`context`、
   `explain`；input v1-v6 和 output v1-v5 仅为 compatibility/internal。
 - 本地 regression、mock、dry-run、旧报告或 no-model smoke 不构成真实 Host、Human Gold、法律专家、
-  3 OS、scale、供应链或发布证据。缺失资格保持 `not_executed`。
+  3 OS、scale、供应链或发布证据。Kernel Release Core、Capability 与 Competitive/Research
+  Claim 分别判定；缺失的可选能力或研究证据保持 `not_executed`，只禁止对应声明。
+- v0.13 Kernel 的支持上限为每个 Vault 10,000 个 active governed Knowledge Objects；>10k
+  为实验范围，100k 与其 sharding/bundling 不属于 v0.13。官方 signed Legal Pack、GUI/Desktop
+  interoperability、semantic restore 与 Claude 未经各自证据不得宣称发布。
 
 机器状态只读取
-[`benchmarks/v013/active-qualification-v2.json`](benchmarks/v013/active-qualification-v2.json) 和
-[`benchmarks/release/v013-gate-classification-v8.json`](benchmarks/release/v013-gate-classification-v8.json)；
+[`benchmarks/v013/active-qualification-v3.json`](benchmarks/v013/active-qualification-v3.json) 和
+[`benchmarks/release/v013-gate-classification-v9.json`](benchmarks/release/v013-gate-classification-v9.json)；
 README 不承担第二状态台账。
 
 ## 安装

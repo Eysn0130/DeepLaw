@@ -1,11 +1,11 @@
 # DeepLaw v0.13 bounded upstream research
 
 Status: **design evidence only**, researched 2026-08-08, reconciled with the 2026-08-17
-architecture freeze, augmented by the named 2026-08-18 product-closure review, and updated with a
-2026-08-20 current observation. This report records concepts considered for v0.13; it is not evidence that any
-target capability is shipped. Package/main remain `0.12.0 Beta`, active qualification is
-`machine_evaluation_pending` under profile `machine_evaluated_no_human_attestation`, and Gate v8
-remains pending. DeepLaw does not vendor or copy upstream implementation code in this work. The
+architecture freeze, augmented by the named 2026-08-18 product-closure review, and reconciled with
+Gate v9 on 2026-08-21. This report records concepts considered for v0.13; it is not evidence that
+any target capability is shipped. Package/main remain `0.12.0 Beta`, active qualification is
+`machine_evaluation_pending` under profile `kernel_release_core`, and Gate v9 remains pending.
+DeepLaw does not vendor or copy upstream implementation code in this work. The
 exact commits below are frozen research anchors, not dependency pins or release inputs.
 
 The frozen product boundary is three roles on one governed kernel: Task Continuity / Governed
@@ -14,6 +14,22 @@ research does not authorize a fourth product, database, Knowledge kind, Relation
 family, Host adapter, Agent runtime, connector, telemetry path or cloud control plane. Automatic
 transcript memory remains prohibited. The current Provider advertisement is input v7/output v6 with
 only `query`, `context`, and `explain`; older Provider versions remain internal compatibility.
+
+## Gate v9 bounded behavior references
+
+Gate v9 freezes only the following exact references and the listed Kernel behaviors. They are
+research inputs, not runtime dependencies, comparative qualification, or evidence of superiority.
+
+| Upstream | Exact reference | Bounded behavior only |
+| --- | --- | --- |
+| OpenWiki | `f078160e248f889d66ee37dc0d431854f50d3294c` | one-command journey, quiet health, protected user block/no-op, incremental rebuild, bounded source drill-down |
+| Tolaria | `367a91416477c90bbfae766dc06add3de6ae75a7` | files-first external edits, Wikilink/alias/backlink/rename, verify-before-write |
+| Obsidian API | `cc1744324150c632416857c98964f87b1574a5fc` | Markdown/Wikilink/alias/backlink/rename interoperability semantics; no Desktop claim |
+| LLM Wiki | `350eec8a284e159b2e4cfd068d808cbf203a6cc5` | task-shaped bounded knowledge and source drill-down; no Agent runtime reuse |
+
+Only task-specific Kernel compatibility/parity may be reported after same-condition execution.
+Until then, each behavior remains `not_executed`; GUI, connector, Agent runtime, telemetry,
+credential storage, transcript capture, and background mutation are out of scope.
 
 ## 2026-08-18 named product-closure anchors
 

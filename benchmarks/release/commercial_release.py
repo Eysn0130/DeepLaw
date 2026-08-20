@@ -200,12 +200,12 @@ def _docs(repository: Path) -> dict[str, bool]:
             "knowledge-support input v7 / output v6",
         ),
         "SECURITY.md": (
-            "machine_evaluated_no_human_attestation",
-            "Gate classification is v8",
+            "kernel_release_core",
+            "Gate classification is v9",
             "not_executed",
         ),
         "docs/PRODUCT_REQUIREMENTS.md": (
-            "PRD revision: **1.3.2**",
+            "PRD revision: **1.3.3**",
             "Task Continuity / Governed Project Knowledge",
             "Source-native Evidence Library",
             "Living Wiki",
@@ -216,9 +216,9 @@ def _docs(repository: Path) -> dict[str, bool]:
             "Deployment/security view",
         ),
         "docs/V0_13_QUALIFICATION_PROTOCOL.md": (
-            "machine_evaluated_no_human_attestation",
-            "current classification is Gate v8",
-            "14 Core",
+            "kernel_release_core",
+            "current classification is Gate v9",
+            "All 13 Kernel Release Core gates",
         ),
     }
     result: dict[str, bool] = {}
@@ -714,7 +714,7 @@ def assemble(
         raise CommercialReleaseError(
             f"release {version} requires {required_schema}; "
             "the historical v5/no-model assembler is closed; use "
-            "the current v0.13 release_provenance_v8 path with retained evidence"
+            "the current v0.13 release_provenance_v9 path with retained Kernel evidence"
         )
     versions = _unified_versions(repository)
     platform_reports = [

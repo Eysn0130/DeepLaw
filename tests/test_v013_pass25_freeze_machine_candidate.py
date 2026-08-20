@@ -218,12 +218,13 @@ def test_freeze_rejects_duplicate_json_keys(
         )
 
 
-def test_candidate_full_calls_v2_freezer_before_retaining_active_qualification() -> None:
+def test_candidate_full_calls_v3_freezer_before_retaining_active_qualification() -> None:
     workflow = (REPOSITORY / ".github/workflows/candidate-full.yml").read_text(encoding="utf-8")
 
-    assert "benchmarks.release.freeze_qualification_candidate_v2" in workflow
-    assert "--template benchmarks/v013/active-qualification-v2.json" in workflow
+    assert "benchmarks.release.freeze_qualification_candidate_v3" in workflow
+    assert "--template benchmarks/v013/active-qualification-v3.json" in workflow
     assert "--reproducible-report" in workflow
     assert "--artifact-manifest" in workflow
     assert "frozen-active-qualification.json" in workflow
-    assert "cp benchmarks/v013/active-qualification-v2.json" not in workflow
+    assert "freeze_qualification_candidate_v2" not in workflow
+    assert "cp benchmarks/v013/active-qualification-v3.json" not in workflow

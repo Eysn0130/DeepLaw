@@ -1,10 +1,10 @@
 # DeepLaw comparative evaluation and independent replication
 
-Status: **Optional comparative track; current v0.13 qualification boundary**, reviewed 2026-08-17.
+Status: **Optional comparative/research track; non-blocking for the v0.13 Kernel**, reviewed 2026-08-21.
 This document does not define the core release or quality gate; see
 [`EVALUATION_PROTOCOL.md`](EVALUATION_PROTOCOL.md). Package/main remain `0.12.0 Beta`; the active
-profile is `machine_evaluated_no_human_attestation`, status `machine_evaluation_pending`, and Gate
-classification v8. No comparative or qualification result is implied by this protocol.
+profile is `kernel_release_core`, status `machine_evaluation_pending`, and Gate
+classification v9. No comparative result is implied by this protocol.
 
 The current Provider advertisement is `knowledge-support` input v7/output v6 with only `query`,
 `context`, and `explain`; input v1-v6 and output v1-v5 are internal compatibility. The shared
@@ -12,17 +12,19 @@ Context Compiler and three product roles (Task Continuity / Governed Project Kno
 Source-native Evidence Library, Living Wiki) are evaluated through the same bounded, source-bound
 Capsule. Transcript, prompt, raw log and hidden reasoning are not automatically persisted.
 
-## Current machine-only qualification boundary
+## Competitive/Research Claim boundary
 
-The active machine profile requires the candidate Host, reference freezer, scorer A, scorer B and
-arbiter to run in separate OS-enforced security domains with no shared filesystem, IPC or
+When a Competitive/Research claim is attempted, the candidate Host, reference freezer, scorer A,
+scorer B and arbiter run in separate OS-enforced security domains with no shared filesystem, IPC or
 transcript. Candidate
 processes cannot read references or scorer outputs; scorers receive only sanitized candidate output
 and sealed reference inputs. Credential brokers deliver Secrets only to the exact Host process; the
 DeepLaw runner, scorers and arbiter receive neither the Secret nor its `.env`. Retained evidence must bind
 executable/process/mount/ACL/network/IPC policy and negative canaries. Machine reviewers may produce
 machine audit evidence, but it is never Human Gold, legal-expert attestation or `human_verified`.
-Missing inputs or failed isolation remain `not_executed`/blocked and cannot be converted to a pass.
+Missing inputs or failed isolation remain `not_executed` and cannot be converted to a pass. They
+block only the corresponding comparative/research statement; they do not block a v0.13 Kernel
+whose complete Release Core independently passes.
 
 ## Corrected decision
 
@@ -35,8 +37,9 @@ software quality claim. That design had four defects:
 - secret data prevents owner-controlled public reproduction;
 - external status could be mistaken for product, source, or legal Authority.
 
-DeepLaw Evaluation Protocol v1 now supplies the core public, fixed, time-frozen, automatic, and
-auditable quality gate. Independent parties may reproduce it without becoming an Authority source.
+DeepLaw Evaluation Protocol v1 supplies a public, fixed, time-frozen, automatic, and auditable
+research baseline. It does not replace Gate v9 Kernel Release Core. Independent parties may
+reproduce it without becoming an Authority source.
 
 Comparative superiority remains a different empirical question. The strongest permitted statement
 has a finite scope:
@@ -52,13 +55,15 @@ participate, are not public, or do not share the same task boundary.
 
 | Level | Evidence | Permitted interpretation |
 | --- | --- | --- |
-| Q | exact release wheel passes Evaluation Protocol v1 | reproducible DeepLaw core quality result |
+| Q | exact release wheel passes Evaluation Protocol v1 | reproducible research-quality result; no release authorization |
 | C1 | public same-condition named-baseline run | result for the named systems and frozen workload |
 | C2 | real Codex, Claude Code, and OpenCode model tasks | host-level task evidence for the named tasks |
 | C3 | independent reproduction of Q, C1, or C2 | additional provenance for that exact result |
 
-Q is the release quality gate. C1 and C2 are required for comparative claims. C3 is welcome but
-optional. None of the levels grants legal Authority or proves a universal ranking.
+The versioned Gate v9 Kernel Release Core is the commercial release gate. Q, C1, and C3 are
+comparative/research evidence levels; C2 Host observations may also satisfy the separately defined
+Kernel Codex/OpenCode gates when they use the exact Kernel tasks and artifact binding. None of the
+levels grants legal Authority or proves a universal ranking.
 
 ## Continuity Pass 2 disposition (development evidence only)
 
@@ -82,9 +87,10 @@ have these bounded repairs:
 The route projection is derived/rebuildable; the continuity correction adds no canonical
 Knowledge table, migration, or sink schema, and `knowledge-sink.input/v2` bytes are unchanged.
 These are kernel observations, not Q, C1, C2, or C3 evidence. Core gates are not lowered.
-Capability gates may remain `not_claimed` when not
-declared (Timeline, semantic restore, and Claude/OpenCode); the Competitive Claim gate is
-independent and cannot be satisfied by local kernel evidence. For the affected PRD rows:
+Capability gates may remain `not_executed` when not declared (official Legal Pack, semantic
+restore, Claude, and GUI/Desktop interoperability). Timeline and OpenCode are Kernel Release Core,
+not optional capabilities. Competitive/Research claims are independent and cannot be satisfied by
+local kernel evidence. For the affected PRD rows:
 `kernel=Implemented`, `E2E=Target`, `external qualification=not_executed`.
 
 Pass 2 also closes the v0.13 release-evidence semantic boundary. The closed
@@ -93,8 +99,9 @@ decision. The closed `v013-release-gate-classification/v1` freezes gate categori
 model requirements, metric bounds, and exact hard-zero counter inventories. A deterministic
 validator reads those bytes and rejects weakened thresholds, missing counters, stale candidate or
 protocol bindings, development-as-blind claims, secret canaries, and private absolute paths. Only
-the v8 commercial assembler may derive manifest v8; release provenance v8 then reopens the typed
-evidence and validates the envelope and asset invariants. Publish and public-redownload paths
+the active v9 commercial assembler may derive the current manifest; release provenance then reopens
+the typed evidence and validates the envelope and asset invariants. Historical v8 artifacts remain
+replayable but cannot authorize the active v9 release. Publish and public-redownload paths
 rerun the semantic validator first. No such
 report or manifest was generated for this candidate, so every external gate remains
 `not_executed`.
@@ -107,7 +114,7 @@ never a pass:
 | Lane | Disposition |
 |---|---|
 | Statement scale 10k | `required not_executed` |
-| Statement scale 100k | `required not_executed` |
+| Statement scale 100k | `v0.14 research not_executed` |
 | Relation truncation 500/5000 | `required not_executed` |
 | Wiki wrong merge | `required not_executed` |
 | Wiki alias collision | `required not_executed` |

@@ -66,19 +66,18 @@ def test_external_qualification_consumes_candidate_full_and_emits_typed_evidence
 def test_commercial_qualification_recomputes_current_typed_core_gates() -> None:
     workflow = _workflow("commercial-qualification.yml")
 
-    assert "candidate-full-raw-evidence" in workflow
-    assert "v013-qualification-evidence" in workflow
-    assert "benchmarks.release.assemble_commercial_qualification_v8" in workflow
-    assert "v013-gate-classification-v8.json" in workflow
-    assert "benchmarks.release.release_provenance_v8" in workflow
+    assert "verified-candidate-artifacts" in workflow
+    assert "kernel-qualification-evidence" in workflow
+    assert "benchmarks.release.kernel_qualification_bundle_v1" in workflow
+    assert "benchmarks.release.assemble_commercial_qualification_v9" in workflow
+    assert "benchmarks.release.release_provenance_v9" in workflow
     assert "candidate_run_id" in workflow
     assert "evidence_run_id" in workflow
-    assert "GITHUB_RUN_ID" in workflow
     assert 'QUALIFICATION_RUN_ID: ${{ github.run_id }}' in workflow
     assert '--qualification-run-id "${QUALIFICATION_RUN_ID}"' in workflow
-    assert "machine-only" in workflow
-    assert "post_build_machine_reference_binding" in workflow
-    assert "candidate_machine_reference" in workflow
+    assert "Kernel Release Core" in workflow
+    assert "post_build_machine_reference_binding" not in workflow
+    assert "candidate_machine_reference" not in workflow
     assert "benchmarks.release.assemble_commercial_qualification_v7" not in workflow
     assert "benchmarks.release.release_provenance_v7" not in workflow
 
@@ -98,8 +97,8 @@ def test_release_is_manual_three_run_provenance_then_draft_and_public_verify() -
         "owner_release_confirmation",
     } <= set(inputs)
     assert "test \"${OWNER_RELEASE_CONFIRMATION}\" = \"publish-v0.13.0\"" in workflow
-    assert "benchmarks.release.release_provenance_v8" in workflow
-    assert "benchmarks.release.external_qualification_bundle_v4" in workflow
+    assert "benchmarks.release.release_provenance_v9" in workflow
+    assert "benchmarks.release.kernel_qualification_bundle_v1" in workflow
     assert "--candidate-run-id" in workflow
     assert "--evidence-run-id" in workflow
     assert "--qualification-run-id" in workflow
@@ -111,7 +110,7 @@ def test_release_is_manual_three_run_provenance_then_draft_and_public_verify() -
     assert workflow.index("--draft=false") < workflow.index(
         "Publicly redownload immutable release without credentials"
     )
-    assert "post_build_machine_reference_binding" in workflow
-    assert "--candidate-machine-reference-binding" in workflow
+    assert "post_build_machine_reference_binding" not in workflow
+    assert "--candidate-machine-reference-binding" not in workflow
     assert "public_release_verified" in workflow
     assert "release_provenance_v7" not in workflow

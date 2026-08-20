@@ -25,7 +25,11 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from benchmarks.hosts import pass16_continuity_cases, pass17_development_diagnostic
+from benchmarks.hosts import (
+    host_preflight_receipt,
+    pass16_continuity_cases,
+    pass17_development_diagnostic,
+)
 from benchmarks.hosts.codex_app_server_client import CodexAppServerClient
 from benchmarks.hosts.pass13_evidence import (
     EvidenceValidationError,
@@ -136,6 +140,28 @@ _FINAL_RESPONSE_SCHEMA: dict[str, Any] = {
 
 class QualificationFailure(RuntimeError):
     """A Host qualification requirement failed closed."""
+
+
+class _PreflightTemporaryDirectory:
+    """Retain a fail-before receipt before its runner-owned root is removed."""
+
+    def __init__(self, *, prefix: str, on_error: Callable[[BaseException], None]) -> None:
+        self._directory = tempfile.TemporaryDirectory(prefix=prefix)
+        self._on_error = on_error
+
+    def __enter__(self) -> str:
+        return self._directory.__enter__()
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
+        if exc_value is not None:
+            try:
+                self._on_error(exc_value)
+            except BaseException as receipt_error:
+                exc_value.add_note(
+                    "Host preflight receipt was not retained before cleanup: "
+                    f"{type(receipt_error).__name__}"
+                )
+        return self._directory.__exit__(exc_type, exc_value, traceback)
 
 
 def _repository() -> Path:
@@ -2468,6 +2494,7 @@ def _validate_owner_broker_launcher(
     *,
     host_binary: Path,
     repository: Path | None = None,
+    expected_broker_sha256: str | None = None,
 ) -> str:
     """Validate an external owner-only broker without reading credentials."""
 
@@ -2505,6 +2532,8 @@ def _validate_owner_broker_launcher(
         raise QualificationFailure("Codex credential broker launcher is unavailable") from exc
     if launcher_sha256 == binary_sha256:
         raise QualificationFailure("Codex credential broker launcher is not process-separated")
+    if expected_broker_sha256 is not None and launcher_sha256 != expected_broker_sha256:
+        raise QualificationFailure("Codex credential broker launcher hash mismatch")
     return launcher_sha256
 
 
@@ -3057,7 +3086,31 @@ def _prepare_codex_diagnostic(
     }
 
 
-def execute(
+def _retain_codex_failed_preflight(
+    *,
+    output_dir: Path,
+    codex_binary: Path,
+    codex_launcher: Path,
+    expected_broker_sha256: str | None,
+    error: BaseException,
+) -> None:
+    target = Path(output_dir).resolve(strict=False)
+    receipt_path = target / host_preflight_receipt.RECEIPT_FILENAME
+    if receipt_path.exists() or not target.is_dir() or target.is_symlink():
+        return
+    failed = host_preflight_receipt.failed_receipt(
+        host_name="codex",
+        host_version=CODEX_VERSION,
+        host_binary=Path(codex_binary),
+        broker_path=Path(codex_launcher),
+        repository=_repository(),
+        expected_broker_sha256=expected_broker_sha256,
+        error=error,
+    )
+    host_preflight_receipt.write_receipt(target, failed)
+
+
+def _execute_codex(
     *,
     candidate_wheel: Path,
     deeplaw_executable: Path,
@@ -3066,6 +3119,7 @@ def execute(
     human_gold_path: Path | None,
     codex_binary: Path,
     codex_launcher: Path,
+    expected_broker_sha256: str | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
     """Execute current qualification or one claim-ineligible diagnostic.
@@ -3084,13 +3138,6 @@ def execute(
         raise QualificationFailure(
             "Codex candidate runner must not receive Human Gold or reference labels"
         )
-    codex_binary = _validate_codex_binary(codex_binary)
-    codex_launcher_sha256 = _validate_owner_broker_launcher(
-        codex_launcher,
-        host_binary=codex_binary,
-        repository=repository,
-    )
-    codex_launcher = Path(codex_launcher)
     orchestrator = QualificationOrchestrator(
         host="codex",
         repository=repository,
@@ -3106,6 +3153,14 @@ def execute(
     }
 
     selected_output.mkdir(parents=True)
+    codex_binary = _validate_codex_binary(codex_binary)
+    codex_launcher_sha256 = _validate_owner_broker_launcher(
+        codex_launcher,
+        host_binary=codex_binary,
+        repository=repository,
+        expected_broker_sha256=expected_broker_sha256,
+    )
+    codex_launcher = Path(codex_launcher)
     runs: list[dict[str, Any]] = []
     lifecycle_methods: set[str] = set()
     lifecycle_requests: set[str] = set()
@@ -3146,7 +3201,16 @@ def execute(
         if mode == "qualification"
         else [("development_diagnostic", "cold_start")]
     )
-    with tempfile.TemporaryDirectory(prefix="deeplaw-pass17-") as temporary:
+    with _PreflightTemporaryDirectory(
+        prefix="deeplaw-pass17-",
+        on_error=lambda error: _retain_codex_failed_preflight(
+            output_dir=selected_output,
+            codex_binary=codex_binary,
+            codex_launcher=codex_launcher,
+            expected_broker_sha256=expected_broker_sha256,
+            error=error,
+        ),
+    ) as temporary:
         work_dir = Path(temporary)
         host_environment = _host_environment(
             codex_binary,
@@ -3261,6 +3325,28 @@ def execute(
             inventory_client.close()
             if inventory_client.secret_leak:
                 security["secret_leak"] = True
+
+        broker_source = host_preflight_receipt.inspect_broker_source(
+            codex_launcher,
+            repository=repository,
+            host_binary=codex_binary,
+            expected_sha256=expected_broker_sha256,
+        )
+        if broker_source.get("failure_reason_code") is not None:
+            raise QualificationFailure("Codex broker source preflight failed")
+        codex_preflight = host_preflight_receipt.build_receipt(
+            host={
+                "name": "codex",
+                "version": codex_version,
+                "sha256": host_preflight_receipt.host_binary_sha256(codex_binary),
+            },
+            broker_source=broker_source,
+            status="passed",
+            stage="complete",
+            reason_code="preflight_passed",
+            check_count=5,
+        )
+        host_preflight_receipt.write_receipt(selected_output, codex_preflight)
 
         for index, (reported_scenario, engine_scenario) in enumerate(run_specs, 1):
             state = states[reported_scenario]
@@ -3608,6 +3694,49 @@ def execute(
     return report
 
 
+def execute(
+    *,
+    candidate_wheel: Path,
+    deeplaw_executable: Path,
+    output_dir: Path,
+    profile_root: Path,
+    human_gold_path: Path | None,
+    codex_binary: Path,
+    codex_launcher: Path,
+    expected_broker_sha256: str | None = None,
+    mode: str = "qualification",
+) -> dict[str, Any]:
+    """Run Codex qualification while retaining a safe fail-before receipt."""
+
+    try:
+        return _execute_codex(
+            candidate_wheel=candidate_wheel,
+            deeplaw_executable=deeplaw_executable,
+            output_dir=output_dir,
+            profile_root=profile_root,
+            human_gold_path=human_gold_path,
+            codex_binary=codex_binary,
+            codex_launcher=codex_launcher,
+            expected_broker_sha256=expected_broker_sha256,
+            mode=mode,
+        )
+    except BaseException as original:
+        try:
+            _retain_codex_failed_preflight(
+                output_dir=Path(output_dir),
+                codex_binary=Path(codex_binary),
+                codex_launcher=Path(codex_launcher),
+                expected_broker_sha256=expected_broker_sha256,
+                error=original,
+            )
+        except BaseException as receipt_error:
+            original.add_note(
+                "Host preflight receipt was not retained: "
+                f"{type(receipt_error).__name__}"
+            )
+        raise
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run current Codex Host receipt workflow")
     parser.add_argument("--mode", choices=("qualification", "diagnostic"), default="qualification")
@@ -3618,6 +3747,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--human-gold")
     parser.add_argument("--codex-binary", required=True)
     parser.add_argument("--codex-launcher", required=True)
+    parser.add_argument("--expected-broker-sha256")
     return parser
 
 
@@ -3631,6 +3761,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         human_gold_path=Path(args.human_gold) if args.human_gold else None,
         codex_binary=Path(args.codex_binary),
         codex_launcher=Path(args.codex_launcher),
+        expected_broker_sha256=args.expected_broker_sha256,
         mode=args.mode,
     )
     print(canonical_json(report))

@@ -6907,6 +6907,41 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_active_v3_pending_template_is_separate_and_release_closed"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_active_v3_pending_template_is_separate_and_release_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_active_v3_stage_transitions_do_not_require_optional_external_hashes"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_active_v3_stage_transitions_do_not_require_optional_external_hashes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_protocol_v3_hash_sidecar_and_history_are_preserved"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_protocol_v3_hash_sidecar_and_history_are_preserved"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_protocol_v3_is_closed_exactly_bound_and_not_executed"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_protocol_v3_is_closed_exactly_bound_and_not_executed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_protocol_v3_source_scale_library_and_host_contracts"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_protocol_v3_source_scale_library_and_host_contracts"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_agent_context",
             "name": "test_builder_sorts_and_deduplicates_collection_inputs_deterministically"
           },
@@ -7069,86 +7104,51 @@
         {
           "junit": {
             "classname": "tests.test_v013_candidate_prep",
-            "name": "test_apply_is_rejected_on_main_and_preserves_the_template"
+            "name": "test_apply_is_rejected_on_main_without_writing"
           },
-          "node_id": "tests/test_v013_candidate_prep.py::test_apply_is_rejected_on_main_and_preserves_the_template"
+          "node_id": "tests/test_v013_candidate_prep.py::test_apply_is_rejected_on_main_without_writing"
         },
         {
           "junit": {
             "classname": "tests.test_v013_candidate_prep",
-            "name": "test_apply_rolls_back_when_atomic_replace_fails"
+            "name": "test_apply_requires_independent_candidate_branch_and_preserves_v2_v8_history"
           },
-          "node_id": "tests/test_v013_candidate_prep.py::test_apply_rolls_back_when_atomic_replace_fails"
+          "node_id": "tests/test_v013_candidate_prep.py::test_apply_requires_independent_candidate_branch_and_preserves_v2_v8_history"
         },
         {
           "junit": {
             "classname": "tests.test_v013_candidate_prep",
-            "name": "test_apply_updates_only_current_surfaces_and_preserves_history"
+            "name": "test_construction_dry_run_is_no_write_and_uses_v3_contracts"
           },
-          "node_id": "tests/test_v013_candidate_prep.py::test_apply_updates_only_current_surfaces_and_preserves_history"
+          "node_id": "tests/test_v013_candidate_prep.py::test_construction_dry_run_is_no_write_and_uses_v3_contracts"
         },
         {
           "junit": {
             "classname": "tests.test_v013_candidate_prep",
-            "name": "test_current_freezer_still_rejects_unprepared_012_template"
+            "name": "test_dirty_or_wrong_git_identity_fails_before_contract_transition"
           },
-          "node_id": "tests/test_v013_candidate_prep.py::test_current_freezer_still_rejects_unprepared_012_template"
+          "node_id": "tests/test_v013_candidate_prep.py::test_dirty_or_wrong_git_identity_fails_before_contract_transition"
         },
         {
           "junit": {
             "classname": "tests.test_v013_candidate_prep",
-            "name": "test_dry_run_is_no_write_and_does_not_disclose_external_paths_or_content"
+            "name": "test_old_external_input_cli_arguments_are_rejected"
           },
-          "node_id": "tests/test_v013_candidate_prep.py::test_dry_run_is_no_write_and_does_not_disclose_external_paths_or_content"
+          "node_id": "tests/test_v013_candidate_prep.py::test_old_external_input_cli_arguments_are_rejected"
         },
         {
           "junit": {
             "classname": "tests.test_v013_candidate_prep",
-            "name": "test_external_input_inventory_is_fail_closed[duplicate]"
+            "name": "test_wrong_construction_contract_or_hash_fails[wrong_hash]"
           },
-          "node_id": "tests/test_v013_candidate_prep.py::test_external_input_inventory_is_fail_closed[duplicate]"
+          "node_id": "tests/test_v013_candidate_prep.py::test_wrong_construction_contract_or_hash_fails[wrong_hash]"
         },
         {
           "junit": {
             "classname": "tests.test_v013_candidate_prep",
-            "name": "test_external_input_inventory_is_fail_closed[missing]"
+            "name": "test_wrong_construction_contract_or_hash_fails[wrong_version]"
           },
-          "node_id": "tests/test_v013_candidate_prep.py::test_external_input_inventory_is_fail_closed[missing]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_candidate_prep",
-            "name": "test_external_input_inventory_is_fail_closed[unsafe_mode]"
-          },
-          "node_id": "tests/test_v013_candidate_prep.py::test_external_input_inventory_is_fail_closed[unsafe_mode]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_candidate_prep",
-            "name": "test_external_input_inventory_is_fail_closed[wrong_hash]"
-          },
-          "node_id": "tests/test_v013_candidate_prep.py::test_external_input_inventory_is_fail_closed[wrong_hash]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_candidate_prep",
-            "name": "test_preflight_rejects_dirty_or_wrong_exact_integration[dirty]"
-          },
-          "node_id": "tests/test_v013_candidate_prep.py::test_preflight_rejects_dirty_or_wrong_exact_integration[dirty]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_candidate_prep",
-            "name": "test_preflight_rejects_dirty_or_wrong_exact_integration[wrong_head]"
-          },
-          "node_id": "tests/test_v013_candidate_prep.py::test_preflight_rejects_dirty_or_wrong_exact_integration[wrong_head]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_candidate_prep",
-            "name": "test_repository_root_is_canonicalized_before_containment_checks"
-          },
-          "node_id": "tests/test_v013_candidate_prep.py::test_repository_root_is_canonicalized_before_containment_checks"
+          "node_id": "tests/test_v013_candidate_prep.py::test_wrong_construction_contract_or_hash_fails[wrong_version]"
         },
         {
           "junit": {
@@ -7642,6 +7642,41 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_commercial_qualification_v9",
+            "name": "test_assembles_exact_27_gates_and_bound_report"
+          },
+          "node_id": "tests/test_v013_commercial_qualification_v9.py::test_assembles_exact_27_gates_and_bound_report"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_commercial_qualification_v9",
+            "name": "test_competitive_input_is_rejected_before_assembly"
+          },
+          "node_id": "tests/test_v013_commercial_qualification_v9.py::test_competitive_input_is_rejected_before_assembly"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_commercial_qualification_v9",
+            "name": "test_core_failure_never_makes_report_release_ready"
+          },
+          "node_id": "tests/test_v013_commercial_qualification_v9.py::test_core_failure_never_makes_report_release_ready"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_commercial_qualification_v9",
+            "name": "test_missing_classified_failure_or_threshold_metric_is_rejected"
+          },
+          "node_id": "tests/test_v013_commercial_qualification_v9.py::test_missing_classified_failure_or_threshold_metric_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_commercial_qualification_v9",
+            "name": "test_tamper_and_candidate_mismatch_fail_closed"
+          },
+          "node_id": "tests/test_v013_commercial_qualification_v9.py::test_tamper_and_candidate_mismatch_fail_closed"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_commercial_release_gate",
             "name": "test_capability_and_competitive_gate_semantics_are_fail_closed"
           },
@@ -7664,9 +7699,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_commercial_release_gate",
-            "name": "test_historical_assembler_closes_v013_in_favor_of_current_v8_path"
+            "name": "test_historical_assembler_closes_v013_in_favor_of_current_v9_path"
           },
-          "node_id": "tests/test_v013_commercial_release_gate.py::test_historical_assembler_closes_v013_in_favor_of_current_v8_path"
+          "node_id": "tests/test_v013_commercial_release_gate.py::test_historical_assembler_closes_v013_in_favor_of_current_v9_path"
         },
         {
           "junit": {
@@ -7692,16 +7727,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_commercial_release_gate",
-            "name": "test_v013_commercial_qualification_recomputes_v8_from_verified_artifacts"
+            "name": "test_v013_commercial_qualification_recomputes_v9_from_verified_artifacts"
           },
-          "node_id": "tests/test_v013_commercial_release_gate.py::test_v013_commercial_qualification_recomputes_v8_from_verified_artifacts"
+          "node_id": "tests/test_v013_commercial_release_gate.py::test_v013_commercial_qualification_recomputes_v9_from_verified_artifacts"
         },
         {
           "junit": {
             "classname": "tests.test_v013_commercial_release_gate",
-            "name": "test_v013_current_selects_v8_and_legacy_v6_stays_explicit"
+            "name": "test_v013_current_selects_v9_and_legacy_v6_stays_explicit"
           },
-          "node_id": "tests/test_v013_commercial_release_gate.py::test_v013_current_selects_v8_and_legacy_v6_stays_explicit"
+          "node_id": "tests/test_v013_commercial_release_gate.py::test_v013_current_selects_v9_and_legacy_v6_stays_explicit"
         },
         {
           "junit": {
@@ -7807,6 +7842,146 @@
             "name": "test_default_public_host_journey_fails_closed_across_lifecycle_states"
           },
           "node_id": "tests/test_v013_final_host_journey.py::test_default_public_host_journey_fails_closed_across_lifecycle_states"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_freeze_qualification_candidate_v3",
+            "name": "test_freeze_binds_exact_candidate_and_keeps_all_claims_pending"
+          },
+          "node_id": "tests/test_v013_freeze_qualification_candidate_v3.py::test_freeze_binds_exact_candidate_and_keeps_all_claims_pending"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_freeze_qualification_candidate_v3",
+            "name": "test_freeze_rejects_non_null_optional_inputs"
+          },
+          "node_id": "tests/test_v013_freeze_qualification_candidate_v3.py::test_freeze_rejects_non_null_optional_inputs"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_freeze_qualification_candidate_v3",
+            "name": "test_freeze_rejects_pending_012_template"
+          },
+          "node_id": "tests/test_v013_freeze_qualification_candidate_v3.py::test_freeze_rejects_pending_012_template"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_freeze_qualification_candidate_v3",
+            "name": "test_freeze_rejects_self_reported_passes[capability_claims]"
+          },
+          "node_id": "tests/test_v013_freeze_qualification_candidate_v3.py::test_freeze_rejects_self_reported_passes[capability_claims]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_freeze_qualification_candidate_v3",
+            "name": "test_freeze_rejects_self_reported_passes[competitive_claims]"
+          },
+          "node_id": "tests/test_v013_freeze_qualification_candidate_v3.py::test_freeze_rejects_self_reported_passes[competitive_claims]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_freeze_qualification_candidate_v3",
+            "name": "test_freeze_rejects_self_reported_passes[core_statuses]"
+          },
+          "node_id": "tests/test_v013_freeze_qualification_candidate_v3.py::test_freeze_rejects_self_reported_passes[core_statuses]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_freeze_qualification_candidate_v3",
+            "name": "test_freeze_rejects_tampered_candidate_evidence[artifact]"
+          },
+          "node_id": "tests/test_v013_freeze_qualification_candidate_v3.py::test_freeze_rejects_tampered_candidate_evidence[artifact]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_freeze_qualification_candidate_v3",
+            "name": "test_freeze_rejects_tampered_candidate_evidence[binding]"
+          },
+          "node_id": "tests/test_v013_freeze_qualification_candidate_v3.py::test_freeze_rejects_tampered_candidate_evidence[binding]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_freeze_qualification_candidate_v3",
+            "name": "test_v2_v8_history_bytes_are_not_touched"
+          },
+          "node_id": "tests/test_v013_freeze_qualification_candidate_v3.py::test_v2_v8_history_bytes_are_not_touched"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_classification_v9",
+            "name": "test_host_pins_and_cross_host_task_matrix_are_frozen"
+          },
+          "node_id": "tests/test_v013_gate_classification_v9.py::test_host_pins_and_cross_host_task_matrix_are_frozen"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_classification_v9",
+            "name": "test_not_executed_cannot_be_forged_as_pass_or_claim"
+          },
+          "node_id": "tests/test_v013_gate_classification_v9.py::test_not_executed_cannot_be_forged_as_pass_or_claim"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_classification_v9",
+            "name": "test_scale_boundary_is_exact_and_has_required_measurements"
+          },
+          "node_id": "tests/test_v013_gate_classification_v9.py::test_scale_boundary_is_exact_and_has_required_measurements"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_classification_v9",
+            "name": "test_source_and_wiki_duties_use_current_typed_artifacts"
+          },
+          "node_id": "tests/test_v013_gate_classification_v9.py::test_source_and_wiki_duties_use_current_typed_artifacts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_classification_v9",
+            "name": "test_v8_and_v2_remain_historical_and_semantically_intact"
+          },
+          "node_id": "tests/test_v013_gate_classification_v9.py::test_v8_and_v2_remain_historical_and_semantically_intact"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_classification_v9",
+            "name": "test_v9_has_exact_core_and_capability_inventory_and_research_is_nonblocking"
+          },
+          "node_id": "tests/test_v013_gate_classification_v9.py::test_v9_has_exact_core_and_capability_inventory_and_research_is_nonblocking"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_classification_v9",
+            "name": "test_v9_schema_and_fixture_are_closed_and_valid"
+          },
+          "node_id": "tests/test_v013_gate_classification_v9.py::test_v9_schema_and_fixture_are_closed_and_valid"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_v9_release_contracts",
+            "name": "test_not_executed_claim_gate_has_no_synthetic_execution_or_reference_binding"
+          },
+          "node_id": "tests/test_v013_gate_v9_release_contracts.py::test_not_executed_claim_gate_has_no_synthetic_execution_or_reference_binding"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_v9_release_contracts",
+            "name": "test_passed_gate_requires_actual_typed_v3_execution_and_input"
+          },
+          "node_id": "tests/test_v013_gate_v9_release_contracts.py::test_passed_gate_requires_actual_typed_v3_execution_and_input"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_v9_release_contracts",
+            "name": "test_release_manifest_core_pass_does_not_require_optional_claims_to_pass"
+          },
+          "node_id": "tests/test_v013_gate_v9_release_contracts.py::test_release_manifest_core_pass_does_not_require_optional_claims_to_pass"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_gate_v9_release_contracts",
+            "name": "test_report_contract_points_only_to_v5_gate_results"
+          },
+          "node_id": "tests/test_v013_gate_v9_release_contracts.py::test_report_contract_points_only_to_v5_gate_results"
         },
         {
           "junit": {
@@ -7975,6 +8150,384 @@
             "name": "test_semantic_harness_does_not_forward_ambient_inputs"
           },
           "node_id": "tests/test_v013_host_environment_isolation.py::test_semantic_harness_does_not_forward_ambient_inputs"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_broker_change_during_exact_byte_read_fails_closed"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_broker_change_during_exact_byte_read_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_broker_hash_is_exact_bytes_and_survives_source_deletion"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_broker_hash_is_exact_bytes_and_survives_source_deletion"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_broker_missing_and_not_regular_are_typed[directory-broker_not_regular]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_broker_missing_and_not_regular_are_typed[directory-broker_not_regular]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_broker_missing_and_not_regular_are_typed[missing-broker_missing]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_broker_missing_and_not_regular_are_typed[missing-broker_missing]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_codex_preflight_categories_are_typed[Codex MCP inventory failed to start-transport_start_failed]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_codex_preflight_categories_are_typed[Codex MCP inventory failed to start-transport_start_failed]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_codex_preflight_categories_are_typed[Codex existing login was not confirmed-auth_unavailable]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_codex_preflight_categories_are_typed[Codex existing login was not confirmed-auth_unavailable]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_codex_preflight_categories_are_typed[MCP inventory was empty-mcp_not_advertised]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_codex_preflight_categories_are_typed[MCP inventory was empty-mcp_not_advertised]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_codex_preflight_categories_are_typed[selected model was absent from model/list-model_unavailable]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_codex_preflight_categories_are_typed[selected model was absent from model/list-model_unavailable]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_expected_broker_hash_mismatch_is_typed"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_expected_broker_hash_mismatch_is_typed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_known_failure_categories_are_closed[Codex App Server failed to start-transport_start_failed]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_known_failure_categories_are_closed[Codex App Server failed to start-transport_start_failed]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_known_failure_categories_are_closed[Codex existing login was not confirmed-auth_unavailable]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_known_failure_categories_are_closed[Codex existing login was not confirmed-auth_unavailable]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_known_failure_categories_are_closed[MCP status exposed an unexpected tool-mcp_not_advertised]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_known_failure_categories_are_closed[MCP status exposed an unexpected tool-mcp_not_advertised]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_known_failure_categories_are_closed[actual OpenCode provider token usage is missing-usage_receipt_missing]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_known_failure_categories_are_closed[actual OpenCode provider token usage is missing-usage_receipt_missing]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_known_failure_categories_are_closed[selected model was absent from model/list-model_unavailable]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_known_failure_categories_are_closed[selected model was absent from model/list-model_unavailable]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_opencode_availability_usage_missing_is_typed"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_opencode_availability_usage_missing_is_typed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_opencode_broker_missing_not_regular_and_hash_mismatch_are_closed"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_opencode_broker_missing_not_regular_and_hash_mismatch_are_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_opencode_broker_validation_has_repository_external_containment"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_opencode_broker_validation_has_repository_external_containment"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_unknown_failures_close_to_internal_error[arbitrary binary diagnostic]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_unknown_failures_close_to_internal_error[arbitrary binary diagnostic]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_unknown_failures_close_to_internal_error[arbitrary provider text]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_unknown_failures_close_to_internal_error[arbitrary provider text]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_unknown_failures_close_to_internal_error[unknown model diagnostic]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_unknown_failures_close_to_internal_error[unknown model diagnostic]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_unknown_failures_close_to_internal_error[unknown provider token text]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_unknown_failures_close_to_internal_error[unknown provider token text]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_unknown_failures_close_to_internal_error[untrusted mcp text]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_unknown_failures_close_to_internal_error[untrusted mcp text]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_unknown_failures_close_to_internal_error[untrusted server text]"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_unknown_failures_close_to_internal_error[untrusted server text]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_v1_receipt_is_strict_and_has_no_free_text_or_sensitive_surface"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_v1_receipt_is_strict_and_has_no_free_text_or_sensitive_surface"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_authorized_forget_is_not_hidden_mutation"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_authorized_forget_is_not_hidden_mutation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_catalog_rejects_binary_drift"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_catalog_rejects_binary_drift"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_manifest_derives_host_task_metrics[continuity-codex]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_manifest_derives_host_task_metrics[continuity-codex]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_manifest_derives_host_task_metrics[continuity-opencode]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_manifest_derives_host_task_metrics[continuity-opencode]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_manifest_derives_host_task_metrics[living_wiki-codex]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_manifest_derives_host_task_metrics[living_wiki-codex]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_manifest_derives_host_task_metrics[living_wiki-opencode]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_manifest_derives_host_task_metrics[living_wiki-opencode]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_manifest_derives_host_task_metrics[professional_evidence-codex]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_manifest_derives_host_task_metrics[professional_evidence-codex]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_manifest_derives_host_task_metrics[professional_evidence-opencode]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_manifest_derives_host_task_metrics[professional_evidence-opencode]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_matrix_requires_exact_six"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_matrix_requires_exact_six"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_missing_public_seam_derives_failure"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_missing_public_seam_derives_failure"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_ocr_gap_is_an_accepted_expected_disposition"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_ocr_gap_is_an_accepted_expected_disposition"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_provider_overflow_and_missing_usage_fail_closed"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_provider_overflow_and_missing_usage_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_schema_and_frozen_catalog_are_closed"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_schema_and_frozen_catalog_are_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_sensitive_projection_fails_closed[ledger]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_sensitive_projection_fails_closed[ledger]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_sensitive_projection_fails_closed[prompt]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_sensitive_projection_fails_closed[prompt]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_sensitive_projection_fails_closed[query_trace]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_sensitive_projection_fails_closed[query_trace]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_sensitive_projection_fails_closed[secret]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_sensitive_projection_fails_closed[secret]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_sensitive_projection_fails_closed[transcript]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_sensitive_projection_fails_closed[transcript]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_usage_metadata_and_host_pin_fail_closed"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_usage_metadata_and_host_pin_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_broker_receipts_bind_the_exact_retained_source"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_broker_receipts_bind_the_exact_retained_source"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_build_and_validate_exact_candidate_bundle"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_build_and_validate_exact_candidate_bundle"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_bundle_rejects_a_file_above_the_closed_size_bound"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_rejects_a_file_above_the_closed_size_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_bundle_rejects_symlink_and_competitive_field"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_rejects_symlink_and_competitive_field"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_exact_10k_report_is_owned_by_candidate_full_run"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_exact_10k_report_is_owned_by_candidate_full_run"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_failed_preflight_cannot_enter_a_kernel_qualification_bundle"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_failed_preflight_cannot_enter_a_kernel_qualification_bundle"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_manifest_candidate_binding_and_secret_filename_are_closed"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_manifest_candidate_binding_and_secret_filename_are_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_manifest_record_digest_and_file_hash_are_fail_closed"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_manifest_record_digest_and_file_hash_are_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_process_receipt_is_schema_bound_and_cannot_retain_raw_output"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_process_receipt_is_schema_bound_and_cannot_retain_raw_output"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_process_receipt_run_and_record_digest_are_bound"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_process_receipt_run_and_record_digest_are_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_retained_broker_source_rejects_a_credential_literal"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_retained_broker_source_rejects_a_credential_literal"
         },
         {
           "junit": {
@@ -9190,9 +9743,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass15_kernel_parity_contract",
-            "name": "test_prd_132_uses_current_status_sources_and_freezes_kernel_scope"
+            "name": "test_prd_133_uses_current_status_sources_and_freezes_kernel_scope"
           },
-          "node_id": "tests/test_v013_pass15_kernel_parity_contract.py::test_prd_132_uses_current_status_sources_and_freezes_kernel_scope"
+          "node_id": "tests/test_v013_pass15_kernel_parity_contract.py::test_prd_133_uses_current_status_sources_and_freezes_kernel_scope"
         },
         {
           "junit": {
@@ -9393,9 +9946,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass16_host_version_binding",
-            "name": "test_v8_is_the_active_self_consistent_classification"
+            "name": "test_v8_remains_historical_and_self_consistent"
           },
-          "node_id": "tests/test_v013_pass16_host_version_binding.py::test_v8_is_the_active_self_consistent_classification"
+          "node_id": "tests/test_v013_pass16_host_version_binding.py::test_v8_remains_historical_and_self_consistent"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass16_host_version_binding",
+            "name": "test_v9_is_the_active_self_consistent_classification"
+          },
+          "node_id": "tests/test_v013_pass16_host_version_binding.py::test_v9_is_the_active_self_consistent_classification"
         },
         {
           "junit": {
@@ -10198,9 +10758,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass22_external_qualification_workflow",
-            "name": "test_external_qualification_workflow_matches_consumer_and_never_rebuilds"
+            "name": "test_external_qualification_workflow_is_retained_research_history_only"
           },
-          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_qualification_workflow_matches_consumer_and_never_rebuilds"
+          "node_id": "tests/test_v013_pass22_external_qualification_workflow.py::test_external_qualification_workflow_is_retained_research_history_only"
         },
         {
           "junit": {
@@ -11878,9 +12438,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_freeze_machine_candidate",
-            "name": "test_candidate_full_calls_v2_freezer_before_retaining_active_qualification"
+            "name": "test_candidate_full_calls_v3_freezer_before_retaining_active_qualification"
           },
-          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_candidate_full_calls_v2_freezer_before_retaining_active_qualification"
+          "node_id": "tests/test_v013_pass25_freeze_machine_candidate.py::test_candidate_full_calls_v3_freezer_before_retaining_active_qualification"
         },
         {
           "junit": {
@@ -12081,9 +12641,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_workflows",
-            "name": "test_candidate_full_freezes_construction_machine_only_active_v2"
+            "name": "test_candidate_full_freezes_construction_kernel_release_core_active_v3"
           },
-          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_freezes_construction_machine_only_active_v2"
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_freezes_construction_kernel_release_core_active_v3"
         },
         {
           "junit": {
@@ -12095,9 +12655,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_workflows",
-            "name": "test_commercial_qualification_dispatch_and_assembly_are_machine_only_v8"
+            "name": "test_candidate_full_runs_the_exact_10k_public_path_once"
           },
-          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_commercial_qualification_dispatch_and_assembly_are_machine_only_v8"
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_runs_the_exact_10k_public_path_once"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_commercial_qualification_dispatch_and_assembly_use_kernel_v9"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_commercial_qualification_dispatch_and_assembly_use_kernel_v9"
         },
         {
           "junit": {
@@ -12165,9 +12732,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_workflows",
-            "name": "test_release_reopens_v8_transitive_provenance_and_keeps_public_state_separate"
+            "name": "test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding"
           },
-          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_release_reopens_v8_transitive_provenance_and_keeps_public_state_separate"
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_release_reopens_v9_kernel_provenance_and_keeps_public_state_separate"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_release_reopens_v9_kernel_provenance_and_keeps_public_state_separate"
         },
         {
           "junit": {
@@ -13746,6 +14320,20 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_release_provenance_v9",
+            "name": "test_v9_release_provenance_reassembles_exact_core_and_keeps_optional_claims_false"
+          },
+          "node_id": "tests/test_v013_release_provenance_v9.py::test_v9_release_provenance_reassembles_exact_core_and_keeps_optional_claims_false"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_release_provenance_v9",
+            "name": "test_v9_release_provenance_rejects_release_tree_or_retained_gate_tamper"
+          },
+          "node_id": "tests/test_v013_release_provenance_v9.py::test_v9_release_provenance_rejects_release_tree_or_retained_gate_tamper"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_retained_artifacts",
             "name": "test_retained_manifest_binds_candidate_tree_lock_wheel_and_sdist"
           },
@@ -13946,6 +14534,111 @@
             "name": "test_scale_report_schema_and_closed_inventory_use_a_real_temporary_vault"
           },
           "node_id": "tests/test_v013_scale_performance.py::test_scale_report_schema_and_closed_inventory_use_a_real_temporary_vault"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_frozen_40_object_batch_stays_on_public_bounded_path"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_frozen_40_object_batch_stays_on_public_bounded_path"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_public_batch_smoke_measures_each_publication_request_bound"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_public_batch_smoke_measures_each_publication_request_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_public_batch_smoke_preserves_global_offset_and_exact_summary"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_public_batch_smoke_preserves_global_offset_and_exact_summary"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_public_rebuild_paths_have_real_modes_and_stable_standard_identity"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_public_rebuild_paths_have_real_modes_and_stable_standard_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_scale_count_must_be_exactly_10k_and_over_10k_is_not_qualified"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_scale_count_must_be_exactly_10k_and_over_10k_is_not_qualified"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_scale_equivalence_and_user_bytes_are_recomputed_not_claimed"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_scale_equivalence_and_user_bytes_are_recomputed_not_claimed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_scale_missing_metric_is_fail_closed"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_scale_missing_metric_is_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_scale_provider_bound_is_hard_and_zero_violation_is_required"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_scale_provider_bound_is_hard_and_zero_violation_is_required"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_scale_rebuild_modes_and_change_counts_are_fail_closed"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_scale_rebuild_modes_and_change_counts_are_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_scale_report_digest_is_bound_to_exact_bytes"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_scale_report_digest_is_bound_to_exact_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_scale_requires_at_least_30_query_and_context_samples"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_scale_requires_at_least_30_query_and_context_samples"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_scale_schema_is_strict_and_valid_report_has_exact_10k_contract"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_scale_schema_is_strict_and_valid_report_has_exact_10k_contract"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_typed_scale_evidence_binds_report_and_derives_gate_vocabulary"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_typed_scale_evidence_binds_report_and_derives_gate_vocabulary"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_typed_scale_evidence_preserves_failed_report_as_failed"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_typed_scale_evidence_preserves_failed_report_as_failed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_typed_scale_evidence_rejects_run_binding_substitution"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_typed_scale_evidence_rejects_run_binding_substitution"
         },
         {
           "junit": {
@@ -14296,6 +14989,328 @@
             "name": "test_report_tamper_is_rejected_and_happy_report_is_closed"
           },
           "node_id": "tests/test_v013_tolaria_workspace_interop.py::test_report_tamper_is_rejected_and_happy_report_is_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_authority_forgery_fails_closed[authority-human_verified]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_authority_forgery_fails_closed[authority-human_verified]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_authority_forgery_fails_closed[authority-official]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_authority_forgery_fails_closed[authority-official]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_authority_forgery_fails_closed[legal_authority-True]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_authority_forgery_fails_closed[legal_authority-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_expected_observed_mismatch_is_a_derived_failure"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_expected_observed_mismatch_is_a_derived_failure"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[cross_reference]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[cross_reference]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[document]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[document]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[effective_date]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[effective_date]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[exception]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[exception]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[fragment]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[fragment]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[gap]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[gap]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[locator]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[locator]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[ocr_critical_token]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[ocr_critical_token]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[proviso]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[proviso]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[quote]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[quote]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[rejection]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[rejection]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[version]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[version]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_missing_duty_fails_closed[wiki_drill_down]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_missing_duty_fails_closed[wiki_drill_down]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_negative_cases_require_explicit_rejection_code[false_authority_rejection-false_authority_rejected]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_negative_cases_require_explicit_rejection_code[false_authority_rejection-false_authority_rejected]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_negative_cases_require_explicit_rejection_code[wrong_version_rejection-wrong_version_rejected]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_negative_cases_require_explicit_rejection_code[wrong_version_rejection-wrong_version_rejected]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_non_negative_and_temporal_cross_reference_duties_fail_closed[effective_date_exception_proviso_cross_reference-<lambda>]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_non_negative_and_temporal_cross_reference_duties_fail_closed[effective_date_exception_proviso_cross_reference-<lambda>]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_non_negative_and_temporal_cross_reference_duties_fail_closed[exact_source_locator-<lambda>]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_non_negative_and_temporal_cross_reference_duties_fail_closed[exact_source_locator-<lambda>]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_ocr_gap_and_wiki_drilldown_are_bound"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_ocr_gap_and_wiki_drilldown_are_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_original_bytes_and_hash_tamper_fail_closed"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_original_bytes_and_hash_tamper_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_rejection_payload_is_code_closed[false_authority_rejection-<lambda>0]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_rejection_payload_is_code_closed[false_authority_rejection-<lambda>0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_rejection_payload_is_code_closed[false_authority_rejection-<lambda>1]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_rejection_payload_is_code_closed[false_authority_rejection-<lambda>1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_rejection_payload_is_code_closed[wrong_version_rejection-<lambda>0]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_rejection_payload_is_code_closed[wrong_version_rejection-<lambda>0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_rejection_payload_is_code_closed[wrong_version_rejection-<lambda>1]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_rejection_payload_is_code_closed[wrong_version_rejection-<lambda>1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_professional_six_cases_derive_passed_gate_metrics"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_professional_six_cases_derive_passed_gate_metrics"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v1_and_v2_junit_behavior_remains_available"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v1_and_v2_junit_behavior_remains_available"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[agent_consensus]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[agent_consensus]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[agent_review_panel]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[agent_review_panel]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[arbiter]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[arbiter]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[comparative_incremental_benefit]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[comparative_incremental_benefit]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[final_blind]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[final_blind]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[final_blind_comparative_holdout]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[final_blind_comparative_holdout]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[machine_reference]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[machine_reference]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[machine_reference_isolation]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[machine_reference_isolation]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[machine_reference_scorer]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[machine_reference_scorer]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[qualification_comparative_holdout]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[qualification_comparative_holdout]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[qualification_holdout]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[qualification_holdout]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[scorer_a]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[scorer_a]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[scorer_b]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[scorer_b]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[scorer_panel]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[scorer_panel]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[sota]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[sota]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_competitive_field_names_are_rejected_but_values_are_not[superiority]"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_competitive_field_names_are_rejected_but_values_are_not[superiority]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_typed_qualification_evidence_v3",
+            "name": "test_v3_schema_is_kernel_core_and_excludes_competitive_scorer_fields"
+          },
+          "node_id": "tests/test_v013_typed_qualification_evidence_v3.py::test_v3_schema_is_kernel_core_and_excludes_competitive_scorer_fields"
         },
         {
           "junit": {
@@ -15152,9 +16167,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2149,
+      "count": 2294,
       "selection": "not qualification and not windows_native",
-      "sha256": "f34960079918f898f632009b06eadd9b5966fc414ceb808d25cde6f45a9ff9ac"
+      "sha256": "726134089ffd90db25a68df7642027094fd81dbd27736f8008d40132e69380b6"
     },
     "windows": {
       "additional_cases": [
@@ -15187,13 +16202,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2153,
+      "count": 2298,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "6188ac85d85d62446f082bd56167d2ce8aeaf2f2a2ac877778cd7115c0228d73"
+      "sha256": "804ce5a2f86c3bd06abcfb4a5d8329936505688133683f19ca682ebbc22c5e63"
     }
   },
-  "manifest_sha256": "b537fa94086b0ab2f97ccd2465dfb6673f24b5bfed7ede5f2f48c677a779e08e",
+  "manifest_sha256": "0d085cc74ff641ade07adb1ed825b6413c4cd5a39d3e2a4081cf07d82990bdc5",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

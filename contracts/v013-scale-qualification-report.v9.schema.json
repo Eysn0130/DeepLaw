@@ -1,0 +1,368 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-scale-qualification-report.v9.schema.json",
+  "title": "DeepLaw v0.13 Kernel Release Core scale qualification report v9",
+  "description": "Exact 10,000 active governed Knowledge Objects per Vault. This contract is a release-evidence report, not a construction diagnostic and never authorizes a 100,000-object claim.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "status",
+    "release_gate_passed",
+    "candidate_binding",
+    "run_binding",
+    "vault",
+    "warm_samples",
+    "metrics",
+    "equivalence",
+    "rebuild",
+    "source_compile",
+    "semantic_batches",
+    "user_bytes",
+    "provider",
+    "scope",
+    "hard_failures",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-scale-qualification-report/v9"},
+    "profile": {"const": "kernel_release_core"},
+    "status": {"enum": ["executed", "failed", "not_executed"]},
+    "release_gate_passed": {"type": "boolean"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "run_binding": {"$ref": "#/$defs/runBinding"},
+    "vault": {"$ref": "#/$defs/vault"},
+    "warm_samples": {"$ref": "#/$defs/warmSamples"},
+    "metrics": {"$ref": "#/$defs/metrics"},
+    "equivalence": {"$ref": "#/$defs/equivalence"},
+    "rebuild": {"$ref": "#/$defs/rebuild"},
+    "source_compile": {"$ref": "#/$defs/sourceCompile"},
+    "semantic_batches": {
+      "type": "array",
+      "minItems": 250,
+      "maxItems": 250,
+      "items": {"$ref": "#/$defs/semanticBatch"}
+    },
+    "user_bytes": {"$ref": "#/$defs/userBytes"},
+    "provider": {"$ref": "#/$defs/provider"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "hard_failures": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/hardFailure"}
+    },
+    "report_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "candidateArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "sha256", "size_bytes"],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "pattern": "^deeplaw-0\\.13\\.0(?:-[^/\\\\]+)?(?:\\.whl|\\.tar\\.gz)$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864}
+      }
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "version", "lock_sha256", "wheel", "sdist"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/gitSha"},
+        "tree": {"$ref": "#/$defs/gitSha"},
+        "version": {"const": "0.13.0"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel": {"$ref": "#/$defs/candidateArtifact"},
+        "sdist": {"$ref": "#/$defs/candidateArtifact"}
+      }
+    },
+    "runBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "workflow_run_id",
+        "started_at_utc",
+        "finished_at_utc",
+        "platform",
+        "python_version",
+        "runner",
+        "runner_sha256",
+        "command"
+      ],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "started_at_utc": {"type": "string", "format": "date-time"},
+        "finished_at_utc": {"type": "string", "format": "date-time"},
+        "platform": {"type": "string", "minLength": 1, "maxLength": 300},
+        "python_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+._A-Za-z0-9]*)?$"},
+        "runner": {"const": "benchmarks/v013/scale_qualification_v9.py"},
+        "runner_sha256": {"$ref": "#/$defs/sha256"},
+        "command": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "vault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "active_governed_object_count",
+        "target_active_governed_object_count",
+        "above_10000_status",
+        "deferred_100000"
+      ],
+      "properties": {
+        "name": {"const": "Vault"},
+        "active_governed_object_count": {"type": "integer", "minimum": 0},
+        "target_active_governed_object_count": {"const": 10000},
+        "above_10000_status": {"const": "experimental_unqualified"},
+        "deferred_100000": {"const": "v0.14"}
+      }
+    },
+    "latency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["samples_ms", "sample_count", "p50_ms", "p95_ms", "max_ms"],
+      "properties": {
+        "samples_ms": {
+          "type": "array",
+          "minItems": 30,
+          "items": {"type": "number", "finite": true, "minimum": 0}
+        },
+        "sample_count": {"type": "integer", "minimum": 30},
+        "p50_ms": {"type": "number", "finite": true, "minimum": 0},
+        "p95_ms": {"type": "number", "finite": true, "minimum": 0},
+        "max_ms": {"type": "number", "finite": true, "minimum": 0}
+      }
+    },
+    "warmSamples": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_samples", "query", "context"],
+      "properties": {
+        "minimum_samples": {"const": 30},
+        "query": {"$ref": "#/$defs/latency"},
+        "context": {"$ref": "#/$defs/latency"}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rss", "storage_bytes", "file_count", "build_duration_ms", "rebuild_duration_ms"],
+      "properties": {
+        "rss": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start_bytes", "peak_bytes", "end_bytes"],
+          "properties": {
+            "start_bytes": {"type": "integer", "minimum": 1},
+            "peak_bytes": {"type": "integer", "minimum": 1},
+            "end_bytes": {"type": "integer", "minimum": 1}
+          }
+        },
+        "storage_bytes": {"type": "integer", "minimum": 1},
+        "file_count": {"type": "integer", "minimum": 1},
+        "build_duration_ms": {"type": "number", "finite": true, "minimum": 0},
+        "rebuild_duration_ms": {"type": "number", "finite": true, "minimum": 0}
+      }
+    },
+    "equivalence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["full", "incremental", "no_op", "full_incremental_equal", "incremental_noop_equal", "exact"],
+      "properties": {
+        "full": {"$ref": "#/$defs/digest"},
+        "incremental": {"$ref": "#/$defs/digest"},
+        "no_op": {"$ref": "#/$defs/digest"},
+        "full_incremental_equal": {"type": "boolean"},
+        "incremental_noop_equal": {"type": "boolean"},
+        "exact": {"type": "boolean"}
+      }
+    },
+    "digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {"sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "changeCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created", "updated", "deleted", "unchanged"],
+      "properties": {
+        "created": {"type": "integer", "minimum": 0},
+        "updated": {"type": "integer", "minimum": 0},
+        "deleted": {"type": "integer", "minimum": 0},
+        "unchanged": {"type": "integer", "minimum": 0}
+      }
+    },
+    "rebuildMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "projection_profile", "change_counts", "stable_identity_sha256"],
+      "properties": {
+        "mode": {"enum": ["full", "minimal", "incremental", "no_op"]},
+        "projection_profile": {"enum": ["standard", "minimal"]},
+        "change_counts": {"$ref": "#/$defs/changeCounts"},
+        "stable_identity_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "rebuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["full", "minimal", "incremental", "no_op"],
+      "properties": {
+        "full": {"$ref": "#/$defs/rebuildMode"},
+        "minimal": {"$ref": "#/$defs/rebuildMode"},
+        "incremental": {"$ref": "#/$defs/rebuildMode"},
+        "no_op": {"$ref": "#/$defs/rebuildMode"}
+      }
+    },
+    "sourceCompile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_file_count",
+        "fragments_per_source",
+        "query_plan_version",
+        "expected_asset_count",
+        "asset_count",
+        "unique_asset_count",
+        "asset_ids_sha256",
+        "exact"
+      ],
+      "properties": {
+        "source_file_count": {"const": 250},
+        "fragments_per_source": {"const": 40},
+        "query_plan_version": {"const": "5"},
+        "expected_asset_count": {"const": 10000},
+        "asset_count": {"type": "integer", "minimum": 0},
+        "unique_asset_count": {"type": "integer", "minimum": 0},
+        "asset_ids_sha256": {"$ref": "#/$defs/sha256"},
+        "exact": {"type": "boolean"}
+      }
+    },
+    "semanticBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch_index",
+        "global_offset",
+        "target_object_count",
+        "grant_max_objects",
+        "grant_id",
+        "compilation_run_id",
+        "source_revision_id",
+        "asset_count",
+        "asset_ids_sha256",
+        "publication_request_bytes",
+        "publication_request_sha256",
+        "publication_request_limit_bytes",
+        "published_object_count",
+        "committed_object_count",
+        "committed_relation_count"
+      ],
+      "properties": {
+        "batch_index": {"type": "integer", "minimum": 0},
+        "global_offset": {"type": "integer", "minimum": 0},
+        "target_object_count": {"const": 40},
+        "grant_max_objects": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "grant_id": {"$ref": "#/$defs/identifier"},
+        "compilation_run_id": {"$ref": "#/$defs/identifier"},
+        "source_revision_id": {"$ref": "#/$defs/identifier"},
+        "asset_count": {"const": 40},
+        "asset_ids_sha256": {"$ref": "#/$defs/sha256"},
+        "publication_request_bytes": {"type": "integer", "minimum": 1, "maximum": 327680},
+        "publication_request_sha256": {"$ref": "#/$defs/sha256"},
+        "publication_request_limit_bytes": {"const": 327680},
+        "published_object_count": {"const": 40},
+        "committed_object_count": {"const": 40},
+        "committed_relation_count": {"const": 0}
+      }
+    },
+    "userBytes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_count", "files", "all_unchanged"],
+      "properties": {
+        "file_count": {"type": "integer", "minimum": 1},
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {"$ref": "#/$defs/userFile"}
+        },
+        "all_unchanged": {"type": "boolean"}
+      }
+    },
+    "userFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "size_before", "size_after", "sha256_before", "sha256_after", "unchanged"],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+        },
+        "size_before": {"type": "integer", "minimum": 1},
+        "size_after": {"type": "integer", "minimum": 1},
+        "sha256_before": {"$ref": "#/$defs/sha256"},
+        "sha256_after": {"$ref": "#/$defs/sha256"},
+        "unchanged": {"type": "boolean"}
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hard_limit_bytes", "sample_count", "max_bytes", "violation_count", "violation"],
+      "properties": {
+        "hard_limit_bytes": {"const": 65536},
+        "sample_count": {"type": "integer", "minimum": 1},
+        "max_bytes": {"type": "integer", "minimum": 0},
+        "violation_count": {"type": "integer", "minimum": 0},
+        "violation": {"type": "boolean"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["above_10000", "hundred_thousand", "claim_eligible"],
+      "properties": {
+        "above_10000": {"const": "experimental_unqualified"},
+        "hundred_thousand": {"const": "deferred_v0.14"},
+        "claim_eligible": {"type": "boolean"}
+      }
+    },
+    "hardFailure": {
+      "enum": [
+        "active_governed_object_count_mismatch",
+        "experimental_over_10000_claimed_qualified",
+        "100000_not_deferred_to_v0.14",
+        "warm_samples_below_30",
+        "missing_p50",
+        "missing_p95",
+        "missing_max",
+        "rss_missing",
+        "storage_missing",
+        "file_count_missing",
+        "build_duration_missing",
+        "rebuild_duration_missing",
+        "full_incremental_noop_mismatch",
+        "user_bytes_unbounded",
+        "provider_bound_exceeded"
+      ]
+    }
+  }
+}

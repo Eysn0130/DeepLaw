@@ -1,8 +1,8 @@
 # DeepLaw Product Requirements
 
 Status: **normative product-direction baseline**
-PRD revision: **1.3.2**
-Reviewed: **2026-08-17**
+PRD revision: **1.3.3**
+Reviewed: **2026-08-21**
 
 This document defines why DeepLaw exists, which user outcomes it owns, the stable product
 boundaries, and the evidence required before scope may expand. It is intentionally smaller and
@@ -911,6 +911,31 @@ Work proceeds in this evidence order:
 
 Current candidate gates and their status remain in the disposition and evaluation documents, not
 in this stable PRD.
+
+### v0.13 release-evidence classification clarification
+
+PRD 1.3.3 does not change the frozen product architecture or add a product capability. It corrects
+the evidence boundary used to decide whether the shared Kernel may be commercially released:
+
+- **Kernel Release Core** gates the v0.13 package. It covers canonical integrity,
+  migration/recovery, Host/Secret isolation, bounded Provider context, professional-source
+  citation and Locator duties, Living Wiki behavior, the supported 10,000-active-object boundary,
+  supported platforms, reproducible supply chain, exact Codex and OpenCode tasks, selective
+  forget, and Timeline behavior. Every Core gate must pass for the exact wheel and sdist.
+- **Capability** evidence gates only the corresponding claim. An unavailable signed official Legal
+  Pack, semantic restore, Claude integration, or GUI/Desktop interoperability MUST remain
+  `not_executed`/not claimed, but does not by itself fail the generic Kernel.
+- **Competitive/Research Claim** evidence gates only comparative statements. Reference isolation,
+  blind comparative holdouts, review panels, scorer A/B, arbitration, incremental benefit,
+  superiority, and SOTA MUST remain `not_executed`/false unless separately executed. They are not
+  Kernel Release Core prerequisites.
+
+The generic Evidence Library may be qualified on owner-provided professional or legal material
+while preserving exact source bytes, version, Fragment, Locator, temporal duties, false-Authority
+rejection, OCR critical-token Gap, and Wiki-to-Source drill-down. This never claims an official
+Legal Pack, Human/legal-expert attestation, `human_verified`, or legal Authority. The v0.13
+commercial support ceiling is 10,000 active governed Knowledge Objects per Vault; larger Vaults
+are experimental, and 100,000-object sharding/bundling is a v0.14 design task.
 
 ## 16. PRD change control and traceability
 

@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-active-qualification.v3.schema.json",
+  "title": "DeepLaw v0.13 active machine qualification v3",
+  "description": "A fail-closed active template with separate Core statuses, Capability claims, and Competitive/Research claims. Optional external inputs never become candidate-freeze prerequisites.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "qualification_id",
+    "profile",
+    "no_human_attestation",
+    "status",
+    "candidate_version",
+    "construction_package_version",
+    "release_target",
+    "classification_binding",
+    "protocol_binding",
+    "candidate_binding",
+    "external_inputs",
+    "core_statuses",
+    "capability_claims",
+    "competitive_claims",
+    "host_constraints",
+    "human_review",
+    "freeze_policy",
+    "blocker",
+    "release_ready",
+    "claim_eligible",
+    "kernel_release_claim_eligible",
+    "competitive_claim_eligible",
+    "owner_release_confirmation",
+    "owner_tag_release_confirmation"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-active-qualification/v3"},
+    "qualification_id": {"const": "deeplaw-v013-active-kernel-release-core-candidate"},
+    "profile": {"const": "kernel_release_core"},
+    "no_human_attestation": {"const": true},
+    "status": {
+      "enum": [
+        "machine_evaluation_pending",
+        "construction_candidate_machine_evaluation_pending",
+        "frozen_exact_candidate_machine_evaluation_pending"
+      ]
+    },
+    "candidate_version": {"enum": ["0.12.0", "0.13.0"]},
+    "construction_package_version": {"const": "0.12.0"},
+    "release_target": {"const": "0.13.0"},
+    "classification_binding": {"$ref": "#/$defs/classificationBinding"},
+    "protocol_binding": {"$ref": "#/$defs/protocolBinding"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "external_inputs": {"$ref": "#/$defs/externalInputs"},
+    "core_statuses": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/coreStatus"}
+    },
+    "capability_claims": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/optionalClaim"}
+    },
+    "competitive_claims": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/optionalClaim"}
+    },
+    "host_constraints": {"$ref": "#/$defs/hostConstraints"},
+    "human_review": {"$ref": "#/$defs/humanReview"},
+    "freeze_policy": {"$ref": "#/$defs/freezePolicy"},
+    "blocker": {
+      "enum": ["machine_evaluation_not_executed", "candidate_artifact_not_built", null]
+    },
+    "release_ready": {"const": false},
+    "claim_eligible": {"const": false},
+    "kernel_release_claim_eligible": {"const": false},
+    "competitive_claim_eligible": {"const": false},
+    "owner_release_confirmation": {"const": "required_at_release_decision"},
+    "owner_tag_release_confirmation": {"const": "required_at_release_decision"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "machine_evaluation_pending"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "candidate_version": {"const": "0.12.0"},
+          "blocker": {"const": "machine_evaluation_not_executed"},
+          "candidate_binding": {"$ref": "#/$defs/pendingCandidateBinding"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "construction_candidate_machine_evaluation_pending"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "candidate_version": {"const": "0.13.0"},
+          "blocker": {"const": "candidate_artifact_not_built"},
+          "candidate_binding": {"$ref": "#/$defs/constructionCandidateBinding"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "frozen_exact_candidate_machine_evaluation_pending"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "candidate_version": {"const": "0.13.0"},
+          "blocker": {"const": null},
+          "candidate_binding": {"$ref": "#/$defs/frozenCandidateBinding"}
+        }
+      }
+    },
+    {"properties": {"core_statuses": {"allOf": [{"contains": {"properties": {"gate_id": {"const": "canonical_integrity"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "migration_recovery"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "secret_host_isolation"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "bounded_context"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "source_citation_locator"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "living_wiki"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "scale_performance"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "supported_platforms"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "reproducible_supply_chain"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "codex"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "opencode"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "selective_forget"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "timeline"}}, "required": ["gate_id"]}}]}}},
+    {"properties": {"capability_claims": {"allOf": [{"contains": {"properties": {"gate_id": {"const": "official_legal_pack"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "semantic_restore"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "claude"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "gui_desktop_interoperability"}}, "required": ["gate_id"]}}]}}},
+    {"properties": {"competitive_claims": {"allOf": [{"contains": {"properties": {"gate_id": {"const": "machine_reference_isolation"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "qualification_comparative_holdout"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "final_blind_comparative_holdout"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "agent_review_panel"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "scorer_a"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "scorer_b"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "arbiter"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "comparative_incremental_benefit"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "superiority"}}, "required": ["gate_id"]}}, {"contains": {"properties": {"gate_id": {"const": "sota"}}, "required": ["gate_id"]}}]}}}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "classificationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification_id", "schema_version", "relative_path", "sha256"],
+      "properties": {
+        "classification_id": {"const": "deeplaw-v013-commercial-gates-v9"},
+        "schema_version": {"const": "deeplaw.v013-release-gate-classification/v9"},
+        "relative_path": {"const": "benchmarks/release/v013-gate-classification-v9.json"},
+        "sha256": {"const": "e9e2c5f332eea494ab0cf32804d61fbd5b3191e021f9686f9e5ceb7a27c61a09"}
+      }
+    },
+    "protocolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_id", "schema_version", "relative_path", "sha256"],
+      "properties": {
+        "protocol_id": {"const": "deeplaw-v013-source-candidate-qualification"},
+        "schema_version": {"const": "deeplaw.v013-qualification-protocol/v3"},
+        "relative_path": {"const": "benchmarks/v013/qualification-protocol-v3.json"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package_version", "source_commit", "source_tree", "lock_sha256", "wheel_filename", "wheel_sha256", "sdist_filename", "sdist_sha256", "artifact_manifest_sha256"],
+      "properties": {
+        "package_version": {"enum": ["0.12.0", "0.13.0"]},
+        "source_commit": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/git"}]},
+        "source_tree": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/git"}]},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_filename": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^deeplaw-0\\.13\\.0-[A-Za-z0-9_.+-]+\\.whl$"}]},
+        "wheel_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "sdist_filename": {"oneOf": [{"type": "null"}, {"const": "deeplaw-0.13.0.tar.gz"}]},
+        "sdist_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "artifact_manifest_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]}
+      }
+    },
+    "pendingCandidateBinding": {
+      "allOf": [{"$ref": "#/$defs/candidateBinding"}, {"properties": {"package_version": {"const": "0.12.0"}, "source_commit": {"const": null}, "source_tree": {"const": null}, "lock_sha256": {"const": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082"}, "wheel_filename": {"const": null}, "wheel_sha256": {"const": null}, "sdist_filename": {"const": null}, "sdist_sha256": {"const": null}, "artifact_manifest_sha256": {"const": null}}}]
+    },
+    "constructionCandidateBinding": {
+      "allOf": [{"$ref": "#/$defs/candidateBinding"}, {"properties": {"package_version": {"const": "0.13.0"}, "source_commit": {"const": null}, "source_tree": {"const": null}, "wheel_filename": {"const": null}, "wheel_sha256": {"const": null}, "sdist_filename": {"const": null}, "sdist_sha256": {"const": null}, "artifact_manifest_sha256": {"const": null}}}]
+    },
+    "frozenCandidateBinding": {
+      "allOf": [{"$ref": "#/$defs/candidateBinding"}, {"properties": {"package_version": {"const": "0.13.0"}, "source_commit": {"$ref": "#/$defs/git"}, "source_tree": {"$ref": "#/$defs/git"}, "wheel_filename": {"type": "string"}, "wheel_sha256": {"$ref": "#/$defs/sha256"}, "sdist_filename": {"const": "deeplaw-0.13.0.tar.gz"}, "sdist_sha256": {"$ref": "#/$defs/sha256"}, "artifact_manifest_sha256": {"$ref": "#/$defs/sha256"}}}]
+    },
+    "externalInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic_machine_proposal_sha256", "qualification_holdout_sha256", "final_blind_holdout_sha256", "agent_review_panel_sha256", "scorer_a_sha256", "scorer_b_sha256", "arbiter_sha256", "status", "null_is_non_blocking", "required_for_candidate_binding"],
+      "properties": {
+        "semantic_machine_proposal_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "qualification_holdout_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "final_blind_holdout_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "agent_review_panel_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "scorer_a_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "scorer_b_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "arbiter_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "status": {"const": "not_executed"},
+        "null_is_non_blocking": {"const": true},
+        "required_for_candidate_binding": {"const": false}
+      }
+    },
+    "coreStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "status", "passed", "claim"],
+      "properties": {
+        "gate_id": {"enum": ["canonical_integrity", "migration_recovery", "secret_host_isolation", "bounded_context", "source_citation_locator", "living_wiki", "scale_performance", "supported_platforms", "reproducible_supply_chain", "codex", "opencode", "selective_forget", "timeline"]},
+        "status": {"enum": ["not_executed", "failed", "passed"]},
+        "passed": {"type": "boolean"},
+        "claim": {"type": "boolean"}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "not_executed"}}, "required": ["status"]}, "then": {"properties": {"passed": {"const": false}, "claim": {"const": false}}}},
+        {"if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]}, "then": {"properties": {"passed": {"const": false}, "claim": {"const": false}}}},
+        {"if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]}, "then": {"properties": {"passed": {"const": true}}}}
+      ]
+    },
+    "optionalClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "status", "passed", "claim"],
+      "properties": {
+        "gate_id": {"enum": ["official_legal_pack", "semantic_restore", "claude", "gui_desktop_interoperability", "machine_reference_isolation", "qualification_comparative_holdout", "final_blind_comparative_holdout", "agent_review_panel", "scorer_a", "scorer_b", "arbiter", "comparative_incremental_benefit", "superiority", "sota"]},
+        "status": {"enum": ["not_executed", "failed", "passed"]},
+        "passed": {"type": "boolean"},
+        "claim": {"type": "boolean"}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "not_executed"}}, "required": ["status"]}, "then": {"properties": {"passed": {"const": false}, "claim": {"const": false}}}},
+        {"if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]}, "then": {"properties": {"passed": {"const": false}, "claim": {"const": false}}}},
+        {"if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]}, "then": {"properties": {"passed": {"const": true}}}}
+      ]
+    },
+    "codexPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binary_version", "binary_sha256", "request_model", "reasoning_effort", "auth_status_command", "auth_material_access"],
+      "properties": {
+        "binary_version": {"const": "codex-cli 0.148.0-alpha.15"},
+        "binary_sha256": {"const": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"},
+        "request_model": {"const": "gpt-5.6-luna"},
+        "reasoning_effort": {"const": "max"},
+        "auth_status_command": {"const": "codex login status"},
+        "auth_material_access": {"const": "forbidden"}
+      }
+    },
+    "openCodePin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "source_commit", "executable_sha256", "package_sha256", "config_selector", "expected_response_model_id", "runtime", "dotenv_policy", "secret_visibility"],
+      "properties": {
+        "version": {"const": "1.18.16"},
+        "source_commit": {"const": "a3647eb025c7615159d417dcc49fc39fdaeba65b"},
+        "executable_sha256": {"const": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"},
+        "package_sha256": {"const": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722"},
+        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
+        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "runtime": {"const": "host_bun_runtime_only"},
+        "dotenv_policy": {"const": "owner_only_external_strict_parser"},
+        "secret_visibility": {"const": "forbidden"}
+      }
+    },
+    "hostConstraints": {"type": "object", "additionalProperties": false, "required": ["codex", "opencode"], "properties": {"codex": {"$ref": "#/$defs/codexPin"}, "opencode": {"$ref": "#/$defs/openCodePin"}}},
+    "humanReview": {"type": "object", "additionalProperties": false, "required": ["mode", "status", "attestation", "owner_release_confirmation"], "properties": {"mode": {"const": "optional_non_gating"}, "status": {"const": "not_executed"}, "attestation": {"const": "not_used_for_kernel_release_core"}, "owner_release_confirmation": {"const": "required_at_release_decision"}}},
+    "freezePolicy": {"type": "object", "additionalProperties": false, "required": ["optional_external_inputs_non_blocking", "null_optional_inputs_do_not_block_freeze", "owner_release_confirmation_required"], "properties": {"optional_external_inputs_non_blocking": {"const": true}, "null_optional_inputs_do_not_block_freeze": {"const": true}, "owner_release_confirmation_required": {"const": true}}}
+  }
+}

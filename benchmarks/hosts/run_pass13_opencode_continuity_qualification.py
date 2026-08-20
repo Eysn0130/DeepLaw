@@ -31,6 +31,7 @@ from urllib.parse import unquote, urlparse
 from jsonschema import Draft202012Validator, ValidationError
 
 from benchmarks.hosts import (
+    host_preflight_receipt,
     pass13_evidence,
     pass16_continuity_cases,
     pass17_development_diagnostic,
@@ -740,6 +741,8 @@ def _analyze_availability_events(
             continue
         else:
             raise QualificationError("availability probe emitted an unexpected event")
+    if not usages:
+        raise QualificationError("availability usage receipt is missing")
     if text_count != 1 or len(usages) != 1:
         raise QualificationError("availability probe did not produce one bounded model turn")
     return _sum_usages(usages)
@@ -2010,12 +2013,23 @@ def _forget_checkpoint(
 
 
 def _validate_binary(binary: Path) -> str:
-    return _sha256_file(binary)
+    try:
+        return _sha256_file(binary)
+    except (OSError, ValueError) as exc:
+        raise QualificationError("OpenCode binary is unavailable") from exc
 
 
-def _validate_owner_broker_launcher(launcher: Path, *, host_binary: Path) -> str:
+def _validate_owner_broker_launcher(
+    launcher: Path,
+    *,
+    host_binary: Path,
+    repository: Path | None = None,
+    expected_broker_sha256: str | None = None,
+) -> str:
     """Bind an external owner-only launcher without reading its credential source."""
 
+    if not launcher.is_absolute():
+        raise QualificationError("OpenCode credential broker launcher must be absolute")
     try:
         details = launcher.lstat()
     except OSError as exc:
@@ -2033,9 +2047,20 @@ def _validate_owner_broker_launcher(launcher: Path, *, host_binary: Path) -> str
         )
     ):
         raise QualificationError("OpenCode credential broker launcher is not owner-only")
+    repository_path = (repository or Path(__file__).resolve().parents[2]).resolve(strict=True)
+    try:
+        launcher.resolve(strict=True).relative_to(repository_path)
+    except ValueError:
+        pass
+    else:
+        raise QualificationError(
+            "OpenCode credential broker launcher must be outside the repository"
+        )
     launcher_sha256 = _sha256_file(launcher)
     if launcher_sha256 == _sha256_file(host_binary):
         raise QualificationError("OpenCode credential broker launcher is not process-separated")
+    if expected_broker_sha256 is not None and launcher_sha256 != expected_broker_sha256:
+        raise QualificationError("OpenCode credential broker launcher hash mismatch")
     return launcher_sha256
 
 
@@ -2420,10 +2445,18 @@ def preflight_opencode(
     cwd: Path,
     project_root: Path | None = None,
     plugin_receipt: Mapping[str, Any] | None = None,
+    expected_broker_sha256: str | None = None,
     agent_name: str = "qualification",
 ) -> dict[str, Any]:
     if project_root is None or plugin_receipt is None:
         raise QualificationError("OpenCode plugin preflight binding is required")
+    if expected_broker_sha256 is not None:
+        _validate_owner_broker_launcher(
+            host_launcher,
+            host_binary=binary,
+            repository=project_root,
+            expected_broker_sha256=expected_broker_sha256,
+        )
     inspection_cwd = project_root
     plugin_target, plugin_sha256 = _validate_plugin_receipt(
         plugin_receipt,
@@ -4374,6 +4407,7 @@ def _execute_qualification_body(
     human_gold_path: Path | None,
     root: Path,
     source_revision_id: str | None = None,
+    expected_broker_sha256: str | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
     if source_revision_id is not None:
@@ -4442,6 +4476,8 @@ def _execute_qualification_body(
     broker_launcher_sha = _validate_owner_broker_launcher(
         host_launcher,
         host_binary=opencode_binary,
+        repository=repository,
+        expected_broker_sha256=expected_broker_sha256,
     )
     runtime_check = _run_bounded_process(
         [deeplaw_executable, "--version"],
@@ -4472,8 +4508,30 @@ def _execute_qualification_body(
         cwd=root,
         project_root=preflight_project,
         plugin_receipt=preflight_plugin_receipt,
+        expected_broker_sha256=expected_broker_sha256,
         agent_name=agent_name,
     )
+    broker_source = host_preflight_receipt.inspect_broker_source(
+        host_launcher,
+        repository=repository,
+        host_binary=opencode_binary,
+        expected_sha256=expected_broker_sha256,
+    )
+    if broker_source.get("failure_reason_code") is not None:
+        raise QualificationError("OpenCode broker source preflight failed")
+    preflight_receipt = host_preflight_receipt.build_receipt(
+        host={
+            "name": "opencode",
+            "version": OPENCODE_VERSION,
+            "sha256": host_preflight_receipt.host_binary_sha256(opencode_binary),
+        },
+        broker_source=broker_source,
+        status="passed",
+        stage="complete",
+        reason_code="preflight_passed",
+        check_count=5,
+    )
+    host_preflight_receipt.write_receipt(output_dir, preflight_receipt)
     runs: list[dict[str, Any]] = []
     artifacts: dict[str, Path] = {}
     wrapper_receipts: list[Mapping[str, Any]] = []
@@ -4639,23 +4697,7 @@ def _execute_qualification_body(
     )
     if mode == "qualification":
         artifacts["qualification_report"] = report_path
-    preflight_receipt = {
-        "isolation": pass13_evidence.isolation_receipt(host="opencode"),
-        "opencode_version_sha256": preflight["version_sha256"],
-        "opencode_version_bytes": preflight["version_bytes"],
-        "model_inventory": preflight["model_inventory"],
-        "resolved_config": preflight["resolved_config"],
-        "external_plugin": preflight["external_plugin"],
-        "availability": preflight["availability"],
-        "mcp_wrapper_receipts": wrapper_receipts,
-    }
-    preflight_path = output_dir / "opencode-preflight-receipt.json"
-    _write_json(
-        preflight_path,
-        preflight_receipt,
-        output_root=output_dir,
-        forbidden_values=forbidden_values,
-    )
+    preflight_path = output_dir / host_preflight_receipt.RECEIPT_FILENAME
     if mode == "qualification":
         artifacts["preflight_receipt"] = preflight_path
         orchestrator.finalize_bundle(
@@ -4676,6 +4718,7 @@ def execute_qualification(
     host_launcher: Path,
     human_gold_path: Path | None,
     source_revision_id: str | None = None,
+    expected_broker_sha256: str | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
     """Run one Host mode with an external root and deterministic cleanup."""
@@ -4691,9 +4734,29 @@ def execute_qualification(
             human_gold_path=human_gold_path,
             root=root,
             source_revision_id=source_revision_id,
+            expected_broker_sha256=expected_broker_sha256,
             mode=mode,
         )
     except BaseException as original:
+        target = Path(output_dir).resolve(strict=False)
+        receipt_path = target / host_preflight_receipt.RECEIPT_FILENAME
+        if not receipt_path.exists() and target.is_dir() and not target.is_symlink():
+            try:
+                failed = host_preflight_receipt.failed_receipt(
+                    host_name="opencode",
+                    host_version=OPENCODE_VERSION,
+                    host_binary=Path(opencode_binary),
+                    broker_path=Path(host_launcher),
+                    repository=Path(__file__).resolve().parents[2],
+                    expected_broker_sha256=expected_broker_sha256,
+                    error=original,
+                )
+                host_preflight_receipt.write_receipt(target, failed)
+            except BaseException as receipt_error:
+                original.add_note(
+                    "Host preflight receipt was not retained: "
+                    f"{type(receipt_error).__name__}"
+                )
         _cleanup_after_qualification(root, original)
         raise
     else:
@@ -4709,6 +4772,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--opencode-binary", type=Path, required=True)
     parser.add_argument("--opencode-launcher", type=Path, required=True)
+    parser.add_argument("--expected-broker-sha256")
     parser.add_argument("--human-gold", type=Path)
     parser.add_argument("--source-revision-id")
     return parser.parse_args(argv)
@@ -4725,6 +4789,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             host_launcher=args.opencode_launcher,
             human_gold_path=args.human_gold,
             source_revision_id=args.source_revision_id,
+            expected_broker_sha256=args.expected_broker_sha256,
             mode=args.mode,
         )
     except (OSError, QualificationError) as exc:
