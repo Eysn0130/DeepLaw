@@ -14,7 +14,11 @@ def _workflow(name: str) -> str:
 def test_candidate_full_retains_raw_platform_and_exact_wheel_evidence() -> None:
     workflow = _workflow("candidate-full.yml")
 
-    assert "uv export --frozen --no-dev --no-emit-project" in workflow
+    assert (
+        "uv export --frozen --no-dev --no-emit-project --no-emit-local"
+        in workflow
+    )
+    assert "--no-sources" not in workflow
     assert "candidate-requirements.txt" in workflow
     assert "benchmarks.release.exact_wheel_runner" in workflow
     assert "--receipt-contract candidate-full-v1" in workflow

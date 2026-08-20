@@ -64,7 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv export --frozen --no-dev --no-emit-project --no-emit-local --no-sources \
+          uv export --frozen --no-dev --no-emit-project --no-emit-local \
             --output-file "${RUNNER_TEMP}/verified-dist/candidate-requirements.txt"
 
       - name: Derive closed pre-publish supply-chain evidence from the verified bytes
