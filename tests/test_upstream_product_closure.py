@@ -4,6 +4,7 @@ import hashlib
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -114,7 +115,8 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
     assert "SHA256SUMS" not in checksums.read_text(encoding="utf-8")
 
     assert report["evidence_class"] == "development_diagnostic"
-    assert report["exact"]["package_version"] == "0.12.0"
+    project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+    assert report["exact"]["package_version"] == project["project"]["version"]
     assert set(report["exact"]["platform"]) == {"system", "release", "machine", "python"}
     assert report["formal_claims"] == {
         "qualification_evidence": False,
