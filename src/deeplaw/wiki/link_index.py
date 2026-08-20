@@ -508,13 +508,14 @@ def build_link_index(
     registry: Mapping[str, Any],
     page_bytes: Mapping[str, bytes],
     *,
+    governed_links: Sequence[Mapping[str, Any]] = (),
     v2_manifest_sha256: str | None = None,
     input_audit_head: str | None = None,
     legacy_audit_head: str | None = None,
     generated_at: str | None = None,
     resolver: StableResolver | None = None,
 ) -> dict[str, Any]:
-    """Build a deterministic edge index from registered bytes only.
+    """Build a deterministic edge index from registered bytes and governed identities.
 
     No filesystem traversal occurs.  A page with no wikilink still contributes a coverage row,
     making completeness explicit and permitting exact zero-link checks.
@@ -534,6 +535,54 @@ def build_link_index(
         "page_ids_sha256"
     ]:
         raise RegistryError("page registry identity digest mismatch")
+    records_by_id = {row["page_id"]: row for row in records}
+    if not isinstance(governed_links, Sequence) or isinstance(
+        governed_links, (str, bytes, bytearray)
+    ):
+        raise RegistryError("governed links must be an array")
+    if len(governed_links) > PUBLIC_EDGE_LIMIT:
+        raise RegistryError("governed link count exceeds public limit")
+    governed_by_source: dict[str, list[dict[str, str]]] = {}
+    governed_identities: set[tuple[str, str, str]] = set()
+    for link in governed_links:
+        if not isinstance(link, Mapping) or set(link) != {
+            "source_page_id",
+            "target_page_id",
+            "reference_id",
+            "reason",
+        }:
+            raise RegistryError("governed link shape is invalid")
+        source_page_id = _id(link["source_page_id"], "governed source_page_id")
+        target_page_id = _id(link["target_page_id"], "governed target_page_id")
+        reference_id = _id(link["reference_id"], "governed reference_id")
+        reason = link["reason"]
+        if (
+            not isinstance(reason, str)
+            or not 1 <= len(reason) <= 128
+            or _contains_control(reason)
+        ):
+            raise RegistryError("governed link reason is invalid")
+        if source_page_id not in records_by_id or target_page_id not in records_by_id:
+            raise RegistryError("governed link page identity is unavailable")
+        identity = (source_page_id, target_page_id, reference_id)
+        if identity in governed_identities:
+            raise RegistryError("governed link identity is duplicated")
+        governed_identities.add(identity)
+        governed_by_source.setdefault(source_page_id, []).append(
+            {
+                "target_page_id": target_page_id,
+                "reference_id": reference_id,
+                "reason": reason,
+            }
+        )
+    for links in governed_by_source.values():
+        links.sort(
+            key=lambda link: (
+                link["target_page_id"],
+                link["reference_id"],
+                link["reason"],
+            )
+        )
     registry_sha256 = registry.get("registry_sha256", component.get("registry_sha256"))
     _sha(registry_sha256, "registry_sha256")
     expected_v2 = v2_manifest_sha256 or component.get("v2_manifest_sha256")
@@ -605,6 +654,42 @@ def build_link_index(
                 "target_page_ids": target_page_ids,
                 "candidate_reasons": candidate_rows,
                 "link_type": "wikilink",
+            }
+            _validate_edge(edge)
+            page_edges.append(edge)
+            edges.append(edge)
+        for governed in governed_by_source.get(page["page_id"], []):
+            target_page = records_by_id[governed["target_page_id"]]
+            ordinal = len(page_edges)
+            target_raw = target_page["canonical_page_path"].removesuffix(".md")
+            candidate_rows = [
+                {
+                    "page_id": target_page["page_id"],
+                    "reason": governed["reason"],
+                }
+            ]
+            edge = {
+                "edge_id": stable_id(
+                    "governed-link",
+                    page["page_id"],
+                    canonical_json(_source_page_revision(page)),
+                    page["audit_head"],
+                    governed["reference_id"],
+                    target_page["page_id"],
+                ),
+                "source_page_id": page["page_id"],
+                "source_page_revision": _source_page_revision(page),
+                "audit_head": page["audit_head"],
+                "ordinal": ordinal,
+                "target_raw": target_raw,
+                "lookup_key": target_raw,
+                "status": "resolved",
+                "candidate_count": 1,
+                "candidates_truncated": False,
+                "truncation_reason": None,
+                "target_page_ids": [target_page["page_id"]],
+                "candidate_reasons": candidate_rows,
+                "link_type": "relation",
             }
             _validate_edge(edge)
             page_edges.append(edge)

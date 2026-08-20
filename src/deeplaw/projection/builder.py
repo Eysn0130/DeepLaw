@@ -11,6 +11,7 @@ from ..knowledge_autonomy import (
     AutonomousKnowledgeStore,
     _atomic_owner_write,
     _interval_admits,
+    _read_object,
     _validate_contract,
 )
 from ..knowledge_intelligence import detect_communities
@@ -1692,8 +1693,13 @@ def _generate_living_wiki(
         reference_time=selected_reference_time,
     )
     generated: list[dict[str, Any]] = []
+    generated_object_pages = profile["name"] == "full"
     page_paths = {
-        row["knowledge_id"]: (f"wiki/{_KIND_DIRECTORIES[row['kind']]}/{row['knowledge_id']}.md")
+        row["knowledge_id"]: (
+            f"wiki/{_KIND_DIRECTORIES[row['kind']]}/{row['knowledge_id']}.md"
+            if generated_object_pages
+            else row["workspace_path"]
+        )
         for row in rows
     }
     titles = {row["knowledge_id"]: row["title"] for row in rows}
@@ -1766,21 +1772,22 @@ def _generate_living_wiki(
                 statement_shards.append(shard)
                 statement_shard_by_path[shard_path] = (row, shard)
         row["_statement_shards"] = statement_shards
-        _write(
-            output_root,
-            relative=page_paths[row["knowledge_id"]],
-            content=_object_page(
-                row=row,
-                audit_head=audit_head,
-                page_paths=page_paths,
-                titles=titles,
-                relations=relations,
-                statements=statements,
-                statement_shards=statement_shards,
-                source_fragment_links=source_fragment_links,
-            ),
-            generated=generated,
-        )
+        if generated_object_pages:
+            _write(
+                output_root,
+                relative=page_paths[row["knowledge_id"]],
+                content=_object_page(
+                    row=row,
+                    audit_head=audit_head,
+                    page_paths=page_paths,
+                    titles=titles,
+                    relations=relations,
+                    statements=statements,
+                    statement_shards=statement_shards,
+                    source_fragment_links=source_fragment_links,
+                ),
+                generated=generated,
+            )
     by_kind: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         by_kind[row["kind"]].append(row)
@@ -1973,7 +1980,6 @@ def _generate_living_wiki(
             *index_links,
             f"- {_wiki_link(source_index, 'Source Revisions')}: {len(sources)}",
             "- [[wiki/guides/index|Guides]]",
-            "- [[wiki/communities/index|Communities]]",
             "- [[wiki/gaps/index|Gaps]]",
             "- [[wiki/recent-changes/index|Recent changes]]",
             "- [[wiki/contradictions/index|Contradictions]]",
@@ -1983,6 +1989,8 @@ def _generate_living_wiki(
             "links are deterministic projection status, not an inferred summary.",
         ]
     )
+    if profile["communities"]:
+        overview_lines.append("- [[wiki/communities/index|Communities]]")
     _write(
         output_root,
         relative="wiki/overview.md",
@@ -1990,7 +1998,7 @@ def _generate_living_wiki(
         generated=generated,
     )
     if profile["communities"]:
-        communities, community_members = _community_views(
+        _, community_members = _community_views(
             store=store,
             output_root=output_root,
             rows=rows,
@@ -2001,20 +2009,21 @@ def _generate_living_wiki(
             generated=generated,
         )
     else:
-        communities, community_members = [], {}
-    community_links = [
-        f"- {_wiki_link(f'wiki/communities/{community_id}.md', f'Community {community_id}')}"
-        for community_id in sorted(community_members)
-    ]
-    _navigation_page(
-        output_root=output_root,
-        relative="wiki/communities/index.md",
-        title="Communities",
-        audit_head=audit_head,
-        generated=generated,
-        links=community_links,
-        gap="no deterministic admitted community is available.",
-    )
+        community_members = {}
+    if profile["communities"]:
+        community_links = [
+            f"- {_wiki_link(f'wiki/communities/{community_id}.md', f'Community {community_id}')}"
+            for community_id in sorted(community_members)
+        ]
+        _navigation_page(
+            output_root=output_root,
+            relative="wiki/communities/index.md",
+            title="Communities",
+            audit_head=audit_head,
+            generated=generated,
+            links=community_links,
+            gap="no deterministic admitted community is available.",
+        )
     root_index_lines = _frontmatter(
         schema="deeplaw.living-wiki-root-index/v1",
         audit_head=audit_head,
@@ -2026,18 +2035,20 @@ def _generate_living_wiki(
             *index_links,
             f"- {_wiki_link(source_index, 'Source Revisions')}",
             "- [[wiki/guides/index|Guides]]",
-            "- [[wiki/communities/index|Communities]]",
             "- [[wiki/gaps/index|Gaps]]",
             "- [[wiki/recent-changes/index|Recent changes]]",
             "- [[wiki/contradictions/index|Contradictions]]",
         ]
     )
+    if profile["communities"]:
+        root_index_lines.append("- [[wiki/communities/index|Communities]]")
     _write(
         output_root,
         relative="wiki/index.md",
         content="\n".join(root_index_lines),
         generated=generated,
     )
+    community_count = len(community_members)
     if profile["recent_changes"]:
         _recent_change_pages(
             store,
@@ -2228,7 +2239,7 @@ def _generate_living_wiki(
             )
         ),
         "source_revision_count": len(sources),
-        "community_count": len(communities),
+        "community_count": community_count,
         "files": sorted(generated, key=lambda item: item["path"]),
         "canvas_manifests": canvas_manifests,
         "generated_at": generated_at,
@@ -2246,7 +2257,78 @@ def _generate_living_wiki(
         if item["path"].endswith(".md")
     }
     page_records: list[dict[str, Any]] = []
-    rows_by_path = {page_paths[row["knowledge_id"]]: row for row in rows}
+    registered_page_inventory: list[dict[str, Any]] = []
+
+    def knowledge_page_record(
+        row: dict[str, Any],
+        *,
+        path: str,
+        payload: bytes,
+    ) -> dict[str, Any]:
+        return _page_record(
+            page_id=row["knowledge_id"],
+            namespace="knowledge",
+            path=path,
+            kind=row["kind"],
+            revision_id=row["revision_id"],
+            audit_head=audit_head,
+            payload=payload,
+            scope=row["scope"],
+            sensitivity=row["sensitivity"],
+            lifecycle=row["lifecycle"],
+            freshness=row["freshness"],
+            input_refs=[
+                row["revision_id"],
+                *[
+                    str(statement["statement_id"])
+                    for statement in row.get("_statements", [])
+                ],
+                *[
+                    str(reference.get("source_revision_id"))
+                    for reference in row.get("source_refs", [])
+                    if reference.get("source_revision_id")
+                ],
+            ],
+            knowledge_id=row["knowledge_id"],
+            semantic_key=row.get("semantic_key"),
+            aliases=row.get("aliases", []),
+            title=row.get("title"),
+            anchors=[
+                {
+                    "anchor_id": f"statement-{statement['statement_id']}",
+                    "anchor": f"statement-{statement['statement_id']}",
+                    "kind": "statement_evidence",
+                    "statement_target": {"statement_id": statement["statement_id"]},
+                }
+                for statement in (
+                    [] if row.get("_statement_shards") else row.get("_statements", [])
+                )
+            ]
+            if generated_object_pages
+            else [],
+        )
+
+    if not generated_object_pages:
+        for row in rows:
+            path = page_paths[row["knowledge_id"]]
+            payload = _read_object(store.root, row["markdown_sha256"])
+            if len(payload) > MAX_DERIVED_FILE_BYTES:
+                raise RuntimeError(f"registered Knowledge Markdown exceeds Wiki byte bound: {path}")
+            payload_by_path[path] = payload
+            registered_page_inventory.append(
+                {
+                    "path": path,
+                    "byte_size": len(payload),
+                    "sha256": row["markdown_sha256"],
+                }
+            )
+            page_records.append(knowledge_page_record(row, path=path, payload=payload))
+
+    rows_by_path = (
+        {page_paths[row["knowledge_id"]]: row for row in rows}
+        if generated_object_pages
+        else {}
+    )
     source_by_path = {
         f"wiki/sources/{source['source_revision_id']}.md": source for source in sources
     }
@@ -2262,50 +2344,7 @@ def _generate_living_wiki(
         payload = payload_by_path[path]
         row = rows_by_path.get(path)
         if row is not None:
-            page_records.append(
-                _page_record(
-                    page_id=row["knowledge_id"],
-                    namespace="knowledge",
-                    path=path,
-                    kind=row["kind"],
-                    revision_id=row["revision_id"],
-                    audit_head=audit_head,
-                    payload=payload,
-                    scope=row["scope"],
-                    sensitivity=row["sensitivity"],
-                    lifecycle=row["lifecycle"],
-                    freshness=row["freshness"],
-                    input_refs=[
-                        row["revision_id"],
-                        *[
-                            str(statement["statement_id"])
-                            for statement in row.get("_statements", [])
-                        ],
-                        *[
-                            str(reference.get("source_revision_id"))
-                            for reference in row.get("source_refs", [])
-                            if reference.get("source_revision_id")
-                        ],
-                    ],
-                    knowledge_id=row["knowledge_id"],
-                    semantic_key=row.get("semantic_key"),
-                    aliases=row.get("aliases", []),
-                    title=row.get("title"),
-                    anchors=[
-                        {
-                            "anchor_id": f"statement-{statement['statement_id']}",
-                            "anchor": f"statement-{statement['statement_id']}",
-                            "kind": "statement_evidence",
-                            "statement_target": {
-                                "statement_id": statement["statement_id"]
-                            },
-                        }
-                        for statement in (
-                            [] if row.get("_statement_shards") else row.get("_statements", [])
-                        )
-                    ],
-                )
-            )
+            page_records.append(knowledge_page_record(row, path=path, payload=payload))
             continue
         statement_shard = statement_shard_by_path.get(path)
         if statement_shard is not None:
@@ -2430,15 +2469,52 @@ def _generate_living_wiki(
     page_registry = build_page_registry(
         page_records,
         v2_file_inventory=manifest["files"],
+        registered_page_inventory=registered_page_inventory,
         input_audit_head=audit_head,
         legacy_audit_head=store.legacy_audit_head,
         v2_manifest_sha256=manifest["manifest_sha256"],
         generated_at=generated_at,
     )
     resolver_artifact = build_resolver_index(page_registry)
+    governed_links: list[dict[str, str]] = []
+    if not generated_object_pages:
+        for relation in relations:
+            governed_links.append(
+                {
+                    "source_page_id": relation["subject_knowledge_id"],
+                    "target_page_id": relation["object_knowledge_id"],
+                    "reference_id": relation["relation_revision_id"],
+                    "reason": f"relation:{relation['predicate']}",
+                }
+            )
+        source_page_ids = {
+            source["source_revision_id"]: stable_id(
+                "source-page", source["source_revision_id"]
+            )
+            for source in sources
+        }
+        for row in rows:
+            for reference in row.get("source_refs", []):
+                source_revision_id = reference.get("source_revision_id")
+                target_page_id = source_page_ids.get(source_revision_id)
+                if target_page_id is None:
+                    continue
+                governed_links.append(
+                    {
+                        "source_page_id": row["knowledge_id"],
+                        "target_page_id": target_page_id,
+                        "reference_id": stable_id(
+                            "source-reference-link",
+                            row["revision_id"],
+                            canonical_json(reference),
+                        ),
+                        "reason": "source_reference",
+                    }
+                )
     link_artifact = build_link_index(
         page_registry,
         payload_by_path,
+        governed_links=governed_links,
         v2_manifest_sha256=manifest["manifest_sha256"],
         input_audit_head=audit_head,
         legacy_audit_head=store.legacy_audit_head,
@@ -2482,7 +2558,7 @@ def _generate_living_wiki(
         if profile["kind_shards"]
         else 0,
         "canvas_count": len(canvas_manifests),
-        "community_count": len(communities),
+        "community_count": community_count,
         "input_audit_head": audit_head,
         "projection_profile_name": profile["name"],
         "projection_profile_version": profile["version"],

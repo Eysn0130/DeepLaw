@@ -166,9 +166,15 @@ def test_v1_aggregate_manifest_remains_accepted(tmp_path: Path) -> None:
     legacy = {
         key: value
         for key, value in top.items()
-        if key not in {"schema_version", "components", "manifest_sha256"}
+        if key not in {
+            "schema_version",
+            "components",
+            "manifest_sha256",
+            "read_snapshot",
+        }
     }
     legacy["schema_version"] = "deeplaw.derived-manifest/v1"
+    legacy["generator_version"] = "1"
     legacy["files"] = sorted(
         [*top["files"], *living["files"]],
         key=lambda item: item["path"],

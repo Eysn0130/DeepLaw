@@ -82,10 +82,15 @@ Evidence labels used below are repository-relative:
 | PRD IDs | Requirement family | Runtime/code seam | Contract and regression evidence | Current boundary |
 | --- | --- | --- | --- | --- |
 | `PRD-WIKI-001..004` | Evidence-labelled pages, shared semantic links, path-independent identity, rename/move and revision reconciliation | `WIKI`, Markdown Registry, reconciliation Coordinator | Page, identity, rename, edit, and reconcile tests | Wiki is a projection; protected Source remains source-native |
-| `PRD-WIKI-005..006` | Bounded registry/link lookup and full/incremental equivalence preserving user-owned files | Page Registry, Link Index, Resolver, projection builder | Cold/warm lookup, ownership, rebuild, and incremental-equivalence tests | Scale and cross-platform evidence are qualification inputs, not local claims |
-| `PRD-WIKI-007..009` | Optional derived navigation, editor-client boundary, attributable edits and unequal Authority | Projection/adapter surfaces, Coordinator, lifecycle | Adapter, ownership, protected-source, and no-control-plane tests | No new page family or editor runtime is implied |
+| `PRD-WIKI-005..006` | Bounded registry/link lookup and full/incremental equivalence preserving user-owned files | Page Registry, Link Index, Resolver, projection builder | Cold/warm lookup, ownership, rebuild, and incremental-equivalence tests | The selected profile is configuration-bound; ownership, rebuild and recovery remain shared; scale and cross-platform evidence are qualification inputs, not local claims |
+| `PRD-WIKI-007..009` | Optional derived navigation, editor-client boundary, attributable edits and unequal Authority | Projection/adapter surfaces, Coordinator, lifecycle | Adapter, ownership, protected-source, and no-control-plane tests | Standard v2 has no per-object/community/Canvas fan-out; full is an explicit advanced opt-in; no new page family or editor runtime is implied |
 | `PRD-WIKI-010..013` | Machine-readable identity/status, typed Relation semantics, ownership classes, bounded graph/path reads | Ledger, Relation Revisions, Resolver, Wiki projections | Relation, status, path-bound, and Gap/truncation tests | Wikilinks/backlinks are navigation, not Authority or typed Relation claims |
-| `PRD-WIKI-014..015` | Bounded source evidence cards/links; explicit file/storage/rebuild/lookup budgets | Evidence projection, Page Registry, derived manifests | Source drill-down, artifact-family, shard, storage, and rebuild tests | No complete editable source transcription or unbounded per-record artifact fan-out |
+| `PRD-WIKI-014..015` | Bounded source evidence cards/links; explicit file/storage/rebuild/lookup budgets | Evidence projection, Page Registry, derived manifests | Source drill-down, artifact-family, shard, storage, and rebuild tests | Standard v2 has no per-object/community/Canvas fan-out; the ownership manifest, rebuild/recovery path, Page Registry, Link Index and Resolver remain shared; no complete editable source transcription or unbounded per-record artifact fan-out |
+
+The v0.13 named projection profile contract is version 2 while retaining the
+`deeplaw.projection-profile/v1` schema family and closed v1 compatibility for historical inputs.
+This is a default-materialization change, not a new Page Family: the Core Living Wiki is the
+standard profile, while communities and all Canvas families require the explicit full profile.
 
 ## Context and delivery mapping
 

@@ -894,6 +894,7 @@ def build_page_registry(
     pages: Sequence[Mapping[str, Any]],
     *,
     v2_file_inventory: Sequence[Mapping[str, Any]],
+    registered_page_inventory: Sequence[Mapping[str, Any]] = (),
     input_audit_head: str,
     legacy_audit_head: str,
     v2_manifest_sha256: str,
@@ -913,7 +914,18 @@ def build_page_registry(
     _sha(v2_manifest_sha256, "v2_manifest_sha256")
     generated_at = _timestamp(generated_at)
     inventory = _validate_inventory(v2_file_inventory)
-    markdown_paths = {row["path"] for row in inventory if row["path"].endswith(".md")}
+    registered_inventory = _validate_inventory(registered_page_inventory)
+    generated_markdown_paths = {
+        row["path"] for row in inventory if row["path"].endswith(".md")
+    }
+    registered_markdown_paths = {
+        row["path"] for row in registered_inventory if row["path"].endswith(".md")
+    }
+    if len(registered_markdown_paths) != len(registered_inventory):
+        raise RegistryError("registered page inventory must contain only Markdown")
+    if generated_markdown_paths & registered_markdown_paths:
+        raise RegistryError("generated and registered page inventories overlap")
+    markdown_paths = generated_markdown_paths | registered_markdown_paths
     normalized = [validate_page_record(page) for page in pages]
     ids = [page["page_id"] for page in normalized]
     paths = [page["canonical_page_path"] for page in normalized]

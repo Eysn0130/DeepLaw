@@ -11,8 +11,8 @@ import asyncio
 import hashlib
 import importlib.metadata
 import json
+import math
 import os
-import resource
 import shutil
 import subprocess
 import sys
@@ -21,15 +21,24 @@ import time
 from pathlib import Path
 from typing import Any
 
+try:
+    import resource
+except ImportError:  # pragma: no cover - exercised by native Windows collection
+    resource = None  # type: ignore[assignment]
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 MAX_PROVIDER_BYTES = 65_536
+MAX_SCALE = 100_000
+EXPENSIVE_SCALE_THRESHOLD = 10_000
 PACKET_SIZE = 100
+DEFAULT_WARM_ITERATIONS = 5
+OWNERSHIP_MANIFEST = Path(".deeplaw/derived/tree/living-wiki-manifest.json")
+V3_MANIFEST = Path(".deeplaw/derived/wiki/v3/manifest.json")
 NOT_EXECUTED = (
     "interruption injection and recovery",
-    "full-versus-incremental changed-input equivalence",
     "PDF/DOCX/HTML exact-byte and locator task",
     "exact Source/Fragment content read pending owner review",
     "alias/same-name collision and Source successor task",
@@ -64,6 +73,23 @@ def _sha256_file(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _open_file_count() -> int:
+    """Return the current process file-descriptor estimate when supported."""
+
+    try:
+        return len(os.listdir("/dev/fd"))
+    except OSError:
+        return -1
+
+
+def _percentile(values: list[float], ratio: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = min(len(ordered) - 1, max(0, int(math.ceil(ratio * len(ordered)) - 1)))
+    return round(ordered[index] * 1000, 3)
 
 
 def _child_environment(root: Path) -> dict[str, str]:
@@ -318,10 +344,11 @@ def _compile_source_revision(
     run_id = str(begun["compilation_run_id"])
     staged = 0
     packet_count = 0
+    packet_seconds = 0.0
     stage_seconds = 0.0
     first_fragment: dict[str, str] | None = None
     while True:
-        packet, packet_seconds = _run_cli(
+        packet, packet_elapsed = _run_cli(
             environment,
             "knowledge",
             "compile",
@@ -333,7 +360,7 @@ def _compile_source_revision(
             "--run-id",
             run_id,
         )
-        stage_seconds += packet_seconds
+        packet_seconds += packet_elapsed
         if packet.get("complete") is True:
             break
         packet_fragments = packet.get("fragments")
@@ -419,14 +446,29 @@ def _compile_source_revision(
             "Begin one resumable Compilation Run for the exact Source Revision."
         ),
         "public_cli_steps": (2 * packet_count) + 5,
+        "owner_operation_steps": 5,
+        "host_internal_packet_steps": 2 * packet_count,
         "objects_staged": staged,
         "packet_count": packet_count,
         "validation_valid": True,
         "commit_status": commit.get("status"),
         "projection_status": projected.get("status"),
         "first_fragment": first_fragment,
+        "phase_elapsed_seconds": {
+            "begin": round(begin_seconds, 6),
+            "packet": round(packet_seconds, 6),
+            "stage": round(stage_seconds, 6),
+            "validate": round(validate_seconds, 6),
+            "commit": round(commit_seconds, 6),
+            "project": round(project_seconds, 6),
+        },
         "elapsed_seconds": round(
-            begin_seconds + stage_seconds + validate_seconds + commit_seconds + project_seconds,
+            begin_seconds
+            + packet_seconds
+            + stage_seconds
+            + validate_seconds
+            + commit_seconds
+            + project_seconds,
             6,
         ),
     }
@@ -434,10 +476,249 @@ def _compile_source_revision(
 
 def _file_inventory(root: Path) -> dict[str, Any]:
     files = [path for path in root.rglob("*") if path.is_file() and not path.is_symlink()]
+    directories = [path for path in root.rglob("*") if path.is_dir() and path != root]
+    symlinks = [path for path in root.rglob("*") if path.is_symlink()]
+    markdown_files = [path for path in files if path.suffix.lower() == ".md"]
     return {
         "file_count": len(files),
+        "directory_count": len(directories),
+        "scanned_entries": len(directories) + len(files) + len(symlinks),
+        "symlink_count": len(symlinks),
         "storage_bytes": sum(path.stat().st_size for path in files),
+        "markdown_file_count": len(markdown_files),
+        "open_file_descriptors": _open_file_count(),
     }
+
+
+def _manifest_inventory(root: Path, manifest_path: Path) -> dict[str, Any]:
+    if not manifest_path.exists():
+        return {}
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    files = manifest.get("files")
+    wiki_files = (
+        [
+            item["path"]
+            for item in files
+            if isinstance(item, dict) and isinstance(item.get("path"), str)
+        ]
+        if isinstance(files, list)
+        else []
+    )
+    path_set = set(wiki_files)
+    object_directories = {
+        "claims",
+        "comparisons",
+        "concepts",
+        "decisions",
+        "entities",
+        "events",
+        "experiences",
+        "memory",
+        "preferences",
+        "procedures",
+        "skills",
+        "syntheses",
+    }
+    managed_paths = [root / str(path) for path in path_set]
+    managed_regular = [path for path in managed_paths if path.is_file() and not path.is_symlink()]
+    return {
+        "managed_file_count": len(path_set),
+        "managed_regular_file_count": len(managed_regular),
+        "managed_missing_or_unsafe_count": len(path_set) - len(managed_regular),
+        "managed_storage_bytes": sum(path.stat().st_size for path in managed_regular),
+        "markdown_managed_count": len([path for path in path_set if str(path).endswith(".md")]),
+        "canvas_file_count": len([path for path in path_set if str(path).endswith(".canvas")]),
+        "wiki_object_markdown_count": len(
+            [
+                path
+                for path in path_set
+                if str(path).startswith("wiki/")
+                and str(path).count("/") == 2
+                and not str(path).endswith("/index.md")
+                and str(path).split("/", 2)[1] in object_directories
+                and str(path).endswith(".md")
+            ]
+        ),
+        "wiki_source_markdown_count": len(
+            [path for path in path_set if str(path).startswith("wiki/sources/")]
+        ),
+        "wiki_index_markdown_count": len(
+            [
+                path
+                for path in path_set
+                if str(path).startswith("wiki/indexes/") and str(path).endswith(".md")
+            ]
+        ),
+        "wiki_community_markdown_count": len(
+            [
+                path
+                for path in path_set
+                if str(path).startswith("wiki/communities/") and str(path).endswith(".md")
+            ]
+        ),
+        "manifest_sha256": _sha256_file(manifest_path),
+        "manifest_bytes": manifest_path.stat().st_size,
+    }
+
+
+def _manifest_descriptor(path: Path) -> dict[str, Any]:
+    if path.is_symlink() or not path.is_file():
+        return {"status": "missing_or_unsafe"}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    records = payload.get("records") if isinstance(payload, dict) else None
+    return {
+        "status": "present",
+        "bytes": path.stat().st_size,
+        "sha256": _sha256_file(path),
+        "record_count": len(records) if isinstance(records, list) else None,
+    }
+
+
+def _v3_inventory(root: Path) -> dict[str, Any]:
+    path = root / V3_MANIFEST
+    top = _manifest_descriptor(path)
+    if top.get("status") != "present":
+        return {"manifest": top, "components": {}}
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    components: dict[str, Any] = {}
+    for item in manifest.get("components", []):
+        if not isinstance(item, dict):
+            continue
+        name = item.get("component")
+        relative = item.get("manifest_path")
+        if not isinstance(name, str) or not isinstance(relative, str):
+            continue
+        components[name] = {
+            **_manifest_descriptor(root / relative),
+            "declared_bytes": item.get("byte_size"),
+            "declared_sha256": item.get("sha256"),
+        }
+    return {"manifest": top, "components": components}
+
+
+def _owned_projection_state(root: Path) -> dict[str, tuple[str, int]]:
+    relative_paths = {OWNERSHIP_MANIFEST.as_posix(), V3_MANIFEST.as_posix()}
+    ownership_path = root / OWNERSHIP_MANIFEST
+    if ownership_path.is_file() and not ownership_path.is_symlink():
+        manifest = json.loads(ownership_path.read_text(encoding="utf-8"))
+        relative_paths.update(
+            str(item["path"])
+            for item in manifest.get("files", [])
+            if isinstance(item, dict) and isinstance(item.get("path"), str)
+        )
+    v3_path = root / V3_MANIFEST
+    if v3_path.is_file() and not v3_path.is_symlink():
+        v3 = json.loads(v3_path.read_text(encoding="utf-8"))
+        relative_paths.update(
+            str(item["manifest_path"])
+            for item in v3.get("components", [])
+            if isinstance(item, dict) and isinstance(item.get("manifest_path"), str)
+        )
+    for directory in ("knowledge", "memory", "skills"):
+        relative_paths.update(
+            path.relative_to(root).as_posix()
+            for path in (root / directory).rglob("*.md")
+            if path.is_file() and not path.is_symlink()
+        )
+    result: dict[str, tuple[str, int]] = {}
+    for relative in sorted(relative_paths):
+        path = root / relative
+        if path.is_symlink() or not path.is_file():
+            raise DiagnosticFailure("DeepLaw-owned projection file is missing or unsafe")
+        result[relative] = (_sha256_file(path), path.stat().st_mtime_ns)
+    return result
+
+
+def _owned_projection_hashes(root: Path) -> dict[str, str]:
+    return {path: value[0] for path, value in _owned_projection_state(root).items()}
+
+
+def _artifact_inventory(root: Path, *, owner_file: Path) -> dict[str, Any]:
+    ownership_path = root / OWNERSHIP_MANIFEST
+    ownership = _manifest_inventory(root, ownership_path)
+    canonical_markdown = [
+        path
+        for directory in ("knowledge", "memory", "skills")
+        for path in (root / directory).rglob("*.md")
+        if path.is_file() and not path.is_symlink() and path != owner_file
+    ]
+    owner_files = [
+        path
+        for directory in ("knowledge", "memory", "skills")
+        for path in (root / directory).rglob("*")
+        if path.is_file() and not path.is_symlink() and path == owner_file
+    ]
+    workspace_directories = [
+        path
+        for directory in ("knowledge", "memory", "skills")
+        for path in (root / directory).rglob("*")
+        if path.is_dir() and not path.is_symlink()
+    ]
+    workspace_symlinks = [
+        path
+        for directory in ("knowledge", "memory", "skills")
+        for path in (root / directory).rglob("*")
+        if path.is_symlink()
+    ]
+    cas_root = root / ".deeplaw" / "objects" / "sha256"
+    cas_files = (
+        [path for path in cas_root.rglob("*") if path.is_file() and not path.is_symlink()]
+        if cas_root.is_dir() and not cas_root.is_symlink()
+        else []
+    )
+    wiki_files = [
+        path for path in (root / "wiki").rglob("*") if path.is_file() and not path.is_symlink()
+    ]
+    canvas_files = [
+        path
+        for path in (root / "canvas").rglob("*.canvas")
+        if path.is_file() and not path.is_symlink()
+    ]
+    v3 = _v3_inventory(root)
+    manifest_paths = (
+        Path(".deeplaw/manifest.json"),
+        Path(".deeplaw/derived/manifest.json"),
+        OWNERSHIP_MANIFEST,
+        V3_MANIFEST,
+    )
+    return {
+        "canonical_knowledge_markdown_file_count": len(canonical_markdown),
+        "canonical_knowledge_markdown_bytes": sum(
+            path.stat().st_size for path in canonical_markdown
+        ),
+        "registered_revision_markdown_file_count": len(canonical_markdown),
+        "cas_file_count": len(cas_files),
+        "cas_revision_file_count": len(cas_files),
+        "cas_revision_bytes": sum(path.stat().st_size for path in cas_files),
+        "wiki_file_count": len(wiki_files),
+        "wiki_storage_bytes": sum(path.stat().st_size for path in wiki_files),
+        "canvas_file_count": len(canvas_files),
+        "canvas_storage_bytes": sum(path.stat().st_size for path in canvas_files),
+        "workspace_managed_markdown_file_count": len(canonical_markdown),
+        "workspace_unmanaged_owner_file_count": len(owner_files),
+        "workspace_directory_count": len(workspace_directories),
+        "workspace_unsafe_symlink_entry_count": len(workspace_symlinks),
+        "ownership_manifest": ownership,
+        "v3_page_registry": v3["components"].get("page_registry", {}),
+        "v3_link_index": v3["components"].get("link_index", {}),
+        "v3_resolver": v3["components"].get("resolver", {}),
+        "v3_manifest": v3["manifest"],
+        "manifest_bytes_by_path": {
+            relative.as_posix(): _manifest_descriptor(root / relative)
+            for relative in manifest_paths
+        },
+    }
+
+
+def _cold_cli_startup(environment: dict[str, str]) -> float:
+    completed = _run_process(
+        [sys.executable, "-m", "deeplaw", "--help"],
+        cwd=REPOSITORY,
+        environment=environment,
+    )
+    if completed.returncode != 0:
+        raise DiagnosticFailure("Cold CLI startup failed")
+    return float(completed.elapsed_seconds)  # type: ignore[attr-defined]
 
 
 def _markdown_hashes(root: Path) -> dict[str, tuple[str, int]]:
@@ -448,7 +729,9 @@ def _markdown_hashes(root: Path) -> dict[str, tuple[str, int]]:
     }
 
 
-def _rss_bytes() -> int:
+def _rss_bytes() -> int | None:
+    if resource is None:
+        return None
     observed = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
     return int(observed if sys.platform == "darwin" else observed * 1024)
 
@@ -457,6 +740,8 @@ async def _run_mcp_task(
     *,
     environment: dict[str, str],
     vault: Path,
+    warm_iterations: int = 0,
+    warm_query_text: str = "synthetic retention decision",
 ) -> dict[str, Any]:
     parameters = StdioServerParameters(
         command=sys.executable,
@@ -487,6 +772,11 @@ async def _run_mcp_task(
             str(definitions[name]["properties"]["operation"]["const"])
             for name in ("query", "context", "explain")
         )
+        warm_query_timings: list[float] = []
+        warm_context_timings: list[float] = []
+        warm_provider_bytes: list[int] = []
+
+        query_started = time.perf_counter()
         query = await session.call_tool(
             "knowledge_support",
             {
@@ -495,6 +785,7 @@ async def _run_mcp_task(
                 "query_plan_version": "6",
             },
         )
+        cold_query_seconds = time.perf_counter() - query_started
         if query.isError or not isinstance(query.structuredContent, dict):
             raise DiagnosticFailure("MCP query failed")
         provider = query.structuredContent.get("result")
@@ -503,6 +794,7 @@ async def _run_mcp_task(
         receipt = provider.get("receipt")
         if not isinstance(receipt, dict) or not isinstance(receipt.get("receipt_id"), str):
             raise DiagnosticFailure("MCP query omitted its local explain receipt")
+        context_started = time.perf_counter()
         context = await session.call_tool(
             "knowledge_support",
             {
@@ -512,12 +804,55 @@ async def _run_mcp_task(
                 "query_plan_version": "6",
             },
         )
+        cold_context_seconds = time.perf_counter() - context_started
         explained = await session.call_tool(
             "knowledge_support",
             {"operation": "explain", "receipt_id": receipt["receipt_id"]},
         )
         if context.isError or explained.isError:
             raise DiagnosticFailure("MCP context or explain failed")
+
+        for _ in range(max(0, warm_iterations)):
+            warm_query_started = time.perf_counter()
+            warm_query = await session.call_tool(
+                "knowledge_support",
+                {
+                    "operation": "query",
+                    "query": warm_query_text,
+                    "query_plan_version": "6",
+                },
+            )
+            warm_query_timings.append(time.perf_counter() - warm_query_started)
+            if warm_query.isError or not isinstance(warm_query.structuredContent, dict):
+                raise DiagnosticFailure("Warm MCP query failed")
+            warm_context_started = time.perf_counter()
+            warm_context = await session.call_tool(
+                "knowledge_support",
+                {
+                    "operation": "context",
+                    "task": warm_query_text,
+                    "confirm_no_case_data": True,
+                    "query_plan_version": "6",
+                },
+            )
+            warm_context_timings.append(time.perf_counter() - warm_context_started)
+            if warm_context.isError:
+                raise DiagnosticFailure("Warm MCP context failed")
+            warm_query_receipt = warm_query.structuredContent.get("result", {}).get("receipt", {})
+            if (
+                not isinstance(warm_query_receipt, dict)
+                or not isinstance(warm_query_receipt.get("receipt_id"), str)
+            ):
+                raise DiagnosticFailure("Warm MCP query omitted its local explain receipt")
+            for response in (warm_query, warm_context):
+                payload = sum(
+                    len(item.text.encode("utf-8"))
+                    for item in response.content
+                    if getattr(item, "type", None) == "text"
+                )
+                if not 0 < payload <= MAX_PROVIDER_BYTES:
+                    raise DiagnosticFailure("Warm MCP Provider payload violated its hard bound")
+                warm_provider_bytes.append(payload)
         provider_bytes = [
             len(item.text.encode("utf-8"))
             for response in (query, context)
@@ -535,6 +870,17 @@ async def _run_mcp_task(
             "explain_status": "executed",
             "provider_content_bytes": provider_bytes,
             "max_provider_content_bytes": max(provider_bytes),
+            "cold_query_timing_ms": round(cold_query_seconds * 1000, 3),
+            "cold_context_timing_ms": round(cold_context_seconds * 1000, 3),
+            "warm_query_timing_ms_p50": _percentile(warm_query_timings, 0.5),
+            "warm_query_timing_ms_p95": _percentile(warm_query_timings, 0.95),
+            "warm_query_timing_samples": len(warm_query_timings),
+            "warm_context_timing_ms_p50": _percentile(warm_context_timings, 0.5),
+            "warm_context_timing_ms_p95": _percentile(warm_context_timings, 0.95),
+            "warm_context_timing_samples": len(warm_context_timings),
+            "provider_content_bytes_warm_max": (
+                max(warm_provider_bytes) if warm_provider_bytes else None
+            ),
             "native_provider_tokens": "unavailable",
         }
 
@@ -1014,8 +1360,17 @@ def _scale_source(scale: int) -> bytes:
     ).encode("utf-8")
 
 
-def _run_scale(scale: int, root: Path, environment: dict[str, str]) -> dict[str, Any]:
+def _run_scale(
+    scale: int,
+    root: Path,
+    environment: dict[str, str],
+    *,
+    warm_iterations: int,
+) -> dict[str, Any]:
     lane_started = time.perf_counter()
+    rss_before = _rss_bytes()
+    fd_before = _open_file_count()
+    cold_startup_seconds = _cold_cli_startup(environment)
     root.mkdir(parents=True)
     vault = root / f"scale-{scale}"
     _run_cli(
@@ -1067,8 +1422,16 @@ def _run_scale(scale: int, root: Path, environment: dict[str, str]) -> dict[str,
     if user_file.read_bytes() != user_bytes:
         raise DiagnosticFailure("Projection changed an unmanaged owner file")
 
-    before_no_op = _markdown_hashes(vault)
-    _run_cli(
+    before_no_op = _owned_projection_state(vault)
+    canonical_before_no_op, _ = _run_cli(
+        environment,
+        "knowledge",
+        "autonomy",
+        "status",
+        "--vault",
+        str(vault),
+    )
+    _, no_op_seconds = _run_cli(
         environment,
         "knowledge",
         "compile",
@@ -1082,10 +1445,22 @@ def _run_scale(scale: int, root: Path, environment: dict[str, str]) -> dict[str,
         "--project",
         "--confirm-no-case-data",
     )
-    after_no_op = _markdown_hashes(vault)
+    after_no_op = _owned_projection_state(vault)
+    canonical_after_no_op, _ = _run_cli(
+        environment,
+        "knowledge",
+        "autonomy",
+        "status",
+        "--vault",
+        str(vault),
+    )
     no_op_equivalent = before_no_op == after_no_op
-    if not no_op_equivalent:
-        raise DiagnosticFailure("No-op projection rewrote or changed Markdown")
+    no_op_canonical_unchanged = (
+        canonical_before_no_op.get("sequence") == canonical_after_no_op.get("sequence")
+        and canonical_before_no_op.get("audit_head") == canonical_after_no_op.get("audit_head")
+    )
+    if not no_op_equivalent or not no_op_canonical_unchanged:
+        raise DiagnosticFailure("No-op projection rewrote an owned file or canonical Ledger")
 
     query, query_seconds = _run_cli(
         environment,
@@ -1122,6 +1497,14 @@ def _run_scale(scale: int, root: Path, environment: dict[str, str]) -> dict[str,
     provider_bytes = len(_canonical(capsule).encode("utf-8"))
     if provider_bytes > MAX_PROVIDER_BYTES:
         raise DiagnosticFailure("Scale query exceeded the Provider byte bound")
+    mcp = asyncio.run(
+        _run_mcp_task(
+            environment=environment,
+            vault=vault,
+            warm_iterations=warm_iterations,
+            warm_query_text=f"Scale fact {scale:06d}",
+        )
+    )
 
     managed = sorted(
         path
@@ -1144,7 +1527,7 @@ def _run_scale(scale: int, root: Path, environment: dict[str, str]) -> dict[str,
         operations=("remember",),
         max_objects=100,
     )
-    reconciled, _ = _run_cli(
+    reconciled, reconcile_seconds = _run_cli(
         environment,
         "knowledge",
         "reconcile",
@@ -1155,37 +1538,82 @@ def _run_scale(scale: int, root: Path, environment: dict[str, str]) -> dict[str,
         "--confirm-no-case-data",
     )
     edit_move_preserved = bool(reconciled.get("committed")) and renamed.exists()
-    if edit_move_preserved is not True or user_file.read_bytes() != user_bytes:
+    derived_maintenance = reconciled.get("derived_maintenance", {})
+    if (
+        edit_move_preserved is not True
+        or user_file.read_bytes() != user_bytes
+        or derived_maintenance.get("status") != "rebuilt"
+    ):
         raise DiagnosticFailure("Rename/edit reconcile did not preserve identity or owner file")
 
+    incremental_hashes = _owned_projection_hashes(vault)
+    rebuilt, full_rebuild_seconds = _run_cli(
+        environment,
+        "knowledge",
+        "autonomy",
+        "rebuild",
+        "--vault",
+        str(vault),
+    )
+    full_hashes = _owned_projection_hashes(vault)
+    full_incremental_equivalent = incremental_hashes == full_hashes
+    if not full_incremental_equivalent:
+        raise DiagnosticFailure("Full and changed incremental projections are not equivalent")
+    if user_file.read_bytes() != user_bytes:
+        raise DiagnosticFailure("Full rebuild changed an unmanaged owner file")
+
     inventory = _file_inventory(vault)
+    artifacts = _artifact_inventory(vault, owner_file=user_file)
     browse_items = browse.get("items", [])
     return {
         "scale": scale,
         "status": "executed",
         "first_correct_action": "Register the exact scale source before compilation.",
         "public_cli_steps": (2 * compilation["packet_count"]) + 13,
+        "owner_operation_steps": 13,
+        "host_internal_packet_steps": 2 * compilation["packet_count"],
         "workspace_edit_steps": 1,
         "source_add_elapsed_seconds": round(add_seconds, 6),
         "compilation_elapsed_seconds": compilation["elapsed_seconds"],
+        "compilation_phase_elapsed_seconds": compilation["phase_elapsed_seconds"],
+        "cold_cli_startup_elapsed_seconds": round(cold_startup_seconds, 6),
+        "no_op_projection_elapsed_seconds": round(no_op_seconds, 6),
+        "changed_incremental_elapsed_seconds": round(reconcile_seconds, 6),
+        "full_rebuild_elapsed_seconds": round(full_rebuild_seconds, 6),
         "total_elapsed_seconds": round(time.perf_counter() - lane_started, 6),
         "packet_count": compilation["packet_count"],
         "objects_staged": compilation["objects_staged"],
         "validation_valid": compilation["validation_valid"],
         "no_op_projection_equivalent": no_op_equivalent,
+        "no_op_canonical_ledger_unchanged": no_op_canonical_unchanged,
+        "no_op_owned_file_count": len(before_no_op),
+        "full_incremental_changed_input_equivalent": full_incremental_equivalent,
+        "full_rebuild_status": rebuilt.get("living_wiki", {}).get("projection_profile_name"),
         "user_file_exact_bytes_preserved": True,
         "rename_edit_reconcile": edit_move_preserved,
         "reconcile_status": "executed",
+        "reconcile_derived_maintenance": derived_maintenance,
         "query_status": "executed",
         "query_gap_codes": sorted(
             {str(item.get("code")) for item in capsule.get("gaps", []) if isinstance(item, dict)}
         ),
         "provider_content_bytes": provider_bytes,
+        "persistent_mcp": mcp,
         "wiki_browse_status": "executed",
         "wiki_browse_returned": len(browse_items) if isinstance(browse_items, list) else 0,
         "query_elapsed_seconds": round(query_seconds, 6),
         "wiki_browse_elapsed_seconds": round(browse_seconds, 6),
         "peak_child_rss_bytes": _rss_bytes(),
+        "peak_child_rss_baseline_bytes": rss_before,
+        "rss_measurement_scope": "runner_process_lifetime_child_peak",
+        "open_file_descriptors_before": fd_before,
+        "open_file_descriptors_after": _open_file_count(),
+        "reconcile_count_fields": {
+            key: value
+            for key, value in reconciled.items()
+            if key.endswith("_count") and isinstance(value, int)
+        },
+        "artifacts": artifacts,
         **inventory,
     }
 
@@ -1204,9 +1632,18 @@ def _git_identity(environment: dict[str, str]) -> dict[str, Any]:
     }
 
 
-def run_diagnostic(scales: list[int]) -> dict[str, Any]:
-    if not scales or any(scale < 1 or scale > 10_000 for scale in scales):
-        raise ValueError("scale must be between 1 and 10000")
+def run_diagnostic(
+    scales: list[int],
+    *,
+    allow_expensive_scale: bool = False,
+    warm_iterations: int = DEFAULT_WARM_ITERATIONS,
+) -> dict[str, Any]:
+    if not scales or any(scale < 1 or scale > MAX_SCALE for scale in scales):
+        raise ValueError("scale must be between 1 and 100000")
+    if any(scale > EXPENSIVE_SCALE_THRESHOLD for scale in scales) and not allow_expensive_scale:
+        raise ValueError("scale above 10000 requires --allow-expensive-scale")
+    if not 1 <= warm_iterations <= 100:
+        raise ValueError("warm iterations must be between 1 and 100")
     if len(scales) != len(set(scales)):
         raise ValueError("scale values must be unique")
     started = time.perf_counter()
@@ -1215,7 +1652,15 @@ def run_diagnostic(scales: list[int]) -> dict[str, Any]:
         root = Path(temporary).resolve()
         environment = _child_environment(root)
         base = _source_and_task_task(root / "base", environment)
-        scale_results = [_run_scale(scale, root / f"lane-{scale}", environment) for scale in scales]
+        scale_results = [
+            _run_scale(
+                scale,
+                root / f"lane-{scale}",
+                environment,
+                warm_iterations=warm_iterations,
+            )
+            for scale in scales
+        ]
         exact = _git_identity(environment)
     report = {
         "schema_version": "deeplaw.upstream-product-closure-development/v1",
@@ -1227,6 +1672,27 @@ def run_diagnostic(scales: list[int]) -> dict[str, Any]:
             "tolaria": "40cc9f9479fef7bfe8a51a6df7e02fe11971f95e",
             "obsidian_api": "cc1744324150c632416857c98964f87b1574a5fc",
             "ekgardt_llm_wiki": "350eec8a284e159b2e4cfd068d808cbf203a6cc5",
+        },
+        "upstream_current_observation": {
+            "observation_date": "2026-08-20",
+            "openwiki": {
+                "released_comparator": "v0.3.3@355f4f68e71bd024631cdcff7aa871c3e72435da",
+                "moving_head": "46c0a3d53011a1f4916052187288dc5b4651c292",
+                "execution_status": "not_executed",
+            },
+            "tolaria": {
+                "released_comparator": "v2026-08-19@cf9b0c8b9fca7cd9556da4b0401e207626a70384",
+                "moving_head": "367a91416477c90bbfae766dc06add3de6ae75a7",
+                "execution_status": "not_executed",
+            },
+            "obsidian_api": {
+                "moving_head": "cc1744324150c632416857c98964f87b1574a5fc",
+                "execution_status": "not_executed",
+            },
+            "ekgardt_llm_wiki": {
+                "moving_head": "350eec8a284e159b2e4cfd068d808cbf203a6cc5",
+                "execution_status": "not_executed",
+            },
         },
         "formal_claims": {
             "qualification_evidence": False,
@@ -1254,6 +1720,7 @@ def run_diagnostic(scales: list[int]) -> dict[str, Any]:
             "Provider bytes are measured from actual stdio MCP content.",
             "Native Provider token usage is unavailable because no real Host/model ran.",
             "Latency, RSS, and storage are one-machine development observations.",
+            "RSS is the runner process-lifetime child peak; file descriptors are parent estimates.",
             "Upstream repositories were researched at exact commits but not executed here.",
         ],
         "elapsed_seconds": round(time.perf_counter() - started, 6),
@@ -1274,6 +1741,17 @@ def _parser() -> argparse.ArgumentParser:
         dest="scales",
         help="Public compilation scale; repeat for more than one lane.",
     )
+    parser.add_argument(
+        "--allow-expensive-scale",
+        action="store_true",
+        help="Explicitly permit a scale above 10000; required for the final 100k candidate only.",
+    )
+    parser.add_argument(
+        "--warm-iterations",
+        type=int,
+        default=DEFAULT_WARM_ITERATIONS,
+        help="Persistent MCP warm query/context samples per scale lane (default: 5).",
+    )
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -1281,7 +1759,11 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> int:
     arguments = _parser().parse_args()
     scales = arguments.scales or [3]
-    report = run_diagnostic(scales)
+    report = run_diagnostic(
+        scales,
+        allow_expensive_scale=arguments.allow_expensive_scale,
+        warm_iterations=arguments.warm_iterations,
+    )
     output = arguments.output.expanduser().absolute()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

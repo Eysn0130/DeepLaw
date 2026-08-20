@@ -230,7 +230,12 @@ def _v3_descriptor(path: str, data: bytes) -> dict[str, Any]:
     return {"path": path, "byte_size": len(data), "sha256": sha256_bytes(data)}
 
 
-def _read_v3_snapshot(root: Path, *, required: bool = False) -> dict[str, Any] | None:
+def _read_v3_snapshot(
+    root: Path,
+    *,
+    required: bool = False,
+    expected_v2_manifest_sha256: str | None = None,
+) -> dict[str, Any] | None:
     """Read and verify the manifest-declared v3 bundle without scanning directories."""
 
     from ..wiki.registry import _safe_read_file
@@ -292,8 +297,16 @@ def _read_v3_snapshot(root: Path, *, required: bool = False) -> dict[str, Any] |
             v2_value = strict_json_loads(v2_raw)
             if not isinstance(v2_value, dict):
                 raise RuntimeError("Living Wiki v2 manifest is invalid")
-            _validate_contract("living-wiki-manifest.v2.schema.json", v2_value)
-            if _manifest_hash(v2_value) != top["v2_manifest_sha256"]:
+            if expected_v2_manifest_sha256 is None:
+                _validate_contract("living-wiki-manifest.v2.schema.json", v2_value)
+            v2_hash = _manifest_hash(v2_value)
+            if (
+                v2_hash != top["v2_manifest_sha256"]
+                or (
+                    expected_v2_manifest_sha256 is not None
+                    and v2_hash != expected_v2_manifest_sha256
+                )
+            ):
                 raise RuntimeError("Living Wiki v2/v3 manifest pair is inconsistent")
         except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
             raise RuntimeError("Living Wiki v2 manifest is invalid") from error
@@ -358,8 +371,15 @@ def _read_v3_snapshot(root: Path, *, required: bool = False) -> dict[str, Any] |
     }
 
 
-def read_previous_v3(root: Path) -> dict[str, Any] | None:
-    return _read_v3_snapshot(root)
+def read_previous_v3(
+    root: Path,
+    *,
+    expected_v2_manifest_sha256: str | None = None,
+) -> dict[str, Any] | None:
+    return _read_v3_snapshot(
+        root,
+        expected_v2_manifest_sha256=expected_v2_manifest_sha256,
+    )
 
 
 def _read_v3_top_hash(root: Path) -> str | None:
@@ -385,7 +405,11 @@ def _read_v3_top_hash(root: Path) -> str | None:
         raise RuntimeError("Living Wiki v3 top manifest is invalid") from error
 
 
-def read_previous_manifest(root: Path) -> dict[str, Any] | None:
+def read_previous_manifest(
+    root: Path,
+    *,
+    expected_manifest_sha256: str | None = None,
+) -> dict[str, Any] | None:
     """Read and validate the authoritative previous manifest, if present."""
 
     manifest_path = root / ".deeplaw/derived/tree" / MANIFEST_NAME
@@ -408,7 +432,16 @@ def read_previous_manifest(root: Path) -> dict[str, Any] | None:
     }.get(schema)
     if contract is None:
         raise RuntimeError("Living Wiki previous manifest schema is unsupported")
-    _manifest_hash(value)
+    manifest_hash = _manifest_hash(value)
+    if (
+        expected_manifest_sha256 is not None
+        and manifest_hash != expected_manifest_sha256
+    ):
+        raise RuntimeError("Living Wiki previous manifest binding is inconsistent")
+    if expected_manifest_sha256 is not None:
+        if not isinstance(value.get("files"), list):
+            raise RuntimeError("Living Wiki previous manifest inventory is invalid")
+        return value
     try:
         _validate_contract(contract, value)
     except Exception as exc:

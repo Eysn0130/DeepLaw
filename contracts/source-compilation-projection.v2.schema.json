@@ -16,7 +16,7 @@
     "derived_file_inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "projection_profile_name": {"enum": ["minimal", "standard", "full"]},
-    "projection_profile_version": {"const": "1"},
+    "projection_profile_version": {"enum": ["1", "2"]},
     "living_wiki": {
       "type": "object", "additionalProperties": false,
       "required": [
@@ -38,7 +38,7 @@
         "community_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
         "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "projection_profile_name": {"enum": ["minimal", "standard", "full"]},
-        "projection_profile_version": {"const": "1"}
+        "projection_profile_version": {"enum": ["1", "2"]}
       }
     }
   }

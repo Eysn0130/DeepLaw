@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
+import pytest
 from mcp import types
 from mcp.server.lowlevel.server import RequestContext, request_ctx
 
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, initialize_autonomous_core
 from deeplaw.knowledge_mcp_server import create_knowledge_mcp_server
-from deeplaw.knowledge_store import KnowledgeVault, initialize_knowledge_vault
+from deeplaw.knowledge_store import KnowledgeVault, _database_path, initialize_knowledge_vault
 from deeplaw.persistent_read_runtime import PersistentReadRuntime
 from deeplaw.util import canonical_json
 
@@ -180,6 +182,75 @@ def test_explicit_verify_bypasses_legacy_integrity_cache(tmp_path: Path, monkeyp
             runtime.close()
 
     exercise()
+
+
+def test_derived_read_snapshot_skips_full_replay_without_weakening_explicit_verify(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    root = _synthetic_vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        projection = store.rebuild_derived()
+    assert projection["generator_version"] == "2"
+    assert projection["read_snapshot"]["audit_head"] == projection["input_audit_head"]
+
+    def unexpected(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("derived-bound startup repeated a full Ledger verification")
+
+    monkeypatch.setattr(KnowledgeVault, "verify_integrity", unexpected)
+    monkeypatch.setattr(AutonomousKnowledgeStore, "verify", unexpected)
+    runtime = PersistentReadRuntime(
+        root,
+        startup_verification="prefer_derived_snapshot",
+        load_wiki=False,
+    )
+    try:
+        snapshot = runtime.get_snapshot(operation="query")
+        assert snapshot.legacy_integrity["verification_mode"] == "derived_read_snapshot"
+        assert snapshot.autonomous_integrity["verification_mode"] == "derived_read_snapshot"
+        assert snapshot.source_integrity is None
+        assert snapshot.wiki is None
+    finally:
+        runtime.close()
+
+    import deeplaw.projection.incremental as incremental
+
+    original_validate = incremental._validate_contract
+
+    def reject_redundant_v2_validation(contract: str, value: Any) -> None:
+        if contract == "living-wiki-manifest.v2.schema.json":
+            raise AssertionError("exact aggregate binding repeated v2 schema validation")
+        original_validate(contract, value)
+
+    monkeypatch.setattr(incremental, "_validate_contract", reject_redundant_v2_validation)
+    wiki_runtime = PersistentReadRuntime(
+        root,
+        startup_verification="prefer_derived_snapshot",
+    )
+    try:
+        assert wiki_runtime.snapshot.wiki is not None
+    finally:
+        wiki_runtime.close()
+
+
+def test_changed_database_cannot_reuse_derived_read_snapshot(tmp_path: Path) -> None:
+    root = _synthetic_vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        store.rebuild_derived()
+    database = _database_path(root)
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE autonomous_metadata_v3 SET value = ? WHERE key = 'audit_head'",
+            ("0" * 64,),
+        )
+        connection.commit()
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+    with pytest.raises(RuntimeError, match="integrity is invalid"):
+        PersistentReadRuntime(
+            root,
+            startup_verification="prefer_derived_snapshot",
+        )
 
 
 def test_root_manifest_tamper_invalidates_first_read_and_clears_cache(tmp_path: Path) -> None:

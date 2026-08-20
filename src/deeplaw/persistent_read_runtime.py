@@ -11,9 +11,9 @@ from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Any
 
-from .knowledge_autonomy import AutonomousKnowledgeStore
+from .knowledge_autonomy import AutonomousKnowledgeStore, _validate_contract
 from .knowledge_store import KnowledgeVault, _database_path
-from .util import canonical_json, sha256_bytes, strict_json_loads
+from .util import canonical_json, sha256_bytes, sha256_file, strict_json_loads
 
 _MAX_LEGACY_DERIVED_MANIFEST_BYTES = 4 * 1024 * 1024
 _MAX_V2_DERIVED_MANIFEST_BYTES = 1 * 1024 * 1024
@@ -21,6 +21,83 @@ _MAX_LIVING_WIKI_V2_MANIFEST_BYTES = 64 * 1024 * 1024
 _MAX_ROOT_MANIFEST_BYTES = 256 * 1024
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MAX_WIKI_PAGE_BYTES = 256 * 1024
+
+
+class _DerivedReadSnapshotUnavailable(RuntimeError):
+    """The optional fast read binding is absent or no longer current."""
+
+
+def _preverify_derived_read_snapshot(root: Path) -> dict[str, Any]:
+    """Verify exact at-rest bytes before SQLite opens its first read connection."""
+
+    path = root / ".deeplaw" / "derived" / "manifest.json"
+    if (
+        path.is_symlink()
+        or not path.is_file()
+        or path.stat().st_size > _MAX_V2_DERIVED_MANIFEST_BYTES
+    ):
+        raise _DerivedReadSnapshotUnavailable("derived read snapshot manifest is unavailable")
+    try:
+        manifest = strict_json_loads(path.read_bytes())
+        if not isinstance(manifest, dict):
+            raise ValueError("manifest is not an object")
+        _validate_contract("derived-manifest.v2.schema.json", manifest)
+    except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
+        raise _DerivedReadSnapshotUnavailable(
+            "derived read snapshot manifest is invalid"
+        ) from error
+    body = {key: value for key, value in manifest.items() if key != "manifest_sha256"}
+    if manifest.get("manifest_sha256") != sha256_bytes(canonical_json(body).encode("utf-8")):
+        raise _DerivedReadSnapshotUnavailable("derived read snapshot manifest hash is invalid")
+    binding = manifest.get("read_snapshot")
+    if manifest.get("generator_version") != "2" or not isinstance(binding, dict):
+        raise _DerivedReadSnapshotUnavailable("derived read snapshot binding is unavailable")
+    database = _database_path(root)
+    wal_path = Path(f"{database}-wal")
+    if wal_path.exists() and (wal_path.is_symlink() or wal_path.stat().st_size != 0):
+        raise _DerivedReadSnapshotUnavailable("derived read snapshot has an active SQLite WAL")
+    if (
+        database.is_symlink()
+        or not database.is_file()
+        or database.stat().st_size != binding.get("database_byte_size")
+        or sha256_file(database) != binding.get("database_sha256")
+    ):
+        raise _DerivedReadSnapshotUnavailable("derived read snapshot database binding changed")
+    return manifest
+
+
+def _derived_read_snapshot_integrity(
+    root: Path,
+    legacy: KnowledgeVault,
+    store: AutonomousKnowledgeStore,
+    *,
+    preverified_manifest: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    manifest = preverified_manifest or _preverify_derived_read_snapshot(root)
+    binding = manifest["read_snapshot"]
+    if (
+        manifest.get("input_audit_head") != store.audit_head
+        or manifest.get("legacy_audit_head") != legacy.audit_head
+        or binding.get("audit_head") != store.audit_head
+        or binding.get("legacy_audit_head") != legacy.audit_head
+        or binding.get("sequence") != store.sequence
+    ):
+        raise _DerivedReadSnapshotUnavailable("derived read snapshot is stale")
+    legacy_integrity = {
+        "valid": True,
+        "verification_mode": "derived_read_snapshot",
+        "audit": {"valid": True, "reason": None, "object_id": None},
+        "state": {"valid": True, "reason": None, "object_id": None},
+    }
+    autonomous_integrity = {
+        "valid": True,
+        "derived_ready": True,
+        "verification_mode": "derived_read_snapshot",
+        "living_wiki_manifest_sha256": manifest["components"][0]["manifest_sha256"],
+        "failures": [],
+        "warnings": [],
+    }
+    return legacy_integrity, autonomous_integrity
 
 
 def _harden_windows_sqlite_read_sidecars(database: Path) -> None:
@@ -73,11 +150,27 @@ class WikiProjectionBundle:
     def v2_file_map(self) -> Mapping[str, Mapping[str, Any]]:
         return MappingProxyType({item["path"]: item for item in self.v2_files})
 
+    @property
+    def registered_file_map(self) -> Mapping[str, Mapping[str, Any]]:
+        return MappingProxyType(
+            {
+                item["canonical_page_path"]: {
+                    "path": item["canonical_page_path"],
+                    "byte_size": item["byte_size"],
+                    "sha256": item["sha256"],
+                }
+                for item in self.page_registry["records"]
+                if item["canonical_page_path"] not in self.v2_file_map
+            }
+        )
+
     def read_page(self, relative: str) -> bytes:
         """Read one registry-declared page without following symlinks or guessing paths."""
 
         normalized = _safe_relative(relative, field="Wiki page")
         descriptor = self.v2_file_map.get(normalized)
+        if descriptor is None:
+            descriptor = self.registered_file_map.get(normalized)
         if descriptor is None:
             raise KeyError("Living Wiki page is unavailable")
         expected_size = descriptor.get("byte_size")
@@ -472,8 +565,20 @@ def _force_legacy_integrity(vault: KnowledgeVault) -> dict[str, Any]:
 class PersistentReadRuntime:
     """Integrity-bound lifespan runtime for the read-only knowledge MCP."""
 
-    def __init__(self, root: str | Path) -> None:
+    def __init__(
+        self,
+        root: str | Path,
+        *,
+        startup_verification: str = "full",
+        load_wiki: bool = True,
+    ) -> None:
         self.root = Path(root).expanduser().absolute()
+        if startup_verification not in {"full", "prefer_derived_snapshot"}:
+            raise ValueError("persistent read startup verification mode is invalid")
+        self.startup_verification = startup_verification
+        if not isinstance(load_wiki, bool):
+            raise ValueError("persistent read Wiki loading mode is invalid")
+        self.load_wiki = load_wiki
         self._observer: _LiveObserver | None = None
         self._snapshot: PersistentReadSnapshot | None = None
         self._closed = False
@@ -495,15 +600,22 @@ class PersistentReadRuntime:
         *,
         legacy_audit_head: str,
         autonomous_audit_head: str,
+        expected_v2_manifest_sha256: str | None = None,
     ) -> WikiProjectionBundle | None:
         """Load and validate the active v2/v3 pair exactly once for a lifespan."""
 
         from .projection.incremental import read_previous_manifest, read_previous_v3
 
-        v3_snapshot = read_previous_v3(self.root)
+        v3_snapshot = read_previous_v3(
+            self.root,
+            expected_v2_manifest_sha256=expected_v2_manifest_sha256,
+        )
         if v3_snapshot is None:
             return None
-        v2_manifest = read_previous_manifest(self.root)
+        v2_manifest = read_previous_manifest(
+            self.root,
+            expected_manifest_sha256=expected_v2_manifest_sha256,
+        )
         if v2_manifest is None:
             raise RuntimeError("Living Wiki v3 projection has no active v2 pair")
         v3_manifest = v3_snapshot.get("manifest")
@@ -549,6 +661,12 @@ class PersistentReadRuntime:
     def _open_and_verify(self) -> None:
         if self._closed:
             raise RuntimeError("persistent knowledge read runtime is closed")
+        preverified_manifest = None
+        if self.startup_verification == "prefer_derived_snapshot":
+            try:
+                preverified_manifest = _preverify_derived_read_snapshot(self.root)
+            except _DerivedReadSnapshotUnavailable:
+                preverified_manifest = None
         observer = _LiveObserver(self.root)
         before = observer.identity()
         legacy: KnowledgeVault | None = None
@@ -560,26 +678,53 @@ class PersistentReadRuntime:
                 read_only=True,
                 legacy_snapshot=legacy,
             )
-            legacy_integrity = legacy.verify_integrity()
-            if not legacy_integrity.get("valid"):
-                raise RuntimeError("knowledge vault integrity is invalid; Agent reads stopped")
-            legacy_audit_head = legacy.audit_head
-            autonomous_integrity = store.verify(
-                preverified_legacy_integrity=legacy_integrity,
-                preverified_legacy_audit_head=legacy_audit_head,
-            )
-            if not autonomous_integrity.get("valid"):
-                raise RuntimeError("autonomous knowledge integrity is invalid; Agent reads stopped")
-            source_rows = legacy.connection.execute(
-                "SELECT source_id FROM sources ORDER BY source_id"
-            )
-            source_ids = tuple(row[0] for row in source_rows)
-            source_integrity = legacy.verify_source_files(source_ids)
-            if not source_integrity.get("valid"):
-                raise RuntimeError("knowledge source integrity is invalid; Agent reads stopped")
-            wiki = self._load_wiki_bundle(
-                legacy_audit_head=legacy_audit_head,
-                autonomous_audit_head=store.audit_head,
+            fast_integrity = None
+            if preverified_manifest is not None:
+                try:
+                    fast_integrity = _derived_read_snapshot_integrity(
+                        self.root,
+                        legacy,
+                        store,
+                        preverified_manifest=preverified_manifest,
+                    )
+                except _DerivedReadSnapshotUnavailable:
+                    fast_integrity = None
+            if fast_integrity is None:
+                legacy_integrity = legacy.verify_integrity()
+                if not legacy_integrity.get("valid"):
+                    raise RuntimeError("knowledge vault integrity is invalid; Agent reads stopped")
+                legacy_audit_head = legacy.audit_head
+                autonomous_integrity = store.verify(
+                    preverified_legacy_integrity=legacy_integrity,
+                    preverified_legacy_audit_head=legacy_audit_head,
+                )
+                if not autonomous_integrity.get("valid"):
+                    raise RuntimeError(
+                        "autonomous knowledge integrity is invalid; Agent reads stopped"
+                    )
+                source_rows = legacy.connection.execute(
+                    "SELECT source_id FROM sources ORDER BY source_id"
+                )
+                source_ids = tuple(row[0] for row in source_rows)
+                source_integrity = legacy.verify_source_files(source_ids)
+                if not source_integrity.get("valid"):
+                    raise RuntimeError("knowledge source integrity is invalid; Agent reads stopped")
+            else:
+                legacy_integrity, autonomous_integrity = fast_integrity
+                legacy_audit_head = legacy.audit_head
+                source_integrity = None
+            wiki = (
+                self._load_wiki_bundle(
+                    legacy_audit_head=legacy_audit_head,
+                    autonomous_audit_head=store.audit_head,
+                    expected_v2_manifest_sha256=(
+                        autonomous_integrity.get("living_wiki_manifest_sha256")
+                        if fast_integrity is not None
+                        else None
+                    ),
+                )
+                if self.load_wiki
+                else None
             )
             after = observer.identity()
             if after != before:

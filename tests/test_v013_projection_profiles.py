@@ -6,9 +6,12 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+import deeplaw.projection.profiles as projection_profiles
+from deeplaw.compilation.coordinator import CompilationCoordinator
 from deeplaw.knowledge_autonomy import SINK_OPERATIONS, AutonomousKnowledgeStore
 from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.projection.profiles import projection_profile
+from deeplaw.util import canonical_json, sha256_bytes
 
 
 def _vault(tmp_path: Path) -> Path:
@@ -42,7 +45,7 @@ def test_default_rebuild_uses_standard_profile_and_v2_manifest(tmp_path: Path) -
             grant_id=grant_id,
             idempotency_key="standard-profile",
             title="Standard profile object",
-            body="The default projection keeps sharded indexes and shared canvases.",
+            body="The default projection keeps sharded indexes without advanced fan-out.",
             kind="concept",
             operation="upsert_concept",
             confirm_no_case_data=True,
@@ -50,14 +53,43 @@ def test_default_rebuild_uses_standard_profile_and_v2_manifest(tmp_path: Path) -
         result = store.rebuild_derived()
 
     profile = projection_profile("standard")
+    assert profile["version"] == "2"
+    assert profile["kind_shards"] is True
+    assert profile["kind_indexes"] is True
+    assert profile["communities"] is False
+    assert all(
+        profile[feature] is False
+        for feature in (
+            "global_canvas",
+            "kind_canvas",
+            "community_canvas",
+            "per_object_canvas",
+            "local_canvas_per_object",
+        )
+    )
     manifest_path = root / ".deeplaw" / "derived" / "tree" / "living-wiki-manifest.json"
     manifest = json.loads(manifest_path.read_text())
     assert manifest["schema_version"] == "deeplaw.living-wiki-manifest/v2"
     assert manifest["configuration"]["projection_profile"] == profile
+    assert manifest["configuration"]["projection_profile_sha256"] == sha256_bytes(
+        canonical_json(profile).encode("utf-8")
+    )
     assert manifest["configuration"]["local_canvas_per_object"] is False
-    assert (root / "canvas" / "knowledge-graph.canvas").is_file()
-    assert not list((root / "canvas").glob("object-*.canvas"))
+    assert not list((root / "wiki" / "communities").rglob("*.md"))
+    assert not list((root / "canvas").rglob("*.canvas"))
+    assert not list((root / "wiki" / "concepts").glob("knowledge_*.md"))
+    registry_manifest = json.loads(
+        (root / ".deeplaw/derived/wiki/v3/registry/manifest.json").read_text()
+    )
+    registry_records = []
+    for shard in registry_manifest["shards"]:
+        registry_records.extend(json.loads((root / shard["path"]).read_text())["records"])
+    knowledge_record = next(
+        record for record in registry_records if record.get("namespace") == "knowledge"
+    )
+    assert knowledge_record["canonical_page_path"].startswith("knowledge/")
     assert result["living_wiki"]["projection_profile_name"] == "standard"
+    assert result["living_wiki"]["projection_profile_version"] == "2"
     _validate(root, "projection-profile.v1.schema.json", profile)
     _validate(root, "living-wiki-manifest.v2.schema.json", manifest)
 
@@ -86,8 +118,82 @@ def test_full_profile_emits_per_object_canvas(tmp_path: Path) -> None:
     manifest = json.loads(
         (root / ".deeplaw" / "derived" / "tree" / "living-wiki-manifest.json").read_text()
     )
+    profile = projection_profile("full")
+    assert manifest["configuration"]["projection_profile"] == profile
+    assert manifest["configuration"]["projection_profile_sha256"] == sha256_bytes(
+        canonical_json(profile).encode("utf-8")
+    )
+    assert manifest["configuration"]["projection_profile"]["version"] == "2"
     assert manifest["configuration"]["projection_profile"]["name"] == "full"
     assert manifest["configuration"]["local_canvas_per_object"] is True
+    community_pages = list((root / "wiki" / "communities").glob("*.md"))
+    assert (root / "wiki" / "communities" / "index.md").is_file()
+    assert any(path.name != "index.md" for path in community_pages)
+    canvas_names = {path.name for path in (root / "canvas").rglob("*.canvas")}
+    assert "knowledge-graph.canvas" in canvas_names
+    assert "knowledge-concept.canvas" in canvas_names
+    assert any(name.startswith("community-") for name in canvas_names)
+    assert {name for name in canvas_names if name.startswith("object-")} == {
+        path.name for path in paths
+    }
+    assert list((root / "wiki" / "concepts").glob("knowledge_*.md"))
+    assert result["living_wiki"]["projection_profile_version"] == "2"
+
+
+@pytest.mark.parametrize("version", ("1", "2"))
+def test_projection_profile_and_coordinator_receipt_accept_closed_versions(
+    tmp_path: Path,
+    version: str,
+) -> None:
+    root = _vault(tmp_path)
+    profile = projection_profile("standard")
+    profile["version"] = version
+    _validate(root, "projection-profile.v1.schema.json", profile)
+
+    digest = "0" * 64
+    living_files = [{"path": "wiki/index.md", "byte_size": 1, "sha256": digest}]
+    projection = {
+        "files": [],
+        "components": [],
+        "manifest_sha256": digest,
+        "input_audit_head": digest,
+        "living_wiki": {
+            "schema_version": "deeplaw.living-wiki-manifest/v2",
+            "manifest_sha256": digest,
+            "knowledge_count": 0,
+            "relation_count": 0,
+            "source_count": 0,
+            "file_count": len(living_files),
+            "files": living_files,
+            "index_shard_count": 0,
+            "canvas_count": 0,
+            "community_count": 0,
+            "input_audit_head": digest,
+            "projection_profile_name": "standard",
+            "projection_profile_version": version,
+        },
+    }
+    receipt = CompilationCoordinator._projection_receipt(projection)
+    assert receipt["projection_profile_version"] == version
+    assert receipt["living_wiki"]["projection_profile_version"] == version
+
+
+def test_historical_v1_manifest_is_readable_and_rebuilt_as_v2(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _vault(tmp_path)
+    monkeypatch.setitem(projection_profiles._PROFILES["standard"], "version", "1")
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        historical = store.rebuild_derived()
+    assert historical["living_wiki"]["projection_profile_version"] == "1"
+
+    monkeypatch.setitem(projection_profiles._PROFILES["standard"], "version", "2")
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        rebuilt = store.rebuild_derived()
+
+    assert rebuilt["living_wiki"]["projection_profile_name"] == "standard"
+    assert rebuilt["living_wiki"]["projection_profile_version"] == "2"
 
 
 def test_full_to_minimal_cleanup_preserves_unregistered_user_file(tmp_path: Path) -> None:
@@ -142,7 +248,7 @@ def test_projection_rows_and_relations_share_reference_time(tmp_path: Path) -> N
             operation="upsert_concept",
             confirm_no_case_data=True,
         )
-        future = store.remember(
+        store.remember(
             grant_id=grant_id,
             idempotency_key="reference-future",
             title="Future interval object",
@@ -152,7 +258,7 @@ def test_projection_rows_and_relations_share_reference_time(tmp_path: Path) -> N
             operation="upsert_concept",
             confirm_no_case_data=True,
         )
-        expired = store.remember(
+        store.remember(
             grant_id=grant_id,
             idempotency_key="reference-expired",
             title="Expired interval object",
@@ -165,6 +271,5 @@ def test_projection_rows_and_relations_share_reference_time(tmp_path: Path) -> N
         result = store.rebuild_derived()
 
     assert result["living_wiki"]["knowledge_count"] == 1
-    assert (root / "wiki" / "concepts" / f"{current['knowledge_id']}.md").is_file()
-    assert not (root / "wiki" / "concepts" / f"{future['knowledge_id']}.md").exists()
-    assert not (root / "wiki" / "concepts" / f"{expired['knowledge_id']}.md").exists()
+    assert (root / current["workspace_path"]).is_file()
+    assert not list((root / "wiki" / "concepts").glob("knowledge_*.md"))

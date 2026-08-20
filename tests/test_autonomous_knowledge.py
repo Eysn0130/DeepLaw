@@ -924,7 +924,7 @@ def test_graph_wiki_lint_capsule_and_forgetting_close_the_runtime_loop(
         )
         _validate_contract("knowledge-relation.v3.schema.json", relation)
 
-        derived = store.rebuild_derived()
+        derived = store.rebuild_derived(projection_profile="full")
         assert derived["knowledge_count"] == 2
         assert derived["relation_count"] == 1
         assert derived["community_count"] == 1
