@@ -1264,9 +1264,13 @@ def test_living_wiki_shards_keep_more_than_300_objects_discoverable(
     living_wiki = completed["projection"]["living_wiki"]
     assert living_wiki["knowledge_count"] == 305
     assert living_wiki["index_shard_count"] == 2
+    assert living_wiki["projection_profile_name"] == "standard"
+    assert living_wiki["projection_profile_version"] == "2"
+    assert completed["projection"]["projection_profile_version"] == "2"
     assert len(canonical_json(completed["projection"]).encode("utf-8")) < 65_536
-    pages = sorted((root / "wiki" / "claims").glob("knowledge_*.md"))
+    pages = sorted((root / "knowledge" / "claims").glob("knowledge_*.md"))
     assert len(pages) == 305
+    assert not list((root / "wiki" / "claims").glob("knowledge_*.md"))
     index_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in sorted((root / "wiki" / "indexes").glob("claim-*.md"))
@@ -1294,6 +1298,9 @@ def test_living_wiki_shards_keep_more_than_300_objects_discoverable(
         verification = store.verify()
     with AutonomousKnowledgeStore(root, read_only=False) as store:
         rebuilt = store.rebuild_derived()
+        standard_community_files = list((root / "wiki" / "communities").rglob("*.md"))
+        standard_canvas_files = list((root / "canvas").rglob("*.canvas"))
+        full_rebuilt = store.rebuild_derived(projection_profile="full")
     assert all(knowledge_id in index_text for knowledge_id in knowledge_ids)
     assert len(fragment_indexes) == 5
     assert "## Exact evidence drill-down" in source_page
@@ -1302,6 +1309,8 @@ def test_living_wiki_shards_keep_more_than_300_objects_discoverable(
         "Explicit bounded projection: 105 additional source-bound claim revisions "
         "are not inlined"
     ) in source_page
+    assert not standard_community_files
+    assert not standard_canvas_files
     community_index = (root / "wiki" / "communities" / "index.md").read_text(
         encoding="utf-8"
     )
@@ -1315,6 +1324,8 @@ def test_living_wiki_shards_keep_more_than_300_objects_discoverable(
     )
     assert first_fragment_id in fragment_indexes[0].read_text(encoding="utf-8")
     assert rebuilt["living_wiki"]["manifest_sha256"] == living_wiki["manifest_sha256"]
+    assert full_rebuilt["living_wiki"]["projection_profile_name"] == "full"
+    assert full_rebuilt["living_wiki"]["projection_profile_version"] == "2"
     assert (root / "wiki" / "overview.md").read_bytes() != (root / "wiki" / "index.md").read_bytes()
     assert verification["valid"] is True, verification["failures"]
 

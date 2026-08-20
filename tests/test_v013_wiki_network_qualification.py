@@ -258,14 +258,20 @@ def _assert_network(root: Path, objects: dict[str, dict[str, Any]]) -> dict[str,
         record = by_knowledge_id[result["knowledge_id"]]
         assert record["kind"] == kind
         assert record["revision_id"] == result["revision_id"]
-        assert record["canonical_page_path"].startswith("wiki/")
-        assert record["canonical_page_path"].endswith(f"/{result['knowledge_id']}.md")
+        assert record["canonical_page_path"].split("/", 1)[0] in {
+            "knowledge",
+            "memory",
+            "skills",
+        }
+        assert result["knowledge_id"] in record["canonical_page_path"]
         resolved = resolver.resolve(
             {"knowledge_id": result["knowledge_id"], "allowed_freshness": ["fresh", "unknown"]}
         )
         assert resolved["status"] == "resolved"
         assert resolved["admission"]["admitted"] is True
         assert resolved["candidates"][0]["page_id"] == record["page_id"]
+        registered_page = KnowledgeOS.open(root).wiki.page(record["canonical_page_path"])
+        assert registered_page["wiki_path"] == record["canonical_page_path"]
 
     # The API read path must consume the indexed network, rather than a filesystem scan.
     root_page = KnowledgeOS.open(root).wiki.page("wiki/index.md")
@@ -331,8 +337,8 @@ def test_v013_development_wiki_network_qualification(tmp_path: Path) -> None:
 
     with AutonomousKnowledgeStore(root, read_only=False) as store:
         incremental = store.rebuild_derived(projection_profile="standard")
-    assert any(
-        item["path"] == f"wiki/concepts/{concept_before['knowledge_id']}.md"
+    assert all(
+        item["path"] != f"wiki/concepts/{concept_before['knowledge_id']}.md"
         for item in incremental["living_wiki"]["change_set"]["updated"]
     )
     objects["concept"] = updated
@@ -626,8 +632,8 @@ def test_v013_wiki_network_relation_cycle_uses_canonical_graph_revisions(
     owner_note.write_text("# Cycle owner note\nPreserve this user file.\n", encoding="utf-8")
     owner_note_bytes = owner_note.read_bytes()
     with AutonomousKnowledgeStore(root, read_only=False) as store:
-        rebuilt = store.rebuild_derived(projection_profile="standard")
-    assert rebuilt["living_wiki"]["projection_profile_name"] == "standard"
+        rebuilt = store.rebuild_derived(projection_profile="full")
+    assert rebuilt["living_wiki"]["projection_profile_name"] == "full"
     assert owner_note.read_bytes() == owner_note_bytes
 
     graph_bounded_response = handle_knowledge_support(

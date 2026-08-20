@@ -30,7 +30,6 @@ def test_standard_projection_emits_governed_navigation_families_when_empty(
 
     required = {
         "wiki/guides/index.md",
-        "wiki/communities/index.md",
         "wiki/gaps/index.md",
         "wiki/sources/index.md",
         "wiki/recent-changes/index.md",
@@ -54,6 +53,8 @@ def test_standard_projection_emits_governed_navigation_families_when_empty(
             or "[[wiki/recent-changes/" in text
             or "[[wiki/gaps/" in text
         )
+    assert not list((root / "wiki" / "communities").rglob("*.md"))
+    assert not list((root / "canvas").rglob("*.canvas"))
 
 
 def test_source_page_separates_evidence_and_derived_summary(tmp_path: Path) -> None:
@@ -146,7 +147,7 @@ def test_current_statement_has_stable_anchor_and_receipt_metadata(tmp_path: Path
         confirm_no_case_data=True,
     )
     with AutonomousKnowledgeStore(root, read_only=False) as store:
-        rebuild_living_wiki(store)
+        rebuild_living_wiki(store, projection_profile="full")
         revision = store.connection.execute(
             "SELECT revision_id, knowledge_id FROM knowledge_revisions_v3 "
             "ORDER BY recorded_at DESC, revision_id DESC LIMIT 1"

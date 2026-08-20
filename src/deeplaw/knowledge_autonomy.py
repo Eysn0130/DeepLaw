@@ -1401,8 +1401,20 @@ def _with_file_lease(lease_key: str):
     def decorate(method: Any) -> Any:
         @wraps(method)
         def wrapped(self: AutonomousKnowledgeStore, *args: Any, **kwargs: Any) -> Any:
+            if lease_key == "derived-rebuild":
+                verification = self.verify()
+                blocking_failures = [
+                    item
+                    for item in verification.get("failures", [])
+                    if item.get("code") != "derived_manifest_invalid"
+                ]
+                if blocking_failures:
+                    raise RuntimeError("derived rebuild requires valid canonical integrity")
             with self._file_lease(lease_key):
-                return method(self, *args, **kwargs)
+                result = method(self, *args, **kwargs)
+            if lease_key == "derived-rebuild":
+                return self._finalize_derived_read_snapshot(result)
+            return result
 
         return wrapped
 
@@ -2369,6 +2381,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         self._windows_acl_refresh_required = False
         self._held_file_leases: dict[str, tuple[str, int]] = {}
         self._legacy_source_state_cache: dict[str, dict[str, dict[str, Any]]] = {}
+        self._pending_derived_result: dict[str, Any] | None = None
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.execute("PRAGMA busy_timeout = 5000")
@@ -2404,10 +2417,28 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 raise
 
     def __exit__(self, *args: object) -> None:
-        self.close()
+        self.close(refresh_derived_read_snapshot=not args or args[0] is None)
 
-    def close(self) -> None:
+    def close(self, *, refresh_derived_read_snapshot: bool = True) -> None:
+        refresh_identity: tuple[int, str, str] | None = None
+        if (
+            not self.read_only
+            and refresh_derived_read_snapshot
+            and not self.connection.in_transaction
+        ):
+            try:
+                checkpoint = self.connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+                if checkpoint is not None and tuple(checkpoint) == (0, 0, 0):
+                    refresh_identity = (
+                        self.sequence,
+                        self.audit_head,
+                        self.legacy_audit_head,
+                    )
+            except (OSError, RuntimeError, sqlite3.DatabaseError, ValueError):
+                refresh_identity = None
         self.connection.close()
+        if refresh_identity is not None:
+            self._refresh_derived_read_snapshot_after_close(*refresh_identity)
         if not self.read_only and os.name == "nt":
             self._windows_acl_refresh_required = False
             from .windows_acl import harden_windows_vault
@@ -11580,6 +11611,112 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "audit_head": self.audit_head,
         }
 
+    def _finalize_derived_read_snapshot(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Publish the aggregate receipt after the rebuild's Ledger lease is released."""
+
+        checkpoint = self.connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        if checkpoint is None or tuple(checkpoint) != (0, 0, 0):
+            raise RuntimeError("derived read snapshot requires a clean SQLite checkpoint")
+        wal_path = Path(f"{self.database}-wal")
+        if wal_path.exists() and (wal_path.is_symlink() or wal_path.stat().st_size != 0):
+            raise RuntimeError("derived read snapshot has an active SQLite WAL")
+        if self.database.is_symlink() or not self.database.is_file():
+            raise RuntimeError("derived read snapshot database is unsafe")
+        manifest_fields = (
+            "schema_version",
+            "input_audit_head",
+            "legacy_audit_head",
+            "generator",
+            "generator_version",
+            "configuration",
+            "fts_rows_sha256",
+            "dense_manifest_sha256",
+            "knowledge_revision_count",
+            "knowledge_revision_ids_sha256",
+            "relation_revision_count",
+            "relation_revision_ids_sha256",
+            "files",
+            "components",
+            "generated_at",
+        )
+        manifest = {field: result[field] for field in manifest_fields}
+        manifest["read_snapshot"] = {
+            "schema_version": "deeplaw.derived-read-snapshot/v1",
+            "database_byte_size": self.database.stat().st_size,
+            "database_sha256": sha256_file(self.database),
+            "sequence": self.sequence,
+            "audit_head": self.audit_head,
+            "legacy_audit_head": self.legacy_audit_head,
+        }
+        manifest["manifest_sha256"] = sha256_bytes(canonical_json(manifest).encode("utf-8"))
+        _atomic_owner_write(
+            self.root / ".deeplaw" / "derived" / "manifest.json",
+            (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
+                "utf-8"
+            ),
+        )
+        result.update(
+            read_snapshot=manifest["read_snapshot"],
+            manifest_sha256=manifest["manifest_sha256"],
+        )
+        self._pending_derived_result = result
+        return result
+
+    def _refresh_derived_read_snapshot_after_close(
+        self,
+        sequence: int,
+        audit_head: str,
+        legacy_audit_head: str,
+    ) -> None:
+        """Refresh optional acceleration bytes after SQLite reaches its at-rest state."""
+
+        path = self.root / ".deeplaw" / "derived" / "manifest.json"
+        if path.is_symlink() or not path.is_file():
+            return
+        try:
+            manifest = strict_json_loads(path.read_bytes())
+        except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError):
+            return
+        if (
+            not isinstance(manifest, dict)
+            or manifest.get("schema_version") != DERIVED_MANIFEST_SCHEMA_V2
+            or manifest.get("generator_version") != "2"
+            or manifest.get("input_audit_head") != audit_head
+            or manifest.get("legacy_audit_head") != legacy_audit_head
+        ):
+            return
+        wal_path = Path(f"{self.database}-wal")
+        if wal_path.exists() and (wal_path.is_symlink() or wal_path.stat().st_size != 0):
+            return
+        if self.database.is_symlink() or not self.database.is_file():
+            return
+        manifest["read_snapshot"] = {
+            "schema_version": "deeplaw.derived-read-snapshot/v1",
+            "database_byte_size": self.database.stat().st_size,
+            "database_sha256": sha256_file(self.database),
+            "sequence": sequence,
+            "audit_head": audit_head,
+            "legacy_audit_head": legacy_audit_head,
+        }
+        manifest_body = {key: value for key, value in manifest.items() if key != "manifest_sha256"}
+        manifest["manifest_sha256"] = sha256_bytes(
+            canonical_json(manifest_body).encode("utf-8")
+        )
+        _validate_contract("derived-manifest.v2.schema.json", manifest)
+        _atomic_owner_write(
+            path,
+            (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
+                "utf-8"
+            ),
+        )
+        pending = self._pending_derived_result
+        if pending is not None:
+            pending.update(
+                read_snapshot=manifest["read_snapshot"],
+                manifest_sha256=manifest["manifest_sha256"],
+            )
+        self._pending_derived_result = None
+
     @_with_file_lease("derived-rebuild")
     def rebuild_derived(
         self,
@@ -11770,7 +11907,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "input_audit_head": input_audit_head,
             "legacy_audit_head": self.legacy_audit_head,
             "generator": "deeplaw.knowledge-autonomy/v1",
-            "generator_version": "1",
+            "generator_version": "2",
             "configuration": {
                 "fts_tokenizer": "unicode61 remove_diacritics 2",
                 "community_algorithm": "weighted-label-propagation+semantic-bridges/1",
@@ -11797,13 +11934,6 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "components": [component],
             "generated_at": reference_time,
         }
-        manifest["manifest_sha256"] = sha256_bytes(canonical_json(manifest).encode("utf-8"))
-        _atomic_owner_write(
-            self.root / ".deeplaw" / "derived" / "manifest.json",
-            (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
-                "utf-8"
-            ),
-        )
         completed_at = utc_now()
         if pending_queue_ids:
             self.connection.execute("BEGIN IMMEDIATE")
@@ -12008,6 +12138,13 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             manifest.get("input_audit_head") != self.audit_head
             or manifest.get("legacy_audit_head") != self.legacy_audit_head
         )
+        read_snapshot = manifest.get("read_snapshot")
+        if manifest.get("generator_version") == "2" and (
+            not isinstance(read_snapshot, dict)
+            or read_snapshot.get("audit_head") != manifest.get("input_audit_head")
+            or read_snapshot.get("legacy_audit_head") != manifest.get("legacy_audit_head")
+        ):
+            raise ValueError("derived read snapshot manifest binding is invalid")
 
         direct_files = manifest["files"]
         if direct_files != sorted(direct_files, key=lambda item: item["path"]):

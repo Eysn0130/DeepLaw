@@ -12291,6 +12291,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_persistent_runtime",
+            "name": "test_changed_database_cannot_reuse_derived_read_snapshot"
+          },
+          "node_id": "tests/test_v013_persistent_runtime.py::test_changed_database_cannot_reuse_derived_read_snapshot"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_persistent_runtime",
+            "name": "test_derived_read_snapshot_skips_full_replay_without_weakening_explicit_verify"
+          },
+          "node_id": "tests/test_v013_persistent_runtime.py::test_derived_read_snapshot_skips_full_replay_without_weakening_explicit_verify"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_persistent_runtime",
             "name": "test_explicit_verify_bypasses_legacy_integrity_cache"
           },
           "node_id": "tests/test_v013_persistent_runtime.py::test_explicit_verify_bypasses_legacy_integrity_cache"
@@ -12760,9 +12774,30 @@
         {
           "junit": {
             "classname": "tests.test_v013_projection_profiles",
+            "name": "test_historical_v1_manifest_is_readable_and_rebuilt_as_v2"
+          },
+          "node_id": "tests/test_v013_projection_profiles.py::test_historical_v1_manifest_is_readable_and_rebuilt_as_v2"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_projection_profiles",
             "name": "test_invalid_projection_profile_is_rejected"
           },
           "node_id": "tests/test_v013_projection_profiles.py::test_invalid_projection_profile_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_projection_profiles",
+            "name": "test_projection_profile_and_coordinator_receipt_accept_closed_versions[1]"
+          },
+          "node_id": "tests/test_v013_projection_profiles.py::test_projection_profile_and_coordinator_receipt_accept_closed_versions[1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_projection_profiles",
+            "name": "test_projection_profile_and_coordinator_receipt_accept_closed_versions[2]"
+          },
+          "node_id": "tests/test_v013_projection_profiles.py::test_projection_profile_and_coordinator_receipt_accept_closed_versions[2]"
         },
         {
           "junit": {
@@ -15089,9 +15124,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2140,
+      "count": 2145,
       "selection": "not qualification and not windows_native",
-      "sha256": "41e295798ad32774b1a5f9c628664757ea03e3b15b2e38e6efb8bc62a87ed5b7"
+      "sha256": "9ba22af1afd1c13ceb2b5d6c584cd85cbdb8aaed96e8e9a73ce3ffdc4ed29b71"
     },
     "windows": {
       "additional_cases": [
@@ -15124,13 +15159,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2144,
+      "count": 2149,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "ecb3e8606827e5df2b383a2b6c13a1e809de6860fd664ec147df1dbe70979aa6"
+      "sha256": "bd2385881b579d6fe2f23bcfd79272e9340ecc2da04a74cfc5f4aafdeb0cec2a"
     }
   },
-  "manifest_sha256": "62351640984f724af08486f0a09a0ddea8b0c69f715b30e1a315b5127230bd54",
+  "manifest_sha256": "18c984e27e479c9b74a08b3aae4a82fa360473b69f98c966274f06aaefaea242",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

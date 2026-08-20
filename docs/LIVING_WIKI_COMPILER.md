@@ -137,9 +137,56 @@ Projection is deterministic and model-free. It produces:
 - a manifest binding audit heads, effective Compilation Run state, configuration, complete
   generated-file inventory and hashes.
 
+### Named projection profiles
+
+The named projection profile keeps the schema family name `deeplaw.projection-profile/v1`, with a
+closed profile `version` of `"1"` or `"2"`. Historical v1 profiles and v1/v2 Living Wiki
+manifests remain valid inputs for verification and projection recovery. Current named profile and
+build output uses version `"2"`; the compiler profile and its semantics are unchanged.
+
+`standard` v2 is the default **Core Living Wiki**. It enables only root/overview/source/core/recent/
+gaps plus kind shards and kind indexes. Communities, global Canvas, kind Canvas, community Canvas,
+per-object Canvas and local per-object Canvas are all disabled. `full` v2 is an explicit advanced
+opt-in: it enables communities and all four Canvas families (global, kind, community and
+per-object), while retaining the richer generated per-object Wiki pages.
+
+The default `standard` and explicit `minimal` physical layouts reuse each current registered
+Knowledge Markdown Revision as the human/Agent-readable object page. Page Registry binds its
+stable Knowledge identity, exact revision, governance fields, byte size and SHA; paths or
+frontmatter never establish identity or Authority. These registered files are indexed but are not
+added to the projection ownership manifest, so rebuild and reconcile never claim or rewrite them.
+Only generated root, source, bounded evidence, index, recent-change and Gap pages are projection
+owned. This is a deterministic physical-layout choice, not a new page family, canonical store,
+database or retrieval engine.
+
+For `standard` and `minimal`, the existing Link Index also projects current admitted Ledger
+relations and exact Source references between registered page identities. These are explicitly
+typed as governed relation links rather than invented textual Wikilinks; they provide bounded
+backlink/outlink and Source drill-down navigation without rewriting canonical Markdown or
+elevating Authority.
+per-object). No profile or page family is added by this contract change.
+
+The manifest binds the complete selected profile and its SHA-256 configuration digest. The same
+ownership manifest, rebuild and recovery path remains responsible for profile switches and
+interrupted projection transactions; user-owned files remain outside the derived ownership set.
+The Page Registry, Link Index and Resolver continue to provide the shared identity, link and lookup
+surfaces behind either profile.
+
 The Wiki, graph, FTS, dense index, communities, Canvas and caches are disposable. Rebuild never
 calls a model and never creates semantic prose that is absent from a canonical Knowledge Revision.
 The same governed inputs and effective Run state produce the same Living Wiki manifest digest.
+
+The aggregate derived manifest may additionally carry
+`deeplaw.derived-read-snapshot/v1`. It is a rebuildable verification receipt, not another Ledger
+or database: an explicit rebuild first completes canonical verification, checkpoints SQLite, and
+binds the exact database bytes, both audit heads, and the autonomous sequence. One-shot CLI
+`query` and `wiki` reads may use that binding to avoid replaying the complete Ledger. Any byte,
+head, sequence, WAL, manifest, or projection identity change invalidates the binding and falls back
+to full fail-closed verification. Reads never create or refresh this receipt; exact Source and Wiki
+page bytes remain verified on demand. Historical generator version `1` manifests remain readable
+through full verification and deterministic rebuild. One-shot `query` does not load the Wiki
+bundle. One-shot `wiki` reads reuse the aggregate manifest's exact v2 hash binding while retaining
+v3 top/component/shard verification, so neither path repeats a per-page schema walk at startup.
 
 ## CLI workflow
 

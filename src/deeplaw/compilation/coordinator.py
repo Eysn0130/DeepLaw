@@ -63,6 +63,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _RUN_ID = re.compile(r"^compilationrun_[0-9a-f]{24}$")
 _PACKET_ID = re.compile(r"^packet_[0-9a-f]{24}$")
 _MAX_TEXT = 200_000
+_PROJECTION_PROFILE_VERSIONS = frozenset({"1", "2"})
 
 
 def _bounded(value: Any, *, field: str, maximum: int) -> str:
@@ -4637,7 +4638,10 @@ class CompilationCoordinator:
             raise RuntimeError("derived projection component inventory is invalid")
         profile_name = living_wiki.get("projection_profile_name")
         profile_version = living_wiki.get("projection_profile_version")
-        if profile_name not in {"minimal", "standard", "full"} or profile_version != "1":
+        if (
+            profile_name not in {"minimal", "standard", "full"}
+            or profile_version not in _PROJECTION_PROFILE_VERSIONS
+        ):
             raise RuntimeError("Living Wiki projection profile is invalid")
         inventory = {
             "direct_files": files,

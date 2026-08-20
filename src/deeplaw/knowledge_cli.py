@@ -111,7 +111,9 @@ from .knowledge_store import (
     verify_knowledge_migration_backup,
 )
 from .lineage_workflow import review_lineage_mapping
+from .persistent_read_runtime import PersistentReadRuntime
 from .projection_workflow import projection_diff, propose_projection_edits
+from .read_services import WikiReadService
 from .relation_workflow import (
     pending_relation_carry_forward,
     plan_relation_carry_forward,
@@ -2846,28 +2848,39 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             return syntheses.abort_refresh(**common, reason=args.reason)
         raise ValueError(f"unsupported Synthesis refresh action: {action}")
     if command == "query":
-        return KnowledgeOS.open(args.vault).retrieval.query(
-            args.query,
-            purpose=args.purpose,
-            policy=args.policy,
-            scope=args.scope,
-            max_sensitivity=args.max_sensitivity,
-            limit=args.limit,
-            max_chars=args.max_chars,
-            max_tokens=args.max_tokens,
-            max_sources=args.max_sources,
-            graph_hops=args.graph_hops,
-            retrieval_mode=args.retrieval_mode,
-            as_of=args.as_of,
-            kinds=tuple(args.kind),
-            query_plan_version=args.query_plan_version,
-            task_binding=_parse_task_binding_argument(args.task_binding),
-            query_target=args.query_target,
-            applicable_duties=(
-                tuple(args.applicable_duty) if args.applicable_duty else None
-            ),
-            projection=args.capsule_projection,
+        runtime = PersistentReadRuntime(
+            args.vault,
+            startup_verification="prefer_derived_snapshot",
+            load_wiki=False,
         )
+        try:
+            snapshot = runtime.get_snapshot(operation="query")
+            return KnowledgeOS.open(args.vault).retrieval.query(
+                args.query,
+                purpose=args.purpose,
+                policy=args.policy,
+                scope=args.scope,
+                max_sensitivity=args.max_sensitivity,
+                limit=args.limit,
+                max_chars=args.max_chars,
+                max_tokens=args.max_tokens,
+                max_sources=args.max_sources,
+                graph_hops=args.graph_hops,
+                retrieval_mode=args.retrieval_mode,
+                as_of=args.as_of,
+                kinds=tuple(args.kind),
+                query_plan_version=args.query_plan_version,
+                force_canonical_lexical=False,
+                task_binding=_parse_task_binding_argument(args.task_binding),
+                query_target=args.query_target,
+                applicable_duties=(
+                    tuple(args.applicable_duty) if args.applicable_duty else None
+                ),
+                projection=args.capsule_projection,
+                _runtime_snapshot=snapshot,
+            )
+        finally:
+            runtime.close()
     if command == "agent-context":
         return build_agent_context(
             task=args.task,
@@ -2981,6 +2994,38 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                     raise RuntimeError(
                         "autonomous knowledge canonical integrity is invalid; read stopped"
                     )
+
+            def reconcile_once() -> dict[str, Any]:
+                result = store.reconcile_workspace(
+                    grant_id=args.grant_id,
+                    confirm_no_case_data=args.confirm_no_case_data,
+                )
+                pending_rebuilds = store.connection.execute(
+                    "SELECT COUNT(*) FROM derived_rebuild_queue_v3 WHERE completed_at IS NULL"
+                ).fetchone()[0]
+                if pending_rebuilds:
+                    try:
+                        rebuilt = store.rebuild_derived()
+                        result["derived_maintenance"] = {
+                            "status": "rebuilt",
+                            "queued_before": pending_rebuilds,
+                            "knowledge_count": rebuilt["knowledge_count"],
+                            "relation_count": rebuilt["relation_count"],
+                            "input_audit_head": rebuilt["input_audit_head"],
+                        }
+                    except Exception as error:
+                        result["derived_maintenance"] = {
+                            "status": "retry_pending",
+                            "queued_before": pending_rebuilds,
+                            "error_type": type(error).__name__,
+                        }
+                else:
+                    result["derived_maintenance"] = {
+                        "status": "current",
+                        "queued_before": 0,
+                    }
+                return result
+
             if action == "inspect":
                 return store.inspect()
             if action == "verify":
@@ -2988,10 +3033,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             if action == "recover":
                 return store.recover()
             if action == "reconcile":
-                return store.reconcile_workspace(
-                    grant_id=args.grant_id,
-                    confirm_no_case_data=args.confirm_no_case_data,
-                )
+                return reconcile_once()
             if action == "watch":
                 if not 0.25 <= args.interval <= 3_600:
                     raise ValueError("watch interval must be between 0.25 and 3600 seconds")
@@ -3002,35 +3044,7 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 last: dict[str, Any] | None = None
                 try:
                     while True:
-                        last = store.reconcile_workspace(
-                            grant_id=args.grant_id,
-                            confirm_no_case_data=args.confirm_no_case_data,
-                        )
-                        pending_rebuilds = store.connection.execute(
-                            "SELECT COUNT(*) FROM derived_rebuild_queue_v3 "
-                            "WHERE completed_at IS NULL"
-                        ).fetchone()[0]
-                        if pending_rebuilds:
-                            try:
-                                rebuilt = store.rebuild_derived()
-                                last["derived_maintenance"] = {
-                                    "status": "rebuilt",
-                                    "queued_before": pending_rebuilds,
-                                    "knowledge_count": rebuilt["knowledge_count"],
-                                    "relation_count": rebuilt["relation_count"],
-                                    "input_audit_head": rebuilt["input_audit_head"],
-                                }
-                            except Exception as error:
-                                last["derived_maintenance"] = {
-                                    "status": "retry_pending",
-                                    "queued_before": pending_rebuilds,
-                                    "error_type": type(error).__name__,
-                                }
-                        else:
-                            last["derived_maintenance"] = {
-                                "status": "current",
-                                "queued_before": 0,
-                            }
+                        last = reconcile_once()
                         cycle_count += 1
                         if args.max_cycles is not None and cycle_count >= args.max_cycles:
                             break
@@ -3183,26 +3197,67 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
             **options,
         )
     if command == "wiki":
-        wiki_api = KnowledgeOS.open(args.vault).wiki
+        runtime = PersistentReadRuntime(
+            args.vault,
+            startup_verification="prefer_derived_snapshot",
+        )
         action = args.wiki_command
         options = {
             "scope": args.scope,
             "max_sensitivity": args.max_sensitivity,
             "limit": args.limit,
         }
-        if action == "page":
-            return wiki_api.page(args.wiki_path, cursor=args.cursor, **options)
-        if action == "backlinks":
-            return wiki_api.backlinks(args.wiki_path, cursor=args.cursor, **options)
-        if action == "outlinks":
-            return wiki_api.outlinks(args.wiki_path, cursor=args.cursor, **options)
-        if action == "local-graph":
-            return wiki_api.local_graph(args.knowledge_id, **options)
-        if action == "browse-kind":
-            return wiki_api.browse_kind(args.kind, **options)
-        if action == "recent":
-            return wiki_api.recent_changes(**options)
-        raise ValueError(f"unsupported Living Wiki action: {action}")
+        try:
+            snapshot = runtime.get_snapshot(operation=f"wiki_{action}")
+            wiki_snapshot = snapshot if snapshot.wiki_projection is not None else None
+            wiki = WikiReadService(args.vault)
+            if action == "page":
+                return wiki.execute(
+                    action="page",
+                    wiki_path=args.wiki_path,
+                    cursor=args.cursor,
+                    snapshot=wiki_snapshot,
+                    **options,
+                )
+            if action == "backlinks":
+                return wiki.execute(
+                    action="backlinks",
+                    wiki_path=args.wiki_path,
+                    cursor=args.cursor,
+                    snapshot=wiki_snapshot,
+                    **options,
+                )
+            if action == "outlinks":
+                return wiki.execute(
+                    action="outlinks",
+                    wiki_path=args.wiki_path,
+                    cursor=args.cursor,
+                    snapshot=wiki_snapshot,
+                    **options,
+                )
+            if action == "local-graph":
+                return wiki.execute(
+                    action="local_graph",
+                    knowledge_id=args.knowledge_id,
+                    snapshot=wiki_snapshot,
+                    **options,
+                )
+            if action == "browse-kind":
+                return wiki.execute(
+                    action="browse_kind",
+                    kind=args.kind,
+                    snapshot=wiki_snapshot,
+                    **options,
+                )
+            if action == "recent":
+                return wiki.execute(
+                    action="recent_changes",
+                    snapshot=wiki_snapshot,
+                    **options,
+                )
+            raise ValueError(f"unsupported Living Wiki action: {action}")
+        finally:
+            runtime.close()
     if command == "editor":
         envelope = _read_bounded_json_object(
             args.envelope,

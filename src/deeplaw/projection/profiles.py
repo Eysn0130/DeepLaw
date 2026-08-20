@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 _PROFILE_SCHEMA = "deeplaw.projection-profile/v1"
-_PROFILE_VERSION = "1"
+_PROFILE_VERSION = "2"
 _PROFILE_NAMES = frozenset({"minimal", "standard", "full"})
 
 # Keep feature names explicit.  The projection manifest binds this complete
@@ -60,10 +60,6 @@ _PROFILES = {
             "gaps",
             "kind_shards",
             "kind_indexes",
-            "communities",
-            "global_canvas",
-            "kind_canvas",
-            "community_canvas",
         },
     ),
     "full": _profile(

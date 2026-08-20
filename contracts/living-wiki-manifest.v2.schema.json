@@ -41,7 +41,7 @@
           "properties": {
             "schema_version": {"const": "deeplaw.projection-profile/v1"},
             "name": {"enum": ["minimal", "standard", "full"]},
-            "version": {"const": "1"},
+            "version": {"enum": ["1", "2"]},
             "root_index": {"type": "boolean"},
             "overview": {"type": "boolean"},
             "source_pages": {"type": "boolean"},

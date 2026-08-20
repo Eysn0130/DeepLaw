@@ -1,8 +1,8 @@
 # DeepLaw v0.13 bounded upstream research
 
 Status: **design evidence only**, researched 2026-08-08, reconciled with the 2026-08-17
-architecture freeze, and augmented by the named 2026-08-18 product-closure review. This report
-records concepts considered for v0.13; it is not evidence that any
+architecture freeze, augmented by the named 2026-08-18 product-closure review, and updated with a
+2026-08-20 current observation. This report records concepts considered for v0.13; it is not evidence that any
 target capability is shipped. Package/main remain `0.12.0 Beta`, active qualification is
 `machine_evaluation_pending` under profile `machine_evaluated_no_human_attestation`, and Gate v8
 remains pending. DeepLaw does not vendor or copy upstream implementation code in this work. The
@@ -32,6 +32,25 @@ The moving branches happened to equal the exact research anchors when observed. 
 does not convert a branch name into an immutable input and does not rotate the qualification
 coordinates. Ekgardt/llm-wiki remains a named research comparator for this development review; it
 does not silently replace the protocol's broader LLM-Wiki behavior category.
+
+## 2026-08-20 current observation (not a qualification rotation)
+
+The following is a current observation dated **2026-08-20**. A **qualification pin** is the frozen
+protocol input; a **released comparator** is a named release coordinate observed for comparison; a
+**moving HEAD** is a branch or current repository coordinate and is not an immutable qualification
+input. The observation does not rotate the frozen pins or alter the immutable
+[`UPSTREAM_PRODUCT_CLOSURE_2026-08-18.md`](UPSTREAM_PRODUCT_CLOSURE_2026-08-18.md) report.
+
+| Upstream | Qualification pin (retained) | Released comparator observed 2026-08-20 | Moving HEAD observed 2026-08-20 | Execution status |
+| --- | --- | --- | --- | --- |
+| OpenWiki | released v0.3.1, peeled `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc` | release `v0.3.3/355f4f68e71bd024631cdcff7aa871c3e72435da` | `main` `46c0a3d53011a1f4916052187288dc5b4651c292` | `not_executed` |
+| Tolaria | `v2026-08-11` / `cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` | release `v2026-08-19/cf9b0c8b9fca7cd9556da4b0401e207626a70384` | `main` `367a91416477c90bbfae766dc06add3de6ae75a7` | `not_executed` |
+| Obsidian API | `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | not separately rotated; exact API coordinate retained | `master` `cc1744324150c632416857c98964f87b1574a5fc` | `not_executed` |
+| Ekgardt/llm-wiki | no named v0.13 qualification comparator; the protocol retains the LLM-Wiki behavior category | none | `main` `350eec8a284e159b2e4cfd068d808cbf203a6cc5` | `not_executed` |
+
+These are source-reading and coordinate observations only. Source reading does not establish parity,
+integration, product reachability or qualification; all upstream execution status remains
+`not_executed`. Execution status: `not_executed` for every row.
 
 ## Frozen references
 

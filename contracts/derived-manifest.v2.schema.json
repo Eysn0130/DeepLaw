@@ -15,7 +15,25 @@
     "input_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "generator": {"const": "deeplaw.knowledge-autonomy/v1"},
-    "generator_version": {"const": "1"},
+    "generator_version": {"enum": ["1", "2"]},
+    "read_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "database_byte_size", "database_sha256", "sequence",
+        "audit_head", "legacy_audit_head"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.derived-read-snapshot/v1"},
+        "database_byte_size": {
+          "type": "integer", "minimum": 1, "maximum": 17179869184
+        },
+        "database_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "sequence": {"type": "integer", "minimum": 0},
+        "audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "legacy_audit_head": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
     "configuration": {
       "type": "object",
       "additionalProperties": false,
@@ -99,5 +117,15 @@
     },
     "generated_at": {"type": "string", "format": "date-time"},
     "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"generator_version": {"const": "2"}}},
+      "then": {"required": ["read_snapshot"]}
+    },
+    {
+      "if": {"properties": {"generator_version": {"const": "1"}}},
+      "then": {"not": {"required": ["read_snapshot"]}}
+    }
+  ]
 }
