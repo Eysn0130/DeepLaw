@@ -164,7 +164,7 @@ def test_codex_login_receipt_hashes_status_without_reading_auth_file(
         "raw_sha256": qualification._sha256(Completed.stdout),
         "raw_bytes": len(Completed.stdout),
     }
-    assert calls == [["/opt/owner-broker", "login", "status"]]
+    assert calls == [[str(Path("/opt/owner-broker")), "login", "status"]]
 
 
 def test_owner_broker_launcher_is_external_owner_only_and_process_separated(
@@ -185,14 +185,15 @@ def test_owner_broker_launcher_is_external_owner_only_and_process_separated(
         repository=repository,
     ) == qualification._sha256_file(launcher)
 
-    launcher.chmod(0o750)
-    with pytest.raises(qualification.QualificationFailure, match="owner-only"):
-        qualification._validate_owner_broker_launcher(
-            launcher,
-            host_binary=host,
-            repository=repository,
-        )
-    launcher.chmod(0o700)
+    if os.name != "nt":
+        launcher.chmod(0o750)
+        with pytest.raises(qualification.QualificationFailure, match="owner-only"):
+            qualification._validate_owner_broker_launcher(
+                launcher,
+                host_binary=host,
+                repository=repository,
+            )
+        launcher.chmod(0o700)
     launcher.write_bytes(host.read_bytes())
     with pytest.raises(qualification.QualificationFailure, match="process-separated"):
         qualification._validate_owner_broker_launcher(

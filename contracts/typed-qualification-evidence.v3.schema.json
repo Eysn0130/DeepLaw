@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/typed-qualification-evidence.v3.schema.json",
+  "title": "DeepLaw typed raw qualification evidence v3",
+  "description": "Closed Kernel Release Core evidence envelope. Existing v2 non-competitive kinds retain their v2 payload contracts; professional source evidence is source-bound and machine-derived.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "reference_provenance",
+    "human_authenticity",
+    "kind",
+    "candidate_binding",
+    "run_binding",
+    "corpus",
+    "runner",
+    "scorer",
+    "payload",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.typed-qualification-evidence/v3"},
+    "profile": {"const": "kernel_release_core"},
+    "reference_provenance": {
+      "enum": ["deterministic_expected_evidence", "not_applicable"]
+    },
+    "human_authenticity": {"const": "not_claimed"},
+    "kind": {
+      "enum": [
+        "candidate_full_junit",
+        "candidate_platform_receipt",
+        "host_event_sequence",
+        "exact_wheel_execution",
+        "legal_rows",
+        "wiki_journey_rows",
+        "context_capsule_selection_usage",
+        "scale_report",
+        "retained_supply_chain",
+        "professional_evidence_rows"
+      ]
+    },
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "run_binding": {"$ref": "#/$defs/runBinding"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "runner": {"$ref": "#/$defs/identityDigest"},
+    "scorer": {"$ref": "#/$defs/identityDigest"},
+    "payload": {"type": "object"},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {"if": {"properties": {"kind": {"const": "candidate_full_junit"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/candidateFullJunit"}}}},
+    {"if": {"properties": {"kind": {"const": "candidate_platform_receipt"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/candidatePlatformReceipt"}}}},
+    {"if": {"properties": {"kind": {"const": "host_event_sequence"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/hostEventSequence"}}}},
+    {"if": {"properties": {"kind": {"const": "exact_wheel_execution"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/exactWheelExecution"}}}},
+    {"if": {"properties": {"kind": {"const": "legal_rows"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/legalRows"}}}},
+    {"if": {"properties": {"kind": {"const": "wiki_journey_rows"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/wikiJourneyRows"}}}},
+    {"if": {"properties": {"kind": {"const": "context_capsule_selection_usage"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/contextCapsuleSelectionUsage"}}}},
+    {"if": {"properties": {"kind": {"const": "scale_report"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/scaleReport"}}}},
+    {"if": {"properties": {"kind": {"const": "retained_supply_chain"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/retainedSupplyChain"}}}},
+    {"if": {"properties": {"kind": {"const": "professional_evidence_rows"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/professionalEvidenceRows"}}}}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"},
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "runBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "workflow_run_id"],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "role"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "role": {"enum": [
+          "candidate_full",
+          "candidate_platform",
+          "host_qualification",
+          "professional_evidence",
+          "living_wiki",
+          "scale_10000",
+          "supply_chain"
+        ]}
+      }
+    },
+    "identityDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "sha256"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "byte_size", "sha256", "media_type"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/safePath"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "media_type": {
+          "enum": [
+            "application/json",
+            "application/xml",
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/octet-stream",
+            "text/plain",
+            "text/csv",
+            "text/html",
+            "text/markdown"
+          ]
+        }
+      }
+    },
+    "jsonSource": {
+      "allOf": [
+        {"$ref": "#/$defs/source"},
+        {"properties": {"media_type": {"const": "application/json"}}}
+      ]
+    },
+    "payloadBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {"source": {"$ref": "#/$defs/source"}}
+    },
+    "candidateFullJunit": {
+      "allOf": [
+        {"$ref": "#/$defs/payloadBase"},
+        {"properties": {"source": {"properties": {"media_type": {"const": "application/xml"}}}}}
+      ]
+    },
+    "candidatePlatformReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "platform_manifest_source", "junit_sources"],
+      "properties": {
+        "source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/json"}}}]},
+        "platform_manifest_source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/json"}}}]},
+        "junit_sources": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["platform", "python_version", "source"],
+            "properties": {
+              "platform": {"enum": ["ubuntu", "macos", "windows"]},
+              "python_version": {"enum": ["3.11", "3.12", "3.13"]},
+              "source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/xml"}}}]}
+            }
+          }
+        }
+      }
+    },
+    "hostEventSequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_source", "lifecycle_source", "usage_source", "expected_source", "continuity_source", "isolation_source"],
+      "properties": {
+        "event_source": {"$ref": "#/$defs/jsonSource"},
+        "lifecycle_source": {"$ref": "#/$defs/jsonSource"},
+        "usage_source": {"$ref": "#/$defs/jsonSource"},
+        "expected_source": {"$ref": "#/$defs/jsonSource"},
+        "continuity_source": {"$ref": "#/$defs/jsonSource"},
+        "isolation_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "exactWheelExecution": {
+      "allOf": [
+        {"$ref": "#/$defs/payloadBase"},
+        {"properties": {"source": {"properties": {"media_type": {"const": "application/json"}}}}}
+      ]
+    },
+    "originalSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "version_id", "source"],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/identifier"},
+        "version_id": {"$ref": "#/$defs/identifier"},
+        "source": {"$ref": "#/$defs/source"}
+      }
+    },
+    "legalRows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_catalog_source", "original_source_refs", "expected_source", "observed_source"],
+      "properties": {
+        "source_catalog_source": {"$ref": "#/$defs/jsonSource"},
+        "original_source_refs": {"type": "array", "minItems": 28, "maxItems": 28, "items": {"$ref": "#/$defs/originalSource"}},
+        "expected_source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/json"}}}]},
+        "observed_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "wikiJourneyRows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_source", "observed_source"],
+      "properties": {
+        "expected_source": {"$ref": "#/$defs/jsonSource"},
+        "observed_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "contextCapsuleSelectionUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_source", "provider_capsule_source", "query_trace_source", "ledger_source", "usage_source"],
+      "properties": {
+        "expected_source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/json"}}}]},
+        "provider_capsule_source": {"$ref": "#/$defs/jsonSource"},
+        "query_trace_source": {"$ref": "#/$defs/jsonSource"},
+        "ledger_source": {"$ref": "#/$defs/jsonSource"},
+        "usage_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "scaleReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_source", "observed_source"],
+      "properties": {
+        "expected_source": {"$ref": "#/$defs/jsonSource"},
+        "observed_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "retainedSupplyChain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_build_source", "retained_candidate_source", "pre_publish_receipt_source", "wheel_source", "sdist_source", "sbom_source", "openvex_source", "licenses_source", "provenance_source"],
+      "properties": {
+        "candidate_build_source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/json"}}}]},
+        "retained_candidate_source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/json"}}}]},
+        "pre_publish_receipt_source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/json"}}}]},
+        "wheel_source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/octet-stream"}}}]},
+        "sdist_source": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {"media_type": {"const": "application/octet-stream"}}}]},
+        "sbom_source": {"$ref": "#/$defs/jsonSource"},
+        "openvex_source": {"$ref": "#/$defs/jsonSource"},
+        "licenses_source": {"$ref": "#/$defs/jsonSource"},
+        "provenance_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    },
+    "professionalEvidenceRows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_catalog_source", "original_source_refs", "expected_source", "observed_source"],
+      "properties": {
+        "source_catalog_source": {"$ref": "#/$defs/jsonSource"},
+        "original_source_refs": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/originalSource"}},
+        "expected_source": {"$ref": "#/$defs/jsonSource"},
+        "observed_source": {"$ref": "#/$defs/jsonSource"}
+      }
+    }
+  }
+}

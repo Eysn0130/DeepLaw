@@ -1,0 +1,856 @@
+{
+  "schema_version": "deeplaw.v013-qualification-protocol/v3",
+  "profile": "kernel_release_core",
+  "no_human_attestation": true,
+  "protocol_id": "deeplaw-v013-source-candidate-qualification",
+  "protocol_version": 3,
+  "status": "candidate_qualification",
+  "freeze_status": "protocol_frozen_machine_evaluation_candidate_binding_pending",
+  "objective": "Run a candidate-independent, machine-only qualification of the v0.13 Gate v9 contract while preserving source evidence, bounded context, host isolation, exact artifact provenance, and explicit non-claims.",
+  "classification_binding": {
+    "classification_id": "deeplaw-v013-commercial-gates-v9",
+    "schema_version": "deeplaw.v013-release-gate-classification/v9",
+    "relative_path": "benchmarks/release/v013-gate-classification-v9.json",
+    "sha256": "e9e2c5f332eea494ab0cf32804d61fbd5b3191e021f9686f9e5ceb7a27c61a09"
+  },
+  "construction_package_version": "0.12.0",
+  "release_target": "0.13.0",
+  "candidate_binding": {
+    "package_version": "0.12.0",
+    "source_commit": null,
+    "source_tree": null,
+    "lock_sha256": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082",
+    "wheel_filename": null,
+    "wheel_sha256": null,
+    "sdist_filename": null,
+    "sdist_sha256": null
+  },
+  "categories": [
+    {
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_allowed": false,
+      "gate_ids": [
+        "canonical_integrity",
+        "migration_recovery",
+        "secret_host_isolation",
+        "bounded_context",
+        "source_citation_locator",
+        "living_wiki",
+        "scale_performance",
+        "supported_platforms",
+        "reproducible_supply_chain",
+        "codex",
+        "opencode",
+        "selective_forget",
+        "timeline"
+      ]
+    },
+    {
+      "category": "Capability",
+      "category_id": "capability",
+      "required": false,
+      "not_claimed_allowed": true,
+      "gate_ids": [
+        "official_legal_pack",
+        "semantic_restore",
+        "claude",
+        "gui_desktop_interoperability"
+      ]
+    },
+    {
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_allowed": true,
+      "gate_ids": [
+        "machine_reference_isolation",
+        "qualification_comparative_holdout",
+        "final_blind_comparative_holdout",
+        "agent_review_panel",
+        "scorer_a",
+        "scorer_b",
+        "arbiter",
+        "comparative_incremental_benefit",
+        "superiority",
+        "sota"
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "gate_id": "canonical_integrity",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "exact_wheel_execution",
+      "artifact_kind": "exact_wheel_execution",
+      "required_task_cases": [],
+      "required_corpus_roles": [
+        "candidate_full"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "migration_recovery",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "candidate_full_junit",
+      "artifact_kind": "candidate_full_junit",
+      "required_task_cases": [],
+      "required_corpus_roles": [
+        "candidate_full"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "secret_host_isolation",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "host_event_sequence",
+      "artifact_kind": "host_event_sequence",
+      "required_task_cases": [
+        "continuity",
+        "living_wiki",
+        "professional_evidence"
+      ],
+      "required_corpus_roles": [
+        "host_qualification"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "bounded_context",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "context_capsule_selection_usage",
+      "artifact_kind": "context_capsule_selection_usage",
+      "required_task_cases": [],
+      "required_corpus_roles": [
+        "host_qualification"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "source_citation_locator",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "professional_evidence_rows",
+      "artifact_kind": "professional_evidence_rows",
+      "required_task_cases": [],
+      "required_corpus_roles": [
+        "professional_evidence"
+      ],
+      "source_duties": [
+        "original_bytes",
+        "original_hash",
+        "document",
+        "version",
+        "fragment",
+        "locator",
+        "wrong_version_rejection",
+        "effective_date",
+        "exception",
+        "proviso",
+        "cross_reference",
+        "false_authority",
+        "ocr_critical_token_gap",
+        "wiki_exact_source_drill_down"
+      ],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "living_wiki",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "wiki_journey_rows",
+      "artifact_kind": "wiki_journey_rows",
+      "required_task_cases": [
+        "alias_same_name_identity",
+        "rename_move",
+        "external_edit_reconcile",
+        "backlink_outlink",
+        "source_successor",
+        "wrong_merge_rejection",
+        "user_file_protection",
+        "full_incremental_noop_equivalence",
+        "wiki_exact_source_drill_down"
+      ],
+      "required_corpus_roles": [
+        "living_wiki"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "scale_performance",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "scale_report",
+      "artifact_kind": "scale_report",
+      "required_task_cases": [],
+      "required_corpus_roles": [
+        "scale_10000"
+      ],
+      "source_duties": [],
+      "scale_contract": {
+        "active_governed_objects": 10000,
+        "vault": "Vault",
+        "above_10000": "experimental_unqualified",
+        "deferred_100000": "v0.14",
+        "warm_samples": 30,
+        "required_metrics": [
+          "p50",
+          "p95",
+          "max",
+          "rss",
+          "storage",
+          "file_count",
+          "build",
+          "rebuild",
+          "full_incremental_noop_equivalence",
+          "user_bytes",
+          "provider_bound"
+        ],
+        "hard_failure_ids": [
+          "active_governed_object_count_mismatch",
+          "experimental_over_10000_claimed_qualified",
+          "100000_not_deferred_to_v0.14",
+          "warm_samples_below_30",
+          "missing_p50",
+          "missing_p95",
+          "missing_max",
+          "rss_missing",
+          "storage_missing",
+          "file_count_missing",
+          "build_duration_missing",
+          "rebuild_duration_missing",
+          "full_incremental_noop_mismatch",
+          "user_bytes_unbounded",
+          "provider_bound_exceeded"
+        ]
+      }
+    },
+    {
+      "gate_id": "supported_platforms",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "candidate_platform_receipt",
+      "artifact_kind": "candidate_platform_receipt",
+      "required_task_cases": [],
+      "required_corpus_roles": [
+        "candidate_platform"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "reproducible_supply_chain",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "retained_supply_chain",
+      "artifact_kind": "retained_supply_chain",
+      "required_task_cases": [],
+      "required_corpus_roles": [
+        "supply_chain"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "codex",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "host_event_sequence",
+      "artifact_kind": "host_event_sequence",
+      "required_task_cases": [
+        "continuity",
+        "living_wiki",
+        "professional_evidence"
+      ],
+      "required_corpus_roles": [
+        "host_qualification"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "opencode",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "host_event_sequence",
+      "artifact_kind": "host_event_sequence",
+      "required_task_cases": [
+        "continuity",
+        "living_wiki",
+        "professional_evidence"
+      ],
+      "required_corpus_roles": [
+        "host_qualification"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "selective_forget",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "wiki_journey_rows",
+      "artifact_kind": "wiki_journey_rows",
+      "required_task_cases": [],
+      "required_corpus_roles": [
+        "living_wiki"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "timeline",
+      "category": "Core",
+      "category_id": "core",
+      "required": true,
+      "not_claimed_only": false,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "host_event_sequence",
+      "artifact_kind": "host_event_sequence",
+      "required_task_cases": [
+        "continuity",
+        "living_wiki",
+        "professional_evidence"
+      ],
+      "required_corpus_roles": [
+        "host_qualification"
+      ],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "official_legal_pack",
+      "category": "Capability",
+      "category_id": "capability",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "semantic_restore",
+      "category": "Capability",
+      "category_id": "capability",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "claude",
+      "category": "Capability",
+      "category_id": "capability",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "gui_desktop_interoperability",
+      "category": "Capability",
+      "category_id": "capability",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "machine_reference_isolation",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "qualification_comparative_holdout",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "final_blind_comparative_holdout",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "agent_review_panel",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "scorer_a",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "scorer_b",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "arbiter",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "comparative_incremental_benefit",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "superiority",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    },
+    {
+      "gate_id": "sota",
+      "category": "Competitive/Research Claim",
+      "category_id": "competitive_research",
+      "required": false,
+      "not_claimed_only": true,
+      "status": "not_executed",
+      "passed": false,
+      "claim": false,
+      "assembly_enabled": false,
+      "evidence_kind": "not_executed",
+      "artifact_kind": "not_executed",
+      "required_task_cases": [],
+      "required_corpus_roles": [],
+      "source_duties": [],
+      "scale_contract": null
+    }
+  ],
+  "evidence_library": {
+    "status": "not_executed",
+    "accepted_materials": [
+      "owner_provided_professional",
+      "owner_provided_legal"
+    ],
+    "preserves_original_bytes": true,
+    "preserves_original_hash": true,
+    "produces_official_authority": false,
+    "produces_legal_authority": false,
+    "human_attestation_required": false,
+    "legal_expert_required": false,
+    "signed_pack_required": false
+  },
+  "source_contract": {
+    "artifact_kind": "professional_evidence_rows",
+    "duties": [
+      "original_bytes",
+      "original_hash",
+      "document",
+      "version",
+      "fragment",
+      "locator",
+      "wrong_version_rejection",
+      "effective_date",
+      "exception",
+      "proviso",
+      "cross_reference",
+      "false_authority",
+      "ocr_critical_token_gap",
+      "wiki_exact_source_drill_down"
+    ],
+    "threshold_metrics": [
+      "original_bytes_preservation_rate",
+      "original_hash_match_rate",
+      "document_identity_rate",
+      "version_identity_rate",
+      "fragment_identity_rate",
+      "locator_validity_rate",
+      "wrong_version_rejection_rate",
+      "effective_date_rate",
+      "exception_rate",
+      "proviso_rate",
+      "cross_reference_rate",
+      "false_authority_zero_rate",
+      "ocr_critical_token_gap_disposition_rate",
+      "wiki_exact_source_drill_down_rate"
+    ],
+    "hard_failure_ids": [
+      "original_bytes_mismatch",
+      "original_hash_mismatch",
+      "document_identity_mismatch",
+      "version_identity_mismatch",
+      "fragment_identity_mismatch",
+      "locator_invalid",
+      "wrong_version_rejection_failure",
+      "effective_date_mismatch",
+      "exception_mismatch",
+      "proviso_mismatch",
+      "cross_reference_mismatch",
+      "false_authority_admission",
+      "ocr_critical_token_gap_missing",
+      "wiki_exact_source_drill_down_failure"
+    ],
+    "protected_source_policy": "evidence_only_no_hidden_mutation"
+  },
+  "scale_contract": {
+    "active_governed_objects": 10000,
+    "vault": "Vault",
+    "above_10000": "experimental_unqualified",
+    "deferred_100000": "v0.14",
+    "warm_samples": 30,
+    "required_metrics": [
+      "p50",
+      "p95",
+      "max",
+      "rss",
+      "storage",
+      "file_count",
+      "build",
+      "rebuild",
+      "full_incremental_noop_equivalence",
+      "user_bytes",
+      "provider_bound"
+    ],
+    "hard_failure_ids": [
+      "active_governed_object_count_mismatch",
+      "experimental_over_10000_claimed_qualified",
+      "100000_not_deferred_to_v0.14",
+      "warm_samples_below_30",
+      "missing_p50",
+      "missing_p95",
+      "missing_max",
+      "rss_missing",
+      "storage_missing",
+      "file_count_missing",
+      "build_duration_missing",
+      "rebuild_duration_missing",
+      "full_incremental_noop_mismatch",
+      "user_bytes_unbounded",
+      "provider_bound_exceeded"
+    ]
+  },
+  "host_constraints": {
+    "codex": {
+      "binary_version": "codex-cli 0.148.0-alpha.15",
+      "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
+      "request_model": "gpt-5.6-luna",
+      "reasoning_effort": "max",
+      "auth_status_command": "codex login status",
+      "auth_material_access": "forbidden"
+    },
+    "opencode": {
+      "version": "1.18.16",
+      "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+      "executable_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
+      "package_sha256": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722",
+      "config_selector": "deepseek/deepseek-v4-flash",
+      "expected_response_model_id": "deepseek-v4-flash",
+      "runtime": "host_bun_runtime_only",
+      "dotenv_policy": "owner_only_external_strict_parser",
+      "secret_visibility": "forbidden"
+    }
+  },
+  "roles": {
+    "members": [
+      {
+        "role_id": "agent_review_panel",
+        "status": "not_executed",
+        "claim": false,
+        "required": false,
+        "secret_visibility": "forbidden"
+      },
+      {
+        "role_id": "scorer_a",
+        "status": "not_executed",
+        "claim": false,
+        "required": false,
+        "secret_visibility": "forbidden"
+      },
+      {
+        "role_id": "scorer_b",
+        "status": "not_executed",
+        "claim": false,
+        "required": false,
+        "secret_visibility": "forbidden"
+      },
+      {
+        "role_id": "arbiter",
+        "status": "not_executed",
+        "claim": false,
+        "required": false,
+        "secret_visibility": "forbidden"
+      }
+    ]
+  },
+  "isolation_contract": {
+    "shared_filesystem": "forbidden",
+    "shared_ipc": "forbidden",
+    "shared_transcript": "forbidden",
+    "input_mounts_read_only": true,
+    "secret_visibility": "forbidden",
+    "candidate_reference_visibility": "forbidden"
+  },
+  "hash_contract": {
+    "algorithm": "sha256",
+    "canonical_serialization": "UTF-8 JSON sort_keys separators=(',', ':') allow_nan=false",
+    "strict_utf8": true,
+    "reject_duplicate_keys": true,
+    "reject_nonfinite_numbers": true,
+    "path_closure": true,
+    "orphan_files": "reject",
+    "required_bindings": [
+      "classification_v9",
+      "protocol_manifest",
+      "candidate_binding",
+      "typed_evidence"
+    ]
+  },
+  "scoring_contract": {
+    "thresholds_frozen_before_result": true,
+    "not_executed_is_not_pass": true,
+    "hard_failure_maximum": 0,
+    "false_authority_maximum": 0,
+    "optional_claims_nonblocking": true
+  },
+  "failure_policy": {
+    "missing_evidence": "not_executed",
+    "unsafe_artifact": "failed",
+    "not_executed_is_not_pass": true,
+    "optional_missing_inputs": "non_blocking_for_core_release"
+  },
+  "freeze_policy": {
+    "optional_external_inputs_non_blocking": true,
+    "null_optional_inputs_do_not_block_freeze": true,
+    "owner_release_confirmation_required": true
+  },
+  "human_review": {
+    "mode": "optional_non_gating",
+    "status": "not_executed",
+    "attestation": "not_used_for_kernel_release_core",
+    "owner_release_confirmation": "required_at_release_decision"
+  },
+  "claim_policy": {
+    "release_ready": false,
+    "kernel_release_claim_eligible": false,
+    "competitive_claim_eligible": false,
+    "optional_claims_nonblocking": true,
+    "not_executed_is_not_pass": true,
+    "owner_release_confirmation": "required_at_release_decision"
+  }
+}

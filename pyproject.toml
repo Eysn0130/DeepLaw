@@ -114,7 +114,7 @@ exclude = [
 addopts = "-q"
 testpaths = ["tests"]
 markers = [
-  "qualification: reserved scale/Wiki qualification cases; not part of the Platform Core Gate",
+  "qualification: reserved machine qualification cases; not part of the Platform Core Gate",
   "windows_native: exercises native Windows ACL and reparse-point behavior",
 ]
 

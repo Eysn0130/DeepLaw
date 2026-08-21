@@ -1,0 +1,369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-host-task-evidence.v1.schema.json",
+  "title": "DeepLaw v0.13 Host task evidence v1",
+  "description": "Closed source projections used by the v0.13 Gate v9 Host task adapter. This contract contains observations only; qualification metrics and hard failures are derived by code.",
+  "oneOf": [
+    {"$ref": "#/$defs/taskCaseCatalog"},
+    {"$ref": "#/$defs/eventSequence"},
+    {"$ref": "#/$defs/lifecycleReceipt"},
+    {"$ref": "#/$defs/usageReceipt"},
+    {"$ref": "#/$defs/expectedTask"},
+    {"$ref": "#/$defs/taskResult"},
+    {"$ref": "#/$defs/isolationReceipt"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"},
+    "taskCase": {"enum": ["continuity", "living_wiki", "professional_evidence"]},
+    "host": {"enum": ["codex", "opencode"]},
+    "status": {"enum": ["observed", "gap", "not_executed"]},
+    "nullableSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "runBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "workflow_run_id"],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "corpusBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "role"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "role": {"const": "host_qualification"}
+      }
+    },
+    "identityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "sha256"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "codexIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binary_version", "binary_sha256", "request_model", "reasoning"],
+      "properties": {
+        "binary_version": {"const": "codex-cli 0.148.0-alpha.15"},
+        "binary_sha256": {"const": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"},
+        "request_model": {"const": "gpt-5.6-luna"},
+        "reasoning": {"const": "max"}
+      }
+    },
+    "opencodeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "source_commit", "config_selector", "expected_response_model_id", "executable_sha256", "package_sha256"],
+      "properties": {
+        "version": {"const": "1.18.16"},
+        "source_commit": {"const": "a3647eb025c7615159d417dcc49fc39fdaeba65b"},
+        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
+        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "executable_sha256": {"const": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"},
+        "package_sha256": {"const": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722"}
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "provenance_level", "host", "host_identity", "event_type", "event_sequence", "session_sha256", "parent_session_sha256", "observation"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.native-host-event/v2"},
+        "provenance_level": {"enum": ["native_plugin_hook", "compatibility_bridge"]},
+        "host": {"$ref": "#/$defs/host"},
+        "host_identity": {"oneOf": [{"$ref": "#/$defs/codexIdentity"}, {"$ref": "#/$defs/opencodeIdentity"}]},
+        "event_type": {"type": "string", "minLength": 1, "maxLength": 40},
+        "event_sequence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["index"],
+          "properties": {"index": {"type": "integer", "minimum": 0, "maximum": 1000000}, "sequence_sha256": {"$ref": "#/$defs/nullableSha256"}}
+        },
+        "session_sha256": {"$ref": "#/$defs/sha256"},
+        "parent_session_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "observation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["methods_observed", "status"],
+          "properties": {
+            "methods_observed": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"}},
+            "status": {"enum": ["received", "completed", "gap"]}
+          }
+        },
+        "route": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["exact", "unbound", "mismatch", "stale", "forgotten", "ambiguous"]},
+            "binding_sha256": {"$ref": "#/$defs/nullableSha256"},
+            "task_handle_sha256": {"$ref": "#/$defs/nullableSha256"},
+            "project_sha256": {"$ref": "#/$defs/nullableSha256"},
+            "repository_sha256": {"$ref": "#/$defs/nullableSha256"},
+            "worktree_sha256": {"$ref": "#/$defs/nullableSha256"}
+          }
+        }
+      }
+    },
+    "eventSequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "schema_version", "run_id", "workflow_run_id", "task_case", "host", "actual_response_model_id", "events"],
+      "properties": {
+        "artifact_kind": {"const": "event_sequence"},
+        "schema_version": {"const": "deeplaw.v013-host-task-evidence/v1"},
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "task_case": {"$ref": "#/$defs/taskCase"},
+        "host": {"$ref": "#/$defs/host"},
+        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash"]},
+        "events": {"type": "array", "minItems": 1, "maxItems": 1000000, "items": {"$ref": "#/$defs/event"}}
+      }
+    },
+    "lifecycleReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "schema_version", "run_id", "workflow_run_id", "task_case", "host", "actual_response_model_id", "receipts"],
+      "properties": {
+        "artifact_kind": {"const": "lifecycle_sequence"},
+        "schema_version": {"const": "deeplaw.v013-host-task-evidence/v1"},
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "task_case": {"$ref": "#/$defs/taskCase"},
+        "host": {"$ref": "#/$defs/host"},
+        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash"]},
+        "receipts": {"type": "array", "minItems": 1, "maxItems": 1000000, "items": {"type": "object", "additionalProperties": false, "required": ["schema_version", "provenance_level", "host", "host_identity", "event_type", "operation", "event_sequence", "raw_observation_digest", "session_sha256", "parent_session_sha256", "route_binding_provenance", "observed_methods", "status", "gap", "claim_eligible", "write_performed", "receipt_sha256"], "properties": {
+          "schema_version": {"const": "deeplaw.native-host-lifecycle-receipt/v2"},
+          "provenance_level": {"enum": ["native_plugin_hook", "compatibility_bridge"]},
+          "host": {"$ref": "#/$defs/host"},
+          "host_identity": {"oneOf": [{"$ref": "#/$defs/codexIdentity"}, {"$ref": "#/$defs/opencodeIdentity"}]},
+          "event_type": {"type": "string", "minLength": 1, "maxLength": 40},
+          "operation": {"enum": ["start", "message", "compaction_pre", "compaction_post", "resume", "fork", "end", "compaction"]},
+          "event_sequence": {"type": "object", "additionalProperties": false, "required": ["index"], "properties": {"index": {"type": "integer", "minimum": 0, "maximum": 1000000}, "sequence_sha256": {"$ref": "#/$defs/nullableSha256"}}},
+          "raw_observation_digest": {"type": "object", "additionalProperties": false, "required": ["bytes", "sha256"], "properties": {"bytes": {"type": "integer", "minimum": 1, "maximum": 65536}, "sha256": {"$ref": "#/$defs/sha256"}}},
+          "session_sha256": {"$ref": "#/$defs/sha256"},
+          "parent_session_sha256": {"$ref": "#/$defs/nullableSha256"},
+          "route_binding_provenance": {"type": "object", "additionalProperties": false, "required": ["status", "source", "verified", "binding_sha256", "task_handle_sha256", "project_sha256", "repository_sha256", "worktree_sha256"], "properties": {"status": {"enum": ["exact", "unbound", "mismatch", "stale", "forgotten", "ambiguous"]}, "source": {"enum": ["host_observed", "none"]}, "verified": {"type": "boolean"}, "binding_sha256": {"$ref": "#/$defs/nullableSha256"}, "task_handle_sha256": {"$ref": "#/$defs/nullableSha256"}, "project_sha256": {"$ref": "#/$defs/nullableSha256"}, "repository_sha256": {"$ref": "#/$defs/nullableSha256"}, "worktree_sha256": {"$ref": "#/$defs/nullableSha256"}}},
+          "observed_methods": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"}},
+          "status": {"enum": ["observed", "gap"]},
+          "gap": {"oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["code"], "properties": {"code": {"enum": ["route_unbound", "route_mismatch", "route_stale", "route_forgotten", "route_ambiguous", "route_incomplete", "route_unverified"]}}}]},
+          "claim_eligible": {"const": false},
+          "write_performed": {"const": false},
+          "receipt_sha256": {"$ref": "#/$defs/sha256"}
+        }}
+      }
+    }
+    },
+    "usageRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "workflow_run_id", "task_case", "host", "actual_response_model_id", "host_identity_sha256", "candidate_commit", "candidate_tree", "corpus_sha256", "runner_identity", "runner_sha256", "input_tokens", "output_tokens", "cache_tokens", "reasoning_tokens", "provider_bytes", "provider_sha256", "latency_ms", "rss_peak_bytes"],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "task_case": {"$ref": "#/$defs/taskCase"},
+        "host": {"$ref": "#/$defs/host"},
+        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash"]},
+        "host_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_commit": {"$ref": "#/$defs/git"},
+        "candidate_tree": {"$ref": "#/$defs/git"},
+        "corpus_sha256": {"$ref": "#/$defs/sha256"},
+        "runner_identity": {"$ref": "#/$defs/identifier"},
+        "runner_sha256": {"$ref": "#/$defs/sha256"},
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "cache_tokens": {"type": "integer", "minimum": 0},
+        "reasoning_tokens": {"type": "integer", "minimum": 0},
+        "provider_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "provider_sha256": {"$ref": "#/$defs/sha256"},
+        "latency_ms": {"type": "number", "minimum": 0},
+        "rss_peak_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "usageReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "schema_version", "run_id", "workflow_run_id", "task_case", "host", "actual_response_model_id", "rows"],
+      "properties": {
+        "artifact_kind": {"const": "usage_receipt"},
+        "schema_version": {"const": "deeplaw.v013-host-task-evidence/v1"},
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "task_case": {"$ref": "#/$defs/taskCase"},
+        "host": {"$ref": "#/$defs/host"},
+        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash"]},
+        "rows": {"type": "array", "minItems": 1, "maxItems": 1000000, "items": {"$ref": "#/$defs/usageRow"}}
+      }
+    },
+    "duty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duty", "status", "gap_code"],
+      "properties": {
+        "duty": {"$ref": "#/$defs/identifier"},
+        "status": {"enum": ["observed", "gap"]},
+        "gap_code": {"type": ["string", "null"], "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"}
+      }
+    },
+    "identitySelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "identity_sha256"],
+      "properties": {"kind": {"$ref": "#/$defs/identifier"}, "identity_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "stateRows": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"type": "object", "additionalProperties": false, "required": ["state", "admitted"], "properties": {"state": {"$ref": "#/$defs/identifier"}, "admitted": {"type": "boolean"}}}
+    },
+    "auditProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["in_capsule", "sha256", "entry_count"],
+      "properties": {"in_capsule": {"const": false}, "sha256": {"$ref": "#/$defs/sha256"}, "entry_count": {"type": "integer", "minimum": 0}}
+    },
+    "authorizedMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "operation", "owner_authorized", "receipt_sha256"],
+      "properties": {
+        "observed": {"type": "boolean"},
+        "operation": {"type": ["string", "null"], "enum": ["owner_forget", null]},
+        "owner_authorized": {"type": "boolean"},
+        "receipt_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    },
+    "taskResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "schema_version", "run_id", "workflow_run_id", "task_case", "host", "first_correct_action", "decision_preservation", "wrong_state_admission", "duties", "provider", "selected_identities", "duplicate_distractor", "no_hidden_mutation", "query_trace", "ledger", "lifecycle_steps", "observed_public_seams", "claim_eligible"],
+      "properties": {
+        "artifact_kind": {"const": "task_result"},
+        "schema_version": {"const": "deeplaw.v013-host-task-evidence/v1"},
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "task_case": {"$ref": "#/$defs/taskCase"},
+        "host": {"$ref": "#/$defs/host"},
+        "first_correct_action": {"type": "object", "additionalProperties": false, "required": ["observed", "event_index", "seam"], "properties": {"observed": {"type": "boolean"}, "event_index": {"type": "integer", "minimum": 0}, "seam": {"enum": ["knowledge_support", "native_capsule", "source_read", "wiki_read"]}}},
+        "decision_preservation": {"type": "object", "additionalProperties": false, "required": ["observed", "identity_sha256"], "properties": {"observed": {"type": "boolean"}, "identity_sha256": {"$ref": "#/$defs/sha256"}}},
+        "wrong_state_admission": {"$ref": "#/$defs/stateRows"},
+        "duties": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/duty"}},
+        "provider": {"type": "object", "additionalProperties": false, "required": ["capsule_sha256", "provider_bytes", "input_tokens", "output_tokens", "cache_tokens", "reasoning_tokens"], "properties": {"capsule_sha256": {"$ref": "#/$defs/sha256"}, "provider_bytes": {"type": "integer", "minimum": 1, "maximum": 65536}, "input_tokens": {"type": "integer", "minimum": 0}, "output_tokens": {"type": "integer", "minimum": 0}, "cache_tokens": {"type": "integer", "minimum": 0}, "reasoning_tokens": {"type": "integer", "minimum": 0}}},
+        "selected_identities": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/identitySelection"}},
+        "duplicate_distractor": {"$ref": "#/$defs/stateRows"},
+        "no_hidden_mutation": {"type": "object", "additionalProperties": false, "required": ["hidden_mutation", "write_performed", "ledger_before_sha256", "ledger_after_sha256", "authorized_mutation", "process_receipt_observed"], "properties": {"hidden_mutation": {"const": false}, "write_performed": {"type": "boolean"}, "ledger_before_sha256": {"$ref": "#/$defs/sha256"}, "ledger_after_sha256": {"$ref": "#/$defs/sha256"}, "authorized_mutation": {"$ref": "#/$defs/authorizedMutation"}, "process_receipt_observed": {"type": "boolean"}}},
+        "query_trace": {"$ref": "#/$defs/auditProjection"},
+        "ledger": {"$ref": "#/$defs/auditProjection"},
+        "lifecycle_steps": {"type": "array", "maxItems": 16, "items": {"type": "object", "additionalProperties": false, "required": ["step", "observed", "gap_code"], "properties": {"step": {"$ref": "#/$defs/identifier"}, "observed": {"type": "boolean"}, "gap_code": {"type": ["string", "null"], "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"}}}},
+        "observed_public_seams": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"enum": ["knowledge_support", "native_capsule", "source_read", "fragment_read", "wiki_read", "query_context"]}},
+        "claim_eligible": {"const": false}
+      }
+    },
+    "expectedRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "required_duties", "required_wrong_states", "required_operations"],
+      "properties": {
+        "case_id": {"$ref": "#/$defs/identifier"},
+        "required_duties": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "required_wrong_states": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "required_operations": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}
+      }
+    },
+    "dutyExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duty", "allowed_statuses", "required_gap_code"],
+      "properties": {
+        "duty": {"$ref": "#/$defs/identifier"},
+        "allowed_statuses": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": {"enum": ["observed", "gap"]}},
+        "required_gap_code": {"type": ["string", "null"], "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"}
+      }
+    },
+    "expectedTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "schema_version", "run_id", "workflow_run_id", "task_case", "host", "required_duties", "duty_expectations", "rows", "hard_failure_ids"],
+      "properties": {
+        "artifact_kind": {"const": "expected_task"},
+        "schema_version": {"const": "deeplaw.v013-host-task-evidence/v1"},
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "task_case": {"$ref": "#/$defs/taskCase"},
+        "host": {"$ref": "#/$defs/host"},
+        "required_duties": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "duty_expectations": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/dutyExpectation"}},
+        "rows": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/expectedRow"}},
+        "hard_failure_ids": {"type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}
+      }
+    },
+    "isolationReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "schema_version", "candidate_binding", "run_binding", "corpus", "runner", "scorer", "host", "task_case", "secret_boundary", "process_boundary", "write_observation", "claim_eligible"],
+      "properties": {
+        "artifact_kind": {"const": "isolation_receipt"},
+        "schema_version": {"const": "deeplaw.v013-host-task-evidence/v1"},
+        "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+        "run_binding": {"$ref": "#/$defs/runBinding"},
+        "corpus": {"$ref": "#/$defs/corpusBinding"},
+        "runner": {"$ref": "#/$defs/identityBinding"},
+        "scorer": {"$ref": "#/$defs/identityBinding"},
+        "host": {"$ref": "#/$defs/host"},
+        "task_case": {"$ref": "#/$defs/taskCase"},
+        "secret_boundary": {"type": "object", "additionalProperties": false, "required": ["parent_secret_present", "child_secret_present", "auth_read", "transcript_read", "prompt_read", "reasoning_read", "secret_read"], "properties": {"parent_secret_present": {"type": "boolean"}, "child_secret_present": {"type": "boolean"}, "auth_read": {"const": false}, "transcript_read": {"const": false}, "prompt_read": {"const": false}, "reasoning_read": {"const": false}, "secret_read": {"const": false}}},
+        "process_boundary": {"type": "object", "additionalProperties": false, "required": ["native_receipt_observed", "host_process_separated", "mcp_process_separated"], "properties": {"native_receipt_observed": {"type": "boolean"}, "host_process_separated": {"type": "boolean"}, "mcp_process_separated": {"type": "boolean"}}},
+        "write_observation": {"type": "object", "additionalProperties": false, "required": ["hidden_mutation", "write_performed", "authorized_mutation", "audit_head_before_sha256", "audit_head_after_sha256"], "properties": {"hidden_mutation": {"const": false}, "write_performed": {"type": "boolean"}, "authorized_mutation": {"$ref": "#/$defs/authorizedMutation"}, "audit_head_before_sha256": {"$ref": "#/$defs/sha256"}, "audit_head_after_sha256": {"$ref": "#/$defs/sha256"}}},
+        "claim_eligible": {"const": false}
+      }
+    },
+    "taskCaseCatalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "schema_version", "status", "hosts", "task_cases", "host_constraints"],
+      "properties": {
+        "artifact_kind": {"const": "task_case_catalog"},
+        "schema_version": {"const": "deeplaw.v013-host-task-cases/v1"},
+        "status": {"const": "qualification_input_frozen"},
+        "hosts": {"const": ["codex", "opencode"]},
+        "task_cases": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "object", "additionalProperties": false, "required": ["task_case", "required_duties", "required_wrong_states", "required_operations"], "properties": {"task_case": {"$ref": "#/$defs/taskCase"}, "required_duties": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}, "required_wrong_states": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}, "required_operations": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}, "scenarios": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}}}},
+        "host_constraints": {"type": "object", "additionalProperties": false, "required": ["codex", "opencode"], "properties": {"codex": {"$ref": "#/$defs/hostConstraint"}, "opencode": {"$ref": "#/$defs/hostConstraint"}}}
+      }
+    },
+    "hostConstraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_version", "binary_sha256", "model_id", "expected_response_model_id", "argv_prefix"],
+      "properties": {
+        "tool_version": {"type": "string", "minLength": 1},
+        "binary_sha256": {"$ref": "#/$defs/sha256"},
+        "source_commit": {"$ref": "#/$defs/git"},
+        "config_selector": {"type": "string", "minLength": 1},
+        "model_id": {"type": "string", "minLength": 1},
+        "expected_response_model_id": {"type": "string", "minLength": 1},
+        "reasoning_effort": {"type": ["string", "null"]},
+        "argv_prefix": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

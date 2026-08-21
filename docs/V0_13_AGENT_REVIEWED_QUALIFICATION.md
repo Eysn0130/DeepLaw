@@ -1,17 +1,19 @@
-# DeepLaw v0.13 machine-evaluated qualification
+# DeepLaw v0.13 historical Gate v8 machine-evaluated qualification
 
-Status: **protocol frozen; machine-evaluation inputs pending**. This document defines the new
-machine-only profile while preserving the historical v1 contracts and fixtures. The current
-active qualification record is v2. The tracked package remains `0.12.0`; no candidate artifact is
-bound and no release decision is enabled.
+Status: **historical compatibility protocol; not the active release gate**. This document preserves
+the Gate v8 machine-only profile and v1/v2 contracts without rewriting their evidence semantics.
+The active Kernel release boundary is Gate v9 with
+[`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json),
+profile `kernel_release_core`. The tracked package remains `0.12.0`; no candidate artifact is bound
+and no release decision is enabled.
 
-The machine-readable contract is
+The historical machine-readable contract is
 [`contracts/v013-qualification-protocol.v2.schema.json`](../contracts/v013-qualification-protocol.v2.schema.json).
-The frozen protocol is
+The historical frozen protocol is
 [`benchmarks/v013/qualification-protocol-v2.json`](../benchmarks/v013/qualification-protocol-v2.json),
 with its exact JSON-byte hash in
 [`benchmarks/v013/qualification-protocol-v2.sha256`](../benchmarks/v013/qualification-protocol-v2.sha256).
-The pending active binding is
+The retained Gate v8 binding is
 [`benchmarks/v013/active-qualification-v2.json`](../benchmarks/v013/active-qualification-v2.json).
 
 ## Profile boundary

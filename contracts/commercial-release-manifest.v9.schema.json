@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/commercial-release-manifest.v9.schema.json",
+  "title": "DeepLaw Kernel Release Core commercial release manifest v9",
+  "description": "Release provenance for Gate classification v9. Only the 13 Kernel Release Core Gates authorize release; capability and competitive research claims remain independent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "reference_provenance",
+    "human_authenticity",
+    "environment",
+    "release",
+    "run_ids",
+    "candidate_binding",
+    "artifact_binding",
+    "evidence_bundle_binding",
+    "pre_publish_artifact_gate",
+    "gate_evidence",
+    "release_ready",
+    "public_release_verified",
+    "post_public_verification",
+    "kernel_release_claim_eligible",
+    "human_attested_claim_eligible",
+    "competitive_claim_eligible",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.commercial-release-manifest/v9"},
+    "profile": {"const": "kernel_release_core"},
+    "reference_provenance": {"enum": ["deterministic_expected_evidence", "not_applicable"]},
+    "human_authenticity": {"const": "not_claimed"},
+    "environment": {"$ref": "#/$defs/environment"},
+    "release": {"$ref": "#/$defs/release"},
+    "run_ids": {"$ref": "#/$defs/runIds"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "artifact_binding": {"$ref": "#/$defs/artifactBinding"},
+    "evidence_bundle_binding": {"$ref": "#/$defs/evidenceBundleBinding"},
+    "pre_publish_artifact_gate": {"$ref": "#/$defs/prePublishReceipt"},
+    "gate_evidence": {"$ref": "#/$defs/gateEvidence"},
+    "release_ready": {"type": "boolean"},
+    "public_release_verified": {"type": "boolean"},
+    "post_public_verification": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/postPublicReceipt"}]
+    },
+    "kernel_release_claim_eligible": {"type": "boolean"},
+    "human_attested_claim_eligible": {"const": false},
+    "competitive_claim_eligible": {"const": false},
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"release_ready": {"const": true}}, "required": ["release_ready"]},
+      "then": {
+        "properties": {
+          "gate_evidence": {"$ref": "#/$defs/passedGateEvidence"},
+          "kernel_release_claim_eligible": {"const": true}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"release_ready": {"const": false}}, "required": ["release_ready"]},
+      "then": {"properties": {"kernel_release_claim_eligible": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"public_release_verified": {"const": true}}, "required": ["public_release_verified"]},
+      "then": {"properties": {"post_public_verification": {"$ref": "#/$defs/postPublicReceipt"}}}
+    },
+    {
+      "if": {"properties": {"public_release_verified": {"const": false}}, "required": ["public_release_verified"]},
+      "then": {"properties": {"post_public_verification": {"type": "null"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"},
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform_system",
+        "platform_release",
+        "platform_version",
+        "machine",
+        "python_implementation",
+        "python_version",
+        "python_executable_name",
+        "uv_version",
+        "ci",
+        "github_actions",
+        "github_runner_os",
+        "github_runner_arch"
+      ],
+      "properties": {
+        "platform_system": {"type": "string", "minLength": 1, "maxLength": 100},
+        "platform_release": {"type": "string", "minLength": 1, "maxLength": 200},
+        "platform_version": {"type": "string", "minLength": 1, "maxLength": 200},
+        "machine": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python_implementation": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python_executable_name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "uv_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "ci": {"type": "boolean"},
+        "github_actions": {"type": "boolean"},
+        "github_runner_os": {"type": ["string", "null"], "maxLength": 100},
+        "github_runner_arch": {"type": ["string", "null"], "maxLength": 100}
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "version", "tag", "commit", "tree"],
+      "properties": {
+        "repository": {"const": "Eysn0130/DeepLaw"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "tag": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"}
+      }
+    },
+    "runIds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_run_id", "evidence_run_id", "qualification_run_id"],
+      "properties": {
+        "candidate_run_id": {"type": "integer", "minimum": 1},
+        "evidence_run_id": {"type": "integer", "minimum": 1},
+        "qualification_run_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256", "version"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "byte_size"],
+      "properties": {
+        "path": {"$ref": "#/$defs/safePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864}
+      }
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wheel", "sdist", "retained_manifest_sha256"],
+      "properties": {
+        "wheel": {"$ref": "#/$defs/artifact"},
+        "sdist": {"$ref": "#/$defs/artifact"},
+        "retained_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "evidenceBundleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_path", "manifest_sha256", "candidate_run_id", "evidence_run_id"],
+      "properties": {
+        "manifest_path": {"$ref": "#/$defs/safePath"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_run_id": {"type": "integer", "minimum": 1},
+        "evidence_run_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "prePublishReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "receipt_sha256", "status"],
+      "properties": {
+        "path": {"$ref": "#/$defs/safePath"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "status": {"const": "pre_publish_passed"}
+      }
+    },
+    "claimStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "status", "claim_eligible"],
+      "properties": {
+        "gate_id": {"$ref": "#/$defs/identifier"},
+        "status": {"enum": ["passed", "failed", "not_executed"]},
+        "claim_eligible": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"claim_eligible": {"const": true}}, "required": ["claim_eligible"]},
+          "then": {"properties": {"status": {"const": "passed"}}}
+        }
+      ]
+    },
+    "gateEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_path",
+        "report_sha256",
+        "record_sha256",
+        "classification_sha256",
+        "status",
+        "hard_zero",
+        "core_gates_passed",
+        "capability_claims",
+        "competitive_research_claims"
+      ],
+      "properties": {
+        "report_path": {"$ref": "#/$defs/safePath"},
+        "report_sha256": {"$ref": "#/$defs/sha256"},
+        "record_sha256": {"$ref": "#/$defs/sha256"},
+        "classification_sha256": {"$ref": "#/$defs/sha256"},
+        "status": {"enum": ["passed", "failed", "not_executed"]},
+        "hard_zero": {"type": "boolean"},
+        "core_gates_passed": {"type": "boolean"},
+        "capability_claims": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/claimStatus"}
+        },
+        "competitive_research_claims": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/claimStatus"}
+        }
+      }
+    },
+    "passedGateEvidence": {
+      "allOf": [
+        {"$ref": "#/$defs/gateEvidence"},
+        {"properties": {"status": {"const": "passed"}, "hard_zero": {"const": true}, "core_gates_passed": {"const": true}}}
+      ]
+    },
+    "artifactHashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "bundle_sha256", "verified"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "bundle_sha256": {"$ref": "#/$defs/sha256"},
+        "verified": {"const": true}
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "attestation_sha256", "verified"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identifier"},
+        "attestation_sha256": {"$ref": "#/$defs/sha256"},
+        "verified": {"const": true}
+      }
+    },
+    "redownload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_id", "source", "wheel_sha256", "sdist_sha256", "sha256_matches"],
+      "properties": {
+        "attempt_id": {"$ref": "#/$defs/identifier"},
+        "source": {"const": "anonymous_public_redownload"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"},
+        "sha256_matches": {"const": true}
+      }
+    },
+    "postPublicReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "status",
+        "verified_at",
+        "artifact_binding",
+        "sigstore",
+        "attestation",
+        "anonymous_redownload",
+        "public_sha256",
+        "public_release_verified",
+        "record_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "deeplaw.post-public-verification/v1"},
+        "status": {"const": "post_public_verified"},
+        "verified_at": {"type": "string", "format": "date-time"},
+        "artifact_binding": {"$ref": "#/$defs/artifactHashes"},
+        "sigstore": {"$ref": "#/$defs/verification"},
+        "attestation": {"$ref": "#/$defs/attestation"},
+        "anonymous_redownload": {"$ref": "#/$defs/redownload"},
+        "public_sha256": {"$ref": "#/$defs/artifactHashes"},
+        "public_release_verified": {"const": true},
+        "record_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

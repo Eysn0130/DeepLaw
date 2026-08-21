@@ -93,14 +93,15 @@ def test_external_has_six_role_domains_and_one_way_security_handoffs() -> None:
     assert "candidate-qualification-inputs" in assembly
 
 
-def test_candidate_full_freezes_construction_machine_only_active_v2() -> None:
+def test_candidate_full_freezes_construction_kernel_release_core_active_v3() -> None:
     workflow = _workflow("candidate-full.yml")
 
-    assert "benchmarks/v013/active-qualification-v2.json" in workflow
+    assert "benchmarks/v013/active-qualification-v3.json" in workflow
     assert '--output "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json"' in workflow
     assert '--active-qualification "${verified}/frozen-active-qualification.json"' in workflow
     assert "active-qualification-v1.json" not in workflow
-    assert "benchmarks.release.freeze_qualification_candidate_v2" in workflow
+    assert "benchmarks.release.freeze_qualification_candidate_v3" in workflow
+    assert "active-qualification-v2.json" not in workflow
     assert "benchmarks.release.freeze_qualification_candidate " not in workflow
 
 
@@ -117,10 +118,32 @@ def test_candidate_full_retains_reproducible_artifact_and_raw_platform_evidence(
     assert "installed-licenses.json" in workflow
     assert "candidate-tests.xml" in workflow
     assert "windows-calibration.xml" in workflow
+    assert "windows-calibration-shards:" in workflow
+    assert "windows-calibration-shard-${{ matrix.shard }}" in workflow
+    assert "windows-calibration-aggregate.json" in workflow
     assert "windows-aggregate.json" in workflow
     assert "platform-matrix-receipt.json" in workflow
     assert "= 14" in workflow
     assert "retention-days: 90" in workflow
+
+
+def test_candidate_full_runs_the_exact_10k_public_path_once() -> None:
+    workflow = _workflow("candidate-full.yml")
+    block = _job_block(workflow, "scale_ten_thousand")
+
+    assert "needs: verified-artifact" in block
+    assert "verified-candidate-artifacts" in block
+    assert "benchmarks.v013.scale_qualification_v9" in block
+    assert "--execute-10k" in block
+    assert "--workflow-run-id \"${GITHUB_RUN_ID}\"" in block
+    assert "--candidate-wheel-sha256" in block
+    assert "--candidate-sdist-sha256" in block
+    assert "scale-10000-evidence" in block
+    assert "100k" not in block.casefold()
+
+    aggregate = workflow.split("\n  aggregate-raw-evidence:\n", maxsplit=1)[1]
+    assert "needs['scale_ten_thousand'].result == 'success'" in aggregate
+    assert "v013-scale-qualification-v9.json" in aggregate
 
 
 def test_external_dispatch_requires_only_candidate_run_id() -> None:
@@ -337,28 +360,62 @@ def test_external_uploads_only_sanitized_v4_bundle_without_gate_claims() -> None
     assert "claim_eligible" not in workflow
 
 
-def test_commercial_qualification_dispatch_and_assembly_are_machine_only_v8() -> None:
+def test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding() -> None:
+    workflow = _workflow("kernel-qualification-evidence.yml")
+    parsed = yaml.safe_load(workflow)
+    trigger = parsed.get("on", parsed.get(True))
+
+    assert set(trigger["workflow_dispatch"]["inputs"]) == {"candidate_run_id"}
+    assert "runs-on: [self-hosted, macOS, deeplaw-kernel-qualification]" in workflow
+    assert "DEEPLAW_KERNEL_EVIDENCE_COLLECTOR" in workflow
+    assert "--transport-retry-limit 1" in workflow
+    assert '"codex-cli 0.148.0-alpha.15"' in workflow
+    assert '"gpt-5.6-luna"' in workflow
+    assert '"deepseek/deepseek-v4-flash"' in workflow
+    assert "scale-10000-evidence/v013-scale-qualification-v9.json" in workflow
+    assert "kernel_qualification_bundle_v1 build" in workflow
+    assert "sentinel=9223372036854775807" in workflow
+    assert 'rm "${root}/bundle-manifest.json"' in workflow
+    assert "name: kernel-qualification-evidence" in workflow
+    assert "retained-broker-source/codex.launcher-source" in workflow
+    assert "retained-broker-source/opencode.launcher-source" in workflow
+    assert 'source "${DEEPLAW_OPENCODE_DOTENV}"' not in workflow
+    assert 'cat "${DEEPLAW_OPENCODE_DOTENV}"' not in workflow
+    assert "path.read_bytes()" not in workflow.split(
+        'exact_file(\n              "DEEPLAW_OPENCODE_DOTENV"', maxsplit=1
+    )[1].split("          fixed =", maxsplit=1)[0]
+    for forbidden in (
+        "deeplaw_reference_freezer",
+        "deeplaw_scorer_a",
+        "deeplaw_scorer_b",
+        "deeplaw_deterministic_arbiter",
+        "qualification_holdout",
+        "final_blind",
+        "superiority",
+        "sota",
+    ):
+        assert forbidden not in workflow.casefold()
+
+
+def test_commercial_qualification_dispatch_and_assembly_use_kernel_v9() -> None:
     workflow = _workflow("commercial-qualification.yml")
     trigger = _trigger(workflow)
 
     inputs = trigger["workflow_dispatch"]["inputs"]
     assert set(inputs) == {"candidate_run_id", "evidence_run_id"}
     assert "QUALIFICATION_RUN_ID: ${{ github.run_id }}" in workflow
-    assert "--qualification-run-id \"${GITHUB_RUN_ID}\"" in workflow
-    assert "assemble_commercial_qualification_v8" in workflow
-    assert "release_provenance_v8" in workflow
+    assert "--qualification-run-id \"${QUALIFICATION_RUN_ID}\"" in workflow
+    assert "assemble_commercial_qualification_v9" in workflow
+    assert "release_provenance_v9" in workflow
+    assert "kernel_qualification_bundle_v1" in workflow
+    assert "kernel-qualification-evidence.yml" in workflow
     assert "external_qualification_bundle_v4" not in workflow
     assert "assemble_commercial_qualification_v7" not in workflow
     assert "release_provenance_v7" not in workflow
-    assert "v013-gate-classification-v8.json" in workflow
-    assert "qualification-protocol-v2.json" in workflow
-    assert "--semantic-reference-sha256" in workflow
-    assert "--candidate-binding-sha256" in workflow
-    assert "--final-blind-holdout-sha256" in workflow
-    assert "--scorer-panel-sha256" in workflow
-    assert "--compiler-scorer-isolation-sha256" in workflow
-    assert "post_build_machine_reference_binding" in workflow
-    assert "candidate_machine_reference" in workflow
+    assert "v013-gate-classification-v8.json" not in workflow
+    assert "qualification-protocol-v2.json" not in workflow
+    assert "post_build_machine_reference_binding" not in workflow
+    assert "candidate_machine_reference" not in workflow
     for forbidden in (
         "trusted-human-approver",
         "trusted-human",
@@ -369,17 +426,20 @@ def test_commercial_qualification_dispatch_and_assembly_are_machine_only_v8() ->
         assert forbidden not in workflow
 
 
-def test_release_reopens_v8_transitive_provenance_and_keeps_public_state_separate() -> None:
+def test_release_reopens_v9_kernel_provenance_and_keeps_public_state_separate() -> None:
     workflow = _workflow("release.yml")
 
-    assert "release_provenance_v8" in workflow
-    assert "external_qualification_bundle_v4" in workflow
-    assert "v013-gate-classification-v8.json" in workflow
-    assert "--candidate-machine-reference-binding" in workflow
-    assert "post_build_machine_reference_binding" in workflow
-    assert "candidate_machine_reference" in workflow
+    assert "release_provenance_v9" in workflow
+    assert "kernel_qualification_bundle_v1" in workflow
+    assert "kernel-qualification-evidence.yml" in workflow
+    assert "external_qualification_bundle_v4" not in workflow
+    assert "v013-gate-classification-v8.json" not in workflow
+    assert "--candidate-machine-reference-binding" not in workflow
+    assert "post_build_machine_reference_binding" not in workflow
+    assert "candidate_machine_reference" not in workflow
     assert "commercial-release-assets" in workflow
-    assert "pre_publish_artifact_gate" in workflow
+    assert "release-bound-commercial-assets" in workflow
+    assert "pre-publish-artifact-gate.json" in workflow
     assert "public_release_verified" in workflow
     assert "tree: ${{ steps.release.outputs.tree }}" in workflow
     assert "tree=$(git rev-parse HEAD^{tree})" in workflow

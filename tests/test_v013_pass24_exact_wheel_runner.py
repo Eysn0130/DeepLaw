@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -272,13 +273,14 @@ def test_unique_wheel_is_installed_and_receipt_is_path_free(tmp_path: Path) -> N
     assert receipt["runtime"]["import_file_path_class"] == "venv_site_packages"
     assert receipt["entrypoint"]["value"] == "deeplaw.cli:main"
     assert receipt["entrypoint"]["executable_path_class"] == "venv_bin"
-    assert receipt["entrypoint"]["executable_relative_path"].endswith("deeplaw")
+    expected_entrypoint = "Scripts/deeplaw.exe" if os.name == "nt" else "bin/deeplaw"
+    assert receipt["entrypoint"]["executable_relative_path"] == expected_entrypoint
     assert receipt["entrypoint"]["module_path_class"] == "venv_site_packages"
     assert receipt["entrypoint"]["module_relative_path"] == "deeplaw/cli.py"
     assert receipt["version_check"]["argv"] == ["deeplaw", "--version"]
     assert receipt["version_check"]["exit_code"] == 0
     assert receipt["version_check"]["stdout_bytes"] == len(
-        f"deeplaw {EXPECTED_VERSION}\n".encode()
+        f"deeplaw {EXPECTED_VERSION}{os.linesep}".encode()
     )
     assert receipt["network_acquisition"] == {
         "explicit": True,
@@ -561,6 +563,43 @@ def test_console_version_execution_failure_cleans_venv(tmp_path: Path) -> None:
             venv_path=venv_path,
         )
     assert not venv_path.exists()
+
+
+def test_version_probe_accepts_one_native_line_and_rejects_other_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Completed:
+        returncode = 0
+
+        def __init__(self, stdout: bytes, stderr: bytes = b"") -> None:
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def probe(stdout: bytes, stderr: bytes = b"") -> dict[str, Any]:
+        def run(*_args: object, **_kwargs: object) -> Completed:
+            return Completed(stdout, stderr)
+
+        monkeypatch.setattr(exact_wheel_runner.subprocess, "run", run)
+        return exact_wheel_runner._run_version(
+            console_entrypoint=tmp_path / "deeplaw",
+            venv_path=tmp_path,
+            expected_version=EXPECTED_VERSION,
+            python_executable=tmp_path / "python",
+        )
+
+    expected_line = f"deeplaw {EXPECTED_VERSION}".encode()
+    for output in (expected_line + b"\n", expected_line + b"\r\n"):
+        receipt = probe(output)
+        assert receipt["stdout_sha256"] == hashlib.sha256(output).hexdigest()
+        assert receipt["stdout_bytes"] == len(output)
+
+    for stdout, stderr in (
+        (expected_line, b""),
+        (expected_line + b"\nextra\n", b""),
+        (expected_line + b"\n", b"warning\n"),
+    ):
+        with pytest.raises(ExactWheelExecutionError, match="output differs"):
+            probe(stdout, stderr)
 
 
 def test_public_journey_step_failure_cleans_venv(tmp_path: Path) -> None:

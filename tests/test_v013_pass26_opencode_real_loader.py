@@ -56,6 +56,7 @@ def _freeze_local_plugin_dependency(directory: Path) -> None:
     )
 
 
+@pytest.mark.qualification
 @pytest.mark.skipif(OPENCODE is None, reason="local OpenCode binary is unavailable")
 def test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event(
     tmp_path: Path,

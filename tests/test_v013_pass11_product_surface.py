@@ -376,8 +376,11 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
         for item in manifest["external_callers"]
         if item["caller"] == "tests/contracts"
     )
-    assert "benchmarks/release/v013-gate-classification-v8.json" in tests_contracts[
+    assert "benchmarks/release/v013-gate-classification-v9.json" in tests_contracts[
         "current_bindings"
+    ]
+    assert "historical Gate v1-v8 classifications and migration fixtures" in tests_contracts[
+        "compatibility_bindings"
     ]
     assert all(
         "knowledge_support operation=wiki" not in binding
@@ -416,10 +419,10 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
 
 def test_current_documented_product_truth_cannot_drift_to_historical_state() -> None:
     active = json.loads(
-        (REPOSITORY / "benchmarks/v013/active-qualification-v2.json").read_bytes()
+        (REPOSITORY / "benchmarks/v013/active-qualification-v3.json").read_bytes()
     )
-    assert active["schema_version"] == "deeplaw.v013-active-qualification/v2"
-    assert active["profile"] == "machine_evaluated_no_human_attestation"
+    assert active["schema_version"] == "deeplaw.v013-active-qualification/v3"
+    assert active["profile"] == "kernel_release_core"
     project = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
     version = project["project"]["version"]
     assert active["candidate_version"] == version
@@ -439,7 +442,7 @@ def test_current_documented_product_truth_cannot_drift_to_historical_state() -> 
     architecture = (REPOSITORY / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
     chinese = (REPOSITORY / "README.md").read_text(encoding="utf-8")
     english = (REPOSITORY / "README_EN.md").read_text(encoding="utf-8")
-    assert "PRD revision: **1.3.2**" in prd
+    assert "PRD revision: **1.3.3**" in prd
     assert "latest committed pass-specific disposition" not in prd
     assert "Gate v6" not in architecture
     assert "Pass 21" not in architecture

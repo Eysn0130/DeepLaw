@@ -33,17 +33,22 @@ and Locators; the Wiki is a rebuildable projection, not a complete editable cano
 
 - Public package/main: `0.12.0 Beta`; latest tag: `v0.12.0`.
 - Active qualification: `machine_evaluation_pending`; profile:
-  `machine_evaluated_no_human_attestation`; Gate classification: v8.
+  `kernel_release_core`; Gate classification: v9.
 - `release_ready=false`; there is no `0.13.0` tag or release.
 - Current Provider advertisement: knowledge-support input v7 / output v6 with only `query`,
   `context`, and `explain`; input v1-v6 and output v1-v5 are compatibility/internal only.
 - Local regressions, mocks, dry-runs, old reports, and no-model smoke are not real-Host, Human Gold,
-  legal-expert, 3-OS, scale, supply-chain, or release evidence. Missing qualification remains
-  `not_executed`.
+  legal-expert, 3-OS, scale, supply-chain, or release evidence. Kernel Release Core, Capability, and
+  Competitive/Research Claim evidence are decided separately; missing optional evidence remains
+  `not_executed` and suppresses only the corresponding claim.
+- The v0.13 Kernel support ceiling is 10,000 active governed Knowledge Objects per Vault. More than
+  10k is experimental; 100k and its sharding/bundling are outside v0.13. The official signed Legal
+  Pack, GUI/Desktop interoperability, semantic restore, and Claude remain unclaimed without their
+  own evidence.
 
 Current machine state is read only from
-[`benchmarks/v013/active-qualification-v2.json`](benchmarks/v013/active-qualification-v2.json) and
-[`benchmarks/release/v013-gate-classification-v8.json`](benchmarks/release/v013-gate-classification-v8.json).
+[`benchmarks/v013/active-qualification-v3.json`](benchmarks/v013/active-qualification-v3.json) and
+[`benchmarks/release/v013-gate-classification-v9.json`](benchmarks/release/v013-gate-classification-v9.json).
 This README is not a second status ledger.
 
 ## Install

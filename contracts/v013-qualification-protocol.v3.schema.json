@@ -1,0 +1,549 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-qualification-protocol.v3.schema.json",
+  "title": "DeepLaw v0.13 machine qualification protocol v3",
+  "description": "A closed, machine-only protocol bound to the exact Gate v9 classification bytes. The current construction package is 0.12.0 and the 0.13.0 release target remains a not-executed HOLD.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "no_human_attestation",
+    "protocol_id",
+    "protocol_version",
+    "status",
+    "freeze_status",
+    "objective",
+    "classification_binding",
+    "construction_package_version",
+    "release_target",
+    "candidate_binding",
+    "categories",
+    "gates",
+    "evidence_library",
+    "source_contract",
+    "scale_contract",
+    "host_constraints",
+    "roles",
+    "isolation_contract",
+    "hash_contract",
+    "scoring_contract",
+    "failure_policy",
+    "freeze_policy",
+    "human_review",
+    "claim_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.v013-qualification-protocol/v3"},
+    "profile": {"const": "kernel_release_core"},
+    "no_human_attestation": {"const": true},
+    "protocol_id": {"const": "deeplaw-v013-source-candidate-qualification"},
+    "protocol_version": {"const": 3},
+    "status": {"const": "candidate_qualification"},
+    "freeze_status": {
+      "const": "protocol_frozen_machine_evaluation_candidate_binding_pending"
+    },
+    "objective": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "classification_binding": {"$ref": "#/$defs/classificationBinding"},
+    "construction_package_version": {"const": "0.12.0"},
+    "release_target": {"const": "0.13.0"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "categories": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/category"}
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 27,
+      "maxItems": 27,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/gate"}
+    },
+    "evidence_library": {"$ref": "#/$defs/evidenceLibrary"},
+    "source_contract": {"$ref": "#/$defs/sourceContract"},
+    "scale_contract": {"$ref": "#/$defs/scaleContract"},
+    "host_constraints": {"$ref": "#/$defs/hostConstraints"},
+    "roles": {"$ref": "#/$defs/roles"},
+    "isolation_contract": {"$ref": "#/$defs/isolationContract"},
+    "hash_contract": {"$ref": "#/$defs/hashContract"},
+    "scoring_contract": {"$ref": "#/$defs/scoringContract"},
+    "failure_policy": {"$ref": "#/$defs/failurePolicy"},
+    "freeze_policy": {"$ref": "#/$defs/freezePolicy"},
+    "human_review": {"$ref": "#/$defs/humanReview"},
+    "claim_policy": {"$ref": "#/$defs/claimPolicy"}
+  },
+  "allOf": [
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "properties": {"category_id": {"const": "core"}},
+            "required": ["category_id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "properties": {"category_id": {"const": "capability"}},
+            "required": ["category_id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "properties": {"category_id": {"const": "competitive_research"}},
+            "required": ["category_id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "classificationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification_id", "schema_version", "relative_path", "sha256"],
+      "properties": {
+        "classification_id": {"const": "deeplaw-v013-commercial-gates-v9"},
+        "schema_version": {"const": "deeplaw.v013-release-gate-classification/v9"},
+        "relative_path": {
+          "const": "benchmarks/release/v013-gate-classification-v9.json"
+        },
+        "sha256": {
+          "const": "e9e2c5f332eea494ab0cf32804d61fbd5b3191e021f9686f9e5ceb7a27c61a09"
+        }
+      }
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_version",
+        "source_commit",
+        "source_tree",
+        "lock_sha256",
+        "wheel_filename",
+        "wheel_sha256",
+        "sdist_filename",
+        "sdist_sha256"
+      ],
+      "properties": {
+        "package_version": {"const": "0.12.0"},
+        "source_commit": {"const": null},
+        "source_tree": {"const": null},
+        "lock_sha256": {
+          "const": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082"
+        },
+        "wheel_filename": {"const": null},
+        "wheel_sha256": {"const": null},
+        "sdist_filename": {"const": null},
+        "sdist_sha256": {"const": null}
+      }
+    },
+    "category": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "category_id", "required", "not_claimed_allowed", "gate_ids"],
+      "properties": {
+        "category": {
+          "enum": ["Core", "Capability", "Competitive/Research Claim"]
+        },
+        "category_id": {
+          "enum": ["core", "capability", "competitive_research"]
+        },
+        "required": {"type": "boolean"},
+        "not_claimed_allowed": {"type": "boolean"},
+        "gate_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"category_id": {"const": "core"}}, "required": ["category_id"]},
+          "then": {
+            "properties": {
+              "category": {"const": "Core"},
+              "required": {"const": true},
+              "not_claimed_allowed": {"const": false},
+              "gate_ids": {
+                "const": [
+                  "canonical_integrity",
+                  "migration_recovery",
+                  "secret_host_isolation",
+                  "bounded_context",
+                  "source_citation_locator",
+                  "living_wiki",
+                  "scale_performance",
+                  "supported_platforms",
+                  "reproducible_supply_chain",
+                  "codex",
+                  "opencode",
+                  "selective_forget",
+                  "timeline"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"category_id": {"const": "capability"}}, "required": ["category_id"]},
+          "then": {
+            "properties": {
+              "category": {"const": "Capability"},
+              "required": {"const": false},
+              "not_claimed_allowed": {"const": true},
+              "gate_ids": {
+                "const": [
+                  "official_legal_pack",
+                  "semantic_restore",
+                  "claude",
+                  "gui_desktop_interoperability"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"category_id": {"const": "competitive_research"}}, "required": ["category_id"]},
+          "then": {
+            "properties": {
+              "category": {"const": "Competitive/Research Claim"},
+              "required": {"const": false},
+              "not_claimed_allowed": {"const": true},
+              "gate_ids": {
+                "minItems": 10,
+                "allOf": [
+                  {"contains": {"const": "machine_reference_isolation"}},
+                  {"contains": {"const": "qualification_comparative_holdout"}},
+                  {"contains": {"const": "final_blind_comparative_holdout"}},
+                  {"contains": {"const": "agent_review_panel"}},
+                  {"contains": {"const": "scorer_a"}},
+                  {"contains": {"const": "scorer_b"}},
+                  {"contains": {"const": "arbiter"}},
+                  {"contains": {"const": "comparative_incremental_benefit"}},
+                  {"contains": {"const": "superiority"}},
+                  {"contains": {"const": "sota"}}
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "threshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric", "minimum", "maximum"],
+      "properties": {
+        "metric": {"$ref": "#/$defs/identifier"},
+        "minimum": {"type": ["number", "null"]},
+        "maximum": {"type": ["number", "null"]}
+      }
+    },
+    "scaleContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active_governed_objects", "vault", "above_10000", "deferred_100000", "warm_samples", "required_metrics", "hard_failure_ids"],
+      "properties": {
+        "active_governed_objects": {"const": 10000},
+        "vault": {"const": "Vault"},
+        "above_10000": {"const": "experimental_unqualified"},
+        "deferred_100000": {"const": "v0.14"},
+        "warm_samples": {"const": 30},
+        "required_metrics": {
+          "const": ["p50", "p95", "max", "rss", "storage", "file_count", "build", "rebuild", "full_incremental_noop_equivalence", "user_bytes", "provider_bound"]
+        },
+        "hard_failure_ids": {
+          "const": ["active_governed_object_count_mismatch", "experimental_over_10000_claimed_qualified", "100000_not_deferred_to_v0.14", "warm_samples_below_30", "missing_p50", "missing_p95", "missing_max", "rss_missing", "storage_missing", "file_count_missing", "build_duration_missing", "rebuild_duration_missing", "full_incremental_noop_mismatch", "user_bytes_unbounded", "provider_bound_exceeded"]
+        }
+      }
+    },
+    "sourceContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "duties", "threshold_metrics", "hard_failure_ids", "protected_source_policy"],
+      "properties": {
+        "artifact_kind": {"const": "professional_evidence_rows"},
+        "duties": {
+          "const": ["original_bytes", "original_hash", "document", "version", "fragment", "locator", "wrong_version_rejection", "effective_date", "exception", "proviso", "cross_reference", "false_authority", "ocr_critical_token_gap", "wiki_exact_source_drill_down"]
+        },
+        "threshold_metrics": {
+          "const": ["original_bytes_preservation_rate", "original_hash_match_rate", "document_identity_rate", "version_identity_rate", "fragment_identity_rate", "locator_validity_rate", "wrong_version_rejection_rate", "effective_date_rate", "exception_rate", "proviso_rate", "cross_reference_rate", "false_authority_zero_rate", "ocr_critical_token_gap_disposition_rate", "wiki_exact_source_drill_down_rate"]
+        },
+        "hard_failure_ids": {
+          "const": ["original_bytes_mismatch", "original_hash_mismatch", "document_identity_mismatch", "version_identity_mismatch", "fragment_identity_mismatch", "locator_invalid", "wrong_version_rejection_failure", "effective_date_mismatch", "exception_mismatch", "proviso_mismatch", "cross_reference_mismatch", "false_authority_admission", "ocr_critical_token_gap_missing", "wiki_exact_source_drill_down_failure"]
+        },
+        "protected_source_policy": {"const": "evidence_only_no_hidden_mutation"}
+      }
+    },
+    "codexPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binary_version", "binary_sha256", "request_model", "reasoning_effort", "auth_status_command", "auth_material_access"],
+      "properties": {
+        "binary_version": {"const": "codex-cli 0.148.0-alpha.15"},
+        "binary_sha256": {"const": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"},
+        "request_model": {"const": "gpt-5.6-luna"},
+        "reasoning_effort": {"const": "max"},
+        "auth_status_command": {"const": "codex login status"},
+        "auth_material_access": {"const": "forbidden"}
+      }
+    },
+    "openCodePin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "source_commit", "executable_sha256", "package_sha256", "config_selector", "expected_response_model_id", "runtime", "dotenv_policy", "secret_visibility"],
+      "properties": {
+        "version": {"const": "1.18.16"},
+        "source_commit": {"const": "a3647eb025c7615159d417dcc49fc39fdaeba65b"},
+        "executable_sha256": {"const": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"},
+        "package_sha256": {"const": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722"},
+        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
+        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "runtime": {"const": "host_bun_runtime_only"},
+        "dotenv_policy": {"const": "owner_only_external_strict_parser"},
+        "secret_visibility": {"const": "forbidden"}
+      }
+    },
+    "hostConstraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codex", "opencode"],
+      "properties": {
+        "codex": {"$ref": "#/$defs/codexPin"},
+        "opencode": {"$ref": "#/$defs/openCodePin"}
+      }
+    },
+    "evidenceLibrary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "accepted_materials", "preserves_original_bytes", "preserves_original_hash", "produces_official_authority", "produces_legal_authority", "human_attestation_required", "legal_expert_required", "signed_pack_required"],
+      "properties": {
+        "status": {"const": "not_executed"},
+        "accepted_materials": {"const": ["owner_provided_professional", "owner_provided_legal"]},
+        "preserves_original_bytes": {"const": true},
+        "preserves_original_hash": {"const": true},
+        "produces_official_authority": {"const": false},
+        "produces_legal_authority": {"const": false},
+        "human_attestation_required": {"const": false},
+        "legal_expert_required": {"const": false},
+        "signed_pack_required": {"const": false}
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "category", "category_id", "required", "not_claimed_only", "status", "passed", "claim", "assembly_enabled", "evidence_kind", "artifact_kind", "required_task_cases", "required_corpus_roles", "source_duties", "scale_contract"],
+      "properties": {
+        "gate_id": {
+          "enum": ["canonical_integrity", "migration_recovery", "secret_host_isolation", "bounded_context", "source_citation_locator", "living_wiki", "scale_performance", "supported_platforms", "reproducible_supply_chain", "codex", "opencode", "selective_forget", "timeline", "official_legal_pack", "semantic_restore", "claude", "gui_desktop_interoperability", "machine_reference_isolation", "qualification_comparative_holdout", "final_blind_comparative_holdout", "agent_review_panel", "scorer_a", "scorer_b", "arbiter", "comparative_incremental_benefit", "superiority", "sota"]
+        },
+        "category": {"enum": ["Core", "Capability", "Competitive/Research Claim"]},
+        "category_id": {"enum": ["core", "capability", "competitive_research"]},
+        "required": {"type": "boolean"},
+        "not_claimed_only": {"type": "boolean"},
+        "status": {"const": "not_executed"},
+        "passed": {"const": false},
+        "claim": {"const": false},
+        "assembly_enabled": {"const": false},
+        "evidence_kind": {"$ref": "#/$defs/identifier"},
+        "artifact_kind": {"$ref": "#/$defs/identifier"},
+        "required_task_cases": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "required_corpus_roles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "candidate_full",
+              "candidate_platform",
+              "host_qualification",
+              "professional_evidence",
+              "living_wiki",
+              "scale_10000",
+              "supply_chain"
+            ]
+          }
+        },
+        "source_duties": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "scale_contract": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/scaleContract"}]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"category_id": {"const": "core"}}, "required": ["category_id"]},
+          "then": {
+            "properties": {
+              "category": {"const": "Core"},
+              "required": {"const": true},
+              "not_claimed_only": {"const": false},
+              "required_corpus_roles": {"minItems": 1}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"category_id": {"enum": ["capability", "competitive_research"]}}, "required": ["category_id"]},
+          "then": {
+            "properties": {
+              "required": {"const": false},
+              "not_claimed_only": {"const": true},
+              "evidence_kind": {"const": "not_executed"},
+              "artifact_kind": {"const": "not_executed"},
+              "required_task_cases": {"maxItems": 0},
+              "required_corpus_roles": {"maxItems": 0},
+              "source_duties": {"maxItems": 0},
+              "scale_contract": {"type": "null"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"gate_id": {"const": "source_citation_locator"}}, "required": ["gate_id"]},
+          "then": {"properties": {"evidence_kind": {"const": "professional_evidence_rows"}, "artifact_kind": {"const": "professional_evidence_rows"}, "source_duties": {"$ref": "#/$defs/sourceDuties"}}}
+        },
+        {
+          "if": {"properties": {"gate_id": {"const": "living_wiki"}}, "required": ["gate_id"]},
+          "then": {"properties": {"evidence_kind": {"const": "wiki_journey_rows"}, "artifact_kind": {"const": "wiki_journey_rows"}}}
+        },
+        {
+          "if": {"properties": {"gate_id": {"const": "scale_performance"}}, "required": ["gate_id"]},
+          "then": {"properties": {"evidence_kind": {"const": "scale_report"}, "artifact_kind": {"const": "scale_report"}, "scale_contract": {"$ref": "#/$defs/scaleContract"}}}
+        },
+        {
+          "if": {"properties": {"gate_id": {"enum": ["codex", "opencode", "secret_host_isolation", "timeline"]}}, "required": ["gate_id"]},
+          "then": {"properties": {"required_task_cases": {"const": ["continuity", "living_wiki", "professional_evidence"]}}}
+        }
+      ]
+    },
+    "sourceDuties": {
+      "const": ["original_bytes", "original_hash", "document", "version", "fragment", "locator", "wrong_version_rejection", "effective_date", "exception", "proviso", "cross_reference", "false_authority", "ocr_critical_token_gap", "wiki_exact_source_drill_down"]
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role_id", "status", "claim", "required", "secret_visibility"],
+      "properties": {
+        "role_id": {"enum": ["agent_review_panel", "scorer_a", "scorer_b", "arbiter"]},
+        "status": {"const": "not_executed"},
+        "claim": {"const": false},
+        "required": {"const": false},
+        "secret_visibility": {"const": "forbidden"}
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["members"],
+      "properties": {
+        "members": {"type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true, "items": {"$ref": "#/$defs/role"}}
+      }
+    },
+    "isolationContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shared_filesystem", "shared_ipc", "shared_transcript", "input_mounts_read_only", "secret_visibility", "candidate_reference_visibility"],
+      "properties": {
+        "shared_filesystem": {"const": "forbidden"},
+        "shared_ipc": {"const": "forbidden"},
+        "shared_transcript": {"const": "forbidden"},
+        "input_mounts_read_only": {"const": true},
+        "secret_visibility": {"const": "forbidden"},
+        "candidate_reference_visibility": {"const": "forbidden"}
+      }
+    },
+    "hashContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "canonical_serialization", "strict_utf8", "reject_duplicate_keys", "reject_nonfinite_numbers", "path_closure", "orphan_files", "required_bindings"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "canonical_serialization": {"const": "UTF-8 JSON sort_keys separators=(',', ':') allow_nan=false"},
+        "strict_utf8": {"const": true},
+        "reject_duplicate_keys": {"const": true},
+        "reject_nonfinite_numbers": {"const": true},
+        "path_closure": {"const": true},
+        "orphan_files": {"const": "reject"},
+        "required_bindings": {"type": "array", "minItems": 4, "uniqueItems": true, "items": {"enum": ["classification_v9", "protocol_manifest", "candidate_binding", "typed_evidence", "bundle_manifest"]}}
+      }
+    },
+    "scoringContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thresholds_frozen_before_result", "not_executed_is_not_pass", "hard_failure_maximum", "false_authority_maximum", "optional_claims_nonblocking"],
+      "properties": {
+        "thresholds_frozen_before_result": {"const": true},
+        "not_executed_is_not_pass": {"const": true},
+        "hard_failure_maximum": {"const": 0},
+        "false_authority_maximum": {"const": 0},
+        "optional_claims_nonblocking": {"const": true}
+      }
+    },
+    "failurePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["missing_evidence", "unsafe_artifact", "not_executed_is_not_pass", "optional_missing_inputs"],
+      "properties": {
+        "missing_evidence": {"const": "not_executed"},
+        "unsafe_artifact": {"const": "failed"},
+        "not_executed_is_not_pass": {"const": true},
+        "optional_missing_inputs": {"const": "non_blocking_for_core_release"}
+      }
+    },
+    "freezePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["optional_external_inputs_non_blocking", "null_optional_inputs_do_not_block_freeze", "owner_release_confirmation_required"],
+      "properties": {
+        "optional_external_inputs_non_blocking": {"const": true},
+        "null_optional_inputs_do_not_block_freeze": {"const": true},
+        "owner_release_confirmation_required": {"const": true}
+      }
+    },
+    "humanReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "status", "attestation", "owner_release_confirmation"],
+      "properties": {
+        "mode": {"const": "optional_non_gating"},
+        "status": {"const": "not_executed"},
+        "attestation": {"const": "not_used_for_kernel_release_core"},
+        "owner_release_confirmation": {"const": "required_at_release_decision"}
+      }
+    },
+    "claimPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_ready", "kernel_release_claim_eligible", "competitive_claim_eligible", "optional_claims_nonblocking", "not_executed_is_not_pass", "owner_release_confirmation"],
+      "properties": {
+        "release_ready": {"const": false},
+        "kernel_release_claim_eligible": {"const": false},
+        "competitive_claim_eligible": {"const": false},
+        "optional_claims_nonblocking": {"const": true},
+        "not_executed_is_not_pass": {"const": true},
+        "owner_release_confirmation": {"const": "required_at_release_decision"}
+      }
+    }
+  }
+}

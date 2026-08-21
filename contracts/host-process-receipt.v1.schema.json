@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-process-receipt.v1.schema.json",
+  "title": "DeepLaw sanitized external Host process receipt v1",
+  "description": "A content-minimized receipt proving that one repository-external broker process completed one frozen Host task. It never retains a path, command, environment, stdout, stderr, prompt, transcript, hidden reasoning, authentication material, or Secret.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "host",
+    "task_case",
+    "run_id",
+    "status",
+    "exit_code",
+    "host_binary",
+    "broker_source",
+    "isolation",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-process-receipt/v1"},
+    "host": {"enum": ["codex", "opencode"]},
+    "task_case": {
+      "enum": ["continuity", "living_wiki", "professional_evidence"]
+    },
+    "run_id": {"$ref": "#/$defs/identifier"},
+    "status": {"const": "exited"},
+    "exit_code": {"const": 0},
+    "host_binary": {
+      "oneOf": [
+        {"$ref": "#/$defs/codexBinary"},
+        {"$ref": "#/$defs/opencodeBinary"}
+      ]
+    },
+    "broker_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_external", "owner_only_mode", "sha256"],
+      "properties": {
+        "repository_external": {"const": true},
+        "owner_only_mode": {"const": true},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner_received_secret",
+        "mcp_received_secret",
+        "ambient_auth_forwarded_to_mcp",
+        "raw_output_retained"
+      ],
+      "properties": {
+        "runner_received_secret": {"const": false},
+        "mcp_received_secret": {"const": false},
+        "ambient_auth_forwarded_to_mcp": {"const": false},
+        "raw_output_retained": {"const": false}
+      }
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"host": {"const": "codex"}}, "required": ["host"]},
+      "then": {"properties": {"host_binary": {"$ref": "#/$defs/codexBinary"}}},
+      "else": {"properties": {"host_binary": {"$ref": "#/$defs/opencodeBinary"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+    },
+    "codexBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256"],
+      "properties": {
+        "version": {"const": "codex-cli 0.148.0-alpha.15"},
+        "sha256": {
+          "const": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"
+        }
+      }
+    },
+    "opencodeBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256"],
+      "properties": {
+        "version": {"const": "1.18.16"},
+        "sha256": {
+          "const": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"
+        }
+      }
+    }
+  }
+}

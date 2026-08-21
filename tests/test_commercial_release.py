@@ -334,6 +334,26 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "candidate-skip-receipt.json" in candidate
     assert "windows-duration-weights.json" in candidate
 
+    calibration_shards = candidate.split(
+        "  windows-calibration-shards:", 1
+    )[1].split("  windows-calibration:", 1)[0]
+    assert "Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3" in (
+        calibration_shards
+    )
+    assert "windows-calibration-shard-${{ matrix.shard }}" in calibration_shards
+    assert "--duration-weights" not in calibration_shards
+    assert "--shard-count 3" in calibration_shards
+    assert 'if: matrix.shard == 1' in calibration_shards
+
+    calibration = candidate.split("  windows-calibration:", 1)[1].split(
+        "  posix-matrix:", 1
+    )[0]
+    assert "needs: windows-calibration-shards" in calibration
+    assert "--input-directory" in calibration
+    assert "--junit-output" in calibration
+    assert "windows-calibration-aggregate.json" in calibration
+    assert "windows-duration-weights.json" in calibration
+
     aggregate = candidate.split("  windows-aggregate:", 1)[1]
     assert "setup-uv" not in aggregate
     assert "python -m benchmarks.release.candidate_regression" in aggregate
@@ -365,7 +385,7 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert "--verify-report-dir" in gate
     assert 'test -z "$(git status --porcelain=v1 --untracked-files=all)"' in gate
     assert "--evaluation" in gate
-    assert "python -m benchmarks.release.release_provenance_v8" in release
+    assert "python -m benchmarks.release.release_provenance_v9" in release
     publish = release.split("\n  publish:", maxsplit=1)[1].split(
         "\n  public-redownload:", maxsplit=1
     )[0]
@@ -395,10 +415,11 @@ def test_release_gate_runs_protocol_from_exact_wheel_and_publishes_evidence() ->
     assert gate.count('python: "3.12"') == 3
     assert gate.count('python: "3.13"') == 3
     assert "--expected-python" in gate
-    assert "benchmarks.release.release_provenance_v8" in release
-    assert "benchmarks.release.external_qualification_bundle_v4" in release
-    assert "--candidate-machine-reference-binding" in release
-    assert "post_build_machine_reference_binding" in release
+    assert "benchmarks.release.release_provenance_v9" in release
+    assert "benchmarks.release.kernel_qualification_bundle_v1" in release
+    assert "benchmarks.release.external_qualification_bundle_v4" not in release
+    assert "--candidate-machine-reference-binding" not in release
+    assert "post_build_machine_reference_binding" not in release
     assert "public_release_verified" in release
     assert "release_provenance_v7" not in release
     assert "benchmarks.release.retained_artifact_manifest" in release

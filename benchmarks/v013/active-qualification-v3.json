@@ -1,0 +1,117 @@
+{
+  "schema_version": "deeplaw.v013-active-qualification/v3",
+  "qualification_id": "deeplaw-v013-active-kernel-release-core-candidate",
+  "profile": "kernel_release_core",
+  "no_human_attestation": true,
+  "status": "machine_evaluation_pending",
+  "candidate_version": "0.12.0",
+  "construction_package_version": "0.12.0",
+  "release_target": "0.13.0",
+  "classification_binding": {
+    "classification_id": "deeplaw-v013-commercial-gates-v9",
+    "schema_version": "deeplaw.v013-release-gate-classification/v9",
+    "relative_path": "benchmarks/release/v013-gate-classification-v9.json",
+    "sha256": "e9e2c5f332eea494ab0cf32804d61fbd5b3191e021f9686f9e5ceb7a27c61a09"
+  },
+  "protocol_binding": {
+    "protocol_id": "deeplaw-v013-source-candidate-qualification",
+    "schema_version": "deeplaw.v013-qualification-protocol/v3",
+    "relative_path": "benchmarks/v013/qualification-protocol-v3.json",
+    "sha256": "6f91c805f9cfdb3145a5b31bef6caa02a88b219592e0c62f9ce420e4f3ff9120"
+  },
+  "candidate_binding": {
+    "package_version": "0.12.0",
+    "source_commit": null,
+    "source_tree": null,
+    "lock_sha256": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082",
+    "wheel_filename": null,
+    "wheel_sha256": null,
+    "sdist_filename": null,
+    "sdist_sha256": null,
+    "artifact_manifest_sha256": null
+  },
+  "external_inputs": {
+    "semantic_machine_proposal_sha256": null,
+    "qualification_holdout_sha256": null,
+    "final_blind_holdout_sha256": null,
+    "agent_review_panel_sha256": null,
+    "scorer_a_sha256": null,
+    "scorer_b_sha256": null,
+    "arbiter_sha256": null,
+    "status": "not_executed",
+    "null_is_non_blocking": true,
+    "required_for_candidate_binding": false
+  },
+  "core_statuses": [
+    {"gate_id": "canonical_integrity", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "migration_recovery", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "secret_host_isolation", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "bounded_context", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "source_citation_locator", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "living_wiki", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "scale_performance", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "supported_platforms", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "reproducible_supply_chain", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "codex", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "opencode", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "selective_forget", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "timeline", "status": "not_executed", "passed": false, "claim": false}
+  ],
+  "capability_claims": [
+    {"gate_id": "official_legal_pack", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "semantic_restore", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "claude", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "gui_desktop_interoperability", "status": "not_executed", "passed": false, "claim": false}
+  ],
+  "competitive_claims": [
+    {"gate_id": "machine_reference_isolation", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "qualification_comparative_holdout", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "final_blind_comparative_holdout", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "agent_review_panel", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "scorer_a", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "scorer_b", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "arbiter", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "comparative_incremental_benefit", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "superiority", "status": "not_executed", "passed": false, "claim": false},
+    {"gate_id": "sota", "status": "not_executed", "passed": false, "claim": false}
+  ],
+  "host_constraints": {
+    "codex": {
+      "binary_version": "codex-cli 0.148.0-alpha.15",
+      "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
+      "request_model": "gpt-5.6-luna",
+      "reasoning_effort": "max",
+      "auth_status_command": "codex login status",
+      "auth_material_access": "forbidden"
+    },
+    "opencode": {
+      "version": "1.18.16",
+      "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+      "executable_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
+      "package_sha256": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722",
+      "config_selector": "deepseek/deepseek-v4-flash",
+      "expected_response_model_id": "deepseek-v4-flash",
+      "runtime": "host_bun_runtime_only",
+      "dotenv_policy": "owner_only_external_strict_parser",
+      "secret_visibility": "forbidden"
+    }
+  },
+  "human_review": {
+    "mode": "optional_non_gating",
+    "status": "not_executed",
+    "attestation": "not_used_for_kernel_release_core",
+    "owner_release_confirmation": "required_at_release_decision"
+  },
+  "freeze_policy": {
+    "optional_external_inputs_non_blocking": true,
+    "null_optional_inputs_do_not_block_freeze": true,
+    "owner_release_confirmation_required": true
+  },
+  "blocker": "machine_evaluation_not_executed",
+  "release_ready": false,
+  "claim_eligible": false,
+  "kernel_release_claim_eligible": false,
+  "competitive_claim_eligible": false,
+  "owner_release_confirmation": "required_at_release_decision",
+  "owner_tag_release_confirmation": "required_at_release_decision"
+}

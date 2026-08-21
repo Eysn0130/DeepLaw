@@ -49,10 +49,68 @@ from deeplaw.native_host import (
 
 SCHEMA_VERSION = "deeplaw.typed-qualification-evidence/v1"
 SCHEMA_V2_VERSION = "deeplaw.typed-qualification-evidence/v2"
+SCHEMA_V3_VERSION = "deeplaw.typed-qualification-evidence/v3"
 DERIVED_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v1"
 DERIVED_V2_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v2"
+DERIVED_V3_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v3"
 MAX_SOURCE_BYTES = 64 * 1024 * 1024
 PACKAGE_NAME = "deeplaw"
+_V2_COMPATIBLE_SCHEMA_VERSIONS = frozenset({SCHEMA_V2_VERSION, SCHEMA_V3_VERSION})
+_V3_PROFESSIONAL_CASE_TYPES = frozenset(
+    {
+        "exact_source_locator",
+        "wrong_version_rejection",
+        "false_authority_rejection",
+        "effective_date_exception_proviso_cross_reference",
+        "ocr_critical_token_gap",
+        "wiki_exact_source_drill_down",
+    }
+)
+_V3_PROFESSIONAL_DUTIES = (
+    "original_bytes",
+    "original_hash",
+    "document",
+    "version",
+    "fragment",
+    "locator",
+    "wrong_version_rejection",
+    "effective_date",
+    "exception",
+    "proviso",
+    "cross_reference",
+    "false_authority",
+    "ocr_critical_token_gap",
+    "wiki_exact_source_drill_down",
+)
+_V3_PROFESSIONAL_HARD_FAILURES = (
+    "original_bytes_mismatch",
+    "original_hash_mismatch",
+    "document_identity_mismatch",
+    "version_identity_mismatch",
+    "fragment_identity_mismatch",
+    "locator_invalid",
+    "wrong_version_rejection_failure",
+    "effective_date_mismatch",
+    "exception_mismatch",
+    "proviso_mismatch",
+    "cross_reference_mismatch",
+    "false_authority_admission",
+    "ocr_critical_token_gap_missing",
+    "wiki_exact_source_drill_down_failure",
+    "expected_observed_mismatch",
+)
+_LEGACY_CORPUS_ROLES = frozenset({"candidate_full", "qualification_holdout", "final_blind"})
+_V3_CORPUS_ROLES = frozenset(
+    {
+        "candidate_full",
+        "candidate_platform",
+        "host_qualification",
+        "professional_evidence",
+        "living_wiki",
+        "scale_10000",
+        "supply_chain",
+    }
+)
 _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     {
         (
@@ -66,7 +124,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "6a0392d6b0184170f1669c2ac9bf61a44357ead0cff722f79a21869f07fd3c08"
+    "576e7442a255c6ef61f54bb187a3ab80c0b0194b6edecce63a11265f7b42084b"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -232,6 +290,34 @@ def _reject_forbidden_keys(
                 path=(*path, str(index)),
                 allow_count_paths=allow_count_paths,
             )
+
+
+def _reject_v3_competitive_fields(value: Any) -> None:
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if key in {
+                "machine_reference_scorer",
+                "scorer_panel",
+                "arbiter",
+                "scorer_a",
+                "scorer_b",
+                "agent_review_panel",
+                "agent_consensus",
+                "machine_reference",
+                "machine_reference_isolation",
+                "qualification_holdout",
+                "qualification_comparative_holdout",
+                "final_blind",
+                "final_blind_comparative_holdout",
+                "comparative_incremental_benefit",
+                "superiority",
+                "sota",
+            }:
+                _fail("v3 Kernel Release Core evidence contains competitive scorer fields")
+            _reject_v3_competitive_fields(item)
+    elif isinstance(value, list):
+        for item in value:
+            _reject_v3_competitive_fields(item)
 
 
 def _repository_root() -> Path:
@@ -503,6 +589,11 @@ def _source_refs(kind: str, payload: Mapping[str, Any]) -> list[Mapping[str, Any
             "expected_source",
             "observed_source",
         ],
+        "professional_evidence_rows": [
+            "source_catalog_source",
+            "expected_source",
+            "observed_source",
+        ],
         "wiki_journey_rows": ["expected_source", "observed_source"],
         "context_capsule_selection_usage": [
             "expected_source",
@@ -565,6 +656,7 @@ def _validate_envelope(
     schema_name = {
         SCHEMA_VERSION: "typed-qualification-evidence.v1.schema.json",
         SCHEMA_V2_VERSION: "typed-qualification-evidence.v2.schema.json",
+        SCHEMA_V3_VERSION: "typed-qualification-evidence.v3.schema.json",
     }.get(schema_version)
     if schema_name is None:
         _fail("typed evidence schema version is unsupported")
@@ -775,6 +867,7 @@ def _parse_junit(
         "::".join(identity)
         for identity in _REQUIRED_CANDIDATE_FULL_IDENTITIES - observed_identities
     )
+    recovery_failed = failure + skipped + len(missing_required)
     return _derived(
         "candidate_full_junit",
         {
@@ -789,11 +882,13 @@ def _parse_junit(
                 _REQUIRED_CANDIDATE_FULL_IDENTITIES & observed_identities
             ),
             "required_identity_missing": missing_required,
+            "recovery_pass_rate": 1.0 if recovery_failed == 0 else 0.0,
         },
         {
             "junit_failure": failure,
             "junit_skip": skipped,
             "junit_required_case_missing": len(missing_required),
+            "recovery_data_loss": recovery_failed,
         },
         record_sha256,
     )
@@ -1120,6 +1215,7 @@ def _parse_platform(
             "successful_testcase_count": outcomes["success"],
             "platforms": ["ubuntu", "macos", "windows"],
             "python_versions": ["3.11", "3.12", "3.13"],
+            "platform_matrix_rows": len(rows),
             "source_sha256": _identity_digest(sorted(observations_by_digest)),
             "platform_manifest_source_sha256": platform_manifest_source_sha256,
             "platform_manifest_digest": platform_manifest_digest,
@@ -1150,6 +1246,7 @@ def _parse_platform(
             "platform_identity_set_mismatch": identity_set_mismatch,
             "platform_required_identity_missing": missing_required,
             "platform_unexpected_identity": unexpected_identities,
+            "mandatory_skip": outcomes["skip"],
         },
         record_sha256,
     )
@@ -1431,6 +1528,36 @@ def _parse_host(
     record_sha256: str,
     expected_corpus_sha256: str | None,
 ) -> dict[str, Any]:
+    # v0.13 Gate v9 keeps the public typed kind ``host_event_sequence`` but
+    # uses three new task-family labels.  Dispatch only after inspecting the
+    # immutable event source so historical v1/v2/old-v3 Host labels retain
+    # their exact parser behavior.
+    probe_value, _ = _source_json(
+        envelope["payload"]["event_source"],
+        root=root,
+        label="Native Host event sequence",
+    )
+    try:
+        from benchmarks.release.typed_qualification_evidence_v3_host_tasks import (
+            HostTaskEvidenceError,
+            is_v013_host_task_event_source,
+            parse_host_task_evidence,
+        )
+
+        if is_v013_host_task_event_source(probe_value):
+            try:
+                return parse_host_task_evidence(
+                    envelope,
+                    root=root,
+                    record_sha256=record_sha256,
+                    expected_corpus_sha256=expected_corpus_sha256,
+                )
+            except HostTaskEvidenceError as exc:
+                _fail(str(exc))
+    except ImportError:
+        # The historical path remains usable when this optional v0.13 module
+        # is absent from an older source tree.
+        pass
     event_value, _ = _source_json(
         envelope["payload"]["event_source"],
         root=root,
@@ -1722,7 +1849,7 @@ def _parse_exact_wheel(
         label="exact-wheel execution receipt",
         allow_count_paths=frozenset({("public_journey", "step_count")}),
     )
-    envelope_is_v2 = envelope["schema_version"] == SCHEMA_V2_VERSION
+    envelope_is_v2 = envelope["schema_version"] in _V2_COMPATIBLE_SCHEMA_VERSIONS
     receipt_schema = (
         "exact-wheel-execution-receipt.v2.schema.json"
         if envelope_is_v2
@@ -1861,12 +1988,28 @@ def _parse_exact_wheel(
             "isolated_environment_verified": venv_verified and network_verified,
             "version_command_verified": command_verified,
             "network_mode": mode,
+            "audit_integrity_pass_rate": float(
+                import_verified
+                and entry_verified
+                and venv_verified
+                and network_verified
+                and command_verified
+            ),
         },
         {
             "exact_wheel_identity": 0,
             "exact_wheel_origin": int(not (import_verified and entry_verified)),
             "exact_wheel_isolation": int(not (venv_verified and network_verified)),
             "exact_wheel_command": int(not command_verified),
+            "canonical_integrity_failure": int(
+                not (
+                    import_verified
+                    and entry_verified
+                    and venv_verified
+                    and network_verified
+                    and command_verified
+                )
+            ),
         },
         record_sha256,
     )
@@ -3167,6 +3310,583 @@ def _parse_legal(
     )
 
 
+_V3_PROFESSIONAL_MEDIA_TYPES = frozenset(
+    {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/html",
+        "text/markdown",
+    }
+)
+
+
+def _professional_catalog(
+    value: Any,
+    *,
+    label: str,
+) -> dict[tuple[str, str], Mapping[str, Any]]:
+    wrapper = _require_mapping(value, label=label, keys={"sources"})
+    sources = wrapper["sources"]
+    if not isinstance(sources, list) or not 1 <= len(sources) <= 64:
+        _fail(f"{label} must contain 1..64 source identities")
+    result: dict[tuple[str, str], Mapping[str, Any]] = {}
+    required = {
+        "source_id",
+        "version_id",
+        "document_sha256",
+        "document_byte_size",
+        "media_type",
+        "origin",
+        "authority",
+        "legal_authority",
+        "effective_date",
+    }
+    for index, source in enumerate(sources):
+        item = _require_mapping(source, label=f"{label}.sources[{index}]")
+        if set(item) != required:
+            _fail(f"{label}.sources[{index}] keys are not closed")
+        if any(
+            not isinstance(item[key], str) or not item[key]
+            for key in ("source_id", "version_id", "effective_date")
+        ):
+            _fail(f"{label}.sources[{index}] identity is invalid")
+        _sha(item["document_sha256"], label=f"{label}.sources[{index}].document_sha256")
+        if (
+            isinstance(item["document_byte_size"], bool)
+            or not isinstance(item["document_byte_size"], int)
+            or not 1 <= item["document_byte_size"] <= MAX_SOURCE_BYTES
+        ):
+            _fail(f"{label}.sources[{index}].document_byte_size is invalid")
+        if item["media_type"] not in _V3_PROFESSIONAL_MEDIA_TYPES:
+            _fail(f"{label}.sources[{index}].media_type is not a professional source")
+        if item["origin"] not in {"user_source", "external_import"}:
+            _fail(f"{label}.sources[{index}].origin is invalid")
+        if item["authority"] not in {"source_attributed", "unverified"}:
+            _fail(f"{label}.sources[{index}].authority is invalid")
+        if item["legal_authority"] is not False:
+            _fail(f"{label}.sources[{index}] falsely claims legal authority")
+        key = (item["source_id"], item["version_id"])
+        if key in result:
+            _fail(f"{label} contains duplicate source identity")
+        result[key] = item
+    return result
+
+
+def _professional_original_sources(
+    descriptors: Any,
+    *,
+    root: Path,
+    catalog: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> tuple[set[tuple[str, str]], dict[tuple[str, str], _SourceData]]:
+    if not isinstance(descriptors, list) or not 1 <= len(descriptors) <= 64:
+        _fail("Professional original source refs must contain 1..64 sources")
+    seen: set[tuple[str, str]] = set()
+    sources: dict[tuple[str, str], _SourceData] = {}
+    for index, descriptor in enumerate(descriptors):
+        item = _require_mapping(
+            descriptor,
+            label=f"Professional original source[{index}]",
+            keys={"source_id", "version_id", "source"},
+        )
+        source_id = item["source_id"]
+        version_id = item["version_id"]
+        if not isinstance(source_id, str) or not source_id or not isinstance(
+            version_id, str
+        ) or not version_id:
+            _fail(f"Professional original source[{index}] identity is invalid")
+        key = (source_id, version_id)
+        expected = catalog.get(key)
+        if expected is None or key in seen:
+            _fail("Professional original source identity does not match catalog")
+        seen.add(key)
+        source = _source_data(
+            item["source"],
+            root=root,
+            label=f"Professional original source[{index}]",
+        )
+        if (
+            source.ref["sha256"] != expected["document_sha256"]
+            or source.ref["byte_size"] != expected["document_byte_size"]
+            or source.ref["media_type"] != expected["media_type"]
+            or _sha256_bytes(source.raw) != expected["document_sha256"]
+            or len(source.raw) != expected["document_byte_size"]
+        ):
+            _fail("Professional catalog document identity differs from original bytes")
+        sources[key] = source
+    if seen != set(catalog):
+        _fail("Professional original source refs do not cover the catalog")
+    return seen, sources
+
+
+def _professional_evidence(
+    value: Any,
+    *,
+    label: str,
+) -> Mapping[str, Any]:
+    result = _require_mapping(
+        value,
+        label=label,
+        keys={
+            "document",
+            "version",
+            "fragment",
+            "locator",
+            "quote",
+            "effective_date",
+            "exception",
+            "proviso",
+            "cross_reference",
+            "ocr_critical_token",
+            "rejection",
+            "gap",
+            "wiki_drill_down",
+        },
+    )
+    document = _require_mapping(
+        result["document"],
+        label=f"{label}.document",
+        keys={"source_id"},
+    )
+    version = _require_mapping(
+        result["version"],
+        label=f"{label}.version",
+        keys={"version_id"},
+    )
+    if not isinstance(document["source_id"], str) or not document["source_id"]:
+        _fail(f"{label}.document.source_id is invalid")
+    if not isinstance(version["version_id"], str) or not version["version_id"]:
+        _fail(f"{label}.version.version_id is invalid")
+    fragment = _require_mapping(
+        result["fragment"],
+        label=f"{label}.fragment",
+        keys={"document_id", "version_id", "fragment_id", "text", "text_sha256"},
+    )
+    for key in ("document_id", "version_id", "fragment_id", "text"):
+        if not isinstance(fragment[key], str) or not fragment[key]:
+            _fail(f"{label}.fragment.{key} is invalid")
+    if _sha(fragment["text_sha256"], label=f"{label}.fragment.text_sha256") != _sha256_bytes(
+        fragment["text"].encode("utf-8")
+    ):
+        _fail(f"{label}.fragment.text_sha256 does not match fragment text bytes")
+    locator = _require_mapping(
+        result["locator"],
+        label=f"{label}.locator",
+        keys={"kind", "value"},
+    )
+    if any(not isinstance(locator[key], str) or not locator[key] for key in ("kind", "value")):
+        _fail(f"{label}.locator is invalid")
+    quote = _require_mapping(
+        result["quote"],
+        label=f"{label}.quote",
+        keys={"text", "sha256"},
+    )
+    if not isinstance(quote["text"], str) or not quote["text"]:
+        _fail(f"{label}.quote.text is invalid")
+    if _sha(quote["sha256"], label=f"{label}.quote.sha256") != _sha256_bytes(
+        quote["text"].encode("utf-8")
+    ):
+        _fail(f"{label}.quote.sha256 does not match quote bytes")
+    if quote["text"] not in fragment["text"]:
+        _fail(f"{label}.quote is not contained by its fragment")
+    if not isinstance(result["effective_date"], str) or not result["effective_date"]:
+        _fail(f"{label}.effective_date is invalid")
+    for key in ("exception", "proviso", "cross_reference", "ocr_critical_token"):
+        values = result[key]
+        if not isinstance(values, list) or any(
+            not isinstance(item, str) or not item for item in values
+        ):
+            _fail(f"{label}.{key} is invalid")
+    rejection = result["rejection"]
+    if rejection is not None:
+        rejection = _require_mapping(
+            rejection,
+            label=f"{label}.rejection",
+        )
+        code = rejection.get("code")
+        if code == "wrong_version_rejected":
+            if set(rejection) != {"code", "challenged_version_id"}:
+                _fail(f"{label}.rejection keys are not closed for wrong-version rejection")
+            if (
+                not isinstance(rejection["challenged_version_id"], str)
+                or not rejection["challenged_version_id"]
+            ):
+                _fail(f"{label}.rejection.challenged_version_id is invalid")
+        elif code == "false_authority_rejected":
+            if set(rejection) != {
+                "code",
+                "challenged_authority",
+                "challenged_legal_authority",
+            }:
+                _fail(f"{label}.rejection keys are not closed for false-authority rejection")
+            if rejection["challenged_authority"] not in {"official", "human_verified"}:
+                _fail(f"{label}.rejection.challenged_authority is invalid")
+            if rejection["challenged_legal_authority"] is not True:
+                _fail(f"{label}.rejection.challenged_legal_authority must be true")
+        else:
+            _fail(f"{label}.rejection.code is invalid")
+    gap = result["gap"]
+    if gap is not None:
+        gap = _require_mapping(gap, label=f"{label}.gap", keys={"code"})
+        if gap["code"] != "ocr_critical_token_gap":
+            _fail(f"{label}.gap.code is invalid")
+    drill_down = result["wiki_drill_down"]
+    if drill_down is not None:
+        drill_down = _require_mapping(
+            drill_down,
+            label=f"{label}.wiki_drill_down",
+            keys={"source_id", "version_id", "fragment_id", "locator", "quote_sha256"},
+        )
+        for key in ("source_id", "version_id", "fragment_id"):
+            if not isinstance(drill_down[key], str) or not drill_down[key]:
+                _fail(f"{label}.wiki_drill_down.{key} is invalid")
+        drill_locator = _require_mapping(
+            drill_down["locator"],
+            label=f"{label}.wiki_drill_down.locator",
+            keys={"kind", "value"},
+        )
+        if any(
+            not isinstance(drill_locator[key], str) or not drill_locator[key]
+            for key in ("kind", "value")
+        ):
+            _fail(f"{label}.wiki_drill_down.locator is invalid")
+        _sha(drill_down["quote_sha256"], label=f"{label}.wiki_drill_down.quote_sha256")
+    return result
+
+
+def _professional_parse_row(
+    row: Mapping[str, Any],
+    *,
+    index: int,
+    field: str,
+    catalog: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> tuple[str, tuple[str, str, str], Mapping[str, Any]]:
+    required = {
+        "case_id",
+        "case_type",
+        "source_id",
+        "version_id",
+        "fragment_id",
+        field,
+    }
+    if set(row) != required:
+        _fail(f"Professional row {index} keys are not closed")
+    if not isinstance(row["case_id"], str) or not row["case_id"]:
+        _fail(f"Professional row {index}.case_id is invalid")
+    if row["case_type"] not in _V3_PROFESSIONAL_CASE_TYPES:
+        _fail(f"Professional row {index}.case_type is invalid")
+    if any(
+        not isinstance(row[key], str) or not row[key]
+        for key in ("source_id", "version_id", "fragment_id")
+    ):
+        _fail(f"Professional row {index} identity is invalid")
+    source_key = (row["source_id"], row["version_id"])
+    if source_key not in catalog:
+        _fail(f"Professional row {index} source identity is not catalogued")
+    evidence = _professional_evidence(
+        row[field], label=f"Professional row {index}.{field}"
+    )
+    evidence_label = f"Professional row {index}.{field}"
+    if (
+        evidence["document"]["source_id"] != row["source_id"]
+        or evidence["version"]["version_id"] != row["version_id"]
+        or evidence["fragment"]["document_id"] != row["source_id"]
+        or evidence["fragment"]["version_id"] != row["version_id"]
+        or evidence["fragment"]["fragment_id"] != row["fragment_id"]
+    ):
+        _fail(f"{evidence_label} is not bound to its row identity")
+    drill_down = evidence["wiki_drill_down"]
+    if drill_down is not None and (
+        drill_down["source_id"] != row["source_id"]
+        or drill_down["version_id"] != row["version_id"]
+        or drill_down["fragment_id"] != row["fragment_id"]
+        or drill_down["locator"] != evidence["locator"]
+        or drill_down["quote_sha256"] != evidence["quote"]["sha256"]
+    ):
+        _fail(f"{evidence_label}.wiki_drill_down is not exact-source bound")
+    if row["case_type"] in {"wrong_version_rejection", "false_authority_rejection"}:
+        expected_code = (
+            "wrong_version_rejected"
+            if row["case_type"] == "wrong_version_rejection"
+            else "false_authority_rejected"
+        )
+        rejection = evidence["rejection"]
+        if rejection is None or rejection["code"] != expected_code:
+            _fail(f"{evidence_label} lacks explicit {expected_code} code")
+        if row["case_type"] == "wrong_version_rejection" and (
+            rejection["challenged_version_id"] == row["version_id"]
+        ):
+            _fail(f"{evidence_label} challenges the correct version instead of a wrong version")
+    elif evidence["rejection"] is not None:
+        _fail(f"{evidence_label}.rejection is not allowed for this case type")
+    if row["case_type"] == "effective_date_exception_proviso_cross_reference" and any(
+        not evidence[key] for key in ("exception", "proviso", "cross_reference")
+    ):
+        _fail(f"{evidence_label} lacks exception, proviso, and cross-reference evidence")
+    if row["case_type"] == "ocr_critical_token_gap" and (
+        not evidence["ocr_critical_token"] or evidence["gap"] is None
+    ):
+        _fail(f"{evidence_label} lacks the OCR critical-token Gap")
+    if row["case_type"] == "wiki_exact_source_drill_down" and (
+        evidence["wiki_drill_down"] is None
+    ):
+        _fail(f"Professional row {index} lacks exact Wiki drill-down")
+    return (
+        row["case_type"],
+        (row["source_id"], row["version_id"], row["fragment_id"]),
+        evidence,
+    )
+
+
+def _parse_professional(
+    envelope: Mapping[str, Any],
+    *,
+    root: Path,
+    record_sha256: str,
+    expected_corpus_sha256: str | None,
+) -> dict[str, Any]:
+    if expected_corpus_sha256 is None:
+        _fail("Professional expected-source corpus binding is required")
+    payload = envelope["payload"]
+    if payload["expected_source"]["sha256"] != expected_corpus_sha256:
+        _fail("Professional expected source is bound to a different corpus")
+    catalog_value, _ = _source_json(
+        payload["source_catalog_source"],
+        root=root,
+        label="Professional source catalog",
+    )
+    expected_value, expected_source = _source_json(
+        payload["expected_source"],
+        root=root,
+        label="Professional expected rows",
+    )
+    observed_value, observed_source = _source_json(
+        payload["observed_source"],
+        root=root,
+        label="Professional observed rows",
+    )
+    if expected_source.path == observed_source.path:
+        _fail("Professional expected and observed evidence must be separate files")
+    catalog = _professional_catalog(catalog_value, label="Professional source catalog")
+    _seen_sources, original_sources = _professional_original_sources(
+        payload["original_source_refs"],
+        root=root,
+        catalog=catalog,
+    )
+    expected_rows = _require_rows(expected_value, label="Professional expected rows")
+    observed_rows = _receipt_rows(
+        observed_value,
+        envelope=envelope,
+        label="Professional observed rows",
+    )
+    expected_by_id: dict[str, Mapping[str, Any]] = {}
+    observed_by_id: dict[str, Mapping[str, Any]] = {}
+    ParsedProfessional = tuple[
+        str,
+        tuple[str, str, str],
+        Mapping[str, Any],
+    ]
+    expected_parsed: dict[str, ParsedProfessional] = {}
+    observed_parsed: dict[str, ParsedProfessional] = {}
+    for index, row in enumerate(expected_rows):
+        parsed = _professional_parse_row(
+            row,
+            index=index,
+            field="expected",
+            catalog=catalog,
+        )
+        if row["case_id"] in expected_by_id:
+            _fail("Professional expected rows contain duplicate case identity")
+        expected_by_id[row["case_id"]] = row
+        expected_parsed[row["case_id"]] = parsed
+    for index, row in enumerate(observed_rows):
+        parsed = _professional_parse_row(
+            row,
+            index=index,
+            field="observed",
+            catalog=catalog,
+        )
+        if row["case_id"] in observed_by_id:
+            _fail("Professional observed rows contain duplicate case identity")
+        observed_by_id[row["case_id"]] = row
+        observed_parsed[row["case_id"]] = parsed
+    if set(expected_by_id) != set(observed_by_id):
+        _fail("Professional expected and observed rows do not cover the same cases")
+    case_types = {parsed[0] for parsed in expected_parsed.values()}
+    if case_types != _V3_PROFESSIONAL_CASE_TYPES:
+        _fail("Professional evidence does not cover every required case type")
+
+    failures = {key: 0 for key in _V3_PROFESSIONAL_HARD_FAILURES}
+    matching_cases = 0
+    duty_hits = {key: 0 for key in _V3_PROFESSIONAL_DUTIES}
+    duty_totals = {key: 0 for key in _V3_PROFESSIONAL_DUTIES}
+
+    def mark(duty: str, passed: bool, *, failure: str | None = None) -> None:
+        duty_totals[duty] += 1
+        if passed:
+            duty_hits[duty] += 1
+        elif failure is not None:
+            failures[failure] += 1
+
+    for case_id in expected_by_id:
+        expected_case = expected_parsed[case_id]
+        observed_case = observed_parsed[case_id]
+        expected_type, expected_identity, expected = expected_case
+        observed_type, observed_identity, observed = observed_case
+        if (
+            expected_type == observed_type
+            and expected_identity == observed_identity
+            and expected == observed
+        ):
+            matching_cases += 1
+        if (
+            expected_type != observed_type
+            or expected_identity != observed_identity
+            or expected != observed
+        ):
+            failures["expected_observed_mismatch"] += 1
+        source_key = (expected_identity[0], expected_identity[1])
+        catalog_entry = catalog[source_key]
+        source = original_sources[source_key]
+        mark(
+            "original_bytes",
+            len(source.raw) == catalog_entry["document_byte_size"],
+            failure="original_bytes_mismatch",
+        )
+        mark(
+            "original_hash",
+            _sha256_bytes(source.raw) == catalog_entry["document_sha256"],
+            failure="original_hash_mismatch",
+        )
+        for evidence in (expected, observed):
+            mark(
+                "document",
+                evidence["document"]["source_id"] == expected_identity[0],
+                failure="document_identity_mismatch",
+            )
+            mark(
+                "version",
+                evidence["version"]["version_id"] == expected_identity[1],
+                failure="version_identity_mismatch",
+            )
+            mark(
+                "fragment",
+                evidence["fragment"]["document_id"] == expected_identity[0]
+                and evidence["fragment"]["version_id"] == expected_identity[1]
+                and evidence["fragment"]["fragment_id"] == expected_identity[2],
+                failure="fragment_identity_mismatch",
+            )
+        mark(
+            "locator",
+            expected["locator"] == observed["locator"],
+            failure="locator_invalid",
+        )
+        mark(
+            "effective_date",
+            expected["effective_date"]
+            == observed["effective_date"]
+            == catalog_entry["effective_date"],
+            failure="effective_date_mismatch",
+        )
+        mark(
+            "exception",
+            expected["exception"] == observed["exception"],
+            failure="exception_mismatch",
+        )
+        mark(
+            "proviso",
+            expected["proviso"] == observed["proviso"],
+            failure="proviso_mismatch",
+        )
+        mark(
+            "cross_reference",
+            expected["cross_reference"] == observed["cross_reference"],
+            failure="cross_reference_mismatch",
+        )
+        if expected_type == "wrong_version_rejection":
+            mark(
+                "wrong_version_rejection",
+                expected["rejection"]["code"]
+                == observed["rejection"]["code"]
+                == "wrong_version_rejected",
+                failure="wrong_version_rejection_failure",
+            )
+        else:
+            duty_totals["wrong_version_rejection"] += 1
+            duty_hits["wrong_version_rejection"] += 1
+        if expected_type == "false_authority_rejection":
+            mark(
+                "false_authority",
+                catalog_entry["legal_authority"] is False
+                and catalog_entry["authority"] in {"source_attributed", "unverified"}
+                and expected["rejection"]["code"]
+                == observed["rejection"]["code"]
+                == "false_authority_rejected",
+                failure="false_authority_admission",
+            )
+        else:
+            duty_totals["false_authority"] += 1
+            duty_hits["false_authority"] += 1
+        if expected_type == "ocr_critical_token_gap":
+            mark(
+                "ocr_critical_token_gap",
+                bool(expected["ocr_critical_token"])
+                and bool(observed["ocr_critical_token"])
+                and expected["gap"] == observed["gap"]
+                and expected["gap"]["code"] == "ocr_critical_token_gap",
+                failure="ocr_critical_token_gap_missing",
+            )
+        else:
+            duty_totals["ocr_critical_token_gap"] += 1
+            duty_hits["ocr_critical_token_gap"] += 1
+        if expected_type == "wiki_exact_source_drill_down":
+            mark(
+                "wiki_exact_source_drill_down",
+                expected["wiki_drill_down"] == observed["wiki_drill_down"]
+                and expected["wiki_drill_down"] is not None,
+                failure="wiki_exact_source_drill_down_failure",
+            )
+        else:
+            duty_totals["wiki_exact_source_drill_down"] += 1
+            duty_hits["wiki_exact_source_drill_down"] += 1
+    metrics = {
+        "case_count": len(expected_rows),
+        "matching_case_count": matching_cases,
+        "source_count": len(catalog),
+        "original_source_count": len(original_sources),
+        "required_case_type_count": len(_V3_PROFESSIONAL_CASE_TYPES),
+        "required_duty_count": len(_V3_PROFESSIONAL_DUTIES),
+        "duty_missing_count": sum(
+            1 for duty in _V3_PROFESSIONAL_DUTIES if duty_totals[duty] == 0
+        ),
+        "observation_mismatch_count": len(expected_rows) - matching_cases,
+    }
+    for duty in _V3_PROFESSIONAL_DUTIES:
+        metric_name = {
+            "original_bytes": "original_bytes_preservation_rate",
+            "original_hash": "original_hash_match_rate",
+            "document": "document_identity_rate",
+            "version": "version_identity_rate",
+            "fragment": "fragment_identity_rate",
+            "locator": "locator_validity_rate",
+            "wrong_version_rejection": "wrong_version_rejection_rate",
+            "effective_date": "effective_date_rate",
+            "exception": "exception_rate",
+            "proviso": "proviso_rate",
+            "cross_reference": "cross_reference_rate",
+            "false_authority": "false_authority_zero_rate",
+            "ocr_critical_token_gap": "ocr_critical_token_gap_disposition_rate",
+            "wiki_exact_source_drill_down": "wiki_exact_source_drill_down_rate",
+        }[duty]
+        total = duty_totals[duty]
+        metrics[metric_name] = duty_hits[duty] / total if total else 0.0
+    return _derived(
+        "professional_evidence_rows",
+        metrics,
+        failures,
+        record_sha256,
+    )
+
+
 def _wiki_snapshot(value: Any, *, label: str) -> Mapping[str, Any]:
     result = _require_mapping(value, label=label)
     allowed = {
@@ -3291,6 +4011,7 @@ def _parse_wiki(
     if set(expected_by_id) != set(observed_by_id):
         _fail("Wiki expected and observed journeys do not cover the same cases")
     counts: Counter[str] = Counter()
+    failed_by_operation: Counter[str] = Counter()
     failed = 0
     for journey_id, expected_row in expected_by_id.items():
         observed_row = observed_by_id[journey_id]
@@ -3336,7 +4057,33 @@ def _parse_wiki(
         counts[operation] += 1
         if not valid:
             failed += 1
+            failed_by_operation[operation] += 1
     missing_operations = sorted(operation for operation in operations if counts[operation] == 0)
+    missing = set(missing_operations)
+    operation_failure = {
+        operation: failed_by_operation[operation] + int(operation in missing)
+        for operation in operations
+    }
+    wiki_failures = {
+        "alias_identity_failure": (
+            operation_failure["alias"] + operation_failure["same_name_entity"]
+        ),
+        "rename_move_identity_failure": (
+            operation_failure["rename"] + operation_failure["move"]
+        ),
+        "external_reconcile_failure": (
+            operation_failure["edit"] + operation_failure["reconcile"]
+        ),
+        "link_index_failure": (
+            operation_failure["backlink"] + operation_failure["outlink"]
+        ),
+        "source_successor_failure": operation_failure["source_successor"],
+        "wrong_merge_admission": operation_failure["wrong_merge"],
+        "user_file_mutation": operation_failure["user_file_protection"],
+        "full_incremental_noop_mismatch": operation_failure[
+            "full_incremental_equivalence"
+        ],
+    }
     return _derived(
         "wiki_journey_rows",
         {
@@ -3344,6 +4091,7 @@ def _parse_wiki(
             "operation_counts": dict(sorted(counts.items())),
             "required_operations": sorted(operations),
             "missing_operations": missing_operations,
+            "wiki_journey_pass_rate": 1.0 if not any(wiki_failures.values()) else 0.0,
             "journey_identity_sha256": _identity_digest(
                 [
                     (
@@ -3358,6 +4106,7 @@ def _parse_wiki(
         {
             "wiki_journey_mismatch": failed,
             "wiki_operation_missing": len(missing_operations),
+            **wiki_failures,
         },
         record_sha256,
     )
@@ -3724,6 +4473,9 @@ def _parse_context(
         (not expected["acceptable_gap"]["allowed"] and bool(actual_gap_codes))
         or bool(actual_gap_codes - set(expected["acceptable_gap"]["codes"]))
     )
+    provider_payload_failures = (
+        tools_limit_failures + payload_limit_failures + global_limit_failures
+    )
     return _derived(
         "context_capsule_selection_usage",
         {
@@ -3747,6 +4499,9 @@ def _parse_context(
             "projection_budget": dict(budget),
             "tools_list_bytes": tools_list_peak,
             "provider_payload_bytes": provider_bytes_peak,
+            "provider_payload_pass_rate": (
+                1.0 if provider_payload_failures == 0 else 0.0
+            ),
             "provider_tokens": {
                 key: totals[key]
                 for key in ("input_tokens", "output_tokens", "cache_tokens", "reasoning_tokens")
@@ -3773,10 +4528,142 @@ def _parse_context(
             "context_tools_list_exceeded": tools_limit_failures,
             "context_projection_exceeded": payload_limit_failures,
             "context_global_payload_exceeded": global_limit_failures,
+            "provider_payload_bound_exceeded": provider_payload_failures,
             "context_relevant_exceeds_context": relevant_exceeds_context,
         },
         record_sha256,
     )
+
+
+def _parse_scale_v9(
+    envelope: Mapping[str, Any],
+    *,
+    expected_value: Any,
+    observed_value: Any,
+    record_sha256: str,
+) -> dict[str, Any]:
+    from benchmarks.v013.scale_qualification_v9 import (
+        ACTIVE_GOVERNED_OBJECT_TARGET,
+        DEFERRED_100000,
+        FRAGMENTS_PER_SOURCE,
+        HARD_FAILURE_IDS,
+        PROVIDER_HARD_LIMIT_BYTES,
+        RUNNER_RELATIVE_PATH,
+        SOURCE_BATCH_COUNT,
+        WARM_SAMPLE_TARGET,
+        verify_report,
+    )
+    from benchmarks.v013.scale_qualification_v9 import (
+        SCHEMA_VERSION as SCALE_V9_SCHEMA_VERSION,
+    )
+
+    expected = _require_mapping(
+        expected_value,
+        label="scale v9 expected contract",
+        keys={
+            "schema_version",
+            "active_governed_object_count",
+            "source_file_count",
+            "fragments_per_source",
+            "query_plan_version",
+            "warm_samples",
+            "provider_hard_limit_bytes",
+            "above_10000_status",
+            "deferred_100000",
+        },
+    )
+    exact_expected = {
+        "schema_version": "deeplaw.v013-scale-qualification-expected/v9",
+        "active_governed_object_count": ACTIVE_GOVERNED_OBJECT_TARGET,
+        "source_file_count": SOURCE_BATCH_COUNT,
+        "fragments_per_source": FRAGMENTS_PER_SOURCE,
+        "query_plan_version": "5",
+        "warm_samples": WARM_SAMPLE_TARGET,
+        "provider_hard_limit_bytes": PROVIDER_HARD_LIMIT_BYTES,
+        "above_10000_status": "experimental_unqualified",
+        "deferred_100000": DEFERRED_100000,
+    }
+    if dict(expected) != exact_expected:
+        _fail("scale v9 expected contract differs from the frozen 10k boundary")
+    observed = _require_mapping(observed_value, label="scale v9 observed report")
+    if observed.get("schema_version") != SCALE_V9_SCHEMA_VERSION:
+        _fail("scale v9 observed report schema is unsupported")
+    verification = verify_report(observed)
+    if verification.get("valid") is not True:
+        errors = verification.get("errors")
+        detail = errors[0] if isinstance(errors, list) and errors else "unknown validation error"
+        _fail(f"scale v9 observed report is invalid: {detail}")
+
+    candidate = observed["candidate_binding"]
+    envelope_candidate = envelope["candidate_binding"]
+    candidate_pairs = (
+        ("commit", candidate["commit"], envelope_candidate["commit"]),
+        ("tree", candidate["tree"], envelope_candidate["tree"]),
+        ("lock_sha256", candidate["lock_sha256"], envelope_candidate["lock_sha256"]),
+        ("wheel_sha256", candidate["wheel"]["sha256"], envelope_candidate["wheel_sha256"]),
+        ("sdist_sha256", candidate["sdist"]["sha256"], envelope_candidate["sdist_sha256"]),
+    )
+    for field, observed_binding, expected_binding in candidate_pairs:
+        if observed_binding != expected_binding:
+            _fail(f"scale v9 candidate binding mismatch: {field}")
+    run = observed["run_binding"]
+    envelope_run = envelope["run_binding"]
+    if (
+        run["run_id"] != envelope_run["run_id"]
+        or run["workflow_run_id"] != envelope_run["workflow_run_id"]
+    ):
+        _fail("scale v9 run binding differs from the typed envelope")
+    if (
+        run["runner"] != RUNNER_RELATIVE_PATH
+        or run["runner_sha256"] != envelope["runner"]["sha256"]
+    ):
+        _fail("scale v9 runner binding differs from the typed envelope")
+
+    query = observed["warm_samples"]["query"]
+    context = observed["warm_samples"]["context"]
+    report_metrics = observed["metrics"]
+    equivalence = observed["equivalence"]
+    user_bytes = observed["user_bytes"]
+    provider = observed["provider"]
+    metrics = {
+        "p50": max(query["p50_ms"], context["p50_ms"]),
+        "p95": max(query["p95_ms"], context["p95_ms"]),
+        "max": max(query["max_ms"], context["max_ms"]),
+        "rss": report_metrics["rss"]["peak_bytes"],
+        "storage": report_metrics["storage_bytes"],
+        "file_count": report_metrics["file_count"],
+        "build": report_metrics["build_duration_ms"],
+        "rebuild": report_metrics["rebuild_duration_ms"],
+        "full_incremental_noop_equivalence": int(
+            equivalence["full_incremental_equal"]
+            and equivalence["incremental_noop_equal"]
+            and equivalence["exact"]
+        ),
+        "user_bytes": int(user_bytes["all_unchanged"]),
+        "provider_bound": int(
+            provider["violation"] is False
+            and provider["violation_count"] == 0
+            and provider["max_bytes"] <= provider["hard_limit_bytes"]
+        ),
+        "active_governed_object_count": observed["vault"][
+            "active_governed_object_count"
+        ],
+        "query_sample_count": query["sample_count"],
+        "context_sample_count": context["sample_count"],
+        "report_sha256": observed["report_sha256"],
+    }
+    observed_failures = set(observed["hard_failures"])
+    unknown_failures = observed_failures - set(HARD_FAILURE_IDS)
+    if unknown_failures:
+        _fail("scale v9 report contains an unknown hard failure")
+    failures = {
+        "scale_not_executed": int(observed["status"] != "executed"),
+        **{
+            failure_id: int(failure_id in observed_failures)
+            for failure_id in HARD_FAILURE_IDS
+        },
+    }
+    return _derived("scale_report", metrics, failures, record_sha256)
 
 
 def _parse_scale(
@@ -3790,21 +4677,46 @@ def _parse_scale(
         _fail("Scale expected-source corpus binding is required")
     if envelope["payload"]["expected_source"]["sha256"] != expected_corpus_sha256:
         _fail("Scale expected source is bound to a different corpus")
-    expected_value, expected_source = _source_json(
+    expected_source = _source_data(
         envelope["payload"]["expected_source"],
         root=root,
         label="scale expected thresholds",
+        media_type="application/json",
     )
-    observed_value, observed_source = _source_json(
+    observed_source = _source_data(
         envelope["payload"]["observed_source"],
         root=root,
         label="scale observed report",
+        media_type="application/json",
     )
+    for label, source in (
+        ("scale expected thresholds", expected_source),
+        ("scale observed report", observed_source),
+    ):
+        _safe_artifact_bytes(source, label=label, json_document=True)
+    expected_value = _strict_json(expected_source.raw, label="scale expected thresholds")
+    observed_value = _strict_json(observed_source.raw, label="scale observed report")
+    _reject_projection_strings(expected_value, label="scale expected thresholds")
+    _reject_projection_strings(observed_value, label="scale observed report")
     if expected_source.path == observed_source.path:
         _fail("Scale expected and observed evidence must be separate files")
+    if (
+        envelope["schema_version"] == SCHEMA_V3_VERSION
+        and isinstance(observed_value, Mapping)
+        and observed_value.get("schema_version")
+        == "deeplaw.v013-scale-qualification-report/v9"
+    ):
+        return _parse_scale_v9(
+            envelope,
+            expected_value=expected_value,
+            observed_value=observed_value,
+            record_sha256=record_sha256,
+        )
+    _reject_forbidden_keys(expected_value)
+    _reject_forbidden_keys(observed_value)
     expected_rows = _require_rows(expected_value, label="scale expected")
     observed_rows_value = observed_value
-    if envelope["schema_version"] == SCHEMA_V2_VERSION:
+    if envelope["schema_version"] in _V2_COMPATIBLE_SCHEMA_VERSIONS:
         commercial_keys = {
             "evidence_class",
             "fixture_kind",
@@ -3848,7 +4760,7 @@ def _parse_scale(
         "execution_id",
         "exit_code",
     }
-    if envelope["schema_version"] == SCHEMA_V2_VERSION:
+    if envelope["schema_version"] in _V2_COMPATIBLE_SCHEMA_VERSIONS:
         observed_required.add("process")
     expected_sizes = {1000, 10000, 100000}
     threshold_keys = {
@@ -3929,7 +4841,7 @@ def _parse_scale(
         execution_ids.add(row["execution_id"])
         if isinstance(row["exit_code"], bool) or not isinstance(row["exit_code"], int):
             _fail("scale observed exit code is invalid")
-        if envelope["schema_version"] == SCHEMA_V2_VERSION:
+        if envelope["schema_version"] in _V2_COMPATIBLE_SCHEMA_VERSIONS:
             process_keys = {
                 "executable_sha256",
                 "pid",
@@ -4476,11 +5388,15 @@ def _parse_retained(
             "sdist_size": len(sdist.raw),
             "auxiliary_sha256": auxiliary,
             "public_redownload_verified": False,
+            "supply_chain_pass_rate": 1.0,
         },
         {
             "retained_wheel_mismatch": 0,
             "retained_sdist_mismatch": 0,
             "retained_supply_chain_mismatch": 0,
+            "artifact_hash_mismatch": 0,
+            "secret_leak": 0,
+            "private_path_disclosure": 0,
         },
         record_sha256,
     )
@@ -4494,6 +5410,7 @@ _PARSERS = {
     "human_gold_scorer": _parse_human_gold,
     "machine_reference_scorer": _parse_machine_reference,
     "legal_rows": _parse_legal,
+    "professional_evidence_rows": _parse_professional,
     "wiki_journey_rows": _parse_wiki,
     "context_capsule_selection_usage": _parse_context,
     "scale_report": _parse_scale,
@@ -4529,6 +5446,8 @@ def parse_typed_evidence(
     if not isinstance(envelope_value, Mapping):
         _fail("typed evidence manifest must be an object")
     _reject_forbidden_keys(envelope_value)
+    if envelope_value.get("schema_version") == SCHEMA_V3_VERSION:
+        _reject_v3_competitive_fields(envelope_value)
     kind, record = _validate_envelope(
         envelope_value,
         expected_candidate=expected_candidate,
@@ -4544,21 +5463,21 @@ def parse_typed_evidence(
         for index, ref in enumerate(refs)
     ]
     referenced_paths = [item.path for item in sources]
-    if kind == "legal_rows":
+    if kind in {"legal_rows", "professional_evidence_rows"}:
         original_refs = envelope_value["payload"]["original_source_refs"]
         if not isinstance(original_refs, list):
-            _fail("Legal evidence original source references are missing")
+            _fail("Original source references are missing")
         for index, descriptor in enumerate(original_refs):
             original = _require_mapping(
                 descriptor,
-                label=f"Legal original source[{index}]",
+                label=f"Original source[{index}]",
                 keys={"source_id", "version_id", "source"},
             )
             referenced_paths.append(
                 _source_data(
                     original["source"],
                     root=evidence_root,
-                    label=f"Legal original source[{index}]",
+                    label=f"Original source[{index}]",
                 ).path
             )
     _check_manifest_closure(
@@ -4579,6 +5498,7 @@ def parse_typed_evidence(
         parser_kwargs["expected_candidate_run_id"] = expected_candidate_run_id
     if kind in {
         "legal_rows",
+        "professional_evidence_rows",
         "wiki_journey_rows",
         "context_capsule_selection_usage",
         "scale_report",
@@ -4588,6 +5508,8 @@ def parse_typed_evidence(
     result = parser(envelope_value, **parser_kwargs)
     if envelope_value["schema_version"] == SCHEMA_V2_VERSION:
         result["schema_version"] = DERIVED_V2_SCHEMA_VERSION
+    elif envelope_value["schema_version"] == SCHEMA_V3_VERSION:
+        result["schema_version"] = DERIVED_V3_SCHEMA_VERSION
     return result
 
 
@@ -4616,6 +5538,10 @@ def parse_machine_reference_scorer(*args: Any, **kwargs: Any) -> dict[str, Any]:
 
 
 def parse_legal_rows(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    return parse_typed_evidence(*args, **kwargs)
+
+
+def parse_professional_evidence_rows(*args: Any, **kwargs: Any) -> dict[str, Any]:
     return parse_typed_evidence(*args, **kwargs)
 
 
@@ -4692,7 +5618,7 @@ def _cli_main(argv: Sequence[str] | None = None) -> int:
         if set(corpus) != {"sha256", "role"}:
             _fail("corpus descriptor keys are not closed")
         _sha(corpus["sha256"], label="corpus descriptor sha256")
-        if corpus["role"] not in {"candidate_full", "qualification_holdout", "final_blind"}:
+        if corpus["role"] not in _LEGACY_CORPUS_ROLES | _V3_CORPUS_ROLES:
             _fail("corpus descriptor role is invalid")
         runner = _load_cli_descriptor(args.runner_path, label="runner descriptor")
         scorer = _load_cli_descriptor(args.scorer_path, label="scorer descriptor")
@@ -4746,7 +5672,9 @@ if __name__ == "__main__":
 __all__ = [
     "DERIVED_SCHEMA_VERSION",
     "DERIVED_V2_SCHEMA_VERSION",
+    "DERIVED_V3_SCHEMA_VERSION",
     "SCHEMA_V2_VERSION",
+    "SCHEMA_V3_VERSION",
     "SCHEMA_VERSION",
     "TypedQualificationEvidenceError",
     "main",
@@ -4758,6 +5686,7 @@ __all__ = [
     "parse_human_gold_scorer",
     "parse_legal_rows",
     "parse_machine_reference_scorer",
+    "parse_professional_evidence_rows",
     "parse_retained_supply_chain",
     "parse_scale_report",
     "parse_typed_evidence",
