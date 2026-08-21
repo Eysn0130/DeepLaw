@@ -14,6 +14,7 @@ from deeplaw.knowledge_autonomy import (
 )
 from deeplaw.knowledge_sink_mcp_server import handle_knowledge_sink
 from deeplaw.knowledge_store import initialize_knowledge_vault
+from deeplaw.subprocess_environment import _build_subprocess_environment
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 
@@ -437,6 +438,7 @@ task_continuity.checkpoint_task(
         cwd=REPOSITORY,
         check=False,
         env={
+            **_build_subprocess_environment(),
             "PATH": os.pathsep.join(
                 [str(Path(shutil.which("git") or "git").parent), os.defpath]
             ),

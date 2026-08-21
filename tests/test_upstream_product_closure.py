@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import subprocess
 import sys
 import tomllib
@@ -12,6 +13,7 @@ import pytest
 
 from benchmarks.v013.run_upstream_product_closure import (
     DiagnosticFailure,
+    _child_environment,
     _write_adjacent_checksums,
 )
 
@@ -62,10 +64,18 @@ def test_named_upstream_research_does_not_rotate_frozen_qualification_inputs() -
 
 def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner_source = RUNNER.read_text(encoding="utf-8")
     assert "from deeplaw" not in runner_source
     assert "import deeplaw" not in runner_source
+
+    monkeypatch.setenv("DEEPLAW_TEST_AMBIENT_SECRET", "must-not-enter-child")
+    child_environment = _child_environment(tmp_path / "child-environment")
+    assert "DEEPLAW_TEST_AMBIENT_SECRET" not in child_environment
+    for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT"):
+        if name in os.environ:
+            assert child_environment[name] == os.environ[name]
 
     refused = subprocess.run(
         [

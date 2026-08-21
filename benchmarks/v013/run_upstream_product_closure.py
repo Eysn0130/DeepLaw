@@ -154,7 +154,7 @@ def _child_environment(root: Path) -> dict[str, str]:
     owner_home = root / "owner-home"
     temporary.mkdir(parents=True, exist_ok=True)
     owner_home.mkdir(parents=True, exist_ok=True)
-    return {
+    environment = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
@@ -162,6 +162,10 @@ def _child_environment(root: Path) -> dict[str, str]:
         "TMPDIR": str(temporary),
         "DEEPLAW_HOME": str(owner_home),
     }
+    for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT"):
+        if name in os.environ:
+            environment[name] = os.environ[name]
+    return environment
 
 
 def _run_process(

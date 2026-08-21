@@ -86,3 +86,11 @@ already verified `file:///C:/...` project-plugin URI as a separate path. Preflig
 the unique exact plugin URI, substitutes only that field in a structured copy, and applies the same
 sensitive-value/path scan to every remaining resolved-config field. This does not allow arbitrary
 drive, UNC, or other file paths into evidence.
+
+The two remaining mapped Windows failures shared a separate pre-business-logic cause: their closed
+Python child environments omitted Windows operating-system bootstrap variables, and importing
+`asyncio` failed with `WinError 10106` before the public CLI or checkpoint recovery began. The
+source-free public-seam diagnostic now copies only `SYSTEMROOT`, `WINDIR`, `COMSPEC`, and `PATHEXT`
+when present, in addition to its existing fixed paths and locale. The checkpoint crash-recovery
+fixture uses the shared closed subprocess-environment builder and then narrows `PATH` as before.
+Provider credentials, ambient auth, test canaries, and arbitrary environment names remain excluded.
