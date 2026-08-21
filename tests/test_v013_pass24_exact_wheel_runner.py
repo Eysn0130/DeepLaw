@@ -280,7 +280,7 @@ def test_unique_wheel_is_installed_and_receipt_is_path_free(tmp_path: Path) -> N
     assert receipt["version_check"]["argv"] == ["deeplaw", "--version"]
     assert receipt["version_check"]["exit_code"] == 0
     assert receipt["version_check"]["stdout_bytes"] == len(
-        f"deeplaw {EXPECTED_VERSION}\n".encode()
+        f"deeplaw {EXPECTED_VERSION}{os.linesep}".encode()
     )
     assert receipt["network_acquisition"] == {
         "explicit": True,
