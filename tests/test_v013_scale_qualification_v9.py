@@ -27,6 +27,7 @@ from benchmarks.v013.scale_qualification_v9 import (
     build_scale_qualification_report,
     verify_report,
 )
+from deeplaw.api import KnowledgeOS
 from deeplaw.compilation.models import MAX_COMPILATION_REQUEST_BYTES
 from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, initialize_autonomous_core
 from deeplaw.knowledge_compiler import compile_source
@@ -313,16 +314,18 @@ def _public_batch_smoke(
             asset_ids.extend(result["asset_ids"])
     initialize_autonomous_core(vault)
     receipts = []
-    for batch_index, source_result in enumerate(source_results):
-        receipts.append(
-            _public_semantic_compile(
-                vault,
-                source_result,
-                target=fragments_per_source,
-                global_offset=batch_index * fragments_per_source,
-                batch_index=batch_index,
+    with KnowledgeOS.open(vault) as knowledge_os:
+        for batch_index, source_result in enumerate(source_results):
+            receipts.append(
+                _public_semantic_compile(
+                    vault,
+                    source_result,
+                    target=fragments_per_source,
+                    global_offset=batch_index * fragments_per_source,
+                    batch_index=batch_index,
+                    knowledge_os_handle=knowledge_os,
+                )
             )
-        )
     assert len(asset_ids) == batch_count * fragments_per_source
     assert len(set(asset_ids)) == len(asset_ids)
     return receipts
@@ -503,6 +506,24 @@ def test_v9_public_batch_smoke_measures_each_publication_request_bound(tmp_path:
         and item["publication_request_limit_bytes"] == MAX_COMPILATION_REQUEST_BYTES
         for item in receipts
     )
+
+
+def test_v9_public_batches_reuse_one_verified_knowledge_os_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_open = KnowledgeOS.open
+    open_count = 0
+
+    def counted_open(path: str | Path) -> KnowledgeOS:
+        nonlocal open_count
+        open_count += 1
+        return original_open(path)
+
+    monkeypatch.setattr(KnowledgeOS, "open", staticmethod(counted_open))
+    receipts = _public_batch_smoke(tmp_path, batch_count=2, fragments_per_source=2)
+
+    assert len(receipts) == 2
+    assert open_count == 1
 
 
 def test_v9_frozen_40_object_batch_stays_on_public_bounded_path(tmp_path: Path) -> None:

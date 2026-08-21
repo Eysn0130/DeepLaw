@@ -25,7 +25,7 @@ import tempfile
 import time
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
@@ -912,6 +912,7 @@ def _public_semantic_compile(
     target: int,
     global_offset: int = 0,
     batch_index: int = 0,
+    knowledge_os_handle: Any | None = None,
 ) -> dict[str, Any]:
     """Publish one bounded Source IR batch through the public compiler seam."""
 
@@ -942,7 +943,12 @@ def _public_semantic_compile(
         or batch_index < 0
     ):
         raise ScaleQualificationError("source batch offset or index is invalid")
-    with KnowledgeOS.open(vault) as knowledge_os:
+    knowledge_os_context = (
+        nullcontext(knowledge_os_handle)
+        if knowledge_os_handle is not None
+        else KnowledgeOS.open(vault)
+    )
+    with knowledge_os_context as knowledge_os:
         profile = knowledge_os.compilations.profile(version="3")
         with AutonomousKnowledgeStore(vault, read_only=False) as store:
             grant_id = store.enable_grant(
@@ -1313,37 +1319,39 @@ def run_scale_qualification(
             )
         initialize_autonomous_core(vault)
         semantic_batches: list[dict[str, Any]] = []
-        for batch_index, source_result in enumerate(source_results):
-            semantic_commit = _public_semantic_compile(
-                vault,
-                source_result,
-                target=FRAGMENTS_PER_SOURCE,
-                global_offset=batch_index * FRAGMENTS_PER_SOURCE,
-                batch_index=batch_index,
-            )
-            semantic_batches.append(
-                {
-                    field: semantic_commit[field]
-                    for field in (
-                        "batch_index",
-                        "global_offset",
-                        "target_object_count",
-                        "grant_max_objects",
-                        "grant_id",
-                        "compilation_run_id",
-                        "source_revision_id",
-                        "asset_count",
-                        "asset_ids_sha256",
-                        "publication_request_bytes",
-                        "publication_request_sha256",
-                        "publication_request_limit_bytes",
-                        "published_object_count",
-                        "committed_object_count",
-                        "committed_relation_count",
-                    )
-                }
-            )
-            rss_samples.append(_rss_bytes())
+        with KnowledgeOS.open(vault) as compilation_knowledge_os:
+            for batch_index, source_result in enumerate(source_results):
+                semantic_commit = _public_semantic_compile(
+                    vault,
+                    source_result,
+                    target=FRAGMENTS_PER_SOURCE,
+                    global_offset=batch_index * FRAGMENTS_PER_SOURCE,
+                    batch_index=batch_index,
+                    knowledge_os_handle=compilation_knowledge_os,
+                )
+                semantic_batches.append(
+                    {
+                        field: semantic_commit[field]
+                        for field in (
+                            "batch_index",
+                            "global_offset",
+                            "target_object_count",
+                            "grant_max_objects",
+                            "grant_id",
+                            "compilation_run_id",
+                            "source_revision_id",
+                            "asset_count",
+                            "asset_ids_sha256",
+                            "publication_request_bytes",
+                            "publication_request_sha256",
+                            "publication_request_limit_bytes",
+                            "published_object_count",
+                            "committed_object_count",
+                            "committed_relation_count",
+                        )
+                    }
+                )
+                rss_samples.append(_rss_bytes())
         build_duration_ms = (time.perf_counter() - build_start) * 1000
         full_start = time.perf_counter()
         with AutonomousKnowledgeStore(vault, read_only=False) as store:

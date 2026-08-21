@@ -61,3 +61,9 @@ Windows qualification bootstraps its duration weights from three deterministic, 
 3.12 shards. Their real JUnit receipts must aggregate into complete, disjoint coverage before the
 workflow may derive weights or start the Python 3.11/3.13 weighted shards. The calibration shards
 are retained separately from the nine final platform rows and cannot substitute for them.
+
+Candidate-v2 10k timeout analysis found a full-Vault verification on every one of the 250 bounded
+semantic batches. The qualification path now retains one verified public `KnowledgeOS` session
+across the same 250×40 compilation runs. Batch dimensions, public seams, hard limits, and the final
+pre-query verification are unchanged. This is an implementation correction, not a qualification or
+pass claim.
