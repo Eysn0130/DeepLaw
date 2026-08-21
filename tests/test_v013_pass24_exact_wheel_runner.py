@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -272,7 +273,8 @@ def test_unique_wheel_is_installed_and_receipt_is_path_free(tmp_path: Path) -> N
     assert receipt["runtime"]["import_file_path_class"] == "venv_site_packages"
     assert receipt["entrypoint"]["value"] == "deeplaw.cli:main"
     assert receipt["entrypoint"]["executable_path_class"] == "venv_bin"
-    assert receipt["entrypoint"]["executable_relative_path"].endswith("deeplaw")
+    expected_entrypoint = "Scripts/deeplaw.exe" if os.name == "nt" else "bin/deeplaw"
+    assert receipt["entrypoint"]["executable_relative_path"] == expected_entrypoint
     assert receipt["entrypoint"]["module_path_class"] == "venv_site_packages"
     assert receipt["entrypoint"]["module_relative_path"] == "deeplaw/cli.py"
     assert receipt["version_check"]["argv"] == ["deeplaw", "--version"]
