@@ -77,7 +77,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install focused dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra discovery
 
       - name: Run native Windows sentinel
         env:
@@ -88,3 +88,14 @@ jobs:
           tests/test_v013_pass21_windows_acl_environment.py
           tests/test_closed_mcp_launcher.py
           tests/test_v013_task_continuity_driver.py
+          tests/test_v013_pass13_codex_qualification.py::test_codex_login_receipt_hashes_status_without_reading_auth_file
+          tests/test_v013_pass13_codex_qualification.py::test_owner_broker_launcher_is_external_owner_only_and_process_separated
+          tests/test_v013_pass13_opencode_qualification.py::test_owner_broker_launcher_must_be_owner_only_and_process_separated
+          tests/test_v013_pass13_opencode_qualification.py::test_preflight_keeps_owner_broker_out_of_static_inspection_commands
+          tests/test_v013_pass13_opencode_qualification.py::test_preflight_rejects_a_canary_resolved_into_debug_config
+          tests/test_v013_pass13_opencode_qualification.py::test_resolved_config_must_bind_the_unique_installed_project_plugin
+          tests/test_v013_pass22_host_lifecycle.py::test_codex_adapter_process_accepts_only_closed_event_and_emits_receipt
+          tests/test_v013_pass24_exact_wheel_runner.py::test_version_probe_accepts_one_native_line_and_rejects_other_output
+          tests/test_v013_pass24_exact_wheel_runner.py::test_public_journey_step_failure_cleans_venv
+          tests/test_upstream_product_closure.py::test_public_seam_runner_is_sanitized_and_cannot_author_qualification
+          tests/test_v013_pass22_continuity_closure.py::test_partial_checkpoint_recovers_after_process_exit_and_restart

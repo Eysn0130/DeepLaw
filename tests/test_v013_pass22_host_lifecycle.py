@@ -19,6 +19,7 @@ from deeplaw.knowledge_autonomy import (
 )
 from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.task_continuity import checkpoint_task, start_task
+from deeplaw.windows_acl import harden_windows_private_file
 
 
 def _git(repository: Path, *arguments: str) -> str:
@@ -308,7 +309,9 @@ def test_codex_adapter_process_accepts_only_closed_event_and_emits_receipt(
     )
     config_path = tmp_path / "codex-lifecycle.json"
     config_path.write_text(json.dumps(config), encoding="utf-8")
-    if os.name != "nt":
+    if os.name == "nt":
+        harden_windows_private_file(config_path)
+    else:
         config_path.chmod(0o600)
     adapter = Path(__file__).resolve().parents[1] / "adapters/codex/lifecycle.py"
     completed = subprocess.run(

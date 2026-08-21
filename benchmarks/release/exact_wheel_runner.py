@@ -465,8 +465,8 @@ def _run_version(
         stderr = completed.stderr.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ExactWheelExecutionError("isolated deeplaw --version output is not UTF-8") from exc
-    expected_output = f"deeplaw {expected_version}\n"
-    if stdout != expected_output or stderr:
+    expected_line = f"deeplaw {expected_version}"
+    if stdout not in {f"{expected_line}\n", f"{expected_line}\r\n"} or stderr:
         raise ExactWheelExecutionError("isolated deeplaw --version output differs")
     return {
         "argv": argv,

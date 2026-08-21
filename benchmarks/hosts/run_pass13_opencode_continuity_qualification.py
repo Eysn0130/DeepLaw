@@ -2508,7 +2508,7 @@ def preflight_opencode(
     config_bytes = bytes(config["stdout"])
     if len(config_bytes) > MAX_OUTPUT_BYTES:
         raise QualificationError("resolved OpenCode config exceeds the bound")
-    _forbid_sensitive(config_bytes + bytes(config["stderr"]), forbidden_values)
+    _forbid_sensitive(bytes(config["stderr"]), forbidden_values)
     try:
         resolved = _strict_json(config_bytes)
     except QualificationError as exc:
@@ -2517,6 +2517,9 @@ def preflight_opencode(
         raise QualificationError("resolved OpenCode config is not an object")
     if not _resolved_plugin_matches(resolved, target=plugin_target):
         raise QualificationError("resolved config did not load the exact project plugin")
+    sanitized_resolved = dict(resolved)
+    sanitized_resolved["plugin"] = ["file://verified-project-plugin"]
+    _forbid_sensitive(_encoded(sanitized_resolved), forbidden_values)
     resolved_mcp = resolved.get("mcp")
     if not isinstance(resolved_mcp, Mapping) or set(resolved_mcp) != {"deeplaw_knowledge"}:
         raise QualificationError("resolved config enabled an unexpected MCP")

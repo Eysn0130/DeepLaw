@@ -67,3 +67,22 @@ semantic batches. The qualification path now retains one verified public `Knowle
 across the same 250×40 compilation runs. Batch dimensions, public seams, hard limits, and the final
 pre-query verification are unchanged. This is an implementation correction, not a qualification or
 pass claim.
+
+Candidate-v3 failed the Windows Python 3.12 duration-calibration shard because four retained tests
+assumed POSIX path or mode behavior and the exact-wheel version probe accepted LF but not the
+equivalent Windows CRLF line ending. The test fixtures now use native path rendering and the
+existing Windows private-file ACL hardener, while POSIX mode-bit assertions remain POSIX-only. The
+version probe still requires exactly one expected UTF-8 line, no stderr, and now accepts either LF
+or CRLF. Candidate-v3 remains a consumed failed candidate; these corrections require a new exact
+candidate and make no platform-qualification or release-pass claim.
+
+Calibration shards 1 and 3 were cancelled at the 100-minute job limit before they could retain
+JUnit receipts. Their progress stream nevertheless contained failures, so timeout cannot be treated
+as the only cause or as a pass. The calibration-only limit is now 150 minutes, while the later
+duration-weighted platform shards keep their existing bound. Deterministically mapped failed nodes
+are included in the fast Windows sentinel before another expensive candidate is admitted. One
+confirmed OpenCode cause was the absolute-path scanner interpreting the drive suffix inside an
+already verified `file:///C:/...` project-plugin URI as a separate path. Preflight now first verifies
+the unique exact plugin URI, substitutes only that field in a structured copy, and applies the same
+sensitive-value/path scan to every remaining resolved-config field. This does not allow arbitrary
+drive, UNC, or other file paths into evidence.

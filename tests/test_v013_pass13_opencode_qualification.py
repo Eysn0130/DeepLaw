@@ -354,10 +354,11 @@ def test_owner_broker_launcher_must_be_owner_only_and_process_separated(
         launcher, host_binary=host
     ) == hashlib.sha256(b"broker-launcher").hexdigest()
 
-    launcher.chmod(0o750)
-    with pytest.raises(runner.QualificationError, match="owner-only"):
-        runner._validate_owner_broker_launcher(launcher, host_binary=host)
-    launcher.chmod(0o700)
+    if os.name != "nt":
+        launcher.chmod(0o750)
+        with pytest.raises(runner.QualificationError, match="owner-only"):
+            runner._validate_owner_broker_launcher(launcher, host_binary=host)
+        launcher.chmod(0o700)
     launcher.write_bytes(host.read_bytes())
     with pytest.raises(runner.QualificationError, match="process-separated"):
         runner._validate_owner_broker_launcher(launcher, host_binary=host)
@@ -535,6 +536,19 @@ def test_preflight_keeps_owner_broker_out_of_static_inspection_commands(
             host_launcher=tmp_path / "owner-broker",
             deeplaw_executable=tmp_path / "deeplaw",
             environment={runner._CANARY_NAMES[0]: "canary-leak"},
+            cwd=tmp_path,
+            project_root=project,
+            plugin_receipt=plugin_receipt,
+        )
+
+    resolved["instructions"] = ["D:/private/runtime"]
+    monkeypatch.setattr(runner, "_run_opencode_command", run_command)
+    with pytest.raises(runner.QualificationError, match="absolute path"):
+        runner.preflight_opencode(
+            binary=tmp_path / "opencode",
+            host_launcher=tmp_path / "owner-broker",
+            deeplaw_executable=tmp_path / "deeplaw",
+            environment={},
             cwd=tmp_path,
             project_root=project,
             plugin_receipt=plugin_receipt,

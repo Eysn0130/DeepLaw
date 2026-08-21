@@ -563,6 +563,43 @@ def test_console_version_execution_failure_cleans_venv(tmp_path: Path) -> None:
     assert not venv_path.exists()
 
 
+def test_version_probe_accepts_one_native_line_and_rejects_other_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Completed:
+        returncode = 0
+
+        def __init__(self, stdout: bytes, stderr: bytes = b"") -> None:
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def probe(stdout: bytes, stderr: bytes = b"") -> dict[str, Any]:
+        def run(*_args: object, **_kwargs: object) -> Completed:
+            return Completed(stdout, stderr)
+
+        monkeypatch.setattr(exact_wheel_runner.subprocess, "run", run)
+        return exact_wheel_runner._run_version(
+            console_entrypoint=tmp_path / "deeplaw",
+            venv_path=tmp_path,
+            expected_version=EXPECTED_VERSION,
+            python_executable=tmp_path / "python",
+        )
+
+    expected_line = f"deeplaw {EXPECTED_VERSION}".encode()
+    for output in (expected_line + b"\n", expected_line + b"\r\n"):
+        receipt = probe(output)
+        assert receipt["stdout_sha256"] == hashlib.sha256(output).hexdigest()
+        assert receipt["stdout_bytes"] == len(output)
+
+    for stdout, stderr in (
+        (expected_line, b""),
+        (expected_line + b"\nextra\n", b""),
+        (expected_line + b"\n", b"warning\n"),
+    ):
+        with pytest.raises(ExactWheelExecutionError, match="output differs"):
+            probe(stdout, stderr)
+
+
 def test_public_journey_step_failure_cleans_venv(tmp_path: Path) -> None:
     candidate_dir = tmp_path / "candidate-full"
     wheel = _fake_wheel(candidate_dir, journey_failure_step="query")

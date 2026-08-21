@@ -252,7 +252,7 @@ jobs:
     name: Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3
     needs: verified-artifact
     runs-on: windows-latest
-    timeout-minutes: 100
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
