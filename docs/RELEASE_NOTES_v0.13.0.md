@@ -94,3 +94,9 @@ source-free public-seam diagnostic now copies only `SYSTEMROOT`, `WINDIR`, `COMS
 when present, in addition to its existing fixed paths and locale. The checkpoint crash-recovery
 fixture uses the shared closed subprocess-environment builder and then narrows `PATH` as before.
 Provider credentials, ambient auth, test canaries, and arbitrary environment names remain excluded.
+
+After that environment correction, the Windows 1k development diagnostic progressed into the real
+public journey but exceeded its previous 900-second subprocess limit. Its Windows-only subprocess
+bound is now 3,600 seconds inside the still-bounded 150-minute Candidate Full calibration job. The
+fast Windows sentinel executes the separated environment-isolation contract and partial-checkpoint
+recovery test; the full 1k journey remains in Candidate Full and cannot be replaced by the sentinel.

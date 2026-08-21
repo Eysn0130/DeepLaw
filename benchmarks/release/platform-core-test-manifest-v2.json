@@ -6943,6 +6943,13 @@
         {
           "junit": {
             "classname": "tests.test_upstream_product_closure",
+            "name": "test_public_seam_child_environment_keeps_windows_bootstrap_and_excludes_ambient"
+          },
+          "node_id": "tests/test_upstream_product_closure.py::test_public_seam_child_environment_keeps_windows_bootstrap_and_excludes_ambient"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_upstream_product_closure",
             "name": "test_public_seam_runner_is_sanitized_and_cannot_author_qualification"
           },
           "node_id": "tests/test_upstream_product_closure.py::test_public_seam_runner_is_sanitized_and_cannot_author_qualification"
@@ -16195,9 +16202,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2292,
+      "count": 2293,
       "selection": "not qualification and not windows_native",
-      "sha256": "b0fd7f1ef81da1dbaece3f3c4c0d6ca05b0b3d1ca9a602d89104532aa7fe3cd7"
+      "sha256": "c3cab56c804d9f8a10d797a00edd36c3f64aefefb00bb1102eda5dc528aecffa"
     },
     "windows": {
       "additional_cases": [
@@ -16230,13 +16237,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2296,
+      "count": 2297,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "fd12ec15f5794af1a083f738bd78b98308832db9dceba119d0a721007b36d5e5"
+      "sha256": "17085bd1e3fde05619e9e9091fc4316aa55210c028bf8aa143303283f2f46a89"
     }
   },
-  "manifest_sha256": "8e063570073a52378c3554a66cdc6a3ac13a57fde7b4a41c2d2d106019681fa2",
+  "manifest_sha256": "ab6d61c29d10ef023b1ffce9c5f6ab95d01444fa89cce4755094662411232505",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

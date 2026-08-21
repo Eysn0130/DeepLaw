@@ -97,5 +97,5 @@ jobs:
           tests/test_v013_pass22_host_lifecycle.py::test_codex_adapter_process_accepts_only_closed_event_and_emits_receipt
           tests/test_v013_pass24_exact_wheel_runner.py::test_version_probe_accepts_one_native_line_and_rejects_other_output
           tests/test_v013_pass24_exact_wheel_runner.py::test_public_journey_step_failure_cleans_venv
-          tests/test_upstream_product_closure.py::test_public_seam_runner_is_sanitized_and_cannot_author_qualification
+          tests/test_upstream_product_closure.py::test_public_seam_child_environment_keeps_windows_bootstrap_and_excludes_ambient
           tests/test_v013_pass22_continuity_closure.py::test_partial_checkpoint_recovers_after_process_exit_and_restart

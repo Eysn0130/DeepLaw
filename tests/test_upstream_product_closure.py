@@ -62,20 +62,36 @@ def test_named_upstream_research_does_not_rotate_frozen_qualification_inputs() -
     assert "does not establish parity" in research
 
 
-def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
+def test_public_seam_child_environment_keeps_windows_bootstrap_and_excludes_ambient(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEEPLAW_TEST_AMBIENT_SECRET", "must-not-enter-child")
+    child_environment = _child_environment(tmp_path / "child-environment")
+    assert "DEEPLAW_TEST_AMBIENT_SECRET" not in child_environment
+    assert set(child_environment) <= {
+        "PATH",
+        "LANG",
+        "LC_ALL",
+        "PYTHONUTF8",
+        "TMPDIR",
+        "DEEPLAW_HOME",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+    }
+    for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT"):
+        if name in os.environ:
+            assert child_environment[name] == os.environ[name]
+
+
+def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
+    tmp_path: Path,
 ) -> None:
     runner_source = RUNNER.read_text(encoding="utf-8")
     assert "from deeplaw" not in runner_source
     assert "import deeplaw" not in runner_source
-
-    monkeypatch.setenv("DEEPLAW_TEST_AMBIENT_SECRET", "must-not-enter-child")
-    child_environment = _child_environment(tmp_path / "child-environment")
-    assert "DEEPLAW_TEST_AMBIENT_SECRET" not in child_environment
-    for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT"):
-        if name in os.environ:
-            assert child_environment[name] == os.environ[name]
 
     refused = subprocess.run(
         [
@@ -114,10 +130,10 @@ def test_public_seam_runner_is_sanitized_and_cannot_author_qualification(
         capture_output=True,
         text=True,
         # This is a bounded cross-process development diagnostic, not the v9
-        # performance gate.  Slower supported CI interpreters may exceed five
-        # minutes while exercising the same 1k public journey; the exact 10k
-        # candidate job owns release latency measurements.
-        timeout=900,
+        # performance gate.  The supported Windows CI interpreter has exceeded
+        # fifteen minutes while exercising the same 1k public journey; the exact
+        # 10k candidate job owns release latency measurements.
+        timeout=3_600 if os.name == "nt" else 900,
     )
     assert completed.returncode == 0, completed.stderr
     report = json.loads(output.read_text(encoding="utf-8"))
