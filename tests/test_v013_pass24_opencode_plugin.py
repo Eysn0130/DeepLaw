@@ -96,6 +96,7 @@ def test_plugin_source_is_thin_and_never_injects_route_identity() -> None:
     assert "DEEPSEEK_API_KEY" not in source
 
 
+@pytest.mark.qualification
 def test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams() -> None:
     result = _bun_probe(
         """
@@ -289,6 +290,7 @@ def test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams() -> N
     }
 
 
+@pytest.mark.qualification
 def test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env() -> None:
     result = _bun_probe(
         """
@@ -359,6 +361,7 @@ def test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env() -> None:
     }
 
 
+@pytest.mark.qualification
 def test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys() -> None:
     result = _bun_probe(
         """
@@ -462,6 +465,7 @@ def test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys() 
     }
 
 
+@pytest.mark.qualification
 def test_bun_hooks_re_resolve_capsule_and_precompact_only_adds_gap() -> None:
     result = _bun_probe(
         """
@@ -530,6 +534,7 @@ def test_bun_hooks_re_resolve_capsule_and_precompact_only_adds_gap() -> None:
     assert "checkpoint(" not in serialized
 
 
+@pytest.mark.qualification
 def test_bun_default_export_keeps_v1_loader_shape() -> None:
     result = _bun_probe(
         """

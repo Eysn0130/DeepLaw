@@ -51,6 +51,48 @@
       "cases": [
         {
           "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_default_export_keeps_v1_loader_shape"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_default_export_keeps_v1_loader_shape"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_hooks_re_resolve_capsule_and_precompact_only_adds_gap"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_hooks_re_resolve_capsule_and_precompact_only_adds_gap"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass26_opencode_real_loader",
+            "name": "test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event"
+          },
+          "node_id": "tests/test_v013_pass26_opencode_real_loader.py::test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_query_graph_p0_reproductions",
             "name": "test_relation_graph_scan_500_and_5000_truncation_not_executed"
           },
@@ -11675,41 +11717,6 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_opencode_plugin",
-            "name": "test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys"
-          },
-          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass24_opencode_plugin",
-            "name": "test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env"
-          },
-          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass24_opencode_plugin",
-            "name": "test_bun_default_export_keeps_v1_loader_shape"
-          },
-          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_default_export_keeps_v1_loader_shape"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass24_opencode_plugin",
-            "name": "test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams"
-          },
-          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass24_opencode_plugin",
-            "name": "test_bun_hooks_re_resolve_capsule_and_precompact_only_adds_gap"
-          },
-          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_hooks_re_resolve_capsule_and_precompact_only_adds_gap"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass24_opencode_plugin",
             "name": "test_context_bridge_uses_the_exact_opencode_pin_and_marks_compaction_experimental"
           },
           "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_context_bridge_uses_the_exact_opencode_pin_and_marks_compaction_experimental"
@@ -12868,13 +12875,6 @@
             "name": "test_v8_classification_is_exactly_machine_only_and_fourteen_core_gates"
           },
           "node_id": "tests/test_v013_pass25_release_provenance_v8.py::test_v8_classification_is_exactly_machine_only_and_fourteen_core_gates"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_pass26_opencode_real_loader",
-            "name": "test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event"
-          },
-          "node_id": "tests/test_v013_pass26_opencode_real_loader.py::test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event"
         },
         {
           "junit": {
@@ -16181,9 +16181,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2296,
+      "count": 2290,
       "selection": "not qualification and not windows_native",
-      "sha256": "3a8a62517a4f32b61e9239f46aa28a8e3aa937bdc2ad31d36185da1cc6095220"
+      "sha256": "a8b458ccccc4b571787eed1a1524738a5f427369ab2e12b5de53bad9ad4e742c"
     },
     "windows": {
       "additional_cases": [
@@ -16216,13 +16216,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2300,
+      "count": 2294,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "4db278d277ca09f0dc73753e783662814685619e359268de15b77ca869f4ad1d"
+      "sha256": "00ff3d41edc26ea1e1c97746f041200151603a4eeb199d4b3695ece24a1aa9c9"
     }
   },
-  "manifest_sha256": "6ff4a7ee497225d0bdb26cf3b4a13c1a7e9dc0e39b76c716ff9d1a2806cefdce",
+  "manifest_sha256": "5026f55d114a7d38fea408793442c044bf2a2fe22031e59cc50bf0c941905550",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

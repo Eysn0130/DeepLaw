@@ -47,7 +47,26 @@ def test_platform_core_manifest_is_closed_frozen_and_digest_bound() -> None:
     assert manifest["selection"]["windows"] == "not qualification"
     assert manifest["inventories"]["common"]["count"] > 1_000
     assert manifest["inventories"]["windows"]["count"] > manifest["inventories"]["common"]["count"]
-    assert len(manifest["classifications"]["qualification"]["cases"]) == 6
+    assert len(manifest["classifications"]["qualification"]["cases"]) == 12
+    qualification_ids = {
+        case["node_id"]
+        for case in manifest["classifications"]["qualification"]["cases"]
+    }
+    assert (
+        "tests/test_v013_pass26_opencode_real_loader.py::"
+        "test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event"
+        in qualification_ids
+    )
+    windows_ids = {
+        case["node_id"] for case in manifest["inventories"]["common"]["cases"]
+    } | {
+        case["node_id"]
+        for case in manifest["inventories"]["windows"]["additional_cases"]
+    }
+    assert windows_ids >= {
+        "tests/test_v013_pass22_host_lifecycle.py::"
+        "test_lifecycle_config_requires_owner_only_non_symlink_file"
+    }
     assert manifest["classifications"]["nonapplicable"]["status"] == "nonapplicable"
     assert (
         manifest["classifications"]["historical_compatibility"]["status"]

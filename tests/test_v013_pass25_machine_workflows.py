@@ -118,6 +118,9 @@ def test_candidate_full_retains_reproducible_artifact_and_raw_platform_evidence(
     assert "installed-licenses.json" in workflow
     assert "candidate-tests.xml" in workflow
     assert "windows-calibration.xml" in workflow
+    assert "windows-calibration-shards:" in workflow
+    assert "windows-calibration-shard-${{ matrix.shard }}" in workflow
+    assert "windows-calibration-aggregate.json" in workflow
     assert "windows-aggregate.json" in workflow
     assert "platform-matrix-receipt.json" in workflow
     assert "= 14" in workflow

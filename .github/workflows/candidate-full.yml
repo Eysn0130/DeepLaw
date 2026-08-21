@@ -248,11 +248,18 @@ jobs:
           retention-days: 90
           path: ${{ runner.temp }}/scale-10000/v013-scale-qualification-v9.json
 
-  windows-calibration:
-    name: Measure exact Windows Python 3.12 module durations
+  windows-calibration-shards:
+    name: Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3
     needs: verified-artifact
     runs-on: windows-latest
     timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - 1
+          - 2
+          - 3
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -274,21 +281,44 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: verified-candidate-artifacts
-          path: ${{ runner.temp }}/verified-dist
+          path: ${{ runner.temp }}/inputs/verified-candidate-artifacts
 
-      - name: Execute duration calibration
-        env:
-          PYTHONUTF8: "1"
-        run: >-
-          uv run --frozen pytest --strict-markers
-          -m "not qualification"
-          --junitxml="${{ runner.temp }}/windows-calibration.xml"
-
-      - name: Fresh-install the exact Windows Python 3.12 artifact
+      - name: Select deterministic unweighted calibration shard
         shell: bash
         run: |
           set -euo pipefail
-          dist="${RUNNER_TEMP}/verified-dist"
+          uv run --frozen python -m benchmarks.release.candidate_regression \
+            select \
+            --shard-count 3 \
+            --shard-index "${{ matrix.shard }}" \
+            --output "${RUNNER_TEMP}/candidate-test-shard.json" \
+            --paths-output "${RUNNER_TEMP}/candidate-test-files.txt"
+
+      - name: Execute duration calibration shard
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          mapfile -t test_files < "${RUNNER_TEMP}/candidate-test-files.txt"
+          uv run --frozen pytest --strict-markers \
+            -m "not qualification" \
+            --junitxml="${RUNNER_TEMP}/candidate-tests.xml" \
+            "${test_files[@]}"
+          uv run --frozen python -m benchmarks.release.candidate_regression \
+            receipt \
+            --junit "${RUNNER_TEMP}/candidate-tests.xml" \
+            --output "${RUNNER_TEMP}/candidate-skip-receipt.json" \
+            --matrix-os windows-latest \
+            --matrix-python "3.12" \
+            --shard-manifest "${RUNNER_TEMP}/candidate-test-shard.json"
+
+      - name: Fresh-install the exact Windows Python 3.12 artifact
+        if: matrix.shard == 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/inputs/verified-candidate-artifacts"
           uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
             --repository . --dist "${dist}" \
             --output "${dist}/retained-artifact-manifest.json" --verify
@@ -297,12 +327,49 @@ jobs:
           uv pip install --python "${RUNNER_TEMP}/fresh/Scripts/python.exe" "${wheel}"
           "${RUNNER_TEMP}/fresh/Scripts/deeplaw.exe" --version
 
-      - name: Freeze duration weights
-        run: >-
-          uv run --frozen python -m benchmarks.release.candidate_regression
-          weights
-          --junit "${{ runner.temp }}/windows-calibration.xml"
-          --output "${{ runner.temp }}/windows-duration-weights.json"
+      - name: Retain exact duration calibration shard
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-calibration-shard-${{ matrix.shard }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/candidate-tests.xml
+            ${{ runner.temp }}/candidate-test-shard.json
+            ${{ runner.temp }}/candidate-skip-receipt.json
+
+  windows-calibration:
+    name: Aggregate exact Windows Python 3.12 duration calibration
+    needs: windows-calibration-shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Download exact calibration shard receipts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: windows-calibration-shard-*
+          path: ${{ runner.temp }}/windows-calibration-shards
+
+      - name: Aggregate complete disjoint calibration and freeze actual weights
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m benchmarks.release.candidate_regression \
+            aggregate \
+            --input-directory "${RUNNER_TEMP}/windows-calibration-shards" \
+            --matrix-python "3.12" \
+            --output "${RUNNER_TEMP}/windows-calibration-aggregate.json" \
+            --junit-output "${RUNNER_TEMP}/windows-calibration.xml"
+          python -m benchmarks.release.candidate_regression \
+            weights \
+            --junit "${RUNNER_TEMP}/windows-calibration.xml" \
+            --output "${RUNNER_TEMP}/windows-duration-weights.json"
 
       - name: Retain exact duration calibration
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -312,6 +379,7 @@ jobs:
           retention-days: 90
           path: |
             ${{ runner.temp }}/windows-calibration.xml
+            ${{ runner.temp }}/windows-calibration-aggregate.json
             ${{ runner.temp }}/windows-duration-weights.json
 
   posix-matrix:

@@ -31,6 +31,9 @@ def test_candidate_full_retains_raw_platform_and_exact_wheel_evidence() -> None:
     assert "security/openvex.json" in workflow
     assert "candidate-tests.xml" in workflow
     assert "windows-calibration.xml" in workflow
+    assert "windows-calibration-shards:" in workflow
+    assert "windows-calibration-shard-${{ matrix.shard }}" in workflow
+    assert "windows-calibration-aggregate.json" in workflow
     assert "windows-aggregate.json" in workflow
     assert "--junit-output" in workflow
     assert "= 14" in workflow

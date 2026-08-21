@@ -56,3 +56,8 @@ bind the exact commit/tree, artifact hashes, Core Gate results, Host token usage
 platform matrix, supply-chain evidence, and public redownload hashes. Until those artifacts exist,
 all corresponding outcomes remain `not_executed` or failed and this document makes no release,
 superiority, or completeness claim.
+
+Windows qualification bootstraps its duration weights from three deterministic, unweighted Python
+3.12 shards. Their real JUnit receipts must aggregate into complete, disjoint coverage before the
+workflow may derive weights or start the Python 3.11/3.13 weighted shards. The calibration shards
+are retained separately from the nine final platform rows and cannot substitute for them.

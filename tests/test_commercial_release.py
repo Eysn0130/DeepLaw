@@ -334,6 +334,26 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "candidate-skip-receipt.json" in candidate
     assert "windows-duration-weights.json" in candidate
 
+    calibration_shards = candidate.split(
+        "  windows-calibration-shards:", 1
+    )[1].split("  windows-calibration:", 1)[0]
+    assert "Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3" in (
+        calibration_shards
+    )
+    assert "windows-calibration-shard-${{ matrix.shard }}" in calibration_shards
+    assert "--duration-weights" not in calibration_shards
+    assert "--shard-count 3" in calibration_shards
+    assert 'if: matrix.shard == 1' in calibration_shards
+
+    calibration = candidate.split("  windows-calibration:", 1)[1].split(
+        "  posix-matrix:", 1
+    )[0]
+    assert "needs: windows-calibration-shards" in calibration
+    assert "--input-directory" in calibration
+    assert "--junit-output" in calibration
+    assert "windows-calibration-aggregate.json" in calibration
+    assert "windows-duration-weights.json" in calibration
+
     aggregate = candidate.split("  windows-aggregate:", 1)[1]
     assert "setup-uv" not in aggregate
     assert "python -m benchmarks.release.candidate_regression" in aggregate

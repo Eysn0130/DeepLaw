@@ -328,10 +328,20 @@ def test_codex_adapter_process_accepts_only_closed_event_and_emits_receipt(
     assert "opaque-hint" not in completed.stdout
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX owner-mode regression")
-def test_lifecycle_config_requires_owner_only_non_symlink_file(tmp_path: Path) -> None:
+def test_lifecycle_config_requires_owner_only_non_symlink_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config_path = tmp_path / "lifecycle.json"
     config_path.write_text("{}", encoding="utf-8")
+    if os.name == "nt":
+        monkeypatch.setattr(
+            "deeplaw.windows_acl.native_windows_path_acl_report",
+            lambda _path: {"permissions_verified": False},
+        )
+        with pytest.raises(HostLifecycleError, match="owner-only"):
+            _load_json_file(config_path)
+        return
+
     config_path.chmod(0o640)
     with pytest.raises(HostLifecycleError, match="owner-only"):
         _load_json_file(config_path)
