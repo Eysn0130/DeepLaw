@@ -13753,6 +13753,13 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_python_read_runtime",
+            "name": "test_python_retrieval_reuses_startup_snapshot"
+          },
+          "node_id": "tests/test_v013_python_read_runtime.py::test_python_retrieval_reuses_startup_snapshot"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_qualification_protocol",
             "name": "test_claim_policy_fails_closed"
           },
@@ -16286,9 +16293,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2305,
+      "count": 2306,
       "selection": "not qualification and not windows_native",
-      "sha256": "f3b91a2c499c4a7b1397f6797ec28a6259ca86fbb035d16643a372ed11df2fd4"
+      "sha256": "54f02c925f18550c30eb37fa81ffabdf32e4b24f5e221dad842a98a25709eb54"
     },
     "windows": {
       "additional_cases": [
@@ -16321,13 +16328,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2309,
+      "count": 2310,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "d2d19a3aada6b8ab371a76a7efae633b283cc4305fb92244f430c2ef21db0115"
+      "sha256": "5817d283882b4e1074b14e1deddb268128a165a2c71a16e02ca585fedac7cad2"
     }
   },
-  "manifest_sha256": "70b48b39f6d398734c1073fbfad8fe9cb8df3b2937852cb98611525b091fc63d",
+  "manifest_sha256": "ac91466e3bfb51f800323083b74956a10de81ffd1770283676d1c40fce86418d",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
