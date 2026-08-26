@@ -339,10 +339,15 @@ class _CompilationsAPI:
 @dataclass(frozen=True)
 class _RetrievalAPI:
     _root: Path
+    _runtime_factory: Callable[[], PersistentReadRuntime]
 
     def query(self, query: str, **options: Any) -> dict[str, Any]:
+        snapshot = options.pop("_runtime_snapshot", None)
+        if snapshot is None:
+            runtime = _invoke(self._runtime_factory)
+            snapshot = _invoke(runtime.get_snapshot, operation="query")
         service = PurposeAwareRetrievalService(self._root)
-        return _invoke(service.query, query, **options)
+        return _invoke(service.query, query, _runtime_snapshot=snapshot, **options)
 
 
 @dataclass(frozen=True)
@@ -676,7 +681,7 @@ class KnowledgeOS:
 
     @property
     def retrieval(self) -> _RetrievalAPI:
-        return _RetrievalAPI(self._root)
+        return _RetrievalAPI(self._root, self._ensure_runtime)
 
     @property
     def context(self) -> _ContextAPI:
