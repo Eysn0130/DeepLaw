@@ -376,12 +376,27 @@ def test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding(
     )
     assert frozen_identity in workflow
     assert '--host-identity-input "${frozen_identity}"' in workflow
+    handoff = workflow.split(
+        "      - name: Build and validate the pre-execution Host task handoff", 1
+    )[1].split(
+        "      - name: Execute Codex x3, OpenCode x3, and deterministic Kernel evidence", 1
+    )[0]
+    assert "--build-handoff" in handoff
+    assert "--validate-handoff \"${host_task_handoff}\"" in handoff
+    assert '--host-identity-input "${frozen_identity}"' in handoff
+    assert "host-task-handoff-validation.json" not in handoff
     collector = workflow.split(
         "      - name: Execute Codex x3, OpenCode x3, and deterministic Kernel evidence",
         1,
     )[1].split("      - name: Reopen every typed receipt with the repository validator", 1)[0]
     assert '--host-identity-input "${DEEPLAW_HOST_IDENTITY_INPUT}"' not in collector
     assert 'cp "${DEEPLAW_HOST_IDENTITY_INPUT}"' not in collector
+    assert '--host-task-handoff "${host_task_handoff}"' in collector
+    assert "-name '*host-task-handoff*'" in collector
+    assert '-exec cmp -s "{}" "${host_task_handoff}"' in collector
+    assert collector.index('--host-identity-input "${frozen_identity}"') < collector.index(
+        '--host-task-handoff "${host_task_handoff}"'
+    )
     reopen = workflow.split(
         "      - name: Reopen every typed receipt with the repository validator", 1
     )[1]

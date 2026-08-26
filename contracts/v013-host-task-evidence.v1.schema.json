@@ -423,8 +423,35 @@
         "schema_version": {"const": "deeplaw.v013-host-task-cases/v1"},
         "status": {"const": "qualification_input_frozen"},
         "hosts": {"const": ["codex", "opencode"]},
-        "task_cases": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "object", "additionalProperties": false, "required": ["task_case", "required_duties", "required_wrong_states", "required_operations"], "properties": {"task_case": {"$ref": "#/$defs/taskCase"}, "required_duties": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}, "required_wrong_states": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}, "required_operations": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}, "scenarios": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}}}},
+        "task_cases": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["task_case", "required_duties", "required_wrong_states", "required_operations", "seed_driver"],
+            "properties": {
+              "task_case": {"$ref": "#/$defs/taskCase"},
+              "required_duties": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+              "required_wrong_states": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+              "required_operations": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+              "scenarios": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+              "seed_driver": {"$ref": "#/$defs/seedDriver"}
+            }
+          }
+        },
         "host_constraints": {"type": "object", "additionalProperties": false, "required": ["codex", "opencode"], "properties": {"codex": {"$ref": "#/$defs/hostConstraint"}, "opencode": {"$ref": "#/$defs/hostConstraint"}}}
+      }
+    },
+    "seedDriver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "driver_kind", "seams"],
+      "properties": {
+        "role": {"const": "task_domain_seed"},
+        "driver_kind": {"const": "native_host_task_v3"},
+        "seams": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}
       }
     },
     "hostConstraint": {

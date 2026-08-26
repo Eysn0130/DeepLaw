@@ -32,7 +32,18 @@
         "compaction_post",
         "end"
       ],
-      "scenarios": ["cold_start", "resume_fork", "compaction_forget"]
+      "scenarios": ["cold_start", "resume_fork", "compaction_forget"],
+      "seed_driver": {
+        "role": "task_domain_seed",
+        "driver_kind": "native_host_task_v3",
+        "seams": [
+          "task_continuity.start_task",
+          "task_continuity.checkpoint_task",
+          "task_continuity.bind_host_session",
+          "task_continuity.resume_task",
+          "task_continuity.forget_task"
+        ]
+      }
     },
     {
       "task_case": "living_wiki",
@@ -48,7 +59,21 @@
         "wiki_exact_source_drill_down"
       ],
       "required_wrong_states": ["wrong_merge", "stale_revision", "hidden_mutation"],
-      "required_operations": ["wiki_read", "source_read", "query_context"]
+      "required_operations": ["wiki_read", "source_read", "query_context"],
+      "seed_driver": {
+        "role": "task_domain_seed",
+        "driver_kind": "native_host_task_v3",
+        "seams": [
+          "KnowledgeOS.compilations.begin",
+          "KnowledgeOS.compilations.next_packet",
+          "KnowledgeOS.compilations.stage",
+          "KnowledgeOS.compilations.validate",
+          "KnowledgeOS.compilations.commit",
+          "SourceReadService.execute",
+          "WikiReadService.execute",
+          "KnowledgeOS.context.compile"
+        ]
+      }
     },
     {
       "task_case": "professional_evidence",
@@ -69,7 +94,21 @@
         "wiki_exact_source_drill_down"
       ],
       "required_wrong_states": ["wrong_version", "false_authority", "ocr_critical_token"],
-      "required_operations": ["source_read", "fragment_read", "wiki_read", "query_context"]
+      "required_operations": ["source_read", "fragment_read", "wiki_read", "query_context"],
+      "seed_driver": {
+        "role": "task_domain_seed",
+        "driver_kind": "native_host_task_v3",
+        "seams": [
+          "KnowledgeOS.compilations.begin",
+          "KnowledgeOS.compilations.next_packet",
+          "KnowledgeOS.compilations.stage",
+          "KnowledgeOS.compilations.validate",
+          "KnowledgeOS.compilations.commit",
+          "SourceReadService.execute",
+          "WikiReadService.execute",
+          "KnowledgeOS.context.compile"
+        ]
+      }
     }
   ],
   "host_constraints": {

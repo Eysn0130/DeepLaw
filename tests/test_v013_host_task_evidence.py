@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator
 
+from benchmarks.hosts import run_v013_host_task_qualification as host_task_runner
 from benchmarks.hosts.run_v013_host_task_qualification import (
     HostTaskQualificationError,
     load_task_cases,
@@ -495,7 +496,7 @@ def test_v013_host_task_manifest_accepts_current_native_v3_codex_identity(
     )
 
 
-def test_v013_host_task_schema_and_frozen_catalog_are_closed() -> None:
+def test_v013_host_task_schema_and_frozen_catalog_are_closed(tmp_path: Path) -> None:
     schema = json.loads(
         (
             Path(__file__).resolve().parents[1] / "contracts/v013-host-task-evidence.v1.schema.json"
@@ -505,6 +506,83 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed() -> None:
     catalog = load_task_cases()
     assert [row["task_case"] for row in catalog["task_cases"]] == list(TASK_DUTIES)
     assert task_case("codex", "continuity")["status"] == "not_executed"
+
+    identity_input = {
+        "schema_version": "deeplaw.host-exact-identity/v1",
+        "hosts": {
+            host: _host_identity(host, current=True)
+            for host in ("codex", "opencode")
+        },
+    }
+    identity_path = tmp_path / "host-exact-identity.json"
+    identity_path.write_bytes(_canonical(identity_input))
+    identity_path.chmod(0o600)
+    builder = getattr(host_task_runner, "build_external_collector_handoff", None)
+    assert callable(builder)
+    handoff = builder(host_identity_input=identity_path)
+    assert handoff["status"] == "not_executed"
+    assert handoff["executed"] is False
+    assert handoff["claim_eligible"] is False
+    assert handoff["release_ready"] is False
+    assert handoff["task_catalog_descriptor"]["role"] == "host_task_catalog"
+    assert handoff["task_catalog_descriptor"]["sha256"]
+    assert [
+        (slot["host"], slot["task_case"])
+        for slot in handoff["slots"]
+    ] == [
+        (host, task)
+        for host in ("codex", "opencode")
+        for task in ("continuity", "living_wiki", "professional_evidence")
+    ]
+    for slot in handoff["slots"]:
+        assert slot["status"] == "not_executed"
+        assert slot["executed"] is False
+        assert slot["typed_source_slots"] == [
+            "event_source",
+            "lifecycle_source",
+            "usage_source",
+            "expected_source",
+            "continuity_source",
+            "isolation_source",
+        ]
+        assert slot["control_receipt_slots"] == [
+            "host_preflight_receipt",
+            "host_process_receipt",
+        ]
+        assert slot["seed_descriptor"]["sha256"]
+        assert slot["driver_descriptor"]["sha256"]
+        assert slot["seed_descriptor"]["role"] == "task_domain_seed"
+        assert slot["driver_descriptor"]["role"] in {
+            "codex_app_server_native_hook",
+            "opencode_exact_project_plugin_native_hook",
+        }
+    handoff_schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "contracts/v013-host-task-handoff.v1.schema.json"
+        ).read_text()
+    )
+    Draft202012Validator.check_schema(handoff_schema)
+    Draft202012Validator(handoff_schema).validate(handoff)
+    validator = getattr(host_task_runner, "validate_external_collector_handoff", None)
+    assert callable(validator)
+    assert validator(handoff, host_identity_input=identity_path) == handoff
+    tampered = json.loads(json.dumps(handoff))
+    tampered["slots"][0]["status"] = "passed"
+    with pytest.raises(HostTaskQualificationError):
+        validator(tampered, host_identity_input=identity_path)
+    duplicate = tmp_path / "duplicate-handoff.json"
+    raw_handoff = _canonical(handoff)
+    duplicate.write_bytes(raw_handoff[:-1] + b',"status":"not_executed"}')
+    with pytest.raises(HostTaskQualificationError):
+        validator(duplicate, host_identity_input=identity_path)
+    tampered = json.loads(json.dumps(handoff))
+    tampered["slots"][0]["seed_descriptor"]["sha256"] = "0" * 64
+    tampered["record_sha256"] = _sha(
+        _canonical({key: value for key, value in tampered.items() if key != "record_sha256"})
+    )
+    with pytest.raises(HostTaskQualificationError):
+        validator(tampered, host_identity_input=identity_path)
 
 
 def test_v013_host_task_catalog_rejects_binary_drift(tmp_path: Path) -> None:

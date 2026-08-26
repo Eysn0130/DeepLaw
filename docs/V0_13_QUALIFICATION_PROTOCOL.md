@@ -146,6 +146,19 @@ that it is perfect, SOTA, leading, fully verified, RC, or GA.
 
 ## Frozen real task set
 
+Before any real Host execution, the repository builds one path-free external-collector handoff
+with exactly six slots in frozen order: Codex/OpenCode crossed with Continuity, Living Wiki, and
+Professional Evidence. It binds the complete canonical frozen task-catalog descriptor; each slot binds the
+catalog's domain-seed seam descriptor, its Host-specific `native_host_task_v3` driver descriptor
+including the frozen argv/plugin policy, the owner-external per-Host identity digest
+and exact identity-source digest, the six typed-source slots, and the two control-receipt slots.
+The handoff is a pre-execution input summary, never Host evidence: every slot and the top-level
+record remain literal `status=not_executed`, `executed=false`, `claim_eligible=false`, and
+`release_ready=false`. It contains no seed or prompt payload, Provider body, path, command,
+environment, authentication or Secret material, transcript, reasoning, stdout, or stderr. The
+external collector consumes this handoff and produces evidence separately; a handoff cannot close
+any gate or change the active/package/native/typed-v3/bundle contracts.
+
 ### Host continuity
 
 Codex requires exactly three distinct runs using the exact executable identity from the

@@ -233,6 +233,24 @@ jobs:
           test -s "${verified}/frozen-active-qualification.json"
           test -s "${raw}/scale-10000-evidence/v013-scale-qualification-v9.json"
 
+      - name: Build and validate the pre-execution Host task handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          frozen_identity="${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"
+          host_task_handoff="${RUNNER_TEMP}/candidate-inputs/host-task-handoff.json"
+          test -f "${frozen_identity}"
+          test ! -e "${host_task_handoff}"
+          uv run --frozen python -m benchmarks.hosts.run_v013_host_task_qualification \
+            --build-handoff \
+            --host-identity-input "${frozen_identity}" \
+            > "${host_task_handoff}"
+          uv run --frozen python -m benchmarks.hosts.run_v013_host_task_qualification \
+            --validate-handoff "${host_task_handoff}" \
+            --host-identity-input "${frozen_identity}" \
+            > /dev/null
+          test -s "${host_task_handoff}"
+
       - name: Execute Codex x3, OpenCode x3, and deterministic Kernel evidence
         env:
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
@@ -243,8 +261,10 @@ jobs:
           output="${RUNNER_TEMP}/kernel-evidence-staging"
           frozen_identity="${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"
           execution_identity="${RUNNER_TEMP}/candidate-inputs/host-execution-identity.json"
+          host_task_handoff="${RUNNER_TEMP}/candidate-inputs/host-task-handoff.json"
           test -f "${frozen_identity}"
           test -f "${execution_identity}"
+          test -f "${host_task_handoff}"
           export DEEPLAW_FROZEN_HOST_IDENTITY="${frozen_identity}"
           test ! -e "${output}"
           mkdir "${output}"
@@ -266,6 +286,7 @@ jobs:
             --opencode-broker "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \
             --opencode-dotenv "${DEEPLAW_OPENCODE_DOTENV}" \
             --host-identity-input "${frozen_identity}" \
+            --host-task-handoff "${host_task_handoff}" \
             --transport-retry-limit 1 \
             --output "${output}"
           test ! -e "${output}/.env"
@@ -274,6 +295,11 @@ jobs:
           test ! -e "${output}/reasoning"
           test ! -e "${output}/stdout"
           test ! -e "${output}/stderr"
+          test -z "$(find "${output}" -type f -name '*host-task-handoff*' -print -quit)"
+          if find "${output}" -type f \
+            -exec cmp -s "{}" "${host_task_handoff}" \; -print -quit | grep -q .; then
+            exit 1
+          fi
           mkdir "${output}/retained-broker-source"
           cp "${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \
             "${output}/retained-broker-source/codex.launcher-source"
