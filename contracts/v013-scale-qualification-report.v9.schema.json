@@ -134,17 +134,30 @@
     "latency": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["samples_ms", "sample_count", "p50_ms", "p95_ms", "max_ms"],
+      "required": ["samples_ms", "sample_count", "p50_ms", "p95_ms", "max_ms", "warmup"],
       "properties": {
         "samples_ms": {
           "type": "array",
           "minItems": 30,
+          "maxItems": 30,
           "items": {"type": "number", "finite": true, "minimum": 0}
         },
-        "sample_count": {"type": "integer", "minimum": 30},
+        "sample_count": {"const": 30},
         "p50_ms": {"type": "number", "finite": true, "minimum": 0},
         "p95_ms": {"type": "number", "finite": true, "minimum": 0},
-        "max_ms": {"type": "number", "finite": true, "minimum": 0}
+        "max_ms": {"type": "number", "finite": true, "minimum": 0},
+        "warmup": {"$ref": "#/$defs/warmup"}
+      }
+    },
+    "warmup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elapsed_ms", "sample_count", "excluded_from_measured_samples", "provider_payload_bytes"],
+      "properties": {
+        "elapsed_ms": {"type": "number", "finite": true, "minimum": 0},
+        "sample_count": {"const": 1},
+        "excluded_from_measured_samples": {"const": true},
+        "provider_payload_bytes": {"type": "integer", "minimum": 1, "maximum": 65536}
       }
     },
     "warmSamples": {
@@ -326,13 +339,22 @@
     "provider": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["hard_limit_bytes", "sample_count", "max_bytes", "violation_count", "violation"],
+      "required": ["hard_limit_bytes", "sample_count", "max_bytes", "violation_count", "violation", "warmup_payload_bytes"],
       "properties": {
         "hard_limit_bytes": {"const": 65536},
         "sample_count": {"type": "integer", "minimum": 1},
         "max_bytes": {"type": "integer", "minimum": 0},
         "violation_count": {"type": "integer", "minimum": 0},
-        "violation": {"type": "boolean"}
+        "violation": {"type": "boolean"},
+        "warmup_payload_bytes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["query", "context"],
+          "properties": {
+            "query": {"type": "integer", "minimum": 1, "maximum": 65536},
+            "context": {"type": "integer", "minimum": 1, "maximum": 65536}
+          }
+        }
       }
     },
     "scope": {
@@ -354,6 +376,10 @@
         "missing_p50",
         "missing_p95",
         "missing_max",
+        "query_p95_exceeded",
+        "context_p95_exceeded",
+        "query_max_exceeded",
+        "context_max_exceeded",
         "rss_missing",
         "storage_missing",
         "file_count_missing",

@@ -45,6 +45,7 @@ def _install_parser(
     events: list[str] | None = None,
     omit_failure_id: str | None = None,
     omit_metric: str | None = None,
+    metric_overrides: dict[str, float] | None = None,
 ) -> None:
     classification = json.loads(
         (Path(__file__).parents[1] / assembler.CLASSIFICATION_RELATIVE_PATH).read_text(
@@ -78,6 +79,8 @@ def _install_parser(
         value = json.loads(path.read_text(encoding="utf-8"))
         kind = value["kind"]
         metrics: dict[str, Any] = {"fixture_metric": 1, **metrics_by_kind[kind]}
+        if metric_overrides:
+            metrics.update(metric_overrides)
         if kind == "host_event_sequence":
             host = "codex" if "codex" in path.as_posix() else "opencode"
             index = int(path.stem.rsplit("-", 1)[-1])
@@ -190,7 +193,10 @@ def test_core_failure_never_makes_report_release_ready(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     root = _prepare_bundle(tmp_path / "bundle", monkeypatch)
-    _install_parser(monkeypatch, failed_kind="scale_report")
+    _install_parser(
+        monkeypatch,
+        metric_overrides={"p95": 2_001.0},
+    )
 
     result = assembler.assemble_commercial_qualification(
         bundle_root=root,

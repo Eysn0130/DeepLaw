@@ -131,7 +131,7 @@
           "const": "benchmarks/release/v013-gate-classification-v9.json"
         },
         "sha256": {
-          "const": "d6a3dfbe89c5632f24909effef4654ce5b9b41041fa4cbd8cbb94c62e5299129"
+          "const": "328ec96f74cf3aee6aadf40ba53ab918e3893958278c2467cac130896d61b1e2"
         }
       }
     },
@@ -279,7 +279,7 @@
           "const": ["p50", "p95", "max", "rss", "storage", "file_count", "build", "rebuild", "full_incremental_noop_equivalence", "user_bytes", "provider_bound"]
         },
         "hard_failure_ids": {
-          "const": ["active_governed_object_count_mismatch", "experimental_over_10000_claimed_qualified", "100000_not_deferred_to_v0.14", "warm_samples_below_30", "missing_p50", "missing_p95", "missing_max", "rss_missing", "storage_missing", "file_count_missing", "build_duration_missing", "rebuild_duration_missing", "full_incremental_noop_mismatch", "user_bytes_unbounded", "provider_bound_exceeded"]
+          "const": ["active_governed_object_count_mismatch", "experimental_over_10000_claimed_qualified", "100000_not_deferred_to_v0.14", "warm_samples_below_30", "missing_p50", "missing_p95", "missing_max", "query_p95_exceeded", "context_p95_exceeded", "query_max_exceeded", "context_max_exceeded", "rss_missing", "storage_missing", "file_count_missing", "build_duration_missing", "rebuild_duration_missing", "full_incremental_noop_mismatch", "user_bytes_unbounded", "provider_bound_exceeded"]
         }
       }
     },

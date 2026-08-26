@@ -20,7 +20,10 @@ from benchmarks.v013.scale_qualification_v9 import (
     PROVIDER_HARD_LIMIT_BYTES,
     SCHEMA_RELATIVE_PATH,
     SOURCE_BATCH_COUNT,
+    WARM_MAX_CEILING_MS,
+    WARM_P95_CEILING_MS,
     WARM_SAMPLE_TARGET,
+    ScaleQualificationError,
     _change_counts,
     _equivalence_digest,
     _public_semantic_compile,
@@ -173,14 +176,41 @@ def _report(
     count: int = ACTIVE_GOVERNED_OBJECT_TARGET,
     query_count: int = WARM_SAMPLE_TARGET,
     context_count: int = WARM_SAMPLE_TARGET,
+    query_samples_ms: list[float] | None = None,
+    context_samples_ms: list[float] | None = None,
     provider_samples: list[int] | None = None,
 ) -> dict[str, object]:
+    observed_query_samples = query_samples_ms or [
+        float(index + 1) for index in range(query_count)
+    ]
+    observed_context_samples = context_samples_ms or [
+        float(index + 2) for index in range(context_count)
+    ]
+    observed_provider_samples = (
+        [1000] * 62
+        if provider_samples is None
+        else [1000] * 61 + provider_samples
+        if len(provider_samples) == 1
+        else provider_samples
+    )
     return build_scale_qualification_report(
         candidate_binding=_candidate(),
         run_binding=_run(),
         active_governed_object_count=count,
-        query_samples_ms=[float(index + 1) for index in range(query_count)],
-        context_samples_ms=[float(index + 2) for index in range(context_count)],
+        query_samples_ms=observed_query_samples,
+        context_samples_ms=observed_context_samples,
+        query_warmup={
+            "elapsed_ms": 1.0,
+            "sample_count": 1,
+            "excluded_from_measured_samples": True,
+            "provider_payload_bytes": 1000,
+        },
+        context_warmup={
+            "elapsed_ms": 2.0,
+            "sample_count": 1,
+            "excluded_from_measured_samples": True,
+            "provider_payload_bytes": 2000,
+        },
         rss={"start_bytes": 100, "peak_bytes": 120, "end_bytes": 110},
         storage_bytes=1024,
         file_count=8,
@@ -191,7 +221,7 @@ def _report(
         source_compile=_source_compile(),
         semantic_batches=_semantic_batches(),
         user_files=[_user_file()],
-        provider_sample_bytes=provider_samples or [1000, 2000],
+        provider_sample_bytes=observed_provider_samples,
     )
 
 
@@ -341,6 +371,7 @@ def test_v9_scale_schema_is_strict_and_valid_report_has_exact_10k_contract() -> 
     assert report["warm_samples"]["query"]["sample_count"] == WARM_SAMPLE_TARGET
     assert report["warm_samples"]["context"]["sample_count"] == WARM_SAMPLE_TARGET
     assert report["provider"]["hard_limit_bytes"] == PROVIDER_HARD_LIMIT_BYTES
+    assert "warmup" in report["warm_samples"]["query"]
 
 
 def test_v9_scale_count_must_be_exactly_10k_and_over_10k_is_not_qualified() -> None:
@@ -358,20 +389,47 @@ def test_v9_scale_count_must_be_exactly_10k_and_over_10k_is_not_qualified() -> N
 
 
 def test_v9_scale_requires_at_least_30_query_and_context_samples() -> None:
-    report = _report(query_count=29)
-    checked = verify_report(report)
-    assert checked["valid"] is False
-    assert any(
-        "does not match" in error or "less than the minimum" in error
-        for error in checked["errors"]
+    with pytest.raises(ScaleQualificationError, match="exactly 30"):
+        _report(query_count=29)
+    with pytest.raises(ScaleQualificationError, match="exactly 30"):
+        _report(context_count=29)
+
+    slow = _report(
+        query_samples_ms=[1.0] * 28 + [2_001.0, 2_001.0],
+        context_samples_ms=[1.0] * 29 + [5_001.0],
     )
-    report = _report(context_count=29)
-    assert verify_report(report)["valid"] is False
+    assert slow["release_gate_passed"] is False
+    assert {
+        "query_p95_exceeded",
+        "context_max_exceeded",
+    } <= set(slow["hard_failures"])
+
+    at_limit = _report(
+        query_samples_ms=[1.0] * 28
+        + [float(WARM_P95_CEILING_MS), float(WARM_P95_CEILING_MS)],
+        context_samples_ms=[1.0] * 29 + [float(WARM_MAX_CEILING_MS)],
+    )
+    assert at_limit["release_gate_passed"] is True
+    assert not {
+        "query_p95_exceeded",
+        "context_p95_exceeded",
+        "query_max_exceeded",
+        "context_max_exceeded",
+    } & set(at_limit["hard_failures"])
 
 
 def test_v9_scale_missing_metric_is_fail_closed() -> None:
     report = _report()
     del report["warm_samples"]["query"]["p95_ms"]
+    assert verify_report(report)["valid"] is False
+
+    report = _report()
+    del report["warm_samples"]["context"]["warmup"]
+    assert verify_report(report)["valid"] is False
+
+    report = _report()
+    report["warm_samples"]["query"]["warmup"]["sample_count"] = 2
+    _redigest(report)
     assert verify_report(report)["valid"] is False
 
 
@@ -424,6 +482,11 @@ def test_v9_scale_provider_bound_is_hard_and_zero_violation_is_required() -> Non
     tampered = _report()
     tampered["provider"]["max_bytes"] = PROVIDER_HARD_LIMIT_BYTES + 1
     tampered["provider"]["violation"] = False
+    _redigest(tampered)
+    assert verify_report(tampered)["valid"] is False
+
+    tampered = _report()
+    tampered["provider"]["sample_count"] -= 1
     _redigest(tampered)
     assert verify_report(tampered)["valid"] is False
 
@@ -485,6 +548,24 @@ def test_v9_typed_scale_evidence_preserves_failed_report_as_failed(tmp_path: Pat
     )
     assert derived["status"] == "failed"
     assert derived["hard_failure_counts"]["active_governed_object_count_mismatch"] == 1
+
+    slow_root = tmp_path / "slow"
+    slow_root.mkdir()
+    slow_manifest = _typed_scale_manifest(
+        slow_root,
+        report=_report(
+            query_samples_ms=[1.0] * 28 + [2_001.0, 2_001.0],
+            context_samples_ms=[1.0] * 29 + [5_001.0],
+        ),
+    )
+    slow = parse_typed_evidence(
+        slow_manifest,
+        expected_corpus_sha256=json.loads(slow_manifest.read_text())["corpus"]["sha256"],
+    )
+    assert slow["hard_failure_counts"]["query_p95_exceeded"] == 1
+    assert slow["hard_failure_counts"]["context_max_exceeded"] == 1
+    assert slow["metrics"]["p95"] == 2_001.0
+    assert slow["metrics"]["max"] == 5_001.0
 
 
 def test_v9_public_batch_smoke_preserves_global_offset_and_exact_summary(tmp_path: Path) -> None:

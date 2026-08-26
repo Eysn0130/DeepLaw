@@ -216,6 +216,10 @@ def test_scale_boundary_is_exact_and_has_required_measurements() -> None:
             "missing_p50",
             "missing_p95",
             "missing_max",
+            "query_p95_exceeded",
+            "context_p95_exceeded",
+            "query_max_exceeded",
+            "context_max_exceeded",
             "rss_missing",
             "storage_missing",
             "file_count_missing",
@@ -228,6 +232,9 @@ def test_scale_boundary_is_exact_and_has_required_measurements() -> None:
     }
     assert scale["status"] == "not_executed"
     assert scale["passed"] is False
+    thresholds = {item["metric"]: item for item in scale["thresholds"]}
+    assert thresholds["p95"]["maximum"] == 2_000
+    assert thresholds["max"]["maximum"] == 5_000
 
 
 def test_host_pins_and_cross_host_task_matrix_are_frozen() -> None:

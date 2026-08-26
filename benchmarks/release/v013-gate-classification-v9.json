@@ -631,12 +631,12 @@
         {
           "metric": "p95",
           "minimum": null,
-          "maximum": null
+          "maximum": 2000
         },
         {
           "metric": "max",
           "minimum": null,
-          "maximum": null
+          "maximum": 5000
         },
         {
           "metric": "rss",
@@ -690,6 +690,10 @@
           "missing_p50",
           "missing_p95",
           "missing_max",
+          "query_p95_exceeded",
+          "context_p95_exceeded",
+          "query_max_exceeded",
+          "context_max_exceeded",
           "rss_missing",
           "storage_missing",
           "file_count_missing",
@@ -729,6 +733,10 @@
           "missing_p50",
           "missing_p95",
           "missing_max",
+          "query_p95_exceeded",
+          "context_p95_exceeded",
+          "query_max_exceeded",
+          "context_max_exceeded",
           "rss_missing",
           "storage_missing",
           "file_count_missing",

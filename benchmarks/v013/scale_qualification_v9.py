@@ -45,6 +45,8 @@ ACTIVE_GOVERNED_OBJECT_TARGET = 10_000
 SOURCE_BATCH_COUNT = 250
 FRAGMENTS_PER_SOURCE = 40
 WARM_SAMPLE_TARGET = 30
+WARM_P95_CEILING_MS = 2_000
+WARM_MAX_CEILING_MS = 5_000
 PROVIDER_HARD_LIMIT_BYTES = 65_536
 DEFERRED_100000 = "v0.14"
 HARD_FAILURE_IDS = (
@@ -55,6 +57,10 @@ HARD_FAILURE_IDS = (
     "missing_p50",
     "missing_p95",
     "missing_max",
+    "query_p95_exceeded",
+    "context_p95_exceeded",
+    "query_max_exceeded",
+    "context_max_exceeded",
     "rss_missing",
     "storage_missing",
     "file_count_missing",
@@ -131,6 +137,33 @@ def _latency(values: Sequence[float]) -> dict[str, Any]:
         "p95_ms": _percentile(samples, 0.95),
         "max_ms": round(max(samples), 6),
     }
+
+
+def _warmup(value: Mapping[str, Any], *, label: str) -> dict[str, Any]:
+    required = {
+        "elapsed_ms",
+        "sample_count",
+        "excluded_from_measured_samples",
+        "provider_payload_bytes",
+    }
+    if set(value) != required:
+        raise ScaleQualificationError(f"{label} keys are not closed")
+    elapsed_ms = value["elapsed_ms"]
+    sample_count = value["sample_count"]
+    provider_payload_bytes = value["provider_payload_bytes"]
+    if not _finite_nonnegative(elapsed_ms):
+        raise ScaleQualificationError(f"{label} elapsed_ms is invalid")
+    if sample_count != 1:
+        raise ScaleQualificationError(f"{label} sample_count must be exactly one")
+    if value["excluded_from_measured_samples"] is not True:
+        raise ScaleQualificationError(f"{label} must be excluded from measured samples")
+    if (
+        isinstance(provider_payload_bytes, bool)
+        or not isinstance(provider_payload_bytes, int)
+        or not 1 <= provider_payload_bytes <= PROVIDER_HARD_LIMIT_BYTES
+    ):
+        raise ScaleQualificationError(f"{label} provider payload bytes are invalid")
+    return dict(value)
 
 
 def _change_counts(receipt: Mapping[str, Any]) -> dict[str, int]:
@@ -407,13 +440,33 @@ def _failure_ids(report: Mapping[str, Any]) -> list[str]:
     for kind in ("query", "context"):
         entry = warm[kind]
         if (
-            entry["sample_count"] < WARM_SAMPLE_TARGET
-            or len(entry["samples_ms"]) < WARM_SAMPLE_TARGET
+            entry["sample_count"] != WARM_SAMPLE_TARGET
+            or len(entry["samples_ms"]) != WARM_SAMPLE_TARGET
         ):
             failures.append("warm_samples_below_30")
         for metric, field in (("p50", "p50_ms"), ("p95", "p95_ms"), ("max", "max_ms")):
             if field not in entry or entry[field] is None:
                 failures.append(f"missing_{metric}")
+    if (
+        warm["query"].get("p95_ms") is not None
+        and warm["query"]["p95_ms"] > WARM_P95_CEILING_MS
+    ):
+        failures.append("query_p95_exceeded")
+    if (
+        warm["context"].get("p95_ms") is not None
+        and warm["context"]["p95_ms"] > WARM_P95_CEILING_MS
+    ):
+        failures.append("context_p95_exceeded")
+    if (
+        warm["query"].get("max_ms") is not None
+        and warm["query"]["max_ms"] > WARM_MAX_CEILING_MS
+    ):
+        failures.append("query_max_exceeded")
+    if (
+        warm["context"].get("max_ms") is not None
+        and warm["context"]["max_ms"] > WARM_MAX_CEILING_MS
+    ):
+        failures.append("context_max_exceeded")
     metrics = report["metrics"]
     rss = metrics.get("rss")
     if not isinstance(rss, Mapping) or any(
@@ -494,6 +547,8 @@ def build_scale_qualification_report(
     active_governed_object_count: int,
     query_samples_ms: Sequence[float],
     context_samples_ms: Sequence[float],
+    query_warmup: Mapping[str, Any],
+    context_warmup: Mapping[str, Any],
     rss: Mapping[str, int],
     storage_bytes: int,
     file_count: int,
@@ -578,6 +633,22 @@ def build_scale_qualification_report(
         for value in provider_sample_bytes
     ):
         raise ScaleQualificationError("provider sample bytes are invalid")
+    query_latency = _latency(query_samples_ms)
+    context_latency = _latency(context_samples_ms)
+    if (
+        query_latency["sample_count"] != WARM_SAMPLE_TARGET
+        or context_latency["sample_count"] != WARM_SAMPLE_TARGET
+    ):
+        raise ScaleQualificationError("exactly 30 measured query/context samples are required")
+    normalized_query_warmup = _warmup(query_warmup, label="query warmup")
+    normalized_context_warmup = _warmup(context_warmup, label="context warmup")
+    expected_provider_sample_count = (
+        query_latency["sample_count"] + context_latency["sample_count"] + 2
+    )
+    if len(provider_sample_bytes) != expected_provider_sample_count:
+        raise ScaleQualificationError(
+            "provider samples must include exactly two warmup payloads and all measured payloads"
+        )
     if not isinstance(rebuild, Mapping) or not isinstance(source_compile, Mapping):
         raise ScaleQualificationError("scale rebuild/source measurements are invalid")
     if not isinstance(semantic_batches, Sequence) or isinstance(semantic_batches, (str, bytes)):
@@ -626,8 +697,8 @@ def build_scale_qualification_report(
         },
         "warm_samples": {
             "minimum_samples": WARM_SAMPLE_TARGET,
-            "query": _latency(query_samples_ms),
-            "context": _latency(context_samples_ms),
+            "query": {**query_latency, "warmup": normalized_query_warmup},
+            "context": {**context_latency, "warmup": normalized_context_warmup},
         },
         "metrics": {
             "rss": dict(rss),
@@ -653,6 +724,10 @@ def build_scale_qualification_report(
                 value > PROVIDER_HARD_LIMIT_BYTES for value in provider_sample_bytes
             ),
             "violation": max_provider_bytes > PROVIDER_HARD_LIMIT_BYTES,
+            "warmup_payload_bytes": {
+                "query": normalized_query_warmup["provider_payload_bytes"],
+                "context": normalized_context_warmup["provider_payload_bytes"],
+            },
         },
         "scope": {
             "above_10000": "experimental_unqualified",
@@ -708,6 +783,20 @@ def verify_report(report: Mapping[str, Any]) -> dict[str, Any]:
             for field in ("sample_count", "p50_ms", "p95_ms", "max_ms"):
                 if latency[field] != expected[field]:
                     errors.append(f"{kind} {field} does not match raw samples")
+            _warmup(latency["warmup"], label=f"{kind} warmup")
+        expected_provider_sample_count = (
+            report["warm_samples"]["query"]["sample_count"]
+            + report["warm_samples"]["context"]["sample_count"]
+            + 2
+        )
+        if report["provider"]["sample_count"] != expected_provider_sample_count:
+            errors.append("provider sample count does not include both warmup payloads")
+        expected_warmup_payload_bytes = {
+            kind: report["warm_samples"][kind]["warmup"]["provider_payload_bytes"]
+            for kind in ("query", "context")
+        }
+        if report["provider"]["warmup_payload_bytes"] != expected_warmup_payload_bytes:
+            errors.append("provider warmup payload bytes are not bound to warmup observations")
         try:
             started = datetime.fromisoformat(
                 report["run_binding"]["started_at_utc"].replace("Z", "+00:00")
@@ -1384,6 +1473,81 @@ def run_scale_qualification(
         rss_samples.append(_rss_bytes())
         with KnowledgeOS.open(vault) as knowledge_os:
             query_text = "Bounded scale evidence 000-000"
+            warmup_query_start = time.perf_counter()
+            warmup_query_result = knowledge_os.retrieval.query(
+                query_text,
+                query_plan_version="5",
+                purpose="answer",
+                scope="project",
+                max_sensitivity="public",
+                limit=8,
+                max_chars=8_000,
+                max_tokens=4_000,
+            )
+            warmup_query_elapsed_ms = (time.perf_counter() - warmup_query_start) * 1000
+            warmup_query_compiled = warmup_query_result.get("compiled")
+            if (
+                not isinstance(warmup_query_compiled, list)
+                or not warmup_query_compiled
+                or not any(
+                    item.get("semantic_key") == "v013-scale-qualification-v9:00000"
+                    for item in warmup_query_compiled
+                    if isinstance(item, Mapping)
+                )
+            ):
+                raise ScaleQualificationError(
+                    "warmup public query did not select the exact scale identity"
+                )
+            warmup_query_provider_bytes = warmup_query_result.get("metrics", {}).get(
+                "provider_payload_bytes"
+            )
+            if (
+                isinstance(warmup_query_provider_bytes, bool)
+                or not isinstance(warmup_query_provider_bytes, int)
+                or not 1 <= warmup_query_provider_bytes <= PROVIDER_HARD_LIMIT_BYTES
+                or warmup_query_result.get("delivery", {}).get("provider_visible_bytes")
+                != warmup_query_provider_bytes
+            ):
+                raise ScaleQualificationError(
+                    "warmup public query Provider byte receipt is invalid"
+                )
+            query_warmup = {
+                "elapsed_ms": warmup_query_elapsed_ms,
+                "sample_count": 1,
+                "excluded_from_measured_samples": True,
+                "provider_payload_bytes": warmup_query_provider_bytes,
+            }
+            provider_bytes.append(warmup_query_provider_bytes)
+
+            warmup_context_start = time.perf_counter()
+            warmup_context = knowledge_os.context.compile(
+                task=query_text,
+                query_plan_version="5",
+                purpose="answer",
+                scope="project",
+                max_sensitivity="public",
+                limit=8,
+                max_chars=8_000,
+                max_tokens=4_000,
+                confirm_no_case_data=True,
+            )
+            warmup_context_elapsed_ms = (time.perf_counter() - warmup_context_start) * 1000
+            if warmup_context.get("budget", {}).get("selected_items", 0) < 1:
+                raise ScaleQualificationError(
+                    "warmup public context did not select governed knowledge"
+                )
+            warmup_context_provider_bytes = len(canonical_json(warmup_context).encode("utf-8"))
+            if not 1 <= warmup_context_provider_bytes <= PROVIDER_HARD_LIMIT_BYTES:
+                raise ScaleQualificationError(
+                    "warmup public context Provider bytes exceed the bound"
+                )
+            context_warmup = {
+                "elapsed_ms": warmup_context_elapsed_ms,
+                "sample_count": 1,
+                "excluded_from_measured_samples": True,
+                "provider_payload_bytes": warmup_context_provider_bytes,
+            }
+            provider_bytes.append(warmup_context_provider_bytes)
             for _ in range(WARM_SAMPLE_TARGET):
                 start = time.perf_counter()
                 result = knowledge_os.retrieval.query(
@@ -1510,6 +1674,8 @@ def run_scale_qualification(
         active_governed_object_count=active_count,
         query_samples_ms=query_times,
         context_samples_ms=context_times,
+        query_warmup=query_warmup,
+        context_warmup=context_warmup,
         rss={"start_bytes": rss_start, "peak_bytes": max(rss_samples), "end_bytes": rss_end},
         storage_bytes=storage_bytes,
         file_count=file_count,

@@ -248,10 +248,14 @@ blind holdouts, review panels, scorer A/B, arbitration, incremental benefit, sup
 are Competitive/Research Claim gates. Missing optional evidence remains `not_executed` with its
 claim false and cannot block Kernel release.
 
-The v0.13 scale gate executes exactly 10,000 active governed Knowledge Objects per Vault and at
-least 30 stable warm query/context samples, reporting p50/p95/max, RSS, storage, file count, and
-build/rebuild duration. It also proves full/incremental/no-op equivalence, user-byte protection,
-and the Provider hard bound. More than 10,000 is experimental; 100,000 sharding/bundling belongs to
+The v0.13 scale gate executes exactly 10,000 active governed Knowledge Objects per Vault. Before
+the measured lane, the public retrieval query and context compile each run exactly one warmup;
+the report retains each warmup's elapsed time, one-sample count, exclusion marker, and Provider
+payload bytes. Warmup values are excluded from exactly 30 measured query/context samples. The
+measured lane reports p50/p95/max and applies hard ceilings of p95 <= 2,000 ms and max <= 5,000 ms
+per surface; the query/context worst case is the typed Gate metric. It also proves RSS, storage,
+file count, build/rebuild duration, full/incremental/no-op equivalence, user-byte protection, and
+the Provider hard bound. More than 10,000 is experimental; 100,000 sharding/bundling belongs to
 v0.14 and is not a v0.13 Core gate.
 
 Formal order is:

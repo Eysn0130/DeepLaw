@@ -131,7 +131,7 @@
         "classification_id": {"const": "deeplaw-v013-commercial-gates-v9"},
         "schema_version": {"const": "deeplaw.v013-release-gate-classification/v9"},
         "relative_path": {"const": "benchmarks/release/v013-gate-classification-v9.json"},
-        "sha256": {"const": "d6a3dfbe89c5632f24909effef4654ce5b9b41041fa4cbd8cbb94c62e5299129"}
+        "sha256": {"const": "328ec96f74cf3aee6aadf40ba53ab918e3893958278c2467cac130896d61b1e2"}
       }
     },
     "protocolBinding": {
