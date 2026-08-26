@@ -86,6 +86,8 @@ _FORBIDDEN_FIELDS = (
     b'"transcript"',
 )
 _PROVIDER_ENV_NAME = "DEEPSEEK_API_KEY"
+_OWNER_DOTENV_ENV_NAME = "DEEPLAW_OWNER_DOTENV"
+MAX_OWNER_DOTENV_BYTES = 64 * 1024
 _MODEL_RECEIPT_ENV_NAME = "DEEPLAW_OPENCODE_MODEL_RECEIPT"
 _CANARY_NAMES = (
     "DEEPLAW_QUALIFICATION_SECRET_CANARY",
@@ -117,6 +119,7 @@ EXPECTED_HOST_ENVIRONMENT_NAMES = frozenset(
         "NO_COLOR",
         "GIT_TERMINAL_PROMPT",
         "DEEPLAW_KNOWLEDGE_VAULT",
+        _OWNER_DOTENV_ENV_NAME,
         _MODEL_RECEIPT_ENV_NAME,
         "CI",
         *_CANARY_NAMES,
@@ -331,6 +334,8 @@ def build_host_environment(
     opencode_binary: Path,
     node_binary: Path,
     canaries: Mapping[str, str] | None = None,
+    owner_dotenv: Path | None = None,
+    repository: Path | None = None,
 ) -> dict[str, str]:
     """Build an allowlisted host environment; ambient values never flow through."""
 
@@ -363,6 +368,13 @@ def build_host_environment(
         "DEEPLAW_KNOWLEDGE_VAULT": "vault",
         "CI": "1",
     }
+    if owner_dotenv is not None:
+        values[_OWNER_DOTENV_ENV_NAME] = str(
+            _validate_owner_dotenv(
+                owner_dotenv,
+                repository=repository or Path(__file__).resolve().parents[2],
+            )
+        )
     if canaries:
         if set(canaries) != set(_CANARY_NAMES) or not all(
             isinstance(value, str) and value for value in canaries.values()
@@ -372,6 +384,72 @@ def build_host_environment(
     if set(values) - EXPECTED_HOST_ENVIRONMENT_NAMES:
         raise QualificationError("host environment contains an unallowlisted name")
     return values
+
+
+def _validate_owner_dotenv(path: Path | None, *, repository: Path) -> Path:
+    """Validate an owner dotenv path using metadata only.
+
+    The owner-only broker, rather than this runner, reads the returned path.
+    In particular, this function must never open, read, or hash the file.
+    """
+
+    if path is None or not isinstance(path, Path):
+        raise QualificationError("OpenCode owner dotenv path is required")
+    if not path.is_absolute():
+        raise QualificationError("OpenCode owner dotenv path must be absolute")
+    try:
+        details = path.lstat()
+    except OSError as exc:
+        raise QualificationError("OpenCode owner dotenv is unavailable") from exc
+    parent = path.parent
+    while True:
+        try:
+            parent_details = parent.lstat()
+        except OSError as exc:
+            raise QualificationError("OpenCode owner dotenv is unavailable") from exc
+        if stat.S_ISLNK(parent_details.st_mode):
+            raise QualificationError("OpenCode owner dotenv parent must not be a symlink")
+        if parent.parent == parent:
+            break
+        parent = parent.parent
+    if stat.S_ISLNK(details.st_mode) or not stat.S_ISREG(details.st_mode):
+        raise QualificationError("OpenCode owner dotenv must be a regular non-symlink file")
+    if details.st_nlink != 1:
+        raise QualificationError("OpenCode owner dotenv must have one link")
+    if details.st_size > MAX_OWNER_DOTENV_BYTES:
+        raise QualificationError("OpenCode owner dotenv exceeds its size bound")
+    mode = stat.S_IMODE(details.st_mode)
+    if (
+        os.name != "nt"
+        and (
+            mode & 0o077
+            or not mode & stat.S_IRUSR
+            or (hasattr(os, "geteuid") and details.st_uid != os.geteuid())
+        )
+    ):
+        raise QualificationError("OpenCode owner dotenv is not owner-only")
+    try:
+        resolved = path.resolve(strict=True)
+        repository_path = Path(repository).resolve(strict=False)
+        resolved_details = resolved.lstat()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise QualificationError("OpenCode owner dotenv is unavailable") from exc
+    if (
+        stat.S_ISLNK(resolved_details.st_mode)
+        or not stat.S_ISREG(resolved_details.st_mode)
+        or details.st_dev != resolved_details.st_dev
+        or details.st_ino != resolved_details.st_ino
+        or details.st_nlink != resolved_details.st_nlink
+        or details.st_uid != resolved_details.st_uid
+        or details.st_size != resolved_details.st_size
+        or stat.S_IMODE(details.st_mode) != stat.S_IMODE(resolved_details.st_mode)
+    ):
+        raise QualificationError("OpenCode owner dotenv changed during validation")
+    try:
+        resolved.relative_to(repository_path)
+    except ValueError:
+        return resolved
+    raise QualificationError("OpenCode owner dotenv must be outside the repository")
 
 
 def _build_mcp_environment(root: Path, *, node_binary: Path) -> dict[str, str]:
@@ -415,7 +493,19 @@ def validate_mcp_receipt(
         or not isinstance(blocked, list)
         or blocked
         or not isinstance(blocked_host, list)
-        or not {_PROVIDER_ENV_NAME, *_CANARY_NAMES}.issubset(set(blocked_host))
+        or not (
+            {
+                _PROVIDER_ENV_NAME,
+                *_CANARY_NAMES,
+                *(
+                    (_OWNER_DOTENV_ENV_NAME,)
+                    if host_environment is not None
+                    and _OWNER_DOTENV_ENV_NAME in host_environment
+                    else ()
+                ),
+            }
+            <= set(blocked_host)
+        )
         or argv
         != [
             "deeplaw",
@@ -459,6 +549,7 @@ def _write_mcp_wrapper(
     blocked_names = sorted(
         {
             _PROVIDER_ENV_NAME,
+            _OWNER_DOTENV_ENV_NAME,
             *_CANARY_NAMES,
             "OPENAI_API_KEY",
             "ANTHROPIC_API_KEY",
@@ -2462,7 +2553,7 @@ def _probe_model_availability(
         forbidden_values=tuple(
             value
             for name, value in environment.items()
-            if name in _CANARY_NAMES
+            if name in {*_CANARY_NAMES, _OWNER_DOTENV_ENV_NAME}
         ),
     )
 
@@ -2500,12 +2591,12 @@ def preflight_opencode(
     forbidden_values = tuple(
         value
         for name, value in environment.items()
-        if name in _CANARY_NAMES
+        if name in {*_CANARY_NAMES, _OWNER_DOTENV_ENV_NAME}
     )
     inspection_environment = {
         name: value
         for name, value in environment.items()
-        if name not in _CANARY_NAMES
+        if name not in _CANARY_NAMES and name != _OWNER_DOTENV_ENV_NAME
     }
     version = _run_opencode_command(
         binary,
@@ -3625,7 +3716,12 @@ def _run_one_scenario(
     deeplaw_environment = {
         name: value
         for name, value in scenario_environment.items()
-        if name not in {_PROVIDER_ENV_NAME, _MODEL_RECEIPT_ENV_NAME}
+        if name
+        not in {
+            _PROVIDER_ENV_NAME,
+            _OWNER_DOTENV_ENV_NAME,
+            _MODEL_RECEIPT_ENV_NAME,
+        }
         and name not in _CANARY_NAMES
     }
     # OpenCode resolves the relative MCP command from its task repository.  A
@@ -4106,7 +4202,8 @@ def _run_one_scenario(
             forbidden_output_values=tuple(
                 value
                 for name, value in scenario_environment.items()
-                if name == _PROVIDER_ENV_NAME or name in _CANARY_NAMES
+                if name in {_PROVIDER_ENV_NAME, _OWNER_DOTENV_ENV_NAME}
+                or name in _CANARY_NAMES
             ),
         )
         server.start()
@@ -4459,6 +4556,7 @@ def _execute_qualification_body(
     opencode_binary: Path,
     host_launcher: Path,
     human_gold_path: Path | None,
+    owner_dotenv: Path | None = None,
     host_identity_input: Path | None = None,
     root: Path,
     source_revision_id: str | None = None,
@@ -4475,6 +4573,14 @@ def _execute_qualification_body(
     if human_gold_path is not None:
         raise QualificationError(
             "OpenCode candidate runner must not receive Human Gold or reference labels"
+        )
+    # The public execute seam validates every mode before entering this body.
+    # Keep the pathless direct diagnostic fixture for the existing no-provider
+    # unit seam; an identity-bound diagnostic body is validated here as well.
+    if mode == "qualification" or host_identity_input is not None:
+        owner_dotenv = _validate_owner_dotenv(
+            owner_dotenv,
+            repository=Path(__file__).resolve().parents[2],
         )
     agent_name = "qualification" if mode == "qualification" else "development"
     orchestrator = QualificationOrchestrator(
@@ -4525,6 +4631,8 @@ def _execute_qualification_body(
         opencode_binary=opencode_binary,
         node_binary=opencode_binary,
         canaries=canaries,
+        owner_dotenv=owner_dotenv,
+        repository=repository,
     )
     for name in (
         "host-home",
@@ -4579,7 +4687,11 @@ def _execute_qualification_body(
         environment={
             key: value
             for key, value in environment.items()
-            if key != _PROVIDER_ENV_NAME and key not in _CANARY_NAMES
+            if key not in {
+                _PROVIDER_ENV_NAME,
+                _OWNER_DOTENV_ENV_NAME,
+                *_CANARY_NAMES,
+            }
         },
         cwd=root,
     )
@@ -4633,7 +4745,15 @@ def _execute_qualification_body(
     artifacts: dict[str, Path] = {}
     wrapper_receipts: list[Mapping[str, Any]] = []
     tool_schema_rows: list[dict[str, Any]] = []
-    forbidden_values = (*canaries.values(), str(root))
+    forbidden_values = tuple(
+        value
+        for value in (
+            *canaries.values(),
+            str(root),
+            str(owner_dotenv) if owner_dotenv is not None else None,
+        )
+        if value is not None
+    )
     diagnostic_fixture = (
         pass17_development_diagnostic.load_fixture() if mode == "diagnostic" else None
     )
@@ -4815,6 +4935,7 @@ def execute_qualification(
     opencode_binary: Path,
     host_launcher: Path,
     human_gold_path: Path | None,
+    owner_dotenv: Path | None = None,
     host_identity_input: Path | None = None,
     source_revision_id: str | None = None,
     expected_broker_sha256: str | None = None,
@@ -4822,6 +4943,10 @@ def execute_qualification(
 ) -> dict[str, Any]:
     """Run one Host mode with an external root and deterministic cleanup."""
 
+    owner_dotenv = _validate_owner_dotenv(
+        owner_dotenv,
+        repository=Path(__file__).resolve().parents[2],
+    )
     root = Path(tempfile.mkdtemp(prefix=_ISOLATED_ROOT_PREFIX))
     try:
         result = _execute_qualification_body(
@@ -4831,6 +4956,7 @@ def execute_qualification(
             opencode_binary=opencode_binary,
             host_launcher=host_launcher,
             human_gold_path=human_gold_path,
+            owner_dotenv=owner_dotenv,
             host_identity_input=host_identity_input,
             root=root,
             source_revision_id=source_revision_id,
@@ -4886,6 +5012,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--opencode-binary", type=Path, required=True)
     parser.add_argument("--opencode-launcher", type=Path, required=True)
+    parser.add_argument("--opencode-dotenv", type=Path)
     parser.add_argument("--host-identity-input", type=Path)
     parser.add_argument("--expected-broker-sha256")
     parser.add_argument("--human-gold", type=Path)
@@ -4896,6 +5023,8 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
+        if args.opencode_dotenv is None:
+            raise QualificationError("OpenCode owner dotenv path is required")
         report = execute_qualification(
             candidate_wheel=args.candidate_wheel,
             deeplaw_executable=args.deeplaw_executable,
@@ -4903,6 +5032,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             opencode_binary=args.opencode_binary,
             host_launcher=args.opencode_launcher,
             human_gold_path=args.human_gold,
+            owner_dotenv=args.opencode_dotenv,
             host_identity_input=args.host_identity_input,
             source_revision_id=args.source_revision_id,
             expected_broker_sha256=args.expected_broker_sha256,

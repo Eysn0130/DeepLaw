@@ -233,11 +233,172 @@ def _preflight_plugin_fixture(tmp_path: Path) -> tuple[Path, dict[str, object], 
     return project, receipt, resolved
 
 
-def test_runner_has_no_dotenv_or_provider_secret_input_surface() -> None:
+def test_runner_routes_owner_dotenv_only_to_external_broker() -> None:
     source = Path(runner.__file__).read_text(encoding="utf-8")
     assert not hasattr(runner, "load_deepseek_key")
     assert "--dotenv" not in source
     assert "load_deepseek_key" not in source
+    assert "--opencode-dotenv" in source
+    assert runner._OWNER_DOTENV_ENV_NAME == "DEEPLAW_OWNER_DOTENV"
+
+
+def _owner_dotenv(path: Path) -> Path:
+    path.write_bytes(b"synthetic owner dotenv metadata fixture")
+    if os.name != "nt":
+        path.chmod(0o600)
+    return path
+
+
+def test_owner_dotenv_metadata_validation_fails_closed(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+
+    with pytest.raises(runner.QualificationError, match="required"):
+        runner._validate_owner_dotenv(None, repository=repository)
+    with pytest.raises(runner.QualificationError, match="absolute"):
+        runner._validate_owner_dotenv(Path(".env"), repository=repository)
+    with pytest.raises(runner.QualificationError, match="unavailable"):
+        runner._validate_owner_dotenv(external / "missing.env", repository=repository)
+
+    target = _owner_dotenv(external / "target.env")
+    symlink = external / "symlink.env"
+    symlink.symlink_to(target)
+    with pytest.raises(runner.QualificationError, match="non-symlink"):
+        runner._validate_owner_dotenv(symlink, repository=repository)
+
+    real_parent = external / "real-parent"
+    real_parent.mkdir()
+    parent_target = _owner_dotenv(real_parent / "parent-target.env")
+    parent_symlink = tmp_path / "parent-link"
+    parent_symlink.symlink_to(real_parent, target_is_directory=True)
+    with pytest.raises(runner.QualificationError, match="parent must not be a symlink"):
+        runner._validate_owner_dotenv(
+            parent_symlink / parent_target.name,
+            repository=repository,
+        )
+
+    hardlink = external / "hardlink.env"
+    try:
+        hardlink.hardlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"hardlink fixture unavailable: {exc}")
+    with pytest.raises(runner.QualificationError, match="one link"):
+        runner._validate_owner_dotenv(hardlink, repository=repository)
+
+    if os.name != "nt":
+        non_owner_only = _owner_dotenv(external / "group-readable.env")
+        non_owner_only.chmod(0o640)
+        with pytest.raises(runner.QualificationError, match="owner-only"):
+            runner._validate_owner_dotenv(non_owner_only, repository=repository)
+
+    inside_repository = _owner_dotenv(repository / ".env")
+    with pytest.raises(runner.QualificationError, match="outside the repository"):
+        runner._validate_owner_dotenv(inside_repository, repository=repository)
+
+    oversized = _owner_dotenv(external / "oversized.env")
+    oversized.write_bytes(b"x" * (runner.MAX_OWNER_DOTENV_BYTES + 1))
+    if os.name != "nt":
+        oversized.chmod(0o600)
+    with pytest.raises(runner.QualificationError, match="size bound"):
+        runner._validate_owner_dotenv(oversized, repository=repository)
+
+
+def test_owner_dotenv_is_metadata_only_and_reaches_launcher_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    dotenv = _owner_dotenv(tmp_path / "external.env")
+
+    original_read_bytes = Path.read_bytes
+    original_open = Path.open
+
+    def forbidden_read_bytes(self: Path) -> bytes:
+        if self == dotenv:
+            raise AssertionError("runner must not read the owner dotenv")
+        return original_read_bytes(self)
+
+    def forbidden_open(self: Path, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        if self == dotenv:
+            raise AssertionError("runner must not open the owner dotenv")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", forbidden_read_bytes)
+    monkeypatch.setattr(Path, "open", forbidden_open)
+    monkeypatch.setattr(
+        runner,
+        "_sha256_file",
+        lambda path: (_ for _ in ()).throw(
+            AssertionError("runner must not hash the owner dotenv")
+        )
+        if path == dotenv
+        else "a" * 64,
+    )
+
+    environment = runner.build_host_environment(
+        root=tmp_path,
+        opencode_binary=tmp_path / "bin" / "opencode",
+        node_binary=tmp_path / "bin" / "node",
+        owner_dotenv=dotenv,
+        repository=repository,
+    )
+    assert environment[runner._OWNER_DOTENV_ENV_NAME] == str(dotenv.resolve())
+    assert runner._OWNER_DOTENV_ENV_NAME not in runner._build_mcp_environment(
+        tmp_path, node_binary=tmp_path / "bin" / "node"
+    )
+
+    captured: list[dict[str, str]] = []
+
+    def fake_run(*_args: object, **kwargs: object) -> dict[str, object]:
+        value = kwargs["environment"]
+        assert isinstance(value, dict)
+        captured.append(value)
+        return {
+            "stdout": _availability_events(),
+            "stderr": b"",
+            "returncode": 0,
+            "elapsed_ms": 1,
+            "timed_out": False,
+            "output_overflow": False,
+        }
+
+    monkeypatch.setattr(runner, "_run_opencode_command", fake_run)
+    result = runner._probe_model_availability(
+        tmp_path / "owner-broker",
+        environment=environment,
+        cwd=tmp_path,
+    )
+    assert result["status"] == "available"
+    assert captured
+    assert captured[0][runner._OWNER_DOTENV_ENV_NAME] == str(dotenv.resolve())
+
+
+@pytest.mark.parametrize("mode", ["qualification", "diagnostic"])
+def test_public_execute_requires_owner_dotenv_for_every_mode(
+    mode: str, tmp_path: Path
+) -> None:
+    with pytest.raises(runner.QualificationError, match="required"):
+        runner.execute_qualification(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "output",
+            opencode_binary=tmp_path / "opencode",
+            host_launcher=tmp_path / "owner-broker",
+            human_gold_path=None,
+            owner_dotenv=None,
+            mode=mode,
+        )
+
+
+def test_owner_dotenv_path_is_not_retained_in_public_forbidden_output() -> None:
+    dotenv = "/external/owner-only/.env"
+    with pytest.raises(runner.QualificationError):
+        runner._forbid_sensitive(
+            json.dumps({"error": dotenv}).encode("utf-8"),
+            forbidden_values=(dotenv,),
+        )
 
 
 def test_sensitive_scan_accepts_public_https_but_rejects_private_paths() -> None:
@@ -1217,6 +1378,7 @@ def test_execute_success_cleans_external_isolated_root(
         opencode_binary=tmp_path / "opencode",
         host_launcher=tmp_path / "owner-broker",
         human_gold_path=tmp_path / "human-gold.json",
+        owner_dotenv=_owner_dotenv(tmp_path / "owner.env"),
     )
     assert result == {"status": "executed"}
     assert created and not created[0].exists()
@@ -1245,6 +1407,7 @@ def test_execute_failure_cleans_root_and_preserves_original_exception(
             opencode_binary=tmp_path / "opencode",
             host_launcher=tmp_path / "owner-broker",
             human_gold_path=tmp_path / "human-gold.json",
+            owner_dotenv=_owner_dotenv(tmp_path / "owner.env"),
         )
     assert created and not created[0].exists()
 
@@ -1293,6 +1456,8 @@ def test_main_returns_nonzero_for_nonexecuted_report(
             str(tmp_path / "opencode"),
             "--opencode-launcher",
             str(tmp_path / "owner-broker"),
+            "--opencode-dotenv",
+            str(tmp_path / "owner.env"),
             "--human-gold",
             str(tmp_path / "human-gold.json"),
         ]
