@@ -89,7 +89,7 @@
       "model_id": "deepseek-v4-flash",
       "expected_response_model_id": "deepseek-v4-flash",
       "reasoning_effort": null,
-      "argv_prefix": ["opencode", "--pure", "run", "--format", "json"]
+      "argv_prefix": ["opencode", "run", "--format", "json"]
     }
   }
 }

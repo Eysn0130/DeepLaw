@@ -161,6 +161,13 @@ Exact executable/package hashes are external qualification inputs and sanitized 
 DeepLaw runners receive no Secret. The exact identity source SHA is retained and compared at bundle
 validation, so replacing version, SHA, Host, run, or candidate bindings fails closed.
 
+The current Gate v9 OpenCode task prefix is non-pure and frozen as
+`["opencode", "run", "--format", "json"]`. It uses exactly one exact candidate project plugin;
+the source and installed plugin bytes and hashes must agree, and ambient project plugins are
+forbidden. OpenCode `--pure` disables the external plugin path required for native plugin-hook
+evidence, so it is not part of this runner contract. This policy correction does not execute a
+Host task: current Gate statuses remain literal `not_executed`.
+
 Across the six runs, the task set covers new thread, ordinary resume without task handle,
 fork/child task, compaction, concurrent worktree, stale checkpoint, workspace divergence, wrong
 task line, selective forget, and no-binding/ambiguous-binding Gap. The public journey is

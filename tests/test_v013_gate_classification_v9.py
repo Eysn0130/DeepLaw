@@ -275,7 +275,9 @@ def test_host_pins_and_cross_host_task_matrix_are_frozen() -> None:
         "model_id": "deepseek-v4-flash",
         "expected_response_model_id": "deepseek-v4-flash",
         "reasoning_effort": None,
-        "argv_prefix": ["opencode", "--pure", "run", "--format", "json"],
+        "argv_prefix": ["opencode", "run", "--format", "json"],
+        "plugin_policy": "single_exact_candidate_plugin",
+        "ambient_project_plugins": "forbidden",
     }
 
 

@@ -493,6 +493,13 @@ must make zero Provider-side continuity tool calls. Reference freezing and scori
 separate processes and remain machine evaluation unless an independent human attestation actually
 exists.
 
+For the current Gate v9 OpenCode runner, the frozen task prefix is non-pure:
+`["opencode", "run", "--format", "json"]`. The isolated project contains exactly one exact
+candidate plugin whose source and installed bytes/hashes must match; ambient project plugins are
+forbidden. `--pure` is not compatible with the native plugin-hook delivery required by this
+qualification path. This is a runner-policy contract only; real Host tasks and their Gate results
+remain `not_executed` until an external collector retains the required evidence.
+
 The disabled sidecars, owner-only enable/disable path, read-only boundary, and exact event
 mappings are documented in `adapters/codex/README.md` and `adapters/opencode/README.md`; static
 tests are not real Host receipts.

@@ -296,7 +296,9 @@
           "type": "array",
           "items": {"type": "string", "minLength": 1},
           "maxItems": 32
-        }
+        },
+        "plugin_policy": {"const": "single_exact_candidate_plugin"},
+        "ambient_project_plugins": {"const": "forbidden"}
       }
     },
     "threshold": {
@@ -749,7 +751,7 @@
               "constraints": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["host", "tool_version", "binary_sha256", "source_commit", "config_selector", "model_id", "expected_response_model_id", "reasoning_effort", "argv_prefix"],
+                "required": ["host", "tool_version", "binary_sha256", "source_commit", "config_selector", "model_id", "expected_response_model_id", "reasoning_effort", "argv_prefix", "plugin_policy", "ambient_project_plugins"],
                 "properties": {
                   "host": {"const": "opencode"},
                   "tool_version": {"const": null},
@@ -759,7 +761,9 @@
                   "model_id": {"const": "deepseek-v4-flash"},
                   "expected_response_model_id": {"const": "deepseek-v4-flash"},
                   "reasoning_effort": {"const": null},
-                  "argv_prefix": {"const": ["opencode", "--pure", "run", "--format", "json"]}
+                  "argv_prefix": {"const": ["opencode", "run", "--format", "json"]},
+                  "plugin_policy": {"const": "single_exact_candidate_plugin"},
+                  "ambient_project_plugins": {"const": "forbidden"}
                 }
               }
             }

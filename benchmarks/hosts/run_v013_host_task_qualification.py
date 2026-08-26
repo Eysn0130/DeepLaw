@@ -84,7 +84,7 @@ def _validate_catalog_host_constraints(value: Mapping[str, Any]) -> None:
         or opencode["model_id"] != "deepseek-v4-flash"
         or opencode["expected_response_model_id"] != "deepseek-v4-flash"
         or opencode["reasoning_effort"] is not None
-        or opencode["argv_prefix"] != ["opencode", "--pure", "run", "--format", "json"]
+        or opencode["argv_prefix"] != ["opencode", "run", "--format", "json"]
     ):
         raise HostTaskQualificationError("v0.13 OpenCode coordinates shape is invalid")
 

@@ -22,6 +22,12 @@ _TASK_BINDING = build_task_context_binding(
     dirty_state_sha256="6" * 64,
 )
 
+_REPOSITORY = Path(__file__).resolve().parents[1]
+_HOST_TASK_CASES = _REPOSITORY / "benchmarks/hosts/v013-host-task-cases-v1.json"
+_GATE_CLASSIFICATION = (
+    _REPOSITORY / "benchmarks/release/v013-gate-classification-v9.json"
+)
+
 
 @pytest.fixture(autouse=True)
 def _candidate_wheel_plugin_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -272,7 +278,20 @@ def test_project_plugin_mode_has_no_legacy_pure_or_project_config_bypass(
     assert "OPENCODE_DISABLE_PROJECT_CONFIG" not in environment
     assert "--pure" not in runner._opencode_cli_turn_args()
     assert "plugin" not in runner.build_opencode_config()
+    catalog = json.loads(_HOST_TASK_CASES.read_text(encoding="utf-8"))
+    classification = json.loads(_GATE_CLASSIFICATION.read_text(encoding="utf-8"))
+    runner_prefix = ["opencode", *runner._opencode_cli_turn_args()[:3]]
+    opencode_gate = next(
+        row for row in classification["gates"] if row["gate_id"] == "opencode"
+    )
 
+    assert runner_prefix == ["opencode", "run", "--format", "json"]
+    assert catalog["host_constraints"]["opencode"]["argv_prefix"] == runner_prefix
+    assert opencode_gate["constraints"]["argv_prefix"] == runner_prefix
+    assert opencode_gate["constraints"]["plugin_policy"] == (
+        "single_exact_candidate_plugin"
+    )
+    assert opencode_gate["constraints"]["ambient_project_plugins"] == "forbidden"
 
 def test_prepare_scenario_state_installs_exact_plugin_bytes_and_receipt(
     tmp_path: Path,
