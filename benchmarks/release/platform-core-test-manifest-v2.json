@@ -8398,6 +8398,104 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_broker_identity_boundaries_fail_closed[hardlink]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_broker_identity_boundaries_fail_closed[hardlink]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_broker_identity_boundaries_fail_closed[non_owner_only]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_broker_identity_boundaries_fail_closed[non_owner_only]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_broker_identity_boundaries_fail_closed[repo_inside]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_broker_identity_boundaries_fail_closed[repo_inside]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_broker_identity_boundaries_fail_closed[symlink]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_broker_identity_boundaries_fail_closed[symlink]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_isolation_and_topology_fail_closed"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_isolation_and_topology_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_process_receipt_producer_has_no_dotenv_or_raw_file_surface"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_process_receipt_producer_has_no_dotenv_or_raw_file_surface"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_supervisor_exit_and_unknown_fields_fail_closed[supervisor0]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_supervisor_exit_and_unknown_fields_fail_closed[supervisor0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_supervisor_exit_and_unknown_fields_fail_closed[supervisor1]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_supervisor_exit_and_unknown_fields_fail_closed[supervisor1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_supervisor_exit_and_unknown_fields_fail_closed[supervisor2]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_supervisor_exit_and_unknown_fields_fail_closed[supervisor2]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_valid_codex_and_opencode_receipts_are_path_free_and_identity_bound[codex-False]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_valid_codex_and_opencode_receipts_are_path_free_and_identity_bound[codex-False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_valid_codex_and_opencode_receipts_are_path_free_and_identity_bound[opencode-False]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_valid_codex_and_opencode_receipts_are_path_free_and_identity_bound[opencode-False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_valid_codex_and_opencode_receipts_are_path_free_and_identity_bound[opencode-True]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_valid_codex_and_opencode_receipts_are_path_free_and_identity_bound[opencode-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_validator_rejects_identity_drift_record_mismatch_and_unknown_fields"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_validator_rejects_identity_drift_record_mismatch_and_unknown_fields"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_wrong_expected_broker_digest_fails_closed"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_wrong_expected_broker_digest_fails_closed"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_host_task_evidence",
             "name": "test_v013_host_task_authorized_forget_is_not_hidden_mutation"
           },
@@ -8472,6 +8570,41 @@
             "name": "test_v013_host_task_missing_public_seam_derives_failure"
           },
           "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_missing_public_seam_derives_failure"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_nested_sources_reject_non_strict_json[continuity_source-{\"nested\":{\"duplicate\":1,\"duplicate\":2}}-duplicate JSON keys]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_nested_sources_reject_non_strict_json[continuity_source-{\"nested\":{\"duplicate\":1,\"duplicate\":2}}-duplicate JSON keys]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_nested_sources_reject_non_strict_json[expected_source-{\"nested\":{\"value\":Infinity}}-non-finite JSON value]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_nested_sources_reject_non_strict_json[expected_source-{\"nested\":{\"value\":Infinity}}-non-finite JSON value]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_nested_sources_reject_non_strict_json[isolation_source-{\"nested\":{\"value\":-Infinity}}-non-finite JSON value]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_nested_sources_reject_non_strict_json[isolation_source-{\"nested\":{\"value\":-Infinity}}-non-finite JSON value]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_nested_sources_reject_non_strict_json[lifecycle_source-{\"nested\":{\"duplicate\":1,\"duplicate\":2}}-duplicate JSON keys]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_nested_sources_reject_non_strict_json[lifecycle_source-{\"nested\":{\"duplicate\":1,\"duplicate\":2}}-duplicate JSON keys]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_nested_sources_reject_non_strict_json[usage_source-{\"nested\":{\"value\":NaN}}-non-finite JSON value]"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_nested_sources_reject_non_strict_json[usage_source-{\"nested\":{\"value\":NaN}}-non-finite JSON value]"
         },
         {
           "junit": {
@@ -9666,6 +9799,27 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_owner_dotenv_is_metadata_only_and_reaches_launcher_environment"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_owner_dotenv_is_metadata_only_and_reaches_launcher_environment"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_owner_dotenv_metadata_validation_fails_closed"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_owner_dotenv_metadata_validation_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_owner_dotenv_path_is_not_retained_in_public_forbidden_output"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_owner_dotenv_path_is_not_retained_in_public_forbidden_output"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
             "name": "test_permission_and_config_are_exactly_read_only"
           },
           "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_permission_and_config_are_exactly_read_only"
@@ -9715,6 +9869,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_public_execute_requires_owner_dotenv_for_every_mode[diagnostic]"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_public_execute_requires_owner_dotenv_for_every_mode[diagnostic]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_public_execute_requires_owner_dotenv_for_every_mode[qualification]"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_public_execute_requires_owner_dotenv_for_every_mode[qualification]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
             "name": "test_report_validation_requires_three_runs_and_path_free_artifacts"
           },
           "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_report_validation_requires_three_runs_and_path_free_artifacts"
@@ -9736,9 +9904,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
-            "name": "test_runner_has_no_dotenv_or_provider_secret_input_surface"
+            "name": "test_runner_routes_owner_dotenv_only_to_external_broker"
           },
-          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_runner_has_no_dotenv_or_provider_secret_input_surface"
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_runner_routes_owner_dotenv_only_to_external_broker"
         },
         {
           "junit": {
@@ -16293,9 +16461,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2306,
+      "count": 2330,
       "selection": "not qualification and not windows_native",
-      "sha256": "54f02c925f18550c30eb37fa81ffabdf32e4b24f5e221dad842a98a25709eb54"
+      "sha256": "497d16767658b428c9ee0edb967f0dc11ca1cad52105a0c818257a4d0354d45d"
     },
     "windows": {
       "additional_cases": [
@@ -16328,13 +16496,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2310,
+      "count": 2334,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "5817d283882b4e1074b14e1deddb268128a165a2c71a16e02ca585fedac7cad2"
+      "sha256": "9a679084a2472d084986256f47db79d499fcd532ab2b8a498a6eb09908a7e1b1"
     }
   },
-  "manifest_sha256": "ac91466e3bfb51f800323083b74956a10de81ffd1770283676d1c40fce86418d",
+  "manifest_sha256": "8d2de875baf14cfb479bfc6271d9df38824f8e11e8bf6b4dd3a08d29bbe764ea",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -401,10 +402,39 @@ def _json_source(ref: Mapping[str, Any], *, root: Path, label: str) -> Mapping[s
         or _sha(raw) != expected_hash
     ):
         _fail(f"{label} source bytes do not match its reference")
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                _fail(f"{label} source contains duplicate JSON keys")
+            value[key] = item
+        return value
+
+    def reject_constant(value: str) -> None:
+        _fail(f"{label} source contains non-finite JSON value: {value}")
+
     try:
-        value = json.loads(raw.decode("utf-8"))
+        value = json.loads(
+            raw.decode("utf-8", errors="strict"),
+            object_pairs_hook=reject_duplicates,
+            parse_constant=reject_constant,
+        )
+    except HostTaskEvidenceError:
+        raise
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HostTaskEvidenceError(f"{label} source is not strict JSON") from exc
+
+    def reject_nonfinite(item: Any) -> None:
+        if isinstance(item, float) and not math.isfinite(item):
+            _fail(f"{label} source contains a non-finite number")
+        if isinstance(item, Mapping):
+            for child in item.values():
+                reject_nonfinite(child)
+        elif isinstance(item, list):
+            for child in item:
+                reject_nonfinite(child)
+
+    reject_nonfinite(value)
     if not isinstance(value, Mapping):
         _fail(f"{label} source must be an object")
     _reject_unsafe(value, label=label)

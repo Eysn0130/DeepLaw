@@ -24,7 +24,9 @@ from benchmarks.release.typed_qualification_evidence_v3_host_tasks import (
     TASK_DUTIES,
     TASK_OPERATIONS,
     TASK_WRONG_STATES,
+    HostTaskEvidenceError,
     _host_identity_projection,
+    parse_host_task_evidence,
 )
 from deeplaw.native_host import derive_native_host_receipt
 
@@ -479,6 +481,57 @@ def test_v013_host_task_manifest_derives_host_task_metrics(
     assert result["metrics"]["query_trace_in_capsule"] is False
     assert result["metrics"]["ledger_in_capsule"] is False
     assert result["hard_failure_counts"]["required_duty_gap"] == 0
+
+
+@pytest.mark.parametrize(
+    ("source_key", "source_json", "message"),
+    [
+        (
+            "lifecycle_source",
+            b'{"nested":{"duplicate":1,"duplicate":2}}',
+            "duplicate JSON keys",
+        ),
+        (
+            "usage_source",
+            b'{"nested":{"value":NaN}}',
+            "non-finite JSON value",
+        ),
+        (
+            "expected_source",
+            b'{"nested":{"value":Infinity}}',
+            "non-finite JSON value",
+        ),
+        (
+            "continuity_source",
+            b'{"nested":{"duplicate":1,"duplicate":2}}',
+            "duplicate JSON keys",
+        ),
+        (
+            "isolation_source",
+            b'{"nested":{"value":-Infinity}}',
+            "non-finite JSON value",
+        ),
+    ],
+)
+def test_v013_host_task_nested_sources_reject_non_strict_json(
+    tmp_path: Path,
+    source_key: str,
+    source_json: bytes,
+    message: str,
+) -> None:
+    manifest = _manifest(tmp_path, host="codex", task="continuity")
+    envelope = json.loads(manifest.read_text())
+    source_path = tmp_path / envelope["payload"][source_key]["relative_path"]
+    source_path.write_bytes(source_json)
+    _refresh_source_ref(manifest, source_key, source_path)
+    envelope = json.loads(manifest.read_text())
+    with pytest.raises(HostTaskEvidenceError, match=message):
+        parse_host_task_evidence(
+            envelope,
+            root=tmp_path,
+            record_sha256=envelope["record_sha256"],
+            expected_corpus_sha256=_expected_sha(tmp_path, "codex", "continuity"),
+        )
 
 
 def test_v013_host_task_manifest_accepts_current_native_v3_codex_identity(

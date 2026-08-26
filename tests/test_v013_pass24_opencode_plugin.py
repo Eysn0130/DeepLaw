@@ -77,6 +77,7 @@ def test_plugin_source_is_thin_and_never_injects_route_identity() -> None:
         "session.created",
         "session.updated",
         "session.compacted",
+        "deeplaw.opencode-native-event-observation/v1",
         "Bun",
         "checkpoint_grant_missing",
         "deeplaw.host-continuity-capsule/v1",
@@ -153,6 +154,19 @@ def test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams() -> N
           compact,
         )
         await hooks.event({
+          type: 'session.created',
+          info: { id: 'chat-session', title: 'native title canary' },
+        })
+        await hooks.event({
+          type: 'session.updated',
+          info: { id: 'chat-session', title: 'native update canary' },
+        })
+        await hooks.event({
+          type: 'session.compacted',
+          info: { id: 'chat-session', title: 'native compact canary' },
+          parts: [{ type: 'reasoning', text: 'native reasoning canary' }],
+        })
+        await hooks.event({
           type: 'message.updated',
           properties: {
             info: {
@@ -218,7 +232,43 @@ def test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams() -> N
     assert "same order" not in serialized
     assert "must-not-cross" not in serialized
     model_observations = result["modelObservations"]
-    assert isinstance(model_observations, list) and len(model_observations) == 3
+    assert isinstance(model_observations, list) and len(model_observations) == 6
+    native_observations = [
+        item
+        for item in model_observations
+        if item.get("schema_version")
+        == "deeplaw.opencode-native-event-observation/v1"
+    ]
+    assert [item["event_type"] for item in native_observations] == [
+        "session.created",
+        "session.updated",
+        "session.compacted",
+    ]
+    assert all(item["status"] == "observed" for item in native_observations)
+    assert all(
+        set(item)
+        == {
+            "schema_version",
+            "event_type",
+            "session_sha256",
+            "parent_session_sha256",
+            "parent_gap",
+            "status",
+            "gap",
+        }
+        for item in native_observations
+    )
+    native_serialized = json.dumps(native_observations, ensure_ascii=False, sort_keys=True)
+    for sensitive in (
+        "native title canary",
+        "native update canary",
+        "native compact canary",
+        "native reasoning canary",
+        "parts",
+        "prompt",
+        "providerID",
+    ):
+        assert sensitive not in native_serialized
     delivery_observations = [
         item
         for item in model_observations

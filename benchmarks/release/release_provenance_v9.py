@@ -335,6 +335,8 @@ def build_release_manifest(
     candidate = bundle_manifest["candidate_binding"]
     if not GIT_RE.fullmatch(release_commit) or not GIT_RE.fullmatch(release_tree):
         _fail("release Git identity is invalid")
+    if release_commit != candidate["commit"]:
+        _fail("release commit differs from the exact candidate commit")
     if release_tree != candidate["tree"]:
         _fail("release tree differs from the exact candidate tree")
     report_relative, report_file = _relative_to(

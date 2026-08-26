@@ -189,7 +189,7 @@ def test_v9_release_provenance_reassembles_exact_core_and_keeps_optional_claims_
         bundle_root=bundle_root,
         report_path=assets / assembled["report_path"],
         pre_publish_receipt_path=pre_path,
-        release_commit="9" * 40,
+        release_commit=EXPECTED_CANDIDATE["commit"],
         release_tree=EXPECTED_CANDIDATE["tree"],
         candidate_run_id=RUN_IDS["candidate_run_id"],
         evidence_run_id=RUN_IDS["evidence_run_id"],
@@ -226,13 +226,24 @@ def test_v9_release_provenance_rejects_release_tree_or_retained_gate_tamper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assets, bundle_root, pre_path, assembled = _fixture(tmp_path, monkeypatch)
-    with pytest.raises(provenance.ReleaseProvenanceV9Error, match="release tree"):
+    with pytest.raises(provenance.ReleaseProvenanceV9Error, match="release commit"):
         provenance.build_release_manifest(
             assets_root=assets,
             bundle_root=bundle_root,
             report_path=assets / assembled["report_path"],
             pre_publish_receipt_path=pre_path,
             release_commit="9" * 40,
+            release_tree=EXPECTED_CANDIDATE["tree"],
+            **RUN_IDS,
+            environment=_environment(),
+        )
+    with pytest.raises(provenance.ReleaseProvenanceV9Error, match="release tree"):
+        provenance.build_release_manifest(
+            assets_root=assets,
+            bundle_root=bundle_root,
+            report_path=assets / assembled["report_path"],
+            pre_publish_receipt_path=pre_path,
+            release_commit=EXPECTED_CANDIDATE["commit"],
             release_tree="8" * 40,
             **RUN_IDS,
             environment=_environment(),
@@ -246,7 +257,7 @@ def test_v9_release_provenance_rejects_release_tree_or_retained_gate_tamper(
             bundle_root=bundle_root,
             report_path=assets / assembled["report_path"],
             pre_publish_receipt_path=pre_path,
-            release_commit="9" * 40,
+            release_commit=EXPECTED_CANDIDATE["commit"],
             release_tree=EXPECTED_CANDIDATE["tree"],
             **RUN_IDS,
             environment=_environment(),

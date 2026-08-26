@@ -15,6 +15,7 @@ export const NATIVE_EVENTS = [
 ] as const
 
 const HOST_CONTINUITY_SCHEMA = "deeplaw.host-continuity-capsule/v1"
+const NATIVE_EVENT_OBSERVATION_SCHEMA = "deeplaw.opencode-native-event-observation/v1"
 const MAX_CAPSULE_BYTES = 1400
 const MAX_CLI_BYTES = 64 * 1024
 const MAX_ID_BYTES = 4096
@@ -69,6 +70,7 @@ export type ContinuityResolver = (
 ) => Promise<ContinuityCapsule>
 
 export type NativeEventObservation = {
+  schema_version: typeof NATIVE_EVENT_OBSERVATION_SCHEMA
   event_type: string
   session_sha256: string | null
   parent_session_sha256: string | null
@@ -112,6 +114,7 @@ export type ContinuityDeliveryObservation = {
 }
 
 export type OpenCodeHostObservation =
+  | NativeEventObservation
   | ResponseModelObservation
   | ContinuityDeliveryObservation
 
@@ -166,6 +169,7 @@ export function observeEvent(input: unknown): NativeEventObservation {
   let gap: string | null = supported ? null : "event_unknown"
   if (session === null) gap = gap ?? "session_missing"
   return {
+    schema_version: NATIVE_EVENT_OBSERVATION_SCHEMA,
     event_type: type ?? "gap:event_unknown",
     session_sha256: sha256Text(session),
     parent_session_sha256: sha256Text(parent),
@@ -637,7 +641,10 @@ export function createOpenCodeHooks(
       const response = observeResponseModel(input)
       if (response !== null) await record(response)
       const observed = observeEvent(input)
-      if (observed.status === "observed") await capsuleFor(observed.session_sha256)
+      if (observed.status === "observed") {
+        await record(observed)
+        await capsuleFor(observed.session_sha256)
+      }
     },
     "experimental.chat.system.transform": async (input: unknown, output: unknown) => {
       const capsule = await capsuleFor(sessionDigest(input))

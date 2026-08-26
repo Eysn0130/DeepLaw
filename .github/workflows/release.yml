@@ -105,6 +105,7 @@ jobs:
             "Commercial Qualification" \
             ".github/workflows/commercial-qualification.yml"
           candidate_head="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run_id}" --jq .head_sha)"
+          test "${candidate_head}" = "${commit}"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${evidence_run_id}" --jq .head_sha)" = "${candidate_head}"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qualification_run_id}" --jq .head_sha)" = "${candidate_head}"
           echo "tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
