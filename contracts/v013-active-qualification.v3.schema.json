@@ -131,7 +131,7 @@
         "classification_id": {"const": "deeplaw-v013-commercial-gates-v9"},
         "schema_version": {"const": "deeplaw.v013-release-gate-classification/v9"},
         "relative_path": {"const": "benchmarks/release/v013-gate-classification-v9.json"},
-        "sha256": {"const": "e9e2c5f332eea494ab0cf32804d61fbd5b3191e021f9686f9e5ceb7a27c61a09"}
+        "sha256": {"const": "d6a3dfbe89c5632f24909effef4654ce5b9b41041fa4cbd8cbb94c62e5299129"}
       }
     },
     "protocolBinding": {
@@ -224,8 +224,8 @@
       "additionalProperties": false,
       "required": ["binary_version", "binary_sha256", "request_model", "reasoning_effort", "auth_status_command", "auth_material_access"],
       "properties": {
-        "binary_version": {"const": "codex-cli 0.148.0-alpha.15"},
-        "binary_sha256": {"const": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"},
+        "binary_version": {"const": null},
+        "binary_sha256": {"const": null},
         "request_model": {"const": "gpt-5.6-luna"},
         "reasoning_effort": {"const": "max"},
         "auth_status_command": {"const": "codex login status"},
@@ -237,10 +237,10 @@
       "additionalProperties": false,
       "required": ["version", "source_commit", "executable_sha256", "package_sha256", "config_selector", "expected_response_model_id", "runtime", "dotenv_policy", "secret_visibility"],
       "properties": {
-        "version": {"const": "1.18.16"},
-        "source_commit": {"const": "a3647eb025c7615159d417dcc49fc39fdaeba65b"},
-        "executable_sha256": {"const": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"},
-        "package_sha256": {"const": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722"},
+        "version": {"const": null},
+        "source_commit": {"const": null},
+        "executable_sha256": {"const": null},
+        "package_sha256": {"const": null},
         "config_selector": {"const": "deepseek/deepseek-v4-flash"},
         "expected_response_model_id": {"const": "deepseek-v4-flash"},
         "runtime": {"const": "host_bun_runtime_only"},

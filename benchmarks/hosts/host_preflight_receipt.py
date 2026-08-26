@@ -13,6 +13,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,9 @@ from jsonschema import Draft202012Validator, FormatChecker, SchemaError, Validat
 SCHEMA_VERSION = "deeplaw.host-preflight-receipt/v1"
 SCHEMA_FILENAME = "host-preflight-receipt.v1.schema.json"
 RECEIPT_FILENAME = "host-preflight-receipt.json"
+HOST_IDENTITY_SCHEMA_VERSION = "deeplaw.host-exact-identity/v1"
+HOST_IDENTITY_MAX_BYTES = 64 * 1024
+HOST_IDENTITY_FILENAME = "host-exact-identity.json"
 
 REASON_CODES = frozenset(
     {
@@ -106,6 +110,514 @@ _FORBIDDEN_KEY = re.compile(
     r"(?:path|argv|stdout|stderr|prompt|transcript|reasoning|secret|auth|credential|token)",
     re.IGNORECASE,
 )
+_IDENTITY_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$")
+_IDENTITY_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_IDENTITY_GIT = re.compile(r"^[0-9a-f]{40}$")
+_IDENTITY_FORBIDDEN_TEXT = re.compile(
+    r"(?:^|[\s=:\"'])/(?:Users|home|root|private|tmp|var|etc|opt|workspace|Volumes|System|Library|bin|sbin|usr|dev|proc|sys|run|mnt)(?:/|[\s\"']|$)|"
+    r"(?:^|[\s=:\"'])(?:[A-Za-z]:[\\/]|\\\\[^\\/\s]+[\\/])",
+)
+_IDENTITY_FORBIDDEN_FILENAME = re.compile(
+    r"(?:^|[._-])(?:auth|credential|secret|password|passwd|api[_-]?key|"
+    r"private[_-]?key|token|prompt|transcript|reasoning)(?:$|[._-])",
+    re.IGNORECASE,
+)
+_IDENTITY_STAT_FIELDS = ("st_ino", "st_size", "st_mode", "st_uid", "st_nlink")
+
+
+class HostIdentityValidationError(ValueError):
+    """A repository-external frozen Host identity is unsafe or malformed."""
+
+
+def _identity_fail(message: str) -> None:
+    raise HostIdentityValidationError(message)
+
+
+def _identity_reject_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            _identity_fail("Host identity input contains a duplicate key")
+        value[key] = item
+    return value
+
+
+def _identity_reject_constant(value: str) -> Any:
+    _identity_fail(f"Host identity input contains a non-finite value: {value}")
+
+
+def _identity_canonical(value: Any) -> bytes:
+    try:
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, UnicodeError, ValueError) as error:
+        raise HostIdentityValidationError("Host identity input is not canonical JSON") from error
+
+
+def _identity_sha(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or _IDENTITY_SHA256.fullmatch(value) is None:
+        _identity_fail(f"{label} must be a lowercase SHA-256 digest")
+    if value == "0" * 64:
+        _identity_fail(f"{label} must identify a supplied artifact")
+    return value
+
+
+def _identity_version(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or _IDENTITY_VERSION.fullmatch(value) is None:
+        _identity_fail(f"{label} has an invalid version shape")
+    return value
+
+
+def _identity_scan(value: Any, *, key: str | None = None) -> None:
+    if isinstance(value, Mapping):
+        for nested_key, nested_value in value.items():
+            if not isinstance(nested_key, str):
+                _identity_fail("Host identity field name is invalid")
+            # ``auth_material_access`` is a closed policy fact, not auth data.
+            allowed_policy_key = nested_key in {
+                "auth_material_access",
+                "secret_visibility",
+                "auth_status_command",
+            }
+            forbidden_parts = (
+                "path", "argv", "stdout", "stderr", "prompt", "transcript",
+                "reasoning_content", "secret", "credential", "token",
+            )
+            if not allowed_policy_key and any(
+                part in nested_key.casefold() for part in forbidden_parts
+            ):
+                _identity_fail("Host identity input contains a forbidden field")
+            _identity_scan(nested_value, key=nested_key)
+    elif isinstance(value, list):
+        for item in value:
+            _identity_scan(item)
+    elif isinstance(value, str):
+        if _IDENTITY_FORBIDDEN_TEXT.search(value):
+            _identity_fail("Host identity input contains an absolute path")
+    elif value is None or isinstance(value, (bool, int, float)):
+        return
+    else:
+        _identity_fail("Host identity input contains an unsupported value")
+
+
+def _validate_host_identity_document(value: Mapping[str, Any]) -> dict[str, Any]:
+    if set(value) != {"schema_version", "hosts"}:
+        _identity_fail("Host identity input fields are not closed")
+    if value.get("schema_version") != HOST_IDENTITY_SCHEMA_VERSION:
+        _identity_fail("Host identity input schema version is unsupported")
+    hosts = value.get("hosts")
+    if not isinstance(hosts, Mapping) or set(hosts) != {"codex", "opencode"}:
+        _identity_fail("Host identity input must contain exactly Codex and OpenCode")
+
+    codex = hosts.get("codex")
+    if not isinstance(codex, Mapping) or set(codex) != {
+        "binary_version",
+        "binary_sha256",
+        "request_model",
+        "reasoning_effort",
+        "auth_status_command",
+        "auth_material_access",
+    }:
+        _identity_fail("Codex Host identity fields are not closed")
+    codex_version = _identity_version(codex.get("binary_version"), label="Codex binary_version")
+    codex_sha = _identity_sha(codex.get("binary_sha256"), label="Codex binary_sha256")
+    if codex.get("request_model") != "gpt-5.6-luna":
+        _identity_fail("Codex request model is not the fixed qualification model")
+    if codex.get("reasoning_effort") != "max":
+        _identity_fail("Codex reasoning effort is not fixed to max")
+    if codex.get("auth_status_command") != "codex login status":
+        _identity_fail("Codex authentication status seam is not fixed")
+    if codex.get("auth_material_access") != "forbidden":
+        _identity_fail("Codex authentication material policy is not forbidden")
+
+    opencode = hosts.get("opencode")
+    if not isinstance(opencode, Mapping) or set(opencode) != {
+        "version",
+        "source_commit",
+        "config_selector",
+        "expected_response_model_id",
+        "executable_sha256",
+        "package_sha256",
+        "runtime",
+        "dotenv_policy",
+        "secret_visibility",
+    }:
+        _identity_fail("OpenCode Host identity fields are not closed")
+    opencode_version = _identity_version(opencode.get("version"), label="OpenCode version")
+    source_commit = opencode.get("source_commit")
+    if not isinstance(source_commit, str) or _IDENTITY_GIT.fullmatch(source_commit) is None:
+        _identity_fail("OpenCode source_commit must be an exact Git digest")
+    executable_sha = _identity_sha(
+        opencode.get("executable_sha256"), label="OpenCode executable_sha256"
+    )
+    package_sha = _identity_sha(opencode.get("package_sha256"), label="OpenCode package_sha256")
+    if opencode.get("config_selector") != "deepseek/deepseek-v4-flash":
+        _identity_fail("OpenCode selector is not fixed")
+    if opencode.get("expected_response_model_id") != "deepseek-v4-flash":
+        _identity_fail("OpenCode response model is not fixed")
+    if opencode.get("runtime") != "host_bun_runtime_only":
+        _identity_fail("OpenCode runtime policy is not fixed")
+    if opencode.get("dotenv_policy") != "owner_only_external_strict_parser":
+        _identity_fail("OpenCode dotenv policy is not fixed")
+    if opencode.get("secret_visibility") != "forbidden":
+        _identity_fail("OpenCode Secret visibility policy is not forbidden")
+
+    normalized = {
+        "schema_version": HOST_IDENTITY_SCHEMA_VERSION,
+        "hosts": {
+            "codex": {
+                "binary_version": codex_version,
+                "binary_sha256": codex_sha,
+                "request_model": "gpt-5.6-luna",
+                "reasoning_effort": "max",
+                "auth_status_command": "codex login status",
+                "auth_material_access": "forbidden",
+            },
+            "opencode": {
+                "version": opencode_version,
+                "source_commit": source_commit,
+                "config_selector": "deepseek/deepseek-v4-flash",
+                "expected_response_model_id": "deepseek-v4-flash",
+                "executable_sha256": executable_sha,
+                "package_sha256": package_sha,
+                "runtime": "host_bun_runtime_only",
+                "dotenv_policy": "owner_only_external_strict_parser",
+                "secret_visibility": "forbidden",
+            },
+        },
+    }
+    _identity_scan(normalized)
+    return normalized
+
+
+def parse_host_identity_input(raw: bytes) -> dict[str, Any]:
+    """Validate exact external identity bytes without retaining their source path."""
+
+    if not isinstance(raw, bytes) or not 1 <= len(raw) <= HOST_IDENTITY_MAX_BYTES:
+        _identity_fail("Host identity input exceeds its byte bound")
+    try:
+        value = json.loads(
+            raw.decode("utf-8", errors="strict"),
+            object_pairs_hook=_identity_reject_pairs,
+            parse_constant=_identity_reject_constant,
+        )
+    except HostIdentityValidationError:
+        raise
+    except (UnicodeError, TypeError, ValueError) as error:
+        raise HostIdentityValidationError("Host identity input is not strict UTF-8 JSON") from error
+    if not isinstance(value, Mapping):
+        _identity_fail("Host identity input must be an object")
+    return _validate_host_identity_document(value)
+
+
+def host_identity_sha256(identity: Mapping[str, Any]) -> str:
+    """Hash one normalized per-Host identity object, excluding source metadata."""
+
+    return hashlib.sha256(_identity_canonical(identity)).hexdigest()
+
+
+def host_identity_source_sha256(raw: bytes) -> str:
+    """Hash the exact frozen input bytes."""
+
+    return hashlib.sha256(raw).hexdigest()
+
+
+def host_binary_identity(identity: Mapping[str, Any], host: str) -> dict[str, str]:
+    """Project a frozen Host identity to the sanitized receipt binary shape."""
+
+    hosts = identity.get("hosts")
+    if not isinstance(hosts, Mapping) or host not in hosts:
+        _identity_fail("Host identity is missing the requested Host")
+    item = hosts[host]
+    if not isinstance(item, Mapping):
+        _identity_fail("Host identity is invalid")
+    if host == "codex":
+        return {
+            "version": str(item["binary_version"]),
+            "sha256": str(item["binary_sha256"]),
+        }
+    return {
+        "version": str(item["version"]),
+        "sha256": str(item["executable_sha256"]),
+    }
+
+
+def _identity_path_has_symlink(path: Path) -> bool:
+    selected = Path(path).expanduser()
+    current = Path(selected.anchor) if selected.is_absolute() else Path.cwd()
+    parts = selected.parts[1:] if selected.is_absolute() else selected.parts
+    for part in parts:
+        current /= part
+        try:
+            if current.is_symlink():
+                return True
+        except OSError:
+            return True
+    return False
+
+
+def _identity_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
+    """Keep mutation-relevant metadata without treating atime as a mutation."""
+
+    return (
+        *(getattr(details, field, None) for field in _IDENTITY_STAT_FIELDS),
+        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
+        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
+    )
+
+
+def _read_identity_file(
+    path: Path,
+    *,
+    repository: Path,
+    require_external: bool,
+) -> tuple[dict[str, Any], bytes]:
+    selected = Path(path).expanduser()
+    if not selected.is_absolute():
+        _identity_fail("Host identity input must be an absolute path")
+    if _identity_path_has_symlink(selected) or _IDENTITY_FORBIDDEN_FILENAME.search(selected.name):
+        _identity_fail("Host identity input must be a regular non-symlink file")
+    try:
+        before = selected.lstat()
+    except OSError as error:
+        raise HostIdentityValidationError("Host identity input is unavailable") from error
+    if not stat.S_ISREG(before.st_mode) or selected.is_symlink() or before.st_nlink != 1:
+        _identity_fail("Host identity input must be a regular non-symlink file")
+    if os.name != "nt" and (
+        not hasattr(os, "geteuid")
+        or before.st_uid != os.geteuid()
+        or stat.S_IMODE(before.st_mode) & 0o077
+    ):
+        _identity_fail("Host identity input must be owner-only")
+    try:
+        resolved = selected.resolve(strict=True)
+        repository_path = Path(repository).resolve(strict=True)
+        inside_repository = resolved == repository_path or repository_path in resolved.parents
+        if require_external and inside_repository:
+            _identity_fail("Host identity input must be repository-external")
+        if not 1 <= before.st_size <= HOST_IDENTITY_MAX_BYTES:
+            _identity_fail("Host identity input exceeds its byte bound")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        descriptor = os.open(selected, flags)
+        try:
+            fd_before = os.fstat(descriptor)
+            if _identity_stat_signature(fd_before) != _identity_stat_signature(before):
+                _identity_fail("Host identity input changed before it was read")
+            chunks: list[bytes] = []
+            total = 0
+            while total <= HOST_IDENTITY_MAX_BYTES:
+                chunk = os.read(descriptor, HOST_IDENTITY_MAX_BYTES + 1 - total)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                total += len(chunk)
+            raw = b"".join(chunks)
+            fd_after = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        after = selected.lstat()
+    except HostIdentityValidationError:
+        raise
+    except OSError as error:
+        raise HostIdentityValidationError("Host identity input is unavailable") from error
+    if (
+        _identity_stat_signature(fd_before) != _identity_stat_signature(fd_after)
+        or _identity_stat_signature(before) != _identity_stat_signature(after)
+        or len(raw) != before.st_size
+    ):
+        _identity_fail("Host identity input changed while it was read")
+    return parse_host_identity_input(raw), raw
+
+
+def load_host_identity_input(
+    path: Path | str,
+    *,
+    repository: Path | str,
+    require_external: bool = True,
+) -> dict[str, Any]:
+    """Load an owner-only frozen Host identity and return path-free metadata."""
+
+    identity, raw = _read_identity_file(
+        Path(path), repository=Path(repository), require_external=require_external
+    )
+    return {
+        "schema_version": HOST_IDENTITY_SCHEMA_VERSION,
+        "hosts": identity["hosts"],
+        "source_sha256": host_identity_source_sha256(raw),
+        "source_bytes": len(raw),
+    }
+
+
+def load_host_identity_input_with_bytes(
+    path: Path | str,
+    *,
+    repository: Path | str,
+) -> tuple[dict[str, Any], bytes]:
+    """Load an owner-only frozen identity and return its exact input bytes."""
+
+    identity, raw = _read_identity_file(
+        Path(path), repository=Path(repository), require_external=True
+    )
+    return (
+        {
+            "schema_version": HOST_IDENTITY_SCHEMA_VERSION,
+            "hosts": identity["hosts"],
+            "source_sha256": host_identity_source_sha256(raw),
+            "source_bytes": len(raw),
+        },
+        raw,
+    )
+
+
+def load_host_identity_bytes(raw: bytes) -> dict[str, Any]:
+    """Load retained identity bytes after they have entered a bundle root."""
+
+    identity = parse_host_identity_input(raw)
+    return {
+        "schema_version": HOST_IDENTITY_SCHEMA_VERSION,
+        "hosts": identity["hosts"],
+        "source_sha256": host_identity_source_sha256(raw),
+        "source_bytes": len(raw),
+    }
+
+
+def inspect_host_binary(
+    path: Path | str,
+    *,
+    host: str,
+    identity: Mapping[str, Any],
+    repository: Path | str,
+) -> dict[str, Any]:
+    """Check a Host executable against frozen identity without retaining its path.
+
+    Codex requires the selected path itself to be a regular, non-symlink,
+    single-link executable.  OpenCode may be entered through a selector
+    symlink, but its resolved execution target must satisfy the same regular
+    single-link boundary.
+    """
+
+    if host not in {"codex", "opencode"}:
+        _identity_fail("Host executable identity is unsupported")
+    selected = Path(path).expanduser()
+    if not selected.is_absolute() or _identity_path_has_symlink(selected.parent):
+        _identity_fail("Host executable path is outside the closed scope")
+    try:
+        source_stat = selected.lstat()
+    except OSError as error:
+        raise HostIdentityValidationError("Host executable is unavailable") from error
+    source_symlink = stat.S_ISLNK(source_stat.st_mode)
+    if host == "codex" and source_symlink:
+        _identity_fail("Codex executable must not be a symlink")
+
+    # OpenCode may use one selector symlink, but the selector's direct target
+    # must itself be a regular file.  Resolving the selector first would
+    # silently accept a symlink chain, so inspect the direct link target before
+    # resolving it.
+    direct_target = selected
+    if source_symlink:
+        try:
+            link_target = selected.readlink()
+        except OSError as error:
+            raise HostIdentityValidationError("Host executable selector is unavailable") from error
+        direct_target = link_target if link_target.is_absolute() else selected.parent / link_target
+    if _identity_path_has_symlink(direct_target.parent):
+        _identity_fail("Host executable parent path contains a symlink")
+    try:
+        direct_stat = direct_target.lstat()
+    except OSError as error:
+        raise HostIdentityValidationError("Host executable is unavailable") from error
+    if source_symlink and stat.S_ISLNK(direct_stat.st_mode):
+        _identity_fail("Host executable selector must not be a symlink chain")
+    try:
+        resolved = direct_target.resolve(strict=True)
+        target_stat = resolved.lstat()
+    except OSError as error:
+        raise HostIdentityValidationError("Host executable is unavailable") from error
+    if (
+        stat.S_ISLNK(target_stat.st_mode)
+        or not stat.S_ISREG(target_stat.st_mode)
+        or target_stat.st_nlink != 1
+    ):
+        _identity_fail("Host executable must be a regular single-link file")
+    if not os.access(resolved, os.X_OK):
+        _identity_fail("Host executable is not executable")
+    repository_path = Path(repository).resolve(strict=True)
+    try:
+        resolved.relative_to(repository_path)
+    except ValueError:
+        pass
+    else:
+        _identity_fail("Host executable must be repository-external")
+    expected = host_binary_identity(identity, host)
+
+    def mutation_snapshot() -> tuple[Any, ...]:
+        if _identity_path_has_symlink(
+            selected.parent
+        ) or _identity_path_has_symlink(direct_target.parent):
+            _identity_fail("Host executable parent path contains a symlink")
+        try:
+            selected_details = selected.lstat()
+            direct_details = direct_target.lstat()
+            resolved_details = resolved.lstat()
+            selector_target = os.readlink(selected) if source_symlink else None
+        except OSError as error:
+            raise HostIdentityValidationError(
+                "Host executable changed during inspection"
+            ) from error
+        return (
+            _identity_stat_signature(selected_details),
+            _identity_stat_signature(direct_details),
+            _identity_stat_signature(resolved_details),
+            selector_target,
+        )
+
+    before_probe = mutation_snapshot()
+    try:
+        observed_sha = sha256_file(resolved)
+    except OSError as error:
+        raise HostIdentityValidationError("Host executable hash probe failed") from error
+    after_hash = mutation_snapshot()
+    if after_hash != before_probe:
+        _identity_fail("Host executable changed during hash probe")
+    if observed_sha != expected["sha256"]:
+        _identity_fail("Host executable hash differs from frozen identity")
+    try:
+        completed = subprocess.run(
+            [str(resolved), "--version"],
+            capture_output=True,
+            check=False,
+            timeout=30,
+            env={"PATH": os.defpath, "LANG": "C", "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HostIdentityValidationError("Host executable version probe failed") from error
+    after_version = mutation_snapshot()
+    if after_version != before_probe:
+        _identity_fail("Host executable changed during version probe")
+    stdout = completed.stdout if isinstance(completed.stdout, bytes) else b""
+    stderr = completed.stderr if isinstance(completed.stderr, bytes) else b""
+    observed_version = (stdout + stderr).decode("utf-8", errors="strict").strip()
+    if completed.returncode != 0 or observed_version != expected["version"]:
+        _identity_fail("Host executable version differs from frozen identity")
+    return {
+        "host": host,
+        "version": observed_version,
+        "sha256": observed_sha,
+        "source_symlink": source_symlink,
+        "selector_source_symlink": source_symlink,
+        "execution_target_regular": True,
+        "execution_target_single_link": True,
+        "repository_external": True,
+        "host_identity_sha256": host_identity_sha256(identity["hosts"][host]),
+        "host_identity_source_sha256": str(identity["source_sha256"]),
+    }
 
 
 class ReceiptValidationError(ValueError):

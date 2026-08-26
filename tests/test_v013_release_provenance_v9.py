@@ -144,7 +144,7 @@ def _fixture(
     }
     pre_publish["record_sha256"] = provenance.record_sha256(pre_publish)
 
-    _make_fixture(bundle_root, monkeypatch)
+    external_identity = _make_fixture(bundle_root, monkeypatch)
     pre_path = bundle_root / "typed" / "pre-publish-source.json"
     _write_json(pre_path, pre_publish)
     pre_raw = pre_path.read_bytes()
@@ -169,6 +169,7 @@ def _fixture(
         bundle_root,
         run_ids=RUN_IDS,
         expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external_identity,
     )
     _install_parser(monkeypatch)
     assembled = assembler.assemble_commercial_qualification(

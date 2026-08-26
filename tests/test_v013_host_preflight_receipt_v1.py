@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -27,6 +29,40 @@ def _broker() -> dict[str, object]:
         "owner_only_mode": True,
         "expected_sha256": None,
     }
+
+
+def _host_identity(*, codex_version: str = "codex-cli moving") -> dict[str, object]:
+    return {
+        "schema_version": receipt.HOST_IDENTITY_SCHEMA_VERSION,
+        "hosts": {
+            "codex": {
+                "binary_version": codex_version,
+                "binary_sha256": "a" * 64,
+                "request_model": "gpt-5.6-luna",
+                "reasoning_effort": "max",
+                "auth_status_command": "codex login status",
+                "auth_material_access": "forbidden",
+            },
+            "opencode": {
+                "version": "1.18.16",
+                "source_commit": "b" * 40,
+                "config_selector": "deepseek/deepseek-v4-flash",
+                "expected_response_model_id": "deepseek-v4-flash",
+                "executable_sha256": "c" * 64,
+                "package_sha256": "d" * 64,
+                "runtime": "host_bun_runtime_only",
+                "dotenv_policy": "owner_only_external_strict_parser",
+                "secret_visibility": "forbidden",
+            },
+        },
+    }
+
+
+def _write_identity(path: Path, value: dict[str, object]) -> bytes:
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    path.write_bytes(raw)
+    path.chmod(0o600)
+    return raw
 
 
 def test_v1_receipt_is_strict_and_has_no_free_text_or_sensitive_surface(
@@ -227,3 +263,132 @@ def test_opencode_availability_usage_missing_is_typed() -> None:
             elapsed_ms=1,
         )
     assert receipt.reason_code_for_exception(failure.value) == "usage_receipt_missing"
+
+
+def test_external_host_identity_is_owner_only_and_source_bound(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    identity_path = tmp_path / "host-identity.json"
+    raw = _write_identity(identity_path, _host_identity())
+    loaded = receipt.load_host_identity_input(identity_path, repository=repository)
+    assert loaded["source_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert loaded["source_bytes"] == len(raw)
+    assert loaded["hosts"]["codex"]["binary_version"] == "codex-cli moving"
+
+    inside = repository / receipt.HOST_IDENTITY_FILENAME
+    _write_identity(inside, _host_identity())
+    with pytest.raises(receipt.HostIdentityValidationError):
+        receipt.load_host_identity_input(inside, repository=repository)
+
+    symlink = tmp_path / "identity-link.json"
+    try:
+        symlink.symlink_to(identity_path)
+    except OSError:
+        pytest.skip("symlinks are unavailable")
+    with pytest.raises(receipt.HostIdentityValidationError):
+        receipt.load_host_identity_input(symlink, repository=repository)
+
+    hardlink = tmp_path / "identity-hardlink.json"
+    try:
+        os.link(identity_path, hardlink)
+    except OSError:
+        pytest.skip("hardlinks are unavailable")
+    with pytest.raises(receipt.HostIdentityValidationError):
+        receipt.load_host_identity_input(hardlink, repository=repository)
+
+
+def test_host_identity_binary_probe_binds_exact_regular_target(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    executable = tmp_path / "codex"
+    executable.write_text("#!/bin/sh\nprintf '%s\\n' 'codex-cli moving'\n", encoding="utf-8")
+    executable.chmod(0o700)
+    identity_value = _host_identity()
+    identity_value["hosts"]["codex"]["binary_sha256"] = hashlib.sha256(
+        executable.read_bytes()
+    ).hexdigest()
+    identity_path = tmp_path / "host-identity.json"
+    _write_identity(identity_path, identity_value)
+    loaded = receipt.load_host_identity_input(identity_path, repository=repository)
+    observed = receipt.inspect_host_binary(
+        executable,
+        host="codex",
+        identity=loaded,
+        repository=repository,
+    )
+    assert observed["version"] == "codex-cli moving"
+    assert observed["source_symlink"] is False
+    assert observed["host_identity_source_sha256"] == loaded["source_sha256"]
+
+
+def test_opencode_selector_allows_one_symlink_but_rejects_a_symlink_chain(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    executable = tmp_path / "opencode-target"
+    executable.write_text("#!/bin/sh\nprintf '%s\\n' '1.18.16'\n", encoding="utf-8")
+    executable.chmod(0o700)
+    identity_value = _host_identity()
+    identity_value["hosts"]["opencode"]["executable_sha256"] = hashlib.sha256(
+        executable.read_bytes()
+    ).hexdigest()
+    identity_path = tmp_path / "host-identity.json"
+    _write_identity(identity_path, identity_value)
+    loaded = receipt.load_host_identity_input(identity_path, repository=repository)
+
+    selector = tmp_path / "opencode"
+    try:
+        selector.symlink_to(executable)
+    except OSError:
+        pytest.skip("symlinks are unavailable")
+    observed = receipt.inspect_host_binary(
+        selector,
+        host="opencode",
+        identity=loaded,
+        repository=repository,
+    )
+    assert observed["selector_source_symlink"] is True
+
+    chained_selector = tmp_path / "opencode-chain"
+    chained_selector.symlink_to(selector)
+    with pytest.raises(receipt.HostIdentityValidationError, match="symlink chain"):
+        receipt.inspect_host_binary(
+            chained_selector,
+            host="opencode",
+            identity=loaded,
+            repository=repository,
+        )
+
+
+def test_host_binary_mutation_after_hash_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    executable = tmp_path / "codex"
+    executable.write_text("#!/bin/sh\nprintf '%s\\n' 'codex-cli moving'\n", encoding="utf-8")
+    executable.chmod(0o700)
+    identity_value = _host_identity()
+    identity_value["hosts"]["codex"]["binary_sha256"] = hashlib.sha256(
+        executable.read_bytes()
+    ).hexdigest()
+    identity_path = tmp_path / "host-identity.json"
+    _write_identity(identity_path, identity_value)
+    loaded = receipt.load_host_identity_input(identity_path, repository=repository)
+
+    original = receipt.sha256_file
+
+    def mutate_after_hash(path: Path) -> str:
+        digest = original(path)
+        path.write_bytes(path.read_bytes() + b" changed")
+        return digest
+
+    monkeypatch.setattr(receipt, "sha256_file", mutate_after_hash)
+    with pytest.raises(receipt.HostIdentityValidationError, match="hash probe"):
+        receipt.inspect_host_binary(
+            executable,
+            host="codex",
+            identity=loaded,
+            repository=repository,
+        )

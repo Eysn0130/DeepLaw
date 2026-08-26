@@ -369,7 +369,28 @@ def test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding(
     assert "runs-on: [self-hosted, macOS, deeplaw-kernel-qualification]" in workflow
     assert "DEEPLAW_KERNEL_EVIDENCE_COLLECTOR" in workflow
     assert "--transport-retry-limit 1" in workflow
-    assert '"codex-cli 0.148.0-alpha.15"' in workflow
+    assert "DEEPLAW_HOST_IDENTITY_INPUT" in workflow
+    frozen_identity = (
+        'frozen_identity="${RUNNER_TEMP}/candidate-inputs/'
+        'frozen-host-exact-identity.json"'
+    )
+    assert frozen_identity in workflow
+    assert '--host-identity-input "${frozen_identity}"' in workflow
+    collector = workflow.split(
+        "      - name: Execute Codex x3, OpenCode x3, and deterministic Kernel evidence",
+        1,
+    )[1].split("      - name: Reopen every typed receipt with the repository validator", 1)[0]
+    assert '--host-identity-input "${DEEPLAW_HOST_IDENTITY_INPUT}"' not in collector
+    assert 'cp "${DEEPLAW_HOST_IDENTITY_INPUT}"' not in collector
+    reopen = workflow.split(
+        "      - name: Reopen every typed receipt with the repository validator", 1
+    )[1]
+    assert frozen_identity in reopen
+    assert '--host-identity-input "${frozen_identity}"' in reopen
+    assert '--host-identity-input "${DEEPLAW_HOST_IDENTITY_INPUT}"' not in reopen
+    assert 'cp "${DEEPLAW_HOST_IDENTITY_INPUT}"' not in reopen
+    assert "codex-cli 0.148.0-alpha.15" not in workflow
+    assert "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7" not in workflow
     assert '"gpt-5.6-luna"' in workflow
     assert '"deepseek/deepseek-v4-flash"' in workflow
     assert "scale-10000-evidence/v013-scale-qualification-v9.json" in workflow
@@ -381,9 +402,10 @@ def test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding(
     assert "retained-broker-source/opencode.launcher-source" in workflow
     assert 'source "${DEEPLAW_OPENCODE_DOTENV}"' not in workflow
     assert 'cat "${DEEPLAW_OPENCODE_DOTENV}"' not in workflow
-    assert "path.read_bytes()" not in workflow.split(
+    dotenv_section = workflow.split(
         'exact_file(\n              "DEEPLAW_OPENCODE_DOTENV"', maxsplit=1
-    )[1].split("          fixed =", maxsplit=1)[0]
+    )[1].split("          identity_path", maxsplit=1)[0]
+    assert "path.read_bytes()" not in dotenv_section
     for forbidden in (
         "deeplaw_reference_freezer",
         "deeplaw_scorer_a",

@@ -138,23 +138,127 @@ CONTINUITY_LIFECYCLE = (
     "resume_after_forget",
 )
 HOST_MODELS = {"codex": "gpt-5.6-luna", "opencode": "deepseek-v4-flash"}
-HOST_IDENTITIES: dict[str, Mapping[str, Any]] = {
-    "codex": {
-        "binary_version": "codex-cli 0.148.0-alpha.15",
-        "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
-        "request_model": "gpt-5.6-luna",
-        "reasoning": "max",
-    },
-    "opencode": {
-        "version": "1.18.16",
-        "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
-        "config_selector": "deepseek/deepseek-v4-flash",
-        "expected_response_model_id": "deepseek-v4-flash",
-        "executable_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
-        "package_sha256": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722",
-    },
-}
 
+
+def _host_identity_shape(
+    value: Any, *, host: str, schema_version: str | None = None
+) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    if host == "codex":
+        historical = (
+            set(value) == {"binary_version", "binary_sha256", "request_model", "reasoning"}
+            and isinstance(value["binary_version"], str)
+            and 1 <= len(value["binary_version"]) <= 100
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}", value["binary_version"])
+            is not None
+            and isinstance(value["binary_sha256"], str)
+            and _SHA256.fullmatch(value["binary_sha256"]) is not None
+            and value["request_model"] == HOST_MODELS[host]
+            and value["reasoning"] == "max"
+        )
+        current = (
+            set(value)
+            == {
+                "binary_version",
+                "binary_sha256",
+                "request_model",
+                "reasoning_effort",
+                "auth_status_command",
+                "auth_material_access",
+            }
+            and isinstance(value["binary_version"], str)
+            and 1 <= len(value["binary_version"]) <= 100
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}", value["binary_version"])
+            is not None
+            and isinstance(value["binary_sha256"], str)
+            and _SHA256.fullmatch(value["binary_sha256"]) is not None
+            and value["request_model"] == HOST_MODELS[host]
+            and value["reasoning_effort"] == "max"
+            and value["auth_status_command"] == "codex login status"
+            and value["auth_material_access"] == "forbidden"
+        )
+        if schema_version == "deeplaw.native-host-event/v2":
+            return historical
+        if schema_version == "deeplaw.native-host-event/v3":
+            return current
+        return False
+    historical = (
+        set(value)
+        == {
+            "version", "source_commit", "config_selector", "expected_response_model_id",
+            "executable_sha256", "package_sha256",
+        }
+        and isinstance(value["version"], str)
+        and 1 <= len(value["version"]) <= 100
+        and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}", value["version"])
+        is not None
+        and isinstance(value["source_commit"], str)
+        and _GIT.fullmatch(value["source_commit"]) is not None
+        and value["config_selector"] == "deepseek/deepseek-v4-flash"
+        and value["expected_response_model_id"] == HOST_MODELS[host]
+        and isinstance(value["executable_sha256"], str)
+        and _SHA256.fullmatch(value["executable_sha256"]) is not None
+        and isinstance(value["package_sha256"], str)
+        and _SHA256.fullmatch(value["package_sha256"]) is not None
+    )
+    current = (
+        set(value)
+        == {
+            "version", "source_commit", "config_selector", "expected_response_model_id",
+            "executable_sha256", "package_sha256", "runtime", "dotenv_policy", "secret_visibility",
+        }
+        and isinstance(value["version"], str)
+        and 1 <= len(value["version"]) <= 100
+        and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}", value["version"])
+        is not None
+        and isinstance(value["source_commit"], str)
+        and _GIT.fullmatch(value["source_commit"]) is not None
+        and value["config_selector"] == "deepseek/deepseek-v4-flash"
+        and value["expected_response_model_id"] == HOST_MODELS[host]
+        and isinstance(value["executable_sha256"], str)
+        and _SHA256.fullmatch(value["executable_sha256"]) is not None
+        and isinstance(value["package_sha256"], str)
+        and _SHA256.fullmatch(value["package_sha256"]) is not None
+        and value["runtime"] == "host_bun_runtime_only"
+        and value["dotenv_policy"] == "owner_only_external_strict_parser"
+        and value["secret_visibility"] == "forbidden"
+    )
+    if schema_version == "deeplaw.native-host-event/v2":
+        return historical
+    if schema_version == "deeplaw.native-host-event/v3":
+        return current
+    return False
+
+
+def _host_identity_projection(value: Any, *, host: str) -> dict[str, Any]:
+    """Normalize historical native identity fields to the v1 external-input shape."""
+
+    item = value if isinstance(value, Mapping) else {}
+    if host == "codex":
+        if "reasoning_effort" in item:
+            return dict(item)
+        return {
+            "binary_version": item.get("binary_version"),
+            "binary_sha256": item.get("binary_sha256"),
+            "request_model": item.get("request_model"),
+            "reasoning_effort": item.get("reasoning", "max"),
+            "auth_status_command": "codex login status",
+            "auth_material_access": "forbidden",
+        }
+    if "runtime" in item:
+        return dict(item)
+    return {
+        "version": item.get("version"),
+        "source_commit": item.get("source_commit"),
+        "config_selector": item.get("config_selector"),
+        "expected_response_model_id": item.get("expected_response_model_id"),
+        "executable_sha256": item.get("executable_sha256"),
+        "package_sha256": item.get("package_sha256"),
+        "runtime": "host_bun_runtime_only",
+        "dotenv_policy": "owner_only_external_strict_parser",
+        "secret_visibility": "forbidden",
+    }
 HARD_FAILURE_IDS = (
     "unsupported_task_case",
     "task_binding_mismatch",
@@ -858,14 +962,20 @@ def parse_host_task_evidence(
             failures["compatibility_bridge"] += 1
         if parsed["host"] != host:
             failures["host_binding_mismatch"] += 1
-        if parsed["host_identity"] != HOST_IDENTITIES[host]:
+        if not _host_identity_shape(
+            parsed.get("host_identity"),
+            host=host,
+            schema_version=parsed.get("schema_version"),
+        ):
             failures["native_host_pin_mismatch"] += 1
         model = parsed["host_identity"].get(
             "request_model" if host == "codex" else "expected_response_model_id"
-        )
+        ) if isinstance(parsed.get("host_identity"), Mapping) else None
         if model != actual_model:
             failures["model_substitution"] += 1
-        identity_digest = _sha(_canonical(parsed["host_identity"]))
+        identity_digest = _sha(
+            _canonical(_host_identity_projection(parsed.get("host_identity"), host=host))
+        )
         host_identity_digests.add(identity_digest)
         sessions.append(parsed["session_sha256"])
         lifecycle_digests.append(_sha(_canonical(receipt)))
@@ -876,7 +986,13 @@ def parse_host_task_evidence(
         event_indices.append(index)
     if event_indices != list(range(len(events))):
         failures["event_sequence_non_contiguous"] += 1
-    if host_identity_digests != {_sha(_canonical(parsed_events[0]["host_identity"]))}:
+    if host_identity_digests != {
+        _sha(
+            _canonical(
+                _host_identity_projection(parsed_events[0].get("host_identity"), host=host)
+            )
+        )
+    }:
         failures["native_host_pin_mismatch"] += 1
 
     result = result_value
@@ -1156,6 +1272,7 @@ def parse_host_task_evidence(
         "run_id": run_id,
         "workflow_run_id": workflow,
         "actual_response_model_id": actual_model,
+        "host_identity_sha256": usage_identity,
         "event_count": len(events),
         "lifecycle_receipt_count": len(receipts),
         "event_sequence_sha256": _sha(_canonical(event_indices)),

@@ -475,7 +475,7 @@ def _failed_diagnostic_report(tmp_path: Path) -> dict[str, object]:
         },
         host_attestation={
             **codex_runner._placeholder_attestation(),
-            "version": codex_runner.CODEX_VERSION,
+            "version": codex_runner.HISTORICAL_CODEX_VERSION_FIXTURE,
         },
         tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
             [knowledge_tool_definition(autonomous=True)]

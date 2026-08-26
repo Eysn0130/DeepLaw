@@ -365,7 +365,7 @@ def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
         },
         host_attestation={
             **qualification._placeholder_attestation(),
-            "version": qualification.CODEX_VERSION,
+            "version": qualification.HISTORICAL_CODEX_VERSION_FIXTURE,
         },
         tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
             [knowledge_tool_definition(autonomous=True)]

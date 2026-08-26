@@ -138,6 +138,14 @@
     }
   ],
   "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
     "identifier": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
@@ -709,16 +717,19 @@
           "then": {
             "properties": {
               "constraints": {
-                "const": {
-                  "host": "codex",
-                  "tool_version": "codex-cli 0.148.0-alpha.15",
-                  "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
-                  "source_commit": null,
-                  "config_selector": null,
-                  "model_id": "gpt-5.6-luna",
-                  "expected_response_model_id": "gpt-5.6-luna",
-                  "reasoning_effort": "max",
-                  "argv_prefix": ["codex", "app-server", "--stdio"]
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["host", "tool_version", "binary_sha256", "source_commit", "config_selector", "model_id", "expected_response_model_id", "reasoning_effort", "argv_prefix"],
+                "properties": {
+                  "host": {"const": "codex"},
+                  "tool_version": {"const": null},
+                  "binary_sha256": {"const": null},
+                  "source_commit": {"type": "null"},
+                  "config_selector": {"type": "null"},
+                  "model_id": {"const": "gpt-5.6-luna"},
+                  "expected_response_model_id": {"const": "gpt-5.6-luna"},
+                  "reasoning_effort": {"const": "max"},
+                  "argv_prefix": {"const": ["codex", "app-server", "--stdio"]}
                 }
               }
             }
@@ -732,16 +743,19 @@
           "then": {
             "properties": {
               "constraints": {
-                "const": {
-                  "host": "opencode",
-                  "tool_version": "1.18.16",
-                  "binary_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
-                  "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
-                  "config_selector": "deepseek/deepseek-v4-flash",
-                  "model_id": "deepseek-v4-flash",
-                  "expected_response_model_id": "deepseek-v4-flash",
-                  "reasoning_effort": null,
-                  "argv_prefix": ["opencode", "--pure", "run", "--format", "json"]
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["host", "tool_version", "binary_sha256", "source_commit", "config_selector", "model_id", "expected_response_model_id", "reasoning_effort", "argv_prefix"],
+                "properties": {
+                  "host": {"const": "opencode"},
+                  "tool_version": {"const": null},
+                  "binary_sha256": {"const": null},
+                  "source_commit": {"const": null},
+                  "config_selector": {"const": "deepseek/deepseek-v4-flash"},
+                  "model_id": {"const": "deepseek-v4-flash"},
+                  "expected_response_model_id": {"const": "deepseek-v4-flash"},
+                  "reasoning_effort": {"const": null},
+                  "argv_prefix": {"const": ["opencode", "--pure", "run", "--format", "json"]}
                 }
               }
             }

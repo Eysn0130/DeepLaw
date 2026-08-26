@@ -24,6 +24,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -50,7 +51,9 @@ from benchmarks.hosts.pass13_orchestrator import (
 
 MODEL = "deepseek/deepseek-v4-flash"
 VARIANT = "max"
-OPENCODE_VERSION = "1.18.16"
+# Compatibility-only fixture value used by non-executing unit seams. Formal
+# qualification passes the version from the external frozen identity.
+HISTORICAL_OPENCODE_VERSION_FIXTURE = "1.18.16"
 TOOL_NAME = "deeplaw_knowledge_knowledge_support"
 RUN_COUNT = 3
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -2012,9 +2015,37 @@ def _forget_checkpoint(
     )
 
 
-def _validate_binary(binary: Path) -> str:
+def _validate_binary(
+    binary: Path,
+    *,
+    identity: Mapping[str, Any] | None = None,
+    repository: Path | None = None,
+) -> str:
+    if identity is not None:
+        try:
+            observation = host_preflight_receipt.inspect_host_binary(
+                binary,
+                host="opencode",
+                identity=identity,
+                repository=repository or Path(__file__).resolve().parents[2],
+            )
+        except (
+            host_preflight_receipt.HostIdentityValidationError,
+            OSError,
+            ValueError,
+        ) as exc:
+            raise QualificationError(
+                "OpenCode executable did not match the frozen Host identity"
+            ) from exc
+        return str(observation["sha256"])
     try:
-        return _sha256_file(binary)
+        resolved = binary.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise QualificationError("OpenCode binary is unavailable") from exc
+    if not stat.S_ISREG(resolved.stat().st_mode) or resolved.stat().st_nlink != 1:
+        raise QualificationError("OpenCode execution target must be a regular single-link file")
+    try:
+        return _sha256_file(resolved)
     except (OSError, ValueError) as exc:
         raise QualificationError("OpenCode binary is unavailable") from exc
 
@@ -2446,10 +2477,13 @@ def preflight_opencode(
     project_root: Path | None = None,
     plugin_receipt: Mapping[str, Any] | None = None,
     expected_broker_sha256: str | None = None,
+    expected_version: str = HISTORICAL_OPENCODE_VERSION_FIXTURE,
     agent_name: str = "qualification",
 ) -> dict[str, Any]:
     if project_root is None or plugin_receipt is None:
         raise QualificationError("OpenCode plugin preflight binding is required")
+    if expected_version is None:
+        raise QualificationError("OpenCode expected version from external identity is required")
     if expected_broker_sha256 is not None:
         _validate_owner_broker_launcher(
             host_launcher,
@@ -2481,11 +2515,11 @@ def preflight_opencode(
     )
     _forbid_sensitive(version["stdout"] + version["stderr"], forbidden_values)
     version_text = version["stdout"].decode("utf-8", errors="replace").strip()
-    if (
-        version["returncode"] != 0
-        or re.fullmatch(r"(?:opencode\s+)?1\.18\.16", version_text, re.IGNORECASE) is None
-    ):
-        raise QualificationError("OpenCode version is not exactly 1.18.16")
+    if version["returncode"] != 0 or version_text not in {
+        expected_version,
+        f"opencode {expected_version}",
+    }:
+        raise QualificationError("OpenCode version differs from the frozen Host identity")
     models = _run_opencode_command(
         binary,
         args=("models", "deepseek"),
@@ -2568,7 +2602,7 @@ def preflight_opencode(
     if availability["status"] != "available":
         raise QualificationError("DeepSeek model availability probe failed")
     return {
-        "version": OPENCODE_VERSION,
+        "version": expected_version,
         "version_sha256": _sha256(version["stdout"]),
         "version_bytes": len(version["stdout"]),
         "model_inventory": model_inventory,
@@ -2665,12 +2699,16 @@ def _require_directory(path: Path, *, label: str) -> None:
         raise QualificationError(f"{label} is not a directory")
 
 
-def _freeze_local_plugin_dependency_state(directory: Path) -> None:
+def _freeze_local_plugin_dependency_state(
+    directory: Path,
+    *,
+    expected_version: str = HISTORICAL_OPENCODE_VERSION_FIXTURE,
+) -> None:
     """Keep exact local-plugin loading offline and prevent Host workspace mutation."""
 
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "node_modules").mkdir(exist_ok=True)
-    dependency = {_OPENCODE_PLUGIN_API_PACKAGE: OPENCODE_VERSION}
+    dependency = {_OPENCODE_PLUGIN_API_PACKAGE: expected_version}
     (directory / "package.json").write_text(
         _canonical({"dependencies": dependency}) + "\n",
         encoding="utf-8",
@@ -2722,7 +2760,11 @@ def _installed_opencode_plugin_bytes(deeplaw_executable: Path) -> bytes:
 
 
 def _install_exact_opencode_plugin(
-    *, repository: Path, run_root: Path, deeplaw_executable: Path
+    *,
+    repository: Path,
+    run_root: Path,
+    deeplaw_executable: Path,
+    expected_version: str = HISTORICAL_OPENCODE_VERSION_FIXTURE,
 ) -> tuple[dict[str, Any], Path]:
     """Install candidate-wheel plugin bytes and retain a path-free binding receipt."""
 
@@ -2738,7 +2780,9 @@ def _install_exact_opencode_plugin(
     opencode_dir = repository / ".opencode"
     plugins_dir = opencode_dir / "plugins"
     _require_directory(opencode_dir, label="OpenCode project plugin directory")
-    _freeze_local_plugin_dependency_state(opencode_dir)
+    _freeze_local_plugin_dependency_state(
+        opencode_dir, expected_version=expected_version
+    )
     _require_directory(plugins_dir, label="OpenCode project plugin directory")
     target = repository / _PLUGIN_INSTALLED_RELATIVE
     if target.exists() or target.is_symlink():
@@ -2863,6 +2907,7 @@ def _prepare_scenario_state(
     repository: Path,
     deeplaw_executable: Path,
     node_binary: Path,
+    expected_version: str = HISTORICAL_OPENCODE_VERSION_FIXTURE,
     agent_name: str = "qualification",
 ) -> tuple[dict[str, str], Path, dict[str, Any]]:
     """Give each scenario a distinct OpenCode state tree and MCP wrapper."""
@@ -2901,6 +2946,7 @@ def _prepare_scenario_state(
         repository=repository,
         run_root=run_root,
         deeplaw_executable=deeplaw_executable,
+        expected_version=expected_version,
     )
     environment = dict(base_environment)
     environment["PATH"] = os.pathsep.join(
@@ -2934,9 +2980,12 @@ def _prepare_scenario_state(
         }
     )
     _freeze_local_plugin_dependency_state(
-        Path(environment["XDG_CONFIG_HOME"]) / "opencode"
+        Path(environment["XDG_CONFIG_HOME"]) / "opencode",
+        expected_version=expected_version,
     )
-    _freeze_local_plugin_dependency_state(Path(environment["OPENCODE_CONFIG_DIR"]))
+    _freeze_local_plugin_dependency_state(
+        Path(environment["OPENCODE_CONFIG_DIR"]), expected_version=expected_version
+    )
     return environment, receipt, plugin_receipt
 
 
@@ -3515,6 +3564,7 @@ def _run_one_scenario(
     opencode_binary: Path,
     host_launcher: Path,
     deeplaw_executable: Path,
+    expected_version: str = HISTORICAL_OPENCODE_VERSION_FIXTURE,
     environment: Mapping[str, str],
     run_root: Path,
     forbidden_values: Sequence[str],
@@ -3551,6 +3601,7 @@ def _run_one_scenario(
         repository=repository,
         deeplaw_executable=deeplaw_executable,
         node_binary=opencode_binary,
+        expected_version=expected_version,
         agent_name=agent_name,
     )
     _validate_plugin_receipt(
@@ -4408,6 +4459,7 @@ def _execute_qualification_body(
     opencode_binary: Path,
     host_launcher: Path,
     human_gold_path: Path | None,
+    host_identity_input: Path | None = None,
     root: Path,
     source_revision_id: str | None = None,
     expected_broker_sha256: str | None = None,
@@ -4436,6 +4488,35 @@ def _execute_qualification_body(
     )
     output_dir, binding, installed = orchestrator.prepare_candidate()
     output_dir.mkdir(parents=True)
+    host_identity: Mapping[str, Any] | None = None
+    expected_version = HISTORICAL_OPENCODE_VERSION_FIXTURE
+    if host_identity_input is None:
+        if mode == "qualification":
+            raise QualificationError(
+                "OpenCode formal qualification requires the repository-external Host identity input"
+            )
+    else:
+        try:
+            host_identity = host_preflight_receipt.load_host_identity_input(
+                host_identity_input, repository=repository
+            )
+            expected_version = host_preflight_receipt.host_binary_identity(
+                host_identity, "opencode"
+            )["version"]
+            host_preflight_receipt.inspect_host_binary(
+                opencode_binary,
+                host="opencode",
+                identity=host_identity,
+                repository=repository,
+            )
+        except (
+            host_preflight_receipt.HostIdentityValidationError,
+            OSError,
+            ValueError,
+        ) as exc:
+            raise QualificationError(
+                "OpenCode Host identity input or executable was rejected"
+            ) from exc
     canaries = {name: _sha256(name.encode("utf-8")) for name in _CANARY_NAMES}
     if root.is_symlink() or not root.is_dir():
         raise QualificationError("isolated runtime root is unavailable")
@@ -4460,8 +4541,12 @@ def _execute_qualification_body(
         "mcp-tmp",
     ):
         (root / name).mkdir(parents=True, exist_ok=True)
-    _freeze_local_plugin_dependency_state(root / "xdg-config" / "opencode")
-    _freeze_local_plugin_dependency_state(root / "opencode-config")
+    _freeze_local_plugin_dependency_state(
+        root / "xdg-config" / "opencode", expected_version=expected_version
+    )
+    _freeze_local_plugin_dependency_state(
+        root / "opencode-config", expected_version=expected_version
+    )
     _write_mcp_wrapper(
         root / "deeplaw-closed-mcp",
         deeplaw_executable=deeplaw_executable,
@@ -4475,7 +4560,14 @@ def _execute_qualification_body(
     )
     # This config is never retained as an artifact; it is regenerated in the
     # isolated directory for this invocation only.
-    binary_sha = _validate_binary(opencode_binary)
+    if host_identity is None:
+        # Diagnostic/unit seams may supply a minimal stub; formal
+        # qualification uses the identity-bound branch below.
+        binary_sha = _validate_binary(opencode_binary)
+    else:
+        binary_sha = _validate_binary(
+            opencode_binary, identity=host_identity, repository=repository
+        )
     broker_launcher_sha = _validate_owner_broker_launcher(
         host_launcher,
         host_binary=opencode_binary,
@@ -4501,6 +4593,7 @@ def _execute_qualification_body(
             repository=preflight_project,
             run_root=root,
             deeplaw_executable=deeplaw_executable,
+            expected_version=expected_version,
         )
     )
     preflight = preflight_opencode(
@@ -4512,6 +4605,7 @@ def _execute_qualification_body(
         project_root=preflight_project,
         plugin_receipt=preflight_plugin_receipt,
         expected_broker_sha256=expected_broker_sha256,
+        expected_version=expected_version,
         agent_name=agent_name,
     )
     broker_source = host_preflight_receipt.inspect_broker_source(
@@ -4525,7 +4619,7 @@ def _execute_qualification_body(
     preflight_receipt = host_preflight_receipt.build_receipt(
         host={
             "name": "opencode",
-            "version": OPENCODE_VERSION,
+            "version": expected_version,
             "sha256": host_preflight_receipt.host_binary_sha256(opencode_binary),
         },
         broker_source=broker_source,
@@ -4558,6 +4652,7 @@ def _execute_qualification_body(
             deeplaw_executable=deeplaw_executable,
             environment=environment,
             run_root=run_root,
+            expected_version=expected_version,
             forbidden_values=forbidden_values,
             case=(
                 diagnostic_fixture
@@ -4609,7 +4704,7 @@ def _execute_qualification_body(
         host_attestation={
             "binary_name": "opencode",
             "binary_sha256": binary_sha,
-            "version": OPENCODE_VERSION,
+            "version": expected_version,
             "model": MODEL,
             "reasoning_effort": VARIANT,
             "actual_response_provider_id": "deepseek",
@@ -4720,6 +4815,7 @@ def execute_qualification(
     opencode_binary: Path,
     host_launcher: Path,
     human_gold_path: Path | None,
+    host_identity_input: Path | None = None,
     source_revision_id: str | None = None,
     expected_broker_sha256: str | None = None,
     mode: str = "qualification",
@@ -4735,6 +4831,7 @@ def execute_qualification(
             opencode_binary=opencode_binary,
             host_launcher=host_launcher,
             human_gold_path=human_gold_path,
+            host_identity_input=host_identity_input,
             root=root,
             source_revision_id=source_revision_id,
             expected_broker_sha256=expected_broker_sha256,
@@ -4745,9 +4842,23 @@ def execute_qualification(
         receipt_path = target / host_preflight_receipt.RECEIPT_FILENAME
         if not receipt_path.exists() and target.is_dir() and not target.is_symlink():
             try:
+                expected_version = "unknown"
+                if host_identity_input is not None:
+                    with suppress(
+                        host_preflight_receipt.HostIdentityValidationError,
+                        OSError,
+                        ValueError,
+                    ):
+                        expected_version = host_preflight_receipt.host_binary_identity(
+                            host_preflight_receipt.load_host_identity_input(
+                                host_identity_input,
+                                repository=Path(__file__).resolve().parents[2],
+                            ),
+                            "opencode",
+                        )["version"]
                 failed = host_preflight_receipt.failed_receipt(
                     host_name="opencode",
-                    host_version=OPENCODE_VERSION,
+                    host_version=expected_version,
                     host_binary=Path(opencode_binary),
                     broker_path=Path(host_launcher),
                     repository=Path(__file__).resolve().parents[2],
@@ -4775,6 +4886,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--opencode-binary", type=Path, required=True)
     parser.add_argument("--opencode-launcher", type=Path, required=True)
+    parser.add_argument("--host-identity-input", type=Path)
     parser.add_argument("--expected-broker-sha256")
     parser.add_argument("--human-gold", type=Path)
     parser.add_argument("--source-revision-id")
@@ -4791,6 +4903,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             opencode_binary=args.opencode_binary,
             host_launcher=args.opencode_launcher,
             human_gold_path=args.human_gold,
+            host_identity_input=args.host_identity_input,
             source_revision_id=args.source_revision_id,
             expected_broker_sha256=args.expected_broker_sha256,
             mode=args.mode,

@@ -21,7 +21,7 @@ from tests.test_v013_kernel_qualification_bundle_v1 import (
 
 def _prepare_bundle(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root.mkdir()
-    _make_fixture(root, monkeypatch)
+    external_identity = _make_fixture(root, monkeypatch)
     for path in sorted((root / "typed").glob("host_event_sequence-*.json")):
         value = json.loads(path.read_text(encoding="utf-8"))
         host = "codex" if "codex" in path.name else "opencode"
@@ -33,6 +33,7 @@ def _prepare_bundle(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         root,
         run_ids=RUN_IDS,
         expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external_identity,
     )
     return root
 

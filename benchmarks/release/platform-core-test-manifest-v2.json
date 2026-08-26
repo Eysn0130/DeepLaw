@@ -8266,6 +8266,27 @@
         {
           "junit": {
             "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_external_host_identity_is_owner_only_and_source_bound"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_external_host_identity_is_owner_only_and_source_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_host_binary_mutation_after_hash_fails_closed"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_host_binary_mutation_after_hash_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_host_identity_binary_probe_binds_exact_regular_target"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_host_identity_binary_probe_binds_exact_regular_target"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
             "name": "test_known_failure_categories_are_closed[Codex App Server failed to start-transport_start_failed]"
           },
           "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_known_failure_categories_are_closed[Codex App Server failed to start-transport_start_failed]"
@@ -8318,6 +8339,13 @@
             "name": "test_opencode_broker_validation_has_repository_external_containment"
           },
           "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_opencode_broker_validation_has_repository_external_containment"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_preflight_receipt_v1",
+            "name": "test_opencode_selector_allows_one_symlink_but_rejects_a_symlink_chain"
+          },
+          "node_id": "tests/test_v013_host_preflight_receipt_v1.py::test_opencode_selector_allows_one_symlink_but_rejects_a_symlink_chain"
         },
         {
           "junit": {
@@ -8381,6 +8409,13 @@
             "name": "test_v013_host_task_catalog_rejects_binary_drift"
           },
           "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_catalog_rejects_binary_drift"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v013_host_task_manifest_accepts_current_native_v3_codex_identity"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v013_host_task_manifest_accepts_current_native_v3_codex_identity"
         },
         {
           "junit": {
@@ -8535,6 +8570,13 @@
             "name": "test_exact_10k_report_is_owned_by_candidate_full_run"
           },
           "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_exact_10k_report_is_owned_by_candidate_full_run"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_external_host_identity_is_bound_and_replacement_fails"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_external_host_identity_is_bound_and_replacement_fails"
         },
         {
           "junit": {
@@ -11657,6 +11699,48 @@
             "name": "test_content_and_auth_fields_are_rejected[transcript_path]"
           },
           "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_content_and_auth_fields_are_rejected[transcript_path]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_current_codex_moving_identity_uses_the_public_v3_event_and_receipt_seam"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_current_codex_moving_identity_uses_the_public_v3_event_and_receipt_seam"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_current_identity_marked_as_historical_v2_fails_before_typed_admission"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_current_identity_marked_as_historical_v2_fails_before_typed_admission"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_current_v3_host_replacement_fails_closed"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_current_v3_host_replacement_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_current_v3_identity_replacements_fail_closed[binary_sha256-not-a-sha]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_current_v3_identity_replacements_fail_closed[binary_sha256-not-a-sha]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_current_v3_identity_replacements_fail_closed[binary_version-]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_current_v3_identity_replacements_fail_closed[binary_version-]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_current_v3_identity_replacements_fail_closed[request_model-gpt-5.5]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_current_v3_identity_replacements_fail_closed[request_model-gpt-5.5]"
         },
         {
           "junit": {
@@ -16202,9 +16286,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2293,
+      "count": 2305,
       "selection": "not qualification and not windows_native",
-      "sha256": "c3cab56c804d9f8a10d797a00edd36c3f64aefefb00bb1102eda5dc528aecffa"
+      "sha256": "f3b91a2c499c4a7b1397f6797ec28a6259ca86fbb035d16643a372ed11df2fd4"
     },
     "windows": {
       "additional_cases": [
@@ -16237,13 +16321,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2297,
+      "count": 2309,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "17085bd1e3fde05619e9e9091fc4316aa55210c028bf8aa143303283f2f46a89"
+      "sha256": "d2d19a3aada6b8ab371a76a7efae633b283cc4305fb92244f430c2ef21db0115"
     }
   },
-  "manifest_sha256": "ab6d61c29d10ef023b1ffce9c5f6ab95d01444fa89cce4755094662411232505",
+  "manifest_sha256": "70b48b39f6d398734c1073fbfad8fe9cb8df3b2937852cb98611525b091fc63d",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

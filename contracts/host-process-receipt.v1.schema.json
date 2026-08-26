@@ -15,6 +15,11 @@
     "host_binary",
     "broker_source",
     "isolation",
+    "host_identity_sha256",
+    "host_identity_source_sha256",
+    "selector_source_symlink",
+    "execution_target_regular",
+    "execution_target_single_link",
     "record_sha256"
   ],
   "properties": {
@@ -27,7 +32,7 @@
     "status": {"const": "exited"},
     "exit_code": {"const": 0},
     "host_binary": {
-      "oneOf": [
+      "anyOf": [
         {"$ref": "#/$defs/codexBinary"},
         {"$ref": "#/$defs/opencodeBinary"}
       ]
@@ -58,6 +63,11 @@
         "raw_output_retained": {"const": false}
       }
     },
+    "host_identity_sha256": {"$ref": "#/$defs/sha256"},
+    "host_identity_source_sha256": {"$ref": "#/$defs/sha256"},
+    "selector_source_symlink": {"type": "boolean"},
+    "execution_target_regular": {"const": true},
+    "execution_target_single_link": {"const": true},
     "record_sha256": {"$ref": "#/$defs/sha256"}
   },
   "allOf": [
@@ -78,10 +88,8 @@
       "additionalProperties": false,
       "required": ["version", "sha256"],
       "properties": {
-        "version": {"const": "codex-cli 0.148.0-alpha.15"},
-        "sha256": {
-          "const": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"
-        }
+        "version": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
       }
     },
     "opencodeBinary": {
@@ -89,10 +97,8 @@
       "additionalProperties": false,
       "required": ["version", "sha256"],
       "properties": {
-        "version": {"const": "1.18.16"},
-        "sha256": {
-          "const": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"
-        }
+        "version": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
       }
     }
   }

@@ -62,8 +62,8 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
         ]
     assert gates["codex"]["constraints"] == {
         "host": "codex",
-        "tool_version": "codex-cli 0.148.0-alpha.15",
-        "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
+        "tool_version": None,
+        "binary_sha256": None,
         "source_commit": None,
         "config_selector": None,
         "model_id": "gpt-5.6-luna",
@@ -71,7 +71,9 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
         "reasoning_effort": "max",
         "argv_prefix": ["codex", "app-server", "--stdio"],
     }
-    assert gates["opencode"]["constraints"]["tool_version"] == "1.18.16"
+    assert gates["opencode"]["constraints"]["tool_version"] is None
+    assert gates["opencode"]["constraints"]["binary_sha256"] is None
+    assert gates["opencode"]["constraints"]["source_commit"] is None
 
 
 def test_living_wiki_core_is_not_bundled_with_optional_graph_analytics() -> None:

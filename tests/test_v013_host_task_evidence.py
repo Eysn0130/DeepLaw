@@ -23,6 +23,7 @@ from benchmarks.release.typed_qualification_evidence_v3_host_tasks import (
     TASK_DUTIES,
     TASK_OPERATIONS,
     TASK_WRONG_STATES,
+    _host_identity_projection,
 )
 from deeplaw.native_host import derive_native_host_receipt
 
@@ -82,15 +83,24 @@ def _candidate() -> dict[str, str]:
     }
 
 
-def _host_identity(host: str) -> dict[str, Any]:
+def _host_identity(host: str, *, current: bool = False) -> dict[str, Any]:
     if host == "codex":
+        if current:
+            return {
+                "binary_version": "codex-cli 0.149.0-alpha.4.3",
+                "binary_sha256": "dd304ffe232fa9e782ed3e5358776d270e394c2fb85cab846f989823f0843313",
+                "request_model": "gpt-5.6-luna",
+                "reasoning_effort": "max",
+                "auth_status_command": "codex login status",
+                "auth_material_access": "forbidden",
+            }
         return {
             "binary_version": "codex-cli 0.148.0-alpha.15",
             "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
             "request_model": "gpt-5.6-luna",
             "reasoning": "max",
         }
-    return {
+    value = {
         "version": "1.18.16",
         "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
         "config_selector": "deepseek/deepseek-v4-flash",
@@ -98,15 +108,24 @@ def _host_identity(host: str) -> dict[str, Any]:
         "executable_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
         "package_sha256": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722",
     }
+    if current:
+        value.update(
+            runtime="host_bun_runtime_only",
+            dotenv_policy="owner_only_external_strict_parser",
+            secret_visibility="forbidden",
+        )
+    return value
 
 
-def _event(host: str, event_type: str, index: int) -> dict[str, Any]:
+def _event(host: str, event_type: str, index: int, *, current: bool = False) -> dict[str, Any]:
     session = "3" * 64
     value: dict[str, Any] = {
-        "schema_version": "deeplaw.native-host-event/v2",
+        "schema_version": (
+            "deeplaw.native-host-event/v3" if current else "deeplaw.native-host-event/v2"
+        ),
         "provenance_level": "native_plugin_hook",
         "host": host,
-        "host_identity": _host_identity(host),
+        "host_identity": _host_identity(host, current=current),
         "event_type": event_type,
         "event_sequence": {"index": index},
         "session_sha256": session,
@@ -121,18 +140,27 @@ def _event(host: str, event_type: str, index: int) -> dict[str, Any]:
             "worktree_sha256": "8" * 64,
         },
     }
+    if current:
+        value["execution_identity"] = {
+            "selector_source_symlink": host == "opencode",
+            "execution_target_regular": True,
+            "execution_target_single_link": True,
+        }
     if host == "opencode" and event_type == "fork":
         value["parent_session_sha256"] = session
     return value
 
 
-def _events(host: str) -> list[dict[str, Any]]:
+def _events(host: str, *, current: bool = False) -> list[dict[str, Any]]:
     types = (
         ("SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "SessionEnd")
         if host == "codex"
         else ("session", "chat.message", "fork", "compaction")
     )
-    return [_event(host, event_type, index) for index, event_type in enumerate(types)]
+    return [
+        _event(host, event_type, index, current=current)
+        for index, event_type in enumerate(types)
+    ]
 
 
 def _expected(
@@ -294,10 +322,17 @@ def _task_result(
     }
 
 
-def _manifest(tmp_path: Path, *, host: str, task: str, provider_bytes: int = 100) -> Path:
+def _manifest(
+    tmp_path: Path,
+    *,
+    host: str,
+    task: str,
+    provider_bytes: int = 100,
+    current: bool = False,
+) -> Path:
     run_id = f"v013:{host}:{task}"
     workflow = 13
-    events = _events(host)
+    events = _events(host, current=current)
     receipts = [derive_native_host_receipt(event) for event in events]
     expected = _expected(tmp_path, host=host, task=task, run_id=run_id, workflow=workflow)
     expected_ref = _source(tmp_path, f"{host}/{task}/expected.json", expected)
@@ -321,7 +356,11 @@ def _manifest(tmp_path: Path, *, host: str, task: str, provider_bytes: int = 100
             "receipts": receipts,
         },
     )
-    identity_hash = _sha(_canonical(_host_identity(host)))
+    identity_hash = _sha(
+        _canonical(
+            _host_identity_projection(_host_identity(host, current=current), host=host)
+        )
+    )
     usage = {
         "artifact_kind": "usage_receipt",
         "schema_version": "deeplaw.v013-host-task-evidence/v1",
@@ -441,6 +480,21 @@ def test_v013_host_task_manifest_derives_host_task_metrics(
     assert result["hard_failure_counts"]["required_duty_gap"] == 0
 
 
+def test_v013_host_task_manifest_accepts_current_native_v3_codex_identity(
+    tmp_path: Path,
+) -> None:
+    manifest = _manifest(tmp_path, host="codex", task="continuity", current=True)
+    result = parse_typed_evidence(
+        manifest,
+        root=tmp_path,
+        expected_corpus_sha256=_expected_sha(tmp_path, "codex", "continuity"),
+    )
+    assert result["status"] == "passed"
+    assert result["metrics"]["host_identity_sha256"] == _sha(
+        _canonical(_host_identity("codex", current=True))
+    )
+
+
 def test_v013_host_task_schema_and_frozen_catalog_are_closed() -> None:
     schema = json.loads(
         (
@@ -455,10 +509,10 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed() -> None:
 
 def test_v013_host_task_catalog_rejects_binary_drift(tmp_path: Path) -> None:
     catalog = load_task_cases()
-    catalog["host_constraints"]["opencode"]["binary_sha256"] = "0" * 64
+    catalog["host_constraints"]["opencode"]["binary_sha256"] = "moving"
     selected = tmp_path / "cases.json"
     selected.write_bytes(_canonical(catalog))
-    with pytest.raises(HostTaskQualificationError, match="coordinates"):
+    with pytest.raises(HostTaskQualificationError, match="strict schema validation"):
         load_task_cases(selected)
 
 

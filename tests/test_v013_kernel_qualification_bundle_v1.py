@@ -46,6 +46,30 @@ HOST_BINARY = {
         "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
     ),
 }
+HOST_IDENTITY = {
+    "schema_version": "deeplaw.host-exact-identity/v1",
+    "hosts": {
+        "codex": {
+            "binary_version": HOST_BINARY["codex"][0],
+            "binary_sha256": HOST_BINARY["codex"][1],
+            "request_model": "gpt-5.6-luna",
+            "reasoning_effort": "max",
+            "auth_status_command": "codex login status",
+            "auth_material_access": "forbidden",
+        },
+        "opencode": {
+            "version": HOST_BINARY["opencode"][0],
+            "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+            "config_selector": "deepseek/deepseek-v4-flash",
+            "expected_response_model_id": "deepseek-v4-flash",
+            "executable_sha256": HOST_BINARY["opencode"][1],
+            "package_sha256": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722",
+            "runtime": "host_bun_runtime_only",
+            "dotenv_policy": "owner_only_external_strict_parser",
+            "secret_visibility": "forbidden",
+        },
+    },
+}
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -159,13 +183,46 @@ def _process_receipt(host: str, task_case: str, index: int) -> dict[str, Any]:
             "ambient_auth_forwarded_to_mcp": False,
             "raw_output_retained": False,
         },
+        "host_identity_sha256": bundle.host_identity_sha256(HOST_IDENTITY["hosts"][host]),
+        "host_identity_source_sha256": hashlib.sha256(
+            bundle.canonical_json(HOST_IDENTITY) + b"\n"
+        ).hexdigest(),
+        "selector_source_symlink": host == "opencode",
+        "execution_target_regular": True,
+        "execution_target_single_link": True,
     }
     value["record_sha256"] = bundle.record_sha256(value)
     return value
 
 
-def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     _copy_bindings(root)
+    _write_json(root / bundle.HOST_IDENTITY_RELATIVE_PATH, HOST_IDENTITY)
+    _write_json(
+        root / bundle.HOST_EXECUTION_IDENTITY_RELATIVE_PATH,
+        {
+            "schema_version": "deeplaw.host-execution-identity/v1",
+            "hosts": {
+                host: {
+                    "selector_source_symlink": host == "opencode",
+                    "execution_target_regular": True,
+                    "execution_target_single_link": True,
+                    "host_identity_sha256": bundle.host_identity_sha256(
+                        HOST_IDENTITY["hosts"][host]
+                    ),
+                    "host_identity_source_sha256": hashlib.sha256(
+                        bundle.canonical_json(HOST_IDENTITY) + b"\n"
+                    ).hexdigest(),
+                }
+                for host in ("codex", "opencode")
+            },
+        },
+    )
+    external_identity = root.parent / "external-host-exact-identity.json"
+    _write_json(external_identity, HOST_IDENTITY)
+    if external_identity.is_symlink():
+        raise AssertionError("fixture external Host identity must not be a symlink")
+    external_identity.chmod(0o600)
     corpus_hashes = {
         role: hashlib.sha256(role.encode()).hexdigest() for role in bundle.CORPUS_ROLES
     }
@@ -225,6 +282,7 @@ def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
                     index % 3
                 ],
                 run_id=f"fixture-{host}-{index}",
+                host_identity_sha256=bundle.host_identity_sha256(HOST_IDENTITY["hosts"][host]),
             )
         return {
             "kind": value["kind"],
@@ -234,6 +292,7 @@ def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         }
 
     monkeypatch.setattr(bundle, "parse_typed_evidence", fake_parse)
+    return external_identity
 
 
 def test_build_and_validate_exact_candidate_bundle(
@@ -241,9 +300,14 @@ def test_build_and_validate_exact_candidate_bundle(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
+    external = _make_fixture(root, monkeypatch)
 
-    built = bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+    built = bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
     assert built["candidate_binding"] == EXPECTED_CANDIDATE
     assert built["record_sha256"] == bundle.record_sha256(built)
 
@@ -260,6 +324,30 @@ def test_build_and_validate_exact_candidate_bundle(
     assert validated["corpus_roles"] == sorted(bundle.CORPUS_ROLES)
 
 
+def test_external_host_identity_is_bound_and_replacement_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    _make_fixture(root, monkeypatch)
+    external = tmp_path / "owner-host-identity.json"
+    _write_json(external, HOST_IDENTITY)
+    external.chmod(0o600)
+
+    bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
+    replaced = json.loads(external.read_text(encoding="utf-8"))
+    replaced["hosts"]["codex"]["binary_version"] = "codex-cli moving"
+    _write_json(external, replaced)
+    external.chmod(0o600)
+    with pytest.raises(bundle.KernelQualificationBundleError):
+        bundle.validate_bundle(root, host_identity_input=external)
+
+
 def test_exact_10k_report_is_owned_by_candidate_full_run() -> None:
     assert "scale_report" in bundle.CANDIDATE_WORKFLOW_KINDS
 
@@ -269,16 +357,26 @@ def test_manifest_record_digest_and_file_hash_are_fail_closed(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
-    bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+    external = _make_fixture(root, monkeypatch)
+    bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
 
     typed_file = root / "typed" / "scale_report.json"
     typed_file.write_bytes(typed_file.read_bytes() + b"\n")
     with pytest.raises(bundle.KernelQualificationBundleError):
         bundle.validate_bundle(root)
 
-    _make_fixture(root, monkeypatch)
-    bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+    external = _make_fixture(root, monkeypatch)
+    bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
     manifest_path = root / bundle.MANIFEST_FILENAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["run_ids"]["qualification_run_id"] += 1
@@ -297,8 +395,13 @@ def test_bundle_rejects_symlink_and_competitive_field(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
-    bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+    external = _make_fixture(root, monkeypatch)
+    bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
 
     try:
         (root / "receipts" / "codex" / "extra-link.json").symlink_to(
@@ -323,8 +426,13 @@ def test_manifest_candidate_binding_and_secret_filename_are_closed(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
-    bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+    external = _make_fixture(root, monkeypatch)
+    bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
 
     manifest_path = root / bundle.MANIFEST_FILENAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -340,8 +448,13 @@ def test_process_receipt_is_schema_bound_and_cannot_retain_raw_output(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
-    bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+    external = _make_fixture(root, monkeypatch)
+    bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
 
     process_path = root / "receipts" / "codex" / "process-0.json"
     process = json.loads(process_path.read_text(encoding="utf-8"))
@@ -357,7 +470,7 @@ def test_failed_preflight_cannot_enter_a_kernel_qualification_bundle(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
+    external = _make_fixture(root, monkeypatch)
     preflight_path = root / "receipts" / "opencode" / "preflight-3.json"
     preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
     preflight.update(
@@ -368,7 +481,12 @@ def test_failed_preflight_cannot_enter_a_kernel_qualification_bundle(
     _write_json(preflight_path, preflight)
 
     with pytest.raises(bundle.KernelQualificationBundleError):
-        bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
 
 
 def test_broker_receipts_bind_the_exact_retained_source(
@@ -376,12 +494,17 @@ def test_broker_receipts_bind_the_exact_retained_source(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
+    external = _make_fixture(root, monkeypatch)
     broker_path = root / "retained-broker-source" / "codex.launcher-source"
     broker_path.write_bytes(broker_path.read_bytes() + b"# changed\n")
 
     with pytest.raises(bundle.KernelQualificationBundleError):
-        bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
 
 
 def test_retained_broker_source_rejects_a_credential_literal(
@@ -389,14 +512,19 @@ def test_retained_broker_source_rejects_a_credential_literal(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
+    external = _make_fixture(root, monkeypatch)
     broker_path = root / "retained-broker-source" / "opencode.launcher-source"
     broker_path.write_bytes(
         b"#!/bin/sh\nDEEPSEEK_API_KEY=abcdefghijklmnopqrstuvwxyz123456\n"
     )
 
     with pytest.raises(bundle.KernelQualificationBundleError):
-        bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
 
 
 def test_process_receipt_run_and_record_digest_are_bound(
@@ -404,7 +532,7 @@ def test_process_receipt_run_and_record_digest_are_bound(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
+    external = _make_fixture(root, monkeypatch)
 
     process_path = root / "receipts" / "codex" / "process-0.json"
     process = json.loads(process_path.read_text(encoding="utf-8"))
@@ -412,7 +540,12 @@ def test_process_receipt_run_and_record_digest_are_bound(
     process["record_sha256"] = bundle.record_sha256(process)
     _write_json(process_path, process)
     with pytest.raises(bundle.KernelQualificationBundleError):
-        bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
 
     _make_fixture(root, monkeypatch)
     process_path = root / "receipts" / "codex" / "process-0.json"
@@ -428,9 +561,14 @@ def test_bundle_rejects_a_file_above_the_closed_size_bound(
 ) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
-    _make_fixture(root, monkeypatch)
+    external = _make_fixture(root, monkeypatch)
     oversized = root / "candidate-inventory.bin"
     with oversized.open("wb") as stream:
         stream.truncate(bundle.MAX_FILE_BYTES + 1)
     with pytest.raises(bundle.KernelQualificationBundleError):
-        bundle.build_bundle(root, run_ids=RUN_IDS, expected_candidate=EXPECTED_CANDIDATE)
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )

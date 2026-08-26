@@ -118,30 +118,26 @@ asset is deleted.
 
 ## Host pins
 
-The following executable coordinates were re-observed locally at `2026-08-20T12:38:48Z`. The
-observation is an exact input check, not a real-Host task result or qualification receipt.
+The current v3 qualification run does not freeze a Desktop-specific Codex build in a
+source-controlled manifest. Instead, the owner supplies an external, owner-only regular file
+`deeplaw.host-exact-identity/v1` for each run. Its bounded version and 64-hex SHA fields are
+validated for shape; the fixed model, effort, selector, runtime, and authentication-prohibition
+fields remain closed. The exact input bytes are retained as
+`candidate-inventory/host-exact-identity.json` and their source SHA is bound to every process
+receipt and the candidate bundle.
 
-Codex is pinned to `codex-cli 0.148.0-alpha.15`, binary SHA-256
-`7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7`, request model
-`gpt-5.6-luna`, and `reasoning=max`. An owner-controlled credential broker uses the locally
-authenticated Codex Host without giving `HOME`, `CODEX_HOME`, auth files, or credential values to
-the DeepLaw runner, scorer, or evidence assembler. The returned response model identifier is
-recorded separately from the request pin.
-
-OpenCode is pinned to `1.18.16`, source commit
-`a3647eb025c7615159d417dcc49fc39fdaeba65b`, executable SHA-256
-`a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f`, package SHA-256
-`d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722`, selector
-`deepseek/deepseek-v4-flash`, and expected response model `deepseek-v4-flash`. It uses the Host
-provided Bun runtime and an owner-only external dotenv parsed without shell evaluation. Only the
-OpenCode Host process receives the required provider variable. The context-bridge and compaction
-hook are experimental, exact-version-only integration surfaces, not cross-version stable APIs.
+Codex must be the exact regular, non-symlink, single-link executable described by that input. An
+OpenCode selector symlink may preserve its source fact, but execution is bound only to its resolved
+regular, single-link target. The owner-controlled credential brokers use the locally authenticated
+Hosts without giving `HOME`, `CODEX_HOME`, auth files, or credential values to the DeepLaw runner,
+scorer, or evidence assembler. The returned response model identifier is recorded separately from
+the request identity.
 
 The request-model values identify requests, not immutable model weights. Formal evidence records
-the observed binary/package hashes, execution date, and returned model identifier.
-
-These pins identify future evidence inputs; they are not Host qualification results. Until the
-machine evidence is actually executed and revalidated, all gates remain `not_executed`.
+the observed binary/package hashes, execution date, returned model identifier, per-Host identity
+SHA, and exact external-input SHA. These inputs identify future evidence; they are not Host
+qualification results. Until machine evidence is actually executed and revalidated, all gates
+remain `not_executed`.
 
 ## Disposition
 

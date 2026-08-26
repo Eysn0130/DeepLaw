@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +55,9 @@ from benchmarks.hosts.pass13_orchestrator import (
 
 MODEL = "gpt-5.6-luna"
 REASONING_EFFORT = "max"
-CODEX_VERSION = "codex-cli 0.148.0-alpha.15"
+# Compatibility-only fixture value used by unit seams that do not execute a
+# formal Host.  Formal qualification always supplies the external identity.
+HISTORICAL_CODEX_VERSION_FIXTURE = "codex-cli 0.148.0-alpha.15"
 RUN_COUNT = 3
 TIMEOUT_SECONDS = 300.0
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -2466,7 +2469,7 @@ def _run_scenario(
     return run
 
 
-def _validate_codex_binary(binary: Path) -> Path:
+def _validate_codex_binary(binary: Path, *, repository: Path | None = None) -> Path:
     """Validate and return the exact static Codex binary supplied by the owner.
 
     The binary is used only for static version/hash attestation.  All login,
@@ -2480,13 +2483,25 @@ def _validate_codex_binary(binary: Path) -> Path:
         details = path.lstat()
     except OSError as exc:
         raise QualificationFailure("Codex binary is unavailable") from exc
-    if not stat.S_ISREG(details.st_mode) or path.is_symlink() or not os.access(path, os.X_OK):
+    if (
+        not stat.S_ISREG(details.st_mode)
+        or path.is_symlink()
+        or details.st_nlink != 1
+        or not os.access(path, os.X_OK)
+    ):
         raise QualificationFailure("Codex binary must be a regular executable")
     try:
-        path.resolve(strict=True)
+        resolved = path.resolve(strict=True)
+        repository_path = (repository or _repository()).resolve(strict=True)
     except (OSError, RuntimeError, ValueError) as exc:
         raise QualificationFailure("Codex binary is unavailable") from exc
-    return path
+    try:
+        resolved.relative_to(repository_path)
+    except ValueError:
+        pass
+    else:
+        raise QualificationFailure("Codex binary must be repository-external")
+    return resolved
 
 
 def _validate_owner_broker_launcher(
@@ -2628,6 +2643,7 @@ def _codex_authentication_receipt(
 def _validate_codex_version(
     completed: Any,
     *,
+    expected_version: str = HISTORICAL_CODEX_VERSION_FIXTURE,
     canaries: Mapping[str, str] = (),
 ) -> str:
     """Accept only the exact pinned Codex CLI version on stdout."""
@@ -2648,9 +2664,9 @@ def _validate_codex_version(
         stderr = b""
     version_bytes = stdout + stderr
     expected_stdout = {
-        CODEX_VERSION.encode("utf-8"),
-        (CODEX_VERSION + "\n").encode("utf-8"),
-        (CODEX_VERSION + "\r\n").encode("utf-8"),
+        expected_version.encode("utf-8"),
+        (expected_version + "\n").encode("utf-8"),
+        (expected_version + "\r\n").encode("utf-8"),
     }
     canary_values = tuple(
         value
@@ -2664,7 +2680,7 @@ def _validate_codex_version(
         or any(value.encode("utf-8") in version_bytes for value in canary_values)
     ):
         raise QualificationFailure("Codex version preflight failed")
-    return CODEX_VERSION
+    return expected_version
 
 
 def _configured_mcp_server_names(value: Any) -> list[str]:
@@ -3092,15 +3108,26 @@ def _retain_codex_failed_preflight(
     codex_binary: Path,
     codex_launcher: Path,
     expected_broker_sha256: str | None,
+    host_identity: Mapping[str, Any] | None,
     error: BaseException,
 ) -> None:
     target = Path(output_dir).resolve(strict=False)
     receipt_path = target / host_preflight_receipt.RECEIPT_FILENAME
     if receipt_path.exists() or not target.is_dir() or target.is_symlink():
         return
+    expected_version = "unknown"
+    if isinstance(host_identity, Mapping):
+        with suppress(
+            KeyError,
+            TypeError,
+            host_preflight_receipt.HostIdentityValidationError,
+        ):
+            expected_version = host_preflight_receipt.host_binary_identity(
+                host_identity, "codex"
+            )["version"]
     failed = host_preflight_receipt.failed_receipt(
         host_name="codex",
-        host_version=CODEX_VERSION,
+        host_version=expected_version,
         host_binary=Path(codex_binary),
         broker_path=Path(codex_launcher),
         repository=_repository(),
@@ -3119,6 +3146,7 @@ def _execute_codex(
     human_gold_path: Path | None,
     codex_binary: Path,
     codex_launcher: Path,
+    host_identity_input: Path | None = None,
     expected_broker_sha256: str | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
@@ -3153,7 +3181,48 @@ def _execute_codex(
     }
 
     selected_output.mkdir(parents=True)
-    codex_binary = _validate_codex_binary(codex_binary)
+    host_identity: Mapping[str, Any] | None = None
+    expected_version = HISTORICAL_CODEX_VERSION_FIXTURE
+    if host_identity_input is None:
+        if mode == "qualification":
+            raise QualificationFailure(
+                "Codex formal qualification requires the repository-external Host identity input"
+            )
+    else:
+        try:
+            host_identity = host_preflight_receipt.load_host_identity_input(
+                host_identity_input, repository=repository
+            )
+            expected_version = host_preflight_receipt.host_binary_identity(
+                host_identity, "codex"
+            )["version"]
+        except (host_preflight_receipt.HostIdentityValidationError, OSError, ValueError) as exc:
+            raise QualificationFailure("Codex Host identity input was rejected") from exc
+    if host_identity is None:
+        # Keep the diagnostic/unit seam compatible with its intentionally
+        # lightweight binary stub.  Formal qualification always takes the
+        # identity-bound branch below.
+        codex_binary = _validate_codex_binary(codex_binary)
+    else:
+        codex_binary = _validate_codex_binary(codex_binary, repository=repository)
+    if host_identity is not None:
+        try:
+            execution_probe = host_preflight_receipt.inspect_host_binary(
+                codex_binary,
+                host="codex",
+                identity=host_identity,
+                repository=repository,
+            )
+        except (
+            host_preflight_receipt.HostIdentityValidationError,
+            OSError,
+            ValueError,
+        ) as exc:
+            raise QualificationFailure(
+                "Codex executable did not match the frozen Host identity"
+            ) from exc
+        if execution_probe.get("source_symlink") is not False:
+            raise QualificationFailure("Codex executable selector must not be a symlink")
     codex_launcher_sha256 = _validate_owner_broker_launcher(
         codex_launcher,
         host_binary=codex_binary,
@@ -3208,6 +3277,7 @@ def _execute_codex(
             codex_binary=codex_binary,
             codex_launcher=codex_launcher,
             expected_broker_sha256=expected_broker_sha256,
+            host_identity=host_identity,
             error=error,
         ),
     ) as temporary:
@@ -3240,7 +3310,11 @@ def _execute_codex(
             timeout=30,
             env=host_environment,
         )
-        codex_version = _validate_codex_version(version_process, canaries=canaries)
+        codex_version = _validate_codex_version(
+            version_process,
+            expected_version=expected_version,
+            canaries=canaries,
+        )
         authentication_receipt = _codex_authentication_receipt(
             codex_launcher,
             host_environment,
@@ -3628,7 +3702,7 @@ def _execute_codex(
             "python_version": platform.python_version(),
             "isolation": host_isolation,
         },
-        host_attestation=host_attestation,
+            host_attestation=host_attestation,
         tool_schema=tool_schema,
         runs=runs,
         lifecycle={
@@ -3703,6 +3777,7 @@ def execute(
     human_gold_path: Path | None,
     codex_binary: Path,
     codex_launcher: Path,
+    host_identity_input: Path | None = None,
     expected_broker_sha256: str | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
@@ -3717,6 +3792,7 @@ def execute(
             human_gold_path=human_gold_path,
             codex_binary=codex_binary,
             codex_launcher=codex_launcher,
+            host_identity_input=host_identity_input,
             expected_broker_sha256=expected_broker_sha256,
             mode=mode,
         )
@@ -3727,6 +3803,7 @@ def execute(
                 codex_binary=Path(codex_binary),
                 codex_launcher=Path(codex_launcher),
                 expected_broker_sha256=expected_broker_sha256,
+                host_identity=None,
                 error=original,
             )
         except BaseException as receipt_error:
@@ -3747,6 +3824,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--human-gold")
     parser.add_argument("--codex-binary", required=True)
     parser.add_argument("--codex-launcher", required=True)
+    parser.add_argument("--host-identity-input")
     parser.add_argument("--expected-broker-sha256")
     return parser
 
@@ -3761,6 +3839,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         human_gold_path=Path(args.human_gold) if args.human_gold else None,
         codex_binary=Path(args.codex_binary),
         codex_launcher=Path(args.codex_launcher),
+        host_identity_input=Path(args.host_identity_input) if args.host_identity_input else None,
         expected_broker_sha256=args.expected_broker_sha256,
         mode=args.mode,
     )

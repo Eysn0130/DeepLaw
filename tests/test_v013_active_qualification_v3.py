@@ -188,17 +188,15 @@ def test_protocol_v3_source_scale_library_and_host_contracts() -> None:
         row = next(row for row in protocol["gates"] if row["gate_id"] == gate_id)
         assert row["required_task_cases"] == HOST_TASKS
     assert protocol["host_constraints"]["codex"] == {
-        "binary_version": "codex-cli 0.148.0-alpha.15",
-        "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
+        "binary_version": None,
+        "binary_sha256": None,
         "request_model": "gpt-5.6-luna",
         "reasoning_effort": "max",
         "auth_status_command": "codex login status",
         "auth_material_access": "forbidden",
     }
-    assert protocol["host_constraints"]["opencode"]["version"] == "1.18.16"
-    assert protocol["host_constraints"]["opencode"]["source_commit"] == (
-        "a3647eb025c7615159d417dcc49fc39fdaeba65b"
-    )
+    assert protocol["host_constraints"]["opencode"]["version"] is None
+    assert protocol["host_constraints"]["opencode"]["source_commit"] is None
 
 
 def test_active_v3_pending_template_is_separate_and_release_closed() -> None:

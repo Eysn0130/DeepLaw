@@ -250,8 +250,8 @@ def test_host_pins_and_cross_host_task_matrix_are_frozen() -> None:
         ]
     assert gates["codex"]["constraints"] == {
         "host": "codex",
-        "tool_version": "codex-cli 0.148.0-alpha.15",
-        "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
+        "tool_version": None,
+        "binary_sha256": None,
         "source_commit": None,
         "config_selector": None,
         "model_id": "gpt-5.6-luna",
@@ -261,9 +261,9 @@ def test_host_pins_and_cross_host_task_matrix_are_frozen() -> None:
     }
     assert gates["opencode"]["constraints"] == {
         "host": "opencode",
-        "tool_version": "1.18.16",
-        "binary_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
-        "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+        "tool_version": None,
+        "binary_sha256": None,
+        "source_commit": None,
         "config_selector": "deepseek/deepseek-v4-flash",
         "model_id": "deepseek-v4-flash",
         "expected_response_model_id": "deepseek-v4-flash",

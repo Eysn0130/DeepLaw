@@ -26,6 +26,13 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.hosts.host_preflight_receipt import (
+    HostIdentityValidationError,
+    host_binary_identity,
+    host_identity_sha256,
+    load_host_identity_bytes,
+    load_host_identity_input_with_bytes,
+)
 from benchmarks.release.typed_qualification_evidence import (
     SCHEMA_V3_VERSION as TYPED_SCHEMA_VERSION,
 )
@@ -41,6 +48,8 @@ MANIFEST_FILENAME = BUNDLE_MANIFEST_NAME
 ACTIVE_RELATIVE_PATH = "benchmarks/v013/active-qualification-v3.json"
 CLASSIFICATION_RELATIVE_PATH = "benchmarks/release/v013-gate-classification-v9.json"
 PROTOCOL_RELATIVE_PATH = "benchmarks/v013/qualification-protocol-v3.json"
+HOST_IDENTITY_RELATIVE_PATH = "candidate-inventory/host-exact-identity.json"
+HOST_EXECUTION_IDENTITY_RELATIVE_PATH = "candidate-inventory/host-execution-identity.json"
 ACTIVE_SCHEMA_FILENAME = "v013-active-qualification.v3.schema.json"
 CLASSIFICATION_SCHEMA_FILENAME = "v013-release-gate-classification.v9.schema.json"
 PROTOCOL_SCHEMA_FILENAME = "v013-qualification-protocol.v3.schema.json"
@@ -80,6 +89,7 @@ CANDIDATE_WORKFLOW_KINDS = frozenset(
 )
 HOST_NAMES = frozenset({"codex", "opencode"})
 HOST_PROCESS_SCHEMA_VERSION = "deeplaw.host-process-receipt/v1"
+HOST_IDENTITY_SCHEMA_VERSION = "deeplaw.host-exact-identity/v1"
 MAX_FILE_BYTES = 64 * 1024 * 1024
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
 REQUIRED_RUN_ID_FIELDS = (
@@ -454,6 +464,8 @@ def _classify_file(
 ) -> tuple[str, str | None, Mapping[str, Any] | None]:
     if relative in binding_paths:
         return "raw_source", None, None
+    if relative == HOST_IDENTITY_RELATIVE_PATH:
+        return "candidate_inventory", None, None
     value = _json_at(relative, {relative: (Path(relative), raw)})
     if value is not None and value.get("schema_version") == TYPED_SCHEMA_VERSION:
         kind = value.get("kind")
@@ -684,6 +696,7 @@ def _validate_preflight(
     value: Mapping[str, Any],
     *,
     raw: bytes,
+    host_identity: Mapping[str, Any],
 ) -> dict[str, str]:
     if value.get("schema_version") != "deeplaw.host-preflight-receipt/v1":
         _fail("Host preflight receipt schema version differs")
@@ -692,25 +705,15 @@ def _validate_preflight(
     host = _host_from_value(value, relative="")
     if host is None:
         _fail("Host preflight receipt lacks a closed Host identity")
-    expected_hosts = {
-        "codex": (
-            "codex-cli 0.148.0-alpha.15",
-            "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
-        ),
-        "opencode": (
-            "1.18.16",
-            "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
-        ),
-    }
-    expected_version, expected_binary = expected_hosts[host]
+    expected_binary = host_binary_identity(host_identity, host)
     host_value = _mapping(value["host"], label="Host preflight identity")
     broker = _mapping(value["broker_source"], label="Host preflight broker source")
     if (
         value.get("status") != "passed"
         or value.get("stage") != "complete"
         or value.get("reason_code") != "preflight_passed"
-        or host_value.get("version") != expected_version
-        or host_value.get("sha256") != expected_binary
+        or host_value.get("version") != expected_binary["version"]
+        or host_value.get("sha256") != expected_binary["sha256"]
         or broker.get("repository_external") is not True
         or broker.get("owner_only_mode") is not True
         or not isinstance(broker.get("bytes"), int)
@@ -725,12 +728,20 @@ def _validate_preflight(
         _fail("Host preflight receipt did not pass exact closed admission")
     if not raw:
         _fail("Host preflight receipt is empty")
-    return {"host": host, "broker_sha256": str(broker["sha256"])}
+    return {
+        "host": host,
+        "broker_sha256": str(broker["sha256"]),
+        "host_identity_sha256": host_identity_sha256(host_identity["hosts"][host]),
+        "host_identity_source_sha256": str(host_identity["source_sha256"]),
+    }
 
 
 def _validate_process_receipt(
-    value: Mapping[str, Any] | None, *, relative: str
-) -> dict[str, str]:
+    value: Mapping[str, Any] | None,
+    *,
+    relative: str,
+    host_identity: Mapping[str, Any],
+) -> dict[str, Any]:
     if value is None or value.get("schema_version") != HOST_PROCESS_SCHEMA_VERSION:
         _fail("Host process receipt must use the sanitized v1 schema")
     _validate_schema(
@@ -746,13 +757,73 @@ def _validate_process_receipt(
     path_match = HOST_TOKEN_RE.search(relative.casefold())
     if path_match is not None and path_match.group(1) != host:
         _fail("Host process receipt path and Host identity differ")
+    expected_binary = host_binary_identity(host_identity, host)
+    host_binary = _mapping(value["host_binary"], label="Host process binary")
+    if (
+        host_binary.get("version") != expected_binary["version"]
+        or host_binary.get("sha256") != expected_binary["sha256"]
+        or value.get("host_identity_sha256")
+        != host_identity_sha256(host_identity["hosts"][host])
+        or value.get("host_identity_source_sha256") != host_identity["source_sha256"]
+        or value.get("execution_target_regular") is not True
+        or value.get("execution_target_single_link") is not True
+        or (
+            host == "codex" and value.get("selector_source_symlink") is not False
+        )
+    ):
+        _fail("Host process receipt does not bind the frozen Host identity")
     _reject_competitive_fields(value)
     return {
         "host": host,
         "task_case": str(value["task_case"]),
         "run_id": str(value["run_id"]),
         "broker_sha256": str(value["broker_source"]["sha256"]),
+        "host_identity_sha256": str(value["host_identity_sha256"]),
+        "host_identity_source_sha256": str(value["host_identity_source_sha256"]),
+        "selector_source_symlink": bool(value["selector_source_symlink"]),
+        "execution_target_regular": True,
+        "execution_target_single_link": True,
     }
+
+
+def _validate_execution_identity(
+    value: Mapping[str, Any], *, host_identity: Mapping[str, Any]
+) -> dict[str, dict[str, Any]]:
+    """Validate the path-free selector and resolved-target topology observation."""
+
+    if set(value) != {"schema_version", "hosts"} or value.get(
+        "schema_version"
+    ) != "deeplaw.host-execution-identity/v1":
+        _fail("Host execution identity artifact is not the closed current shape")
+    hosts = value.get("hosts")
+    if not isinstance(hosts, Mapping) or set(hosts) != HOST_NAMES:
+        _fail("Host execution identity artifact must contain both Hosts")
+    expected = {
+        host: host_identity_sha256(host_identity["hosts"][host]) for host in HOST_NAMES
+    }
+    expected_source = str(host_identity["source_sha256"])
+    result: dict[str, dict[str, Any]] = {}
+    for host in sorted(HOST_NAMES):
+        item = hosts.get(host)
+        if not isinstance(item, Mapping) or set(item) != {
+            "selector_source_symlink",
+            "execution_target_regular",
+            "execution_target_single_link",
+            "host_identity_sha256",
+            "host_identity_source_sha256",
+        }:
+            _fail("Host execution identity fields are not closed")
+        if (
+            not isinstance(item["selector_source_symlink"], bool)
+            or item["execution_target_regular"] is not True
+            or item["execution_target_single_link"] is not True
+            or item["host_identity_sha256"] != expected[host]
+            or item["host_identity_source_sha256"] != expected_source
+            or (host == "codex" and item["selector_source_symlink"] is not False)
+        ):
+            _fail("Host execution identity does not bind the frozen topology")
+        result[host] = dict(item)
+    return result
 
 
 def _validate_broker_source(relative: str, raw: bytes) -> dict[str, str]:
@@ -770,6 +841,41 @@ def _validate_broker_source(relative: str, raw: bytes) -> dict[str, str]:
     return {"host": match.group("host"), "sha256": _sha256(raw)}
 
 
+def _load_host_identity_binding(
+    root: Path,
+    files: Mapping[str, tuple[Path, bytes]],
+    *,
+    external_path: Path | str | None = None,
+    require_external: bool = False,
+) -> dict[str, Any]:
+    """Load the retained identity and, when supplied, compare exact external bytes."""
+
+    selected = files.get(HOST_IDENTITY_RELATIVE_PATH)
+    if selected is None:
+        _fail("bundle must retain the owner-controlled Host identity input")
+    raw = selected[1]
+    try:
+        retained = load_host_identity_bytes(raw)
+    except (HostIdentityValidationError, OSError, ValueError) as error:
+        raise KernelQualificationBundleError(
+            "retained Host identity input was rejected"
+        ) from error
+    if require_external and external_path is None:
+        _fail("bundle build requires the repository-external Host identity input")
+    if external_path is not None:
+        try:
+            external, external_raw = load_host_identity_input_with_bytes(
+                external_path, repository=root
+            )
+        except (HostIdentityValidationError, OSError, ValueError) as error:
+            raise KernelQualificationBundleError(
+                "repository-external Host identity input was rejected"
+            ) from error
+        if external_raw != raw or external != retained:
+            _fail("retained Host identity differs from the repository-external input")
+    return retained
+
+
 def _validate_inventory(
     root: Path,
     files: Mapping[str, tuple[Path, bytes]],
@@ -778,12 +884,14 @@ def _validate_inventory(
     manifest: Mapping[str, Any],
     candidate: Mapping[str, str],
     run_ids: Mapping[str, int],
+    host_identity: Mapping[str, Any],
 ) -> dict[str, Any]:
     typed_paths: dict[str, list[str]] = defaultdict(list)
     typed_values: dict[str, Mapping[str, Any]] = {}
     preflight_receipts: list[dict[str, str]] = []
     process_receipts: list[dict[str, str]] = []
     process_tasks: dict[str, list[str]] = defaultdict(list)
+    execution_identity: dict[str, dict[str, Any]] | None = None
     broker_sources: list[dict[str, str]] = []
     broker_source_paths: set[str] = set()
     referenced_source_paths: set[str] = set()
@@ -810,12 +918,16 @@ def _validate_inventory(
         elif artifact_kind == "host_preflight_receipt":
             if evidence_kind is not None or parsed is None:
                 _fail("Host preflight receipt declaration is invalid")
-            preflight_receipts.append(_validate_preflight(parsed, raw=raw))
+            preflight_receipts.append(
+                _validate_preflight(parsed, raw=raw, host_identity=host_identity)
+            )
             receipt_paths.add(relative)
         elif artifact_kind == "host_process_receipt":
             if evidence_kind is not None or parsed is None:
                 _fail("Host process receipt cannot be typed evidence")
-            process_receipt = _validate_process_receipt(parsed, relative=relative)
+            process_receipt = _validate_process_receipt(
+                parsed, relative=relative, host_identity=host_identity
+            )
             process_receipts.append(process_receipt)
             process_tasks[process_receipt["host"]].append(process_receipt["task_case"])
             receipt_paths.add(relative)
@@ -827,6 +939,12 @@ def _validate_inventory(
         elif artifact_kind in {"raw_source", "candidate_inventory"}:
             if evidence_kind is not None:
                 _fail("raw bundle artifact cannot declare a typed evidence kind")
+            if relative == HOST_EXECUTION_IDENTITY_RELATIVE_PATH:
+                if parsed is None:
+                    _fail("Host execution identity artifact must be strict JSON")
+                execution_identity = _validate_execution_identity(
+                    parsed, host_identity=host_identity
+                )
         else:
             _fail("bundle contains an unsupported artifact kind")
     if {kind: len(paths) for kind, paths in typed_paths.items()} != TYPED_COUNTS:
@@ -849,6 +967,8 @@ def _validate_inventory(
     process_hosts = [item["host"] for item in process_receipts]
     if len(preflight_receipts) != 6 or len(process_receipts) != 6:
         _fail("bundle requires exactly six Host preflight and six process receipts")
+    if execution_identity is None:
+        _fail("bundle requires the sanitized Host execution identity observation")
     for label, hosts in (("preflight", preflight_hosts), ("process", process_hosts)):
         if set(hosts) != HOST_NAMES or any(hosts.count(host) != 3 for host in HOST_NAMES):
             _fail(f"Host {label} receipts must contain Codex x3 and OpenCode x3")
@@ -861,6 +981,21 @@ def _validate_inventory(
     for receipt in (*preflight_receipts, *process_receipts):
         if receipt["broker_sha256"] != broker_by_host[receipt["host"]]:
             _fail("Host receipt broker hash differs from retained broker source")
+    for receipt in process_receipts:
+        observed = execution_identity[receipt["host"]]
+        if any(
+            receipt[field] != observed[field]
+            for field in (
+                "selector_source_symlink",
+                "execution_target_regular",
+                "execution_target_single_link",
+            )
+        ):
+            _fail("Host process receipt topology differs from the sanitized observation")
+    expected_identity_source = str(host_identity["source_sha256"])
+    for receipt in (*preflight_receipts, *process_receipts):
+        if receipt["host_identity_source_sha256"] != expected_identity_source:
+            _fail("Host receipt source identity differs from retained Host input")
     corpora = manifest["corpora"]
     corpus_by_role: dict[str, Mapping[str, Any]] = {}
     for corpus in corpora:
@@ -927,6 +1062,17 @@ def _validate_inventory(
     host_names = [item.get("metrics", {}).get("host") for item in host_derived]
     if set(host_names) != HOST_NAMES or any(host_names.count(host) != 3 for host in HOST_NAMES):
         _fail("typed Host evidence must contain Codex x3 and OpenCode x3")
+    expected_identity_digests = {
+        host: host_identity_sha256(host_identity["hosts"][host]) for host in HOST_NAMES
+    }
+    for item in host_derived:
+        metrics = _mapping(item.get("metrics"), label="typed Host metrics")
+        host = metrics.get("host")
+        if (
+            host not in HOST_NAMES
+            or metrics.get("host_identity_sha256") != expected_identity_digests[host]
+        ):
+            _fail("typed Host evidence does not bind the frozen Host identity")
     typed_host_runs = {
         (
             str(item.get("metrics", {}).get("host")),
@@ -1059,6 +1205,7 @@ def validate_bundle(
     qualification_protocol: Path | str | None = None,
     expected_candidate: Mapping[str, Any] | None = None,
     expected_run_ids: Mapping[str, Any] | None = None,
+    host_identity_input: Path | str | None = None,
 ) -> dict[str, Any]:
     """Re-read and validate one exact-candidate Kernel evidence bundle."""
 
@@ -1080,6 +1227,11 @@ def validate_bundle(
         _fail("bundle manifest record digest differs")
     files = _scan_root(selected_root, excluded=manifest_relative)
     references = _validate_file_references(manifest_value, files=files)
+    host_identity = _load_host_identity_binding(
+        selected_root,
+        files,
+        external_path=host_identity_input,
+    )
     expected_paths = {
         ACTIVE_RELATIVE_PATH,
         CLASSIFICATION_RELATIVE_PATH,
@@ -1117,6 +1269,7 @@ def validate_bundle(
         manifest=manifest_value,
         candidate=candidate,
         run_ids=run_ids,
+        host_identity=host_identity,
     )
     return {
         "schema_version": "deeplaw.kernel-qualification-bundle-derived/v1",
@@ -1136,9 +1289,12 @@ def build_bundle(
     classification: Path | str | None = None,
     qualification_protocol: Path | str | None = None,
     expected_candidate: Mapping[str, Any] | None = None,
+    host_identity_input: Path | str | None = None,
 ) -> dict[str, Any]:
     """Build, persist, and immediately validate a bundle manifest."""
 
+    if host_identity_input is None:
+        _fail("bundle build requires the repository-external Host identity input")
     selected_root = _root_directory(root)
     manifest_relative, manifest_path = _manifest_path(selected_root, manifest)
     active_relative = ACTIVE_RELATIVE_PATH
@@ -1229,6 +1385,7 @@ def build_bundle(
         manifest=manifest_relative,
         expected_candidate=expected_candidate,
         expected_run_ids=normalized_run_ids,
+        host_identity_input=host_identity_input,
     )
     return provisional
 
@@ -1257,6 +1414,7 @@ def _cli_main(argv: Sequence[str] | None = None) -> int:
         sub.add_argument("--active-qualification", type=Path, default=None)
         sub.add_argument("--classification", type=Path, default=None)
         sub.add_argument("--qualification-protocol", type=Path, default=None)
+        sub.add_argument("--host-identity-input", type=Path, default=None)
         sub.add_argument("--candidate", type=Path, default=None)
         sub.add_argument("--run-ids", type=Path, default=None)
         sub.add_argument("--candidate-run-id", type=int, default=None)
@@ -1297,6 +1455,7 @@ def _cli_main(argv: Sequence[str] | None = None) -> int:
                 qualification_protocol=args.qualification_protocol,
                 expected_candidate=candidate,
                 run_ids=supplied_run_ids,
+                host_identity_input=args.host_identity_input,
             )
         else:
             result = validate_bundle(
@@ -1307,6 +1466,7 @@ def _cli_main(argv: Sequence[str] | None = None) -> int:
                 qualification_protocol=args.qualification_protocol,
                 expected_candidate=candidate,
                 expected_run_ids=supplied_run_ids,
+                host_identity_input=args.host_identity_input,
             )
         sys.stdout.write(canonical_json(result).decode("utf-8") + "\n")
         return 0

@@ -82,6 +82,12 @@ jobs:
           import stat
           from pathlib import Path
 
+          from benchmarks.hosts.host_preflight_receipt import (
+              HostIdentityValidationError,
+              inspect_host_binary,
+              load_host_identity_input_with_bytes,
+          )
+
           repository = Path(os.environ["GITHUB_WORKSPACE"]).resolve(strict=True)
 
           def exact_file(
@@ -120,6 +126,12 @@ jobs:
           exact_file("DEEPLAW_KERNEL_EVIDENCE_COLLECTOR", executable=True, owner_only=True)
           exact_file("DEEPLAW_CODEX_CREDENTIAL_BROKER", executable=True, owner_only=True)
           exact_file("DEEPLAW_OPENCODE_CREDENTIAL_BROKER", executable=True, owner_only=True)
+          identity_path = exact_file(
+              "DEEPLAW_HOST_IDENTITY_INPUT",
+              executable=False,
+              owner_only=True,
+              verify_content_hash=False,
+          )
           # Metadata only: the validator must never read or hash the dotenv bytes.
           exact_file(
               "DEEPLAW_OPENCODE_DOTENV",
@@ -127,18 +139,91 @@ jobs:
               owner_only=True,
               verify_content_hash=False,
           )
-
-          fixed = {
-              "DEEPLAW_CODEX_BINARY": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
-              "DEEPLAW_OPENCODE_BINARY": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
-              "DEEPLAW_OPENCODE_PACKAGE": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722",
+          identity, identity_bytes = load_host_identity_input_with_bytes(
+              identity_path, repository=repository
+          )
+          frozen_root = Path(os.environ["RUNNER_TEMP"]) / "candidate-inputs"
+          frozen_root.mkdir(parents=True, exist_ok=True)
+          frozen_path = frozen_root / "frozen-host-exact-identity.json"
+          frozen_tmp = frozen_root / ".frozen-host-exact-identity.tmp"
+          if frozen_path.exists() or frozen_path.is_symlink() or frozen_tmp.exists() or frozen_tmp.is_symlink():
+              raise SystemExit("frozen Host identity target already exists")
+          descriptor = os.open(
+              frozen_tmp,
+              os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+              0o600,
+          )
+          try:
+              os.write(descriptor, identity_bytes)
+              os.fsync(descriptor)
+          finally:
+              os.close(descriptor)
+          frozen_tmp.chmod(0o600)
+          os.replace(frozen_tmp, frozen_path)
+          frozen_details = frozen_path.lstat()
+          if (
+              not stat.S_ISREG(frozen_details.st_mode)
+              or frozen_path.is_symlink()
+              or frozen_details.st_nlink != 1
+              or stat.S_IMODE(frozen_details.st_mode) & 0o077
+          ):
+              raise SystemExit("frozen Host identity target is unsafe")
+          if frozen_path.read_bytes() != identity_bytes:
+              raise SystemExit("frozen Host identity bytes changed")
+          codex_binary = exact_file(
+              "DEEPLAW_CODEX_BINARY",
+              executable=True,
+              owner_only=False,
+              verify_content_hash=False,
+          )
+          opencode_binary = Path(os.environ.get("DEEPLAW_OPENCODE_BINARY", ""))
+          if not opencode_binary.is_absolute():
+              raise SystemExit("OpenCode selector must be absolute")
+          try:
+              codex_observed = inspect_host_binary(
+                  codex_binary,
+                  host="codex",
+                  identity=identity,
+                  repository=repository,
+              )
+              opencode_observed = inspect_host_binary(
+                  opencode_binary,
+                  host="opencode",
+                  identity=identity,
+                  repository=repository,
+              )
+          except (HostIdentityValidationError, OSError, ValueError) as error:
+              raise SystemExit("Host executable does not match the external frozen identity") from error
+          execution_identity = {
+              "schema_version": "deeplaw.host-execution-identity/v1",
+              "hosts": {
+                  host: {
+                      "selector_source_symlink": bool(observed["selector_source_symlink"]),
+                      "execution_target_regular": observed["execution_target_regular"] is True,
+                      "execution_target_single_link": observed["execution_target_single_link"] is True,
+                      "host_identity_sha256": observed["host_identity_sha256"],
+                      "host_identity_source_sha256": observed["host_identity_source_sha256"],
+                  }
+                  for host, observed in (("codex", codex_observed), ("opencode", opencode_observed))
+              },
           }
-          for name, expected in fixed.items():
-              path = Path(os.environ.get(name, ""))
-              if not path.is_absolute() or path.is_symlink() or not path.is_file():
-                  raise SystemExit(f"pinned Host prerequisite is unavailable: {name}")
-              if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
-                  raise SystemExit(f"pinned Host binary/package hash mismatch: {name}")
+          (frozen_root / "host-execution-identity.json").write_text(
+              __import__("json").dumps(
+                  execution_identity,
+                  sort_keys=True,
+                  separators=(",", ":"),
+          ) + "\n",
+              encoding="utf-8",
+          )
+          (frozen_root / "host-execution-identity.json").chmod(0o600)
+          package = exact_file(
+              "DEEPLAW_OPENCODE_PACKAGE",
+              executable=False,
+              owner_only=False,
+              verify_content_hash=False,
+          )
+          if hashlib.sha256(package.read_bytes()).hexdigest() != identity["hosts"]["opencode"]["package_sha256"]:
+              raise SystemExit("OpenCode package does not match the external frozen identity")
           PY
           verified="${RUNNER_TEMP}/candidate-inputs/verified-dist"
           raw="${RUNNER_TEMP}/candidate-inputs/candidate-full-raw-evidence"
@@ -156,6 +241,11 @@ jobs:
         run: |
           set -euo pipefail
           output="${RUNNER_TEMP}/kernel-evidence-staging"
+          frozen_identity="${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"
+          execution_identity="${RUNNER_TEMP}/candidate-inputs/host-execution-identity.json"
+          test -f "${frozen_identity}"
+          test -f "${execution_identity}"
+          export DEEPLAW_FROZEN_HOST_IDENTITY="${frozen_identity}"
           test ! -e "${output}"
           mkdir "${output}"
           "${DEEPLAW_KERNEL_EVIDENCE_COLLECTOR}" \
@@ -165,16 +255,17 @@ jobs:
             --candidate-run-id "${CANDIDATE_RUN_ID}" \
             --evidence-run-id "${EVIDENCE_RUN_ID}" \
             --codex-binary "${DEEPLAW_CODEX_BINARY}" \
-            --codex-version "codex-cli 0.148.0-alpha.15" \
+            --codex-version "$(uv run --frozen python -c 'from benchmarks.hosts.host_preflight_receipt import load_host_identity_input; import os; from pathlib import Path; print(load_host_identity_input(Path(os.environ["DEEPLAW_FROZEN_HOST_IDENTITY"]), repository=Path.cwd(), require_external=False)["hosts"]["codex"]["binary_version"])')" \
             --codex-model "gpt-5.6-luna" \
             --codex-reasoning "max" \
             --codex-broker "${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \
             --opencode-binary "${DEEPLAW_OPENCODE_BINARY}" \
             --opencode-package "${DEEPLAW_OPENCODE_PACKAGE}" \
-            --opencode-version "1.18.16" \
+            --opencode-version "$(uv run --frozen python -c 'from benchmarks.hosts.host_preflight_receipt import load_host_identity_input; import os; from pathlib import Path; print(load_host_identity_input(Path(os.environ["DEEPLAW_FROZEN_HOST_IDENTITY"]), repository=Path.cwd(), require_external=False)["hosts"]["opencode"]["version"])')" \
             --opencode-model "deepseek/deepseek-v4-flash" \
             --opencode-broker "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \
             --opencode-dotenv "${DEEPLAW_OPENCODE_DOTENV}" \
+            --host-identity-input "${frozen_identity}" \
             --transport-retry-limit 1 \
             --output "${output}"
           test ! -e "${output}/.env"
@@ -188,6 +279,11 @@ jobs:
             "${output}/retained-broker-source/codex.launcher-source"
           cp "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \
             "${output}/retained-broker-source/opencode.launcher-source"
+          mkdir "${output}/candidate-inventory"
+          cp "${frozen_identity}" \
+            "${output}/candidate-inventory/host-exact-identity.json"
+          cp "${execution_identity}" \
+            "${output}/candidate-inventory/host-execution-identity.json"
 
       - name: Reopen every typed receipt with the repository validator
         env:
@@ -198,6 +294,8 @@ jobs:
         run: |
           set -euo pipefail
           root="${STAGING_ROOT}"
+          frozen_identity="${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"
+          test -f "${frozen_identity}"
           mkdir -p \
             "${root}/benchmarks/v013" \
             "${root}/benchmarks/release"
@@ -216,12 +314,14 @@ jobs:
             --candidate-run-id "${CANDIDATE_RUN_ID}" \
             --evidence-run-id "${EVIDENCE_RUN_ID}" \
             --qualification-run-id "${sentinel}" \
+            --host-identity-input "${frozen_identity}" \
             > "${RUNNER_TEMP}/kernel-bundle-validation.json"
           uv run --frozen python -m benchmarks.release.kernel_qualification_bundle_v1 validate \
             --root "${root}" \
             --candidate-run-id "${CANDIDATE_RUN_ID}" \
             --evidence-run-id "${EVIDENCE_RUN_ID}" \
             --qualification-run-id "${sentinel}" \
+            --host-identity-input "${frozen_identity}" \
             >> "${RUNNER_TEMP}/kernel-bundle-validation.json"
           rm "${root}/bundle-manifest.json"
           test -z "$(find "${root}" -type l -print -quit)"

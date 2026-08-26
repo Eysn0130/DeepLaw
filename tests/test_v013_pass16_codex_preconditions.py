@@ -163,8 +163,11 @@ class _VersionProcess:
 
 
 def test_exact_codex_version_is_accepted() -> None:
-    process = _VersionProcess(qualification.CODEX_VERSION + "\n")
-    assert qualification._validate_codex_version(process) == qualification.CODEX_VERSION
+    process = _VersionProcess(qualification.HISTORICAL_CODEX_VERSION_FIXTURE + "\n")
+    assert (
+        qualification._validate_codex_version(process)
+        == qualification.HISTORICAL_CODEX_VERSION_FIXTURE
+    )
 
 
 @pytest.mark.parametrize(

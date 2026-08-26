@@ -129,8 +129,8 @@ It is derived from the following version-bound behavior tasks; there is no gener
 | Tolaria / `367a91416477c90bbfae766dc06add3de6ae75a7` | Read Markdown/Wikilinks; controlled edits; conflict/reconcile; source-successor identity; wrong-merge rejection | `canonical_integrity`, `living_wiki`, `source_citation_locator`; real-file receipts | Tolaria Desktop GUI, visual design, and runtime |
 | Obsidian API / `cc1744324150c632416857c98964f87b1574a5fc` | Preserve Markdown, Wikilinks, aliases, backlinks/outlinks, rename/move identity, and edit/reconcile behavior | `living_wiki`; real-file receipts | Obsidian UI, Sync, marketplace, and complete Canvas UX |
 | LLM Wiki / `350eec8a284e159b2e4cfd068d808cbf203a6cc5` | Agent-derived knowledge retains provenance, revision, Authority, scope, sensitivity, and Ledger state; Source Revision is never rewritten | `canonical_integrity`, `living_wiki`, `source_citation_locator` | Any named-product or superiority claim without a separately frozen comparator |
-| Codex `0.148.0-alpha.15` / `gpt-5.6-luna` / `reasoning=max` | Three distinct real tasks: Continuity, Living Wiki, and Professional Evidence | `codex`, `bounded_context`, `secret_host_isolation`, `living_wiki`, `source_citation_locator`, `selective_forget`, `timeline`; actual Provider bytes/tokens | Codex runtime ownership, UI, marketplace, or static/no-model smoke |
-| OpenCode `1.18.16` / `deepseek/deepseek-v4-flash` | The same three real tasks with independently isolated Secret handling | `opencode` and the same shared Core duties; actual Provider bytes/tokens | OpenCode runtime, UI, ecosystem, or config-only smoke |
+| Codex owner-supplied exact identity / `gpt-5.6-luna` / `reasoning=max` | Three distinct real tasks: Continuity, Living Wiki, and Professional Evidence | `codex`, `bounded_context`, `secret_host_isolation`, `living_wiki`, `source_citation_locator`, `selective_forget`, `timeline`; actual Provider bytes/tokens | Codex runtime ownership, UI, marketplace, or static/no-model smoke |
+| OpenCode owner-supplied exact identity / `deepseek/deepseek-v4-flash` | The same three real tasks with independently isolated Secret handling | `opencode` and the same shared Core duties; actual Provider bytes/tokens | OpenCode runtime, UI, ecosystem, or config-only smoke |
 
 Before every mapped task and Core gate passes, the only permitted statement is:
 
@@ -148,21 +148,18 @@ that it is perfect, SOTA, leading, fully verified, RC, or GA.
 
 ### Host continuity
 
-Codex requires exactly three distinct runs using exact `codex-cli 0.148.0-alpha.15`, binary
-SHA-256 `7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7`, requested model
-`gpt-5.6-luna`, and `reasoning=max`. Authentication uses the supported official existing-login
-seam without reading, copying, printing, or retaining auth. The receipt records the actual returned
-model identity and date; the selector is not represented as an immutable model snapshot.
+Codex requires exactly three distinct runs using the exact executable identity from the
+repository-external owner input, requested model `gpt-5.6-luna`, and `reasoning=max`.
+Authentication uses the supported official existing-login seam without reading, copying, printing,
+or retaining auth. The receipt records the actual returned model identity and date; the selector is
+not represented as an immutable model snapshot.
 
-The Codex and OpenCode executable coordinates below were re-observed locally at
-`2026-08-20T12:38:48Z`; this observation rotates the current input contract but is not Host task or
-qualification evidence.
-
-OpenCode requires exactly three distinct runs using exact `1.18.16`, source commit
-`a3647eb025c7615159d417dcc49fc39fdaeba65b`, selector
-`deepseek/deepseek-v4-flash`, and expected response model `deepseek-v4-flash`. Its owner-only
-`.env` is read only by the credential broker. Exact executable/package hashes are qualification
-inputs and sanitized receipt fields; DeepLaw runners receive no Secret.
+OpenCode requires exactly three distinct runs using the exact executable, source, and package
+identity from that same external-input family, selector `deepseek/deepseek-v4-flash`, and expected
+response model `deepseek-v4-flash`. Its owner-only `.env` is read only by the credential broker.
+Exact executable/package hashes are external qualification inputs and sanitized receipt fields;
+DeepLaw runners receive no Secret. The exact identity source SHA is retained and compared at bundle
+validation, so replacing version, SHA, Host, run, or candidate bindings fails closed.
 
 Across the six runs, the task set covers new thread, ordinary resume without task handle,
 fork/child task, compaction, concurrent worktree, stale checkpoint, workspace divergence, wrong
@@ -178,8 +175,9 @@ Trace and Ledger receipts remain outside the Provider Capsule.
 Each of the six task runs also retains two separate, sanitized control records. The
 `deeplaw.host-preflight-receipt/v1` record contains only the closed preflight stage and reason
 code, exact Host binary version/hash, and repository-external broker source hash/byte count/mode.
-The `deeplaw.host-process-receipt/v1` record binds the Host/task/run, exact binary and broker
-source hash, successful exit, and negative isolation booleans. Neither record permits a command,
+The `deeplaw.host-process-receipt/v1` record binds the Host/task/run, exact binary, per-Host
+identity SHA, exact external identity source SHA, and broker source hash, successful exit, and
+negative isolation booleans. Neither record permits a command,
 environment, path, PID, stdout/stderr, prompt, transcript, hidden reasoning, authentication
 material, or Secret. A development diagnostic or an untyped process record is not qualification
 evidence.

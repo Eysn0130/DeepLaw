@@ -11,12 +11,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.hosts.host_preflight_receipt import (
+    HostIdentityValidationError,
+    host_identity_sha256,
+    load_host_identity_input,
+)
 from benchmarks.release.typed_qualification_evidence import parse_typed_evidence
 from benchmarks.release.typed_qualification_evidence_v3_host_tasks import (
     TASK_DUTIES,
@@ -41,26 +47,46 @@ CONTINUITY_LIFECYCLE = (
     "forget",
     "resume_after_forget",
 )
-HOST_CONSTRAINTS = {
-    "codex": {
-        "tool_version": "codex-cli 0.148.0-alpha.15",
-        "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
-        "model_id": "gpt-5.6-luna",
-        "expected_response_model_id": "gpt-5.6-luna",
-        "reasoning_effort": "max",
-        "argv_prefix": ["codex", "app-server", "--stdio"],
-    },
-    "opencode": {
-        "tool_version": "1.18.16",
-        "binary_sha256": "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f",
-        "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
-        "config_selector": "deepseek/deepseek-v4-flash",
-        "model_id": "deepseek-v4-flash",
-        "expected_response_model_id": "deepseek-v4-flash",
-        "reasoning_effort": None,
-        "argv_prefix": ["opencode", "--pure", "run", "--format", "json"],
-    },
-}
+_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_GIT = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _validate_catalog_host_constraints(value: Mapping[str, Any]) -> None:
+    if set(value) != set(HOSTS):
+        raise HostTaskQualificationError("v0.13 Host coordinates are not closed")
+    codex = value["codex"]
+    if not isinstance(codex, Mapping) or set(codex) != {
+        "tool_version", "binary_sha256", "model_id", "expected_response_model_id",
+        "reasoning_effort", "argv_prefix",
+    }:
+        raise HostTaskQualificationError("v0.13 Codex coordinates are not closed")
+    if (
+        codex["tool_version"] is not None
+        or codex["binary_sha256"] is not None
+        or codex["model_id"] != "gpt-5.6-luna"
+        or codex["expected_response_model_id"] != "gpt-5.6-luna"
+        or codex["reasoning_effort"] != "max"
+        or codex["argv_prefix"] != ["codex", "app-server", "--stdio"]
+    ):
+        raise HostTaskQualificationError("v0.13 Codex coordinate shape is invalid")
+    opencode = value["opencode"]
+    if not isinstance(opencode, Mapping) or set(opencode) != {
+        "tool_version", "binary_sha256", "source_commit", "config_selector",
+        "model_id", "expected_response_model_id", "reasoning_effort", "argv_prefix",
+    }:
+        raise HostTaskQualificationError("v0.13 OpenCode coordinates are not closed")
+    if (
+        opencode["tool_version"] is not None
+        or opencode["binary_sha256"] is not None
+        or opencode["source_commit"] is not None
+        or opencode["config_selector"] != "deepseek/deepseek-v4-flash"
+        or opencode["model_id"] != "deepseek-v4-flash"
+        or opencode["expected_response_model_id"] != "deepseek-v4-flash"
+        or opencode["reasoning_effort"] is not None
+        or opencode["argv_prefix"] != ["opencode", "--pure", "run", "--format", "json"]
+    ):
+        raise HostTaskQualificationError("v0.13 OpenCode coordinates shape is invalid")
 
 
 class HostTaskQualificationError(ValueError):
@@ -80,6 +106,15 @@ def _schema() -> dict[str, Any]:
 
 def _canonical(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _load_external_identity(path: Path | str) -> dict[str, Any]:
+    try:
+        return load_host_identity_input(path, repository=REPOSITORY)
+    except (HostIdentityValidationError, OSError, ValueError) as exc:
+        raise HostTaskQualificationError(
+            "owner-controlled Host identity input was rejected"
+        ) from exc
 
 
 def load_task_cases(path: Path | str | None = None) -> dict[str, Any]:
@@ -111,8 +146,7 @@ def load_task_cases(path: Path | str | None = None) -> dict[str, Any]:
             raise HostTaskQualificationError(
                 "v0.13 Host task duties, wrong states, or operations are not frozen"
             )
-    if value["host_constraints"] != HOST_CONSTRAINTS:
-        raise HostTaskQualificationError("v0.13 Host binary/model coordinates are not frozen")
+    _validate_catalog_host_constraints(value["host_constraints"])
     return json.loads(_canonical(value))
 
 
@@ -145,6 +179,7 @@ def task_case(host: str, task: str, *, cases: Mapping[str, Any] | None = None) -
         "native_host_receipts_required": True,
         "claim_eligible": False,
         "release_ready": False,
+        "host_identity_source": "owner_external_frozen_input",
     }
     if task == "continuity":
         plan["lifecycle"] = list(CONTINUITY_LIFECYCLE)
@@ -222,6 +257,7 @@ def validate_retained_manifest(
     expected_corpus_sha256: str | None = None,
     expected_runner: Mapping[str, Any] | None = None,
     expected_scorer: Mapping[str, Any] | None = None,
+    host_identity_input: Path | str | None = None,
 ) -> dict[str, Any]:
     """Validate a retained v3 ``host_event_sequence`` evidence manifest."""
 
@@ -247,10 +283,21 @@ def validate_retained_manifest(
         or metrics.get("host") not in HOSTS
     ):
         raise HostTaskQualificationError("retained evidence lacks v0.13 Host/task metrics")
+    if host_identity_input is not None:
+        identity = _load_external_identity(host_identity_input)
+        expected_identity = host_identity_sha256(identity["hosts"][metrics["host"]])
+        if metrics.get("host_identity_sha256") != expected_identity:
+            raise HostTaskQualificationError(
+                "retained Host evidence does not bind the owner-controlled identity"
+            )
     return result
 
 
-def validate_host_task_matrix(results: list[Mapping[str, Any]]) -> dict[str, Any]:
+def validate_host_task_matrix(
+    results: list[Mapping[str, Any]],
+    *,
+    host_identity_input: Path | str | None = None,
+) -> dict[str, Any]:
     """Require exactly one derived result for each Host/task pair.
 
     This is an aggregate admission check only.  It never turns a local result
@@ -260,6 +307,9 @@ def validate_host_task_matrix(results: list[Mapping[str, Any]]) -> dict[str, Any
     if not isinstance(results, list) or len(results) != len(HOSTS) * len(TASK_CASES):
         raise HostTaskQualificationError("v0.13 Host task matrix requires exactly six results")
     identities: set[tuple[str, str]] = set()
+    frozen_identity: Mapping[str, Any] | None = None
+    if host_identity_input is not None:
+        frozen_identity = _load_external_identity(host_identity_input)
     for index, result in enumerate(results):
         if not isinstance(result, Mapping) or result.get("kind") != "host_event_sequence":
             raise HostTaskQualificationError(f"Host task matrix result {index} has the wrong kind")
@@ -275,6 +325,16 @@ def validate_host_task_matrix(results: list[Mapping[str, Any]]) -> dict[str, Any
                 "Host task matrix contains a duplicate or unsupported pair"
             )
         identities.add((host, task))
+        if frozen_identity is not None:
+            identity_digest = metrics.get("host_identity_sha256")
+            if not isinstance(identity_digest, str) or _SHA256.fullmatch(identity_digest) is None:
+                raise HostTaskQualificationError(
+                    "Host task matrix lacks a bounded Host identity digest"
+                )
+            if identity_digest != host_identity_sha256(frozen_identity["hosts"][host]):
+                raise HostTaskQualificationError(
+                    "Host task matrix does not bind the owner-controlled identity"
+                )
     expected = {(host, task) for host in HOSTS for task in TASK_CASES}
     if identities != expected:
         raise HostTaskQualificationError(
@@ -298,12 +358,17 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", type=Path, default=None)
     parser.add_argument("--manifest", type=Path, default=None)
     parser.add_argument("--root", type=Path, default=None)
+    parser.add_argument("--host-identity-input", type=Path, default=None)
     args = parser.parse_args(argv)
     try:
         if args.manifest is not None:
             if args.root is None:
                 raise HostTaskQualificationError("--root is required with --manifest")
-            result = validate_retained_manifest(args.manifest, root=args.root)
+            result = validate_retained_manifest(
+                args.manifest,
+                root=args.root,
+                host_identity_input=args.host_identity_input,
+            )
         else:
             if args.host is None or args.task_case is None:
                 raise HostTaskQualificationError("--host and --task-case are required for a plan")
