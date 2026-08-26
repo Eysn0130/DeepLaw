@@ -75,6 +75,106 @@ def test_pass13_runner_uses_a_closed_temporary_host_profile(
     assert str(tmp_path) not in json.dumps(receipt, sort_keys=True)
 
 
+def test_keyring_bridge_requires_the_real_current_user_home(tmp_path: Path) -> None:
+    with pytest.raises(qualification.QualificationFailure, match="keyring home is required"):
+        qualification._validate_keyring_home(None)
+
+    wrong_home = tmp_path / "wrong-home"
+    wrong_home.mkdir()
+    with pytest.raises(qualification.QualificationFailure, match="current user system home"):
+        qualification._validate_keyring_home(wrong_home)
+
+
+def test_cli_requires_keyring_home_before_execution(tmp_path: Path) -> None:
+    with pytest.raises(qualification.QualificationFailure, match="keyring home is required"):
+        qualification.main(
+            [
+                "--mode",
+                "diagnostic",
+                "--candidate-wheel",
+                str(tmp_path / "candidate.whl"),
+                "--deeplaw-executable",
+                str(tmp_path / "deeplaw"),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--profile-root",
+                str(tmp_path / "profile"),
+                "--codex-binary",
+                str(tmp_path / "codex"),
+                "--codex-launcher",
+                str(tmp_path / "owner-broker"),
+            ]
+        )
+
+
+def test_keyring_bridge_keeps_codex_profile_roots_closed_and_receipt_path_free(
+    tmp_path: Path,
+) -> None:
+    profile = tmp_path / "profile"
+    keyring_home = qualification._current_system_home()
+    parent_home = os.environ.get("HOME")
+    parent_codex_home = os.environ.get("CODEX_HOME")
+    environment = qualification._host_environment(
+        Path("/opt/codex"),
+        profile,
+        keyring_home=keyring_home,
+    )
+
+    assert Path(environment["HOME"]) == keyring_home
+    assert Path(environment["CODEX_HOME"]) == profile / "codex"
+    assert Path(environment["XDG_CONFIG_HOME"]) == profile / "xdg-config"
+    assert Path(environment["XDG_DATA_HOME"]) == profile / "xdg-data"
+    receipt = qualification._isolation_receipt(
+        profile,
+        environment,
+        keyring_home=keyring_home,
+    )
+    assert receipt == {
+        "profile_kind": "temporary_closed_with_keyring_bridge",
+        "home_isolated": False,
+        "codex_home_isolated": True,
+        "xdg_config_home_isolated": True,
+        "xdg_data_home_isolated": True,
+        "ambient_host_state_inherited": True,
+        "ambient_plugins_inherited": False,
+        "ambient_apps_inherited": False,
+        "ambient_hooks_inherited": False,
+        "secret_values_retained": False,
+        "auth_class": "chatgpt_login",
+    }
+    assert str(profile) not in json.dumps(receipt, sort_keys=True)
+    assert os.environ.get("HOME") == parent_home
+    assert os.environ.get("CODEX_HOME") == parent_codex_home
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["XDG_CACHE_HOME", "XDG_STATE_HOME", "TMPDIR", "TMP", "TEMP", "USERPROFILE"],
+)
+def test_keyring_bridge_receipt_rejects_ambient_profile_root(
+    tmp_path: Path,
+    name: str,
+) -> None:
+    profile = tmp_path / "profile"
+    keyring_home = qualification._current_system_home()
+    environment = qualification._host_environment(
+        Path("/opt/codex"),
+        profile,
+        keyring_home=keyring_home,
+    )
+    environment[name] = str(keyring_home)
+
+    with pytest.raises(
+        qualification.QualificationFailure,
+        match="temporary profile isolation is inconsistent",
+    ):
+        qualification._isolation_receipt(
+            profile,
+            environment,
+            keyring_home=keyring_home,
+        )
+
+
 def test_app_server_argv_is_read_only_and_exposes_one_mcp_tool(tmp_path: Path) -> None:
     codex_binary = Path("/opt/codex")
     argv = qualification._app_server_argv(

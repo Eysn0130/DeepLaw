@@ -236,6 +236,70 @@ def _validate_profile_root(
     return resolved
 
 
+def _current_system_home() -> Path:
+    """Resolve the current user's real system home without trusting ``HOME``."""
+
+    try:
+        effective_uid = os.geteuid()
+    except AttributeError:
+        effective_uid = None
+    if effective_uid is not None:
+        try:
+            import pwd
+
+            home = Path(pwd.getpwuid(effective_uid).pw_dir)
+        except (ImportError, KeyError, OSError, TypeError, ValueError) as exc:
+            raise QualificationFailure("current user system home is unavailable") from exc
+    else:
+        try:
+            home = Path.home()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise QualificationFailure("current user system home is unavailable") from exc
+    if not home.is_absolute():
+        raise QualificationFailure("current user system home is not absolute")
+    try:
+        resolved = home.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise QualificationFailure("current user system home is unavailable") from exc
+    if resolved != home:
+        raise QualificationFailure("current user system home must not be a symlink")
+    return resolved
+
+
+def _validate_keyring_home(keyring_home: Path | None) -> Path:
+    """Validate the one system directory allowed for the Codex keyring bridge."""
+
+    if keyring_home is None:
+        raise QualificationFailure("Codex keyring home is required for the keyring bridge")
+    home = Path(keyring_home)
+    if not home.is_absolute():
+        raise QualificationFailure("Codex keyring home must be absolute")
+    try:
+        metadata = home.lstat()
+    except (OSError, ValueError) as exc:
+        raise QualificationFailure("Codex keyring home must be an existing directory") from exc
+    if stat.S_ISLNK(metadata.st_mode):
+        raise QualificationFailure("Codex keyring home must not be a symlink")
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise QualificationFailure("Codex keyring home must be an existing directory")
+    try:
+        resolved = home.resolve(strict=True)
+        current_home = _current_system_home()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise QualificationFailure("Codex keyring home is unavailable") from exc
+    if resolved != home:
+        raise QualificationFailure("Codex keyring home must not contain a symlink")
+    if resolved != current_home:
+        raise QualificationFailure("Codex keyring home must be the current user system home")
+    try:
+        effective_uid = os.geteuid()
+    except AttributeError:
+        effective_uid = None
+    if effective_uid is not None and metadata.st_uid != effective_uid:
+        raise QualificationFailure("Codex keyring home must be owned by the current user")
+    return resolved
+
+
 def _host_environment(
     codex_binary: Path,
     profile_root: Path,
@@ -243,6 +307,7 @@ def _host_environment(
     *,
     runtime_executable: Path | None = None,
     inherit_existing_login: bool = False,
+    keyring_home: Path | None = None,
 ) -> dict[str, str]:
     """Build a closed Host environment without consulting ambient login state.
 
@@ -257,6 +322,9 @@ def _host_environment(
             "ambient Codex login inheritance is disabled; use the owner credential broker"
         )
     profile_root = _validate_profile_root(profile_root, allow_create=True)
+    validated_keyring_home = (
+        _validate_keyring_home(keyring_home) if keyring_home is not None else None
+    )
     roots = _profile_roots(profile_root)
     for root in set(roots.values()):
         if root.is_symlink():
@@ -274,6 +342,8 @@ def _host_environment(
             root.chmod(0o700)
     environment = {name: value for name in _HOST_ENV_NAMES if (value := os.environ.get(name))}
     environment.update({name: str(root) for name, root in roots.items()})
+    if validated_keyring_home is not None:
+        environment["HOME"] = str(validated_keyring_home)
     path_entries = [str(codex_binary.parent)]
     if runtime_executable is not None:
         path_entries.insert(0, str(Path(runtime_executable).parent))
@@ -289,20 +359,26 @@ def _isolation_receipt(
     environment: Mapping[str, str],
     *,
     inherit_existing_login: bool = False,
+    keyring_home: Path | None = None,
 ) -> dict[str, Any]:
     if inherit_existing_login:
         raise QualificationFailure(
             "ambient Codex login inheritance is disabled; use the owner credential broker"
         )
-    expected = {
-        "HOME": profile_root / "home",
-        "CODEX_HOME": profile_root / "codex",
-        "XDG_CONFIG_HOME": profile_root / "xdg-config",
-        "XDG_DATA_HOME": profile_root / "xdg-data",
-    }
+    expected = _profile_roots(profile_root)
+    if keyring_home is not None:
+        expected = {name: path for name, path in expected.items() if name != "HOME"}
     if any(environment.get(name) != str(path) for name, path in expected.items()):
         raise QualificationFailure("Codex temporary profile isolation is inconsistent")
-    return isolation_receipt(host="codex")
+    if keyring_home is None:
+        expected_home = profile_root / "home"
+        if environment.get("HOME") != str(expected_home):
+            raise QualificationFailure("Codex temporary profile isolation is inconsistent")
+        return isolation_receipt(host="codex")
+    validated_keyring_home = _validate_keyring_home(keyring_home)
+    if environment.get("HOME") != str(validated_keyring_home):
+        raise QualificationFailure("Codex keyring bridge environment is inconsistent")
+    return isolation_receipt(host="codex", keyring_bridge=True)
 
 
 def _closed_mcp_wrapper_source(runtime_python: Path, executable: Path, vault: Path) -> str:
@@ -3148,6 +3224,7 @@ def _execute_codex(
     codex_launcher: Path,
     host_identity_input: Path | None = None,
     expected_broker_sha256: str | None = None,
+    keyring_home: Path | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
     """Execute current qualification or one claim-ineligible diagnostic.
@@ -3155,11 +3232,16 @@ def _execute_codex(
     This function intentionally performs no authentication-file access.  Every
     login, MCP, and App Server call is routed through the explicitly supplied
     external owner-only broker; the runner receives neither the owner's
-    HOME/CODEX_HOME nor any authentication path/value.
+    CODEX_HOME nor any authentication path/value.  When supplied, the
+    keyring bridge permits only the current user's system ``HOME`` for the
+    Codex Host process; all other profile roots remain explicit and closed.
     """
 
     repository = _repository()
     profile_root = _validate_profile_root(profile_root, repository=repository)
+    validated_keyring_home = (
+        _validate_keyring_home(keyring_home) if keyring_home is not None else None
+    )
     if mode not in {"qualification", "diagnostic"}:
         raise QualificationFailure("Codex execution mode is invalid")
     if human_gold_path is not None:
@@ -3287,10 +3369,12 @@ def _execute_codex(
             profile_root,
             canaries,
             runtime_executable=runtime["_executable"],
+            keyring_home=validated_keyring_home,
         )
         host_isolation = _isolation_receipt(
             profile_root,
             host_environment,
+            keyring_home=validated_keyring_home,
         )
         plugin_receipt = _install_candidate_codex_plugin(
             runtime_python=runtime["_runtime_python"],
@@ -3779,6 +3863,7 @@ def execute(
     codex_launcher: Path,
     host_identity_input: Path | None = None,
     expected_broker_sha256: str | None = None,
+    keyring_home: Path | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
     """Run Codex qualification while retaining a safe fail-before receipt."""
@@ -3794,6 +3879,7 @@ def execute(
             codex_launcher=codex_launcher,
             host_identity_input=host_identity_input,
             expected_broker_sha256=expected_broker_sha256,
+            keyring_home=keyring_home,
             mode=mode,
         )
     except BaseException as original:
@@ -3826,11 +3912,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--codex-launcher", required=True)
     parser.add_argument("--host-identity-input")
     parser.add_argument("--expected-broker-sha256")
+    parser.add_argument(
+        "--keyring-home",
+        help="current user's real system home used only by the Codex keyring bridge",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if not args.keyring_home:
+        raise QualificationFailure(
+            "Codex keyring home is required; pass --keyring-home explicitly"
+        )
     report = execute(
         candidate_wheel=Path(args.candidate_wheel),
         deeplaw_executable=Path(args.deeplaw_executable),
@@ -3841,6 +3935,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         codex_launcher=Path(args.codex_launcher),
         host_identity_input=Path(args.host_identity_input) if args.host_identity_input else None,
         expected_broker_sha256=args.expected_broker_sha256,
+        keyring_home=Path(args.keyring_home),
         mode=args.mode,
     )
     print(canonical_json(report))

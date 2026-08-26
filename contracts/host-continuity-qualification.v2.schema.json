@@ -57,6 +57,7 @@
               "isolation": {
                 "oneOf": [
                   {"$ref": "#/$defs/closedIsolation"},
+                  {"$ref": "#/$defs/codexKeyringBridgeIsolation"},
                   {"$ref": "#/$defs/codexExistingLoginDiagnosticIsolation"}
                 ]
               }
@@ -71,7 +72,12 @@
           "runs": {"minItems": 3, "maxItems": 3},
           "environment": {
             "properties": {
-              "isolation": {"$ref": "#/$defs/closedIsolation"}
+              "isolation": {
+                "oneOf": [
+                  {"$ref": "#/$defs/closedIsolation"},
+                  {"$ref": "#/$defs/codexKeyringBridgeIsolation"}
+                ]
+              }
             }
           }
         }
@@ -224,6 +230,7 @@
     "isolation": {
       "oneOf": [
         {"$ref": "#/$defs/closedIsolation"},
+        {"$ref": "#/$defs/codexKeyringBridgeIsolation"},
         {"$ref": "#/$defs/codexExistingLoginDiagnosticIsolation"}
       ]
     },
@@ -249,6 +256,30 @@
         "ambient_hooks_inherited": {"const": false},
         "secret_values_retained": {"const": false},
         "auth_class": {"enum": ["chatgpt_login", "deepseek_api_key"]}
+      }
+    },
+    "codexKeyringBridgeIsolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_kind", "home_isolated", "codex_home_isolated",
+        "xdg_config_home_isolated", "xdg_data_home_isolated",
+        "ambient_host_state_inherited", "ambient_plugins_inherited",
+        "ambient_apps_inherited", "ambient_hooks_inherited",
+        "secret_values_retained", "auth_class"
+      ],
+      "properties": {
+        "profile_kind": {"const": "temporary_closed_with_keyring_bridge"},
+        "home_isolated": {"const": false},
+        "codex_home_isolated": {"const": true},
+        "xdg_config_home_isolated": {"const": true},
+        "xdg_data_home_isolated": {"const": true},
+        "ambient_host_state_inherited": {"const": true},
+        "ambient_plugins_inherited": {"const": false},
+        "ambient_apps_inherited": {"const": false},
+        "ambient_hooks_inherited": {"const": false},
+        "secret_values_retained": {"const": false},
+        "auth_class": {"const": "chatgpt_login"}
       }
     },
     "codexExistingLoginDiagnosticIsolation": {

@@ -9414,6 +9414,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_cli_requires_keyring_home_before_execution"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_cli_requires_keyring_home_before_execution"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
             "name": "test_codex_failure_codes_are_safe_constant_labels"
           },
           "node_id": "tests/test_v013_pass13_codex_qualification.py::test_codex_failure_codes_are_safe_constant_labels"
@@ -9431,6 +9438,62 @@
             "name": "test_installed_cli_parser_accepts_pretty_printed_public_json"
           },
           "node_id": "tests/test_v013_pass13_codex_qualification.py::test_installed_cli_parser_accepts_pretty_printed_public_json"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_keyring_bridge_keeps_codex_profile_roots_closed_and_receipt_path_free"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_keyring_bridge_keeps_codex_profile_roots_closed_and_receipt_path_free"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_keyring_bridge_receipt_rejects_ambient_profile_root[TEMP]"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_keyring_bridge_receipt_rejects_ambient_profile_root[TEMP]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_keyring_bridge_receipt_rejects_ambient_profile_root[TMPDIR]"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_keyring_bridge_receipt_rejects_ambient_profile_root[TMPDIR]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_keyring_bridge_receipt_rejects_ambient_profile_root[TMP]"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_keyring_bridge_receipt_rejects_ambient_profile_root[TMP]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_keyring_bridge_receipt_rejects_ambient_profile_root[USERPROFILE]"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_keyring_bridge_receipt_rejects_ambient_profile_root[USERPROFILE]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_keyring_bridge_receipt_rejects_ambient_profile_root[XDG_CACHE_HOME]"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_keyring_bridge_receipt_rejects_ambient_profile_root[XDG_CACHE_HOME]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_keyring_bridge_receipt_rejects_ambient_profile_root[XDG_STATE_HOME]"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_keyring_bridge_receipt_rejects_ambient_profile_root[XDG_STATE_HOME]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_keyring_bridge_requires_the_real_current_user_home"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_keyring_bridge_requires_the_real_current_user_home"
         },
         {
           "junit": {
@@ -9634,6 +9697,13 @@
             "name": "test_safe_reads_recompute_exact_provider_transport_bytes"
           },
           "node_id": "tests/test_v013_pass13_host_evidence.py::test_safe_reads_recompute_exact_provider_transport_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_host_evidence",
+            "name": "test_v2_accepts_only_the_exact_codex_keyring_bridge_isolation_variant"
+          },
+          "node_id": "tests/test_v013_pass13_host_evidence.py::test_v2_accepts_only_the_exact_codex_keyring_bridge_isolation_variant"
         },
         {
           "junit": {
@@ -16461,9 +16531,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2330,
+      "count": 2340,
       "selection": "not qualification and not windows_native",
-      "sha256": "497d16767658b428c9ee0edb967f0dc11ca1cad52105a0c818257a4d0354d45d"
+      "sha256": "f7f9035027fcd118d444a4c7381857e003900182165c5478396a42ede8cdc6fc"
     },
     "windows": {
       "additional_cases": [
@@ -16496,13 +16566,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2334,
+      "count": 2344,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "9a679084a2472d084986256f47db79d499fcd532ab2b8a498a6eb09908a7e1b1"
+      "sha256": "39a7782714af26493d2984d2207af8765c2ba0d8512342fbe5300da049366cd8"
     }
   },
-  "manifest_sha256": "8d2de875baf14cfb479bfc6271d9df38824f8e11e8bf6b4dd3a08d29bbe764ea",
+  "manifest_sha256": "4e94ad038300661cc4afebe0bd474a1954a74a369708f462101d20b872c8462a",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
