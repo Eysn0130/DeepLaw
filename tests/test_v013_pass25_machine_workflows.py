@@ -432,6 +432,7 @@ def test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding(
         "sota",
     ):
         assert forbidden not in workflow.casefold()
+    _assert_kernel_workflow_gates_opencode_on_transient_zero_model_broker_preflight()
 
 
 def test_commercial_qualification_dispatch_and_assembly_use_kernel_v9() -> None:
@@ -461,6 +462,52 @@ def test_commercial_qualification_dispatch_and_assembly_use_kernel_v9() -> None:
         "candidate_gold",
     ):
         assert forbidden not in workflow
+
+
+def _assert_kernel_workflow_gates_opencode_on_transient_zero_model_broker_preflight() -> None:
+    workflow = _workflow("kernel-qualification-evidence.yml")
+    codex_marker = "      - name: Run Codex owner-external zero-model preflight"
+    opencode_marker = "      - name: Run OpenCode owner-external zero-model preflight"
+    formal_marker = (
+        "      - name: Execute Codex x3, OpenCode x3, and deterministic Kernel evidence"
+    )
+    assert workflow.index(codex_marker) < workflow.index(opencode_marker)
+    assert workflow.index(opencode_marker) < workflow.index(formal_marker)
+
+    preflight = workflow.split(opencode_marker, 1)[1].split(formal_marker, 1)[0]
+    for required in (
+        "--zero-model-preflight",
+        "benchmarks.hosts.run_pass13_opencode_continuity_qualification",
+        '--candidate-binding-input "${RUNNER_TEMP}/candidate-inputs/verified-dist/'
+        'frozen-active-qualification.json"',
+        '--host-identity-input "${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"',
+        '--opencode-package "${DEEPLAW_OPENCODE_PACKAGE}"',
+        '--opencode-binary "${DEEPLAW_OPENCODE_BINARY}"',
+        '--opencode-launcher "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}"',
+        '--expected-broker-sha256 "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER_SHA256}"',
+        "--task-case continuity",
+        '--run-id "opencode-zero-model-preflight-${CANDIDATE_RUN_ID}-${EVIDENCE_RUN_ID}"',
+        '--evidence-run-id "${EVIDENCE_RUN_ID}"',
+        '--qualification-run-id "${EVIDENCE_RUN_ID}"',
+    ):
+        assert required in preflight
+    for forbidden in (
+        "DEEPLAW_OPENCODE_DOTENV",
+        "--opencode-dotenv",
+        "--opencode-model",
+        "deepseek/deepseek-v4-flash",
+        "host_process_receipt",
+        "process-receipt",
+        "host-task-handoff",
+        "kernel-evidence-staging",
+    ):
+        assert forbidden not in preflight
+
+    formal = workflow.split(formal_marker, 1)[1].split(
+        "      - name: Reopen every typed receipt with the repository validator", 1
+    )[0]
+    assert '--opencode-model "deepseek/deepseek-v4-flash"' in formal
+    assert '--opencode-dotenv "${DEEPLAW_OPENCODE_DOTENV}"' in formal
 
 
 def test_release_reopens_v9_kernel_provenance_and_keeps_public_state_separate() -> None:

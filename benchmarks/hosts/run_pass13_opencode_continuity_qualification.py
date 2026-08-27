@@ -10,21 +10,25 @@ payloads, credentials, and host paths remain in memory only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
 import re
+import secrets
 import shutil
 import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Mapping, Sequence
-from contextlib import suppress
+from collections.abc import Iterator, Mapping, MutableSet, Sequence
+from contextlib import contextmanager, suppress
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -33,6 +37,7 @@ from jsonschema import Draft202012Validator, ValidationError
 
 from benchmarks.hosts import (
     host_preflight_receipt,
+    host_process_receipt_v2,
     pass13_evidence,
     pass16_continuity_cases,
     pass17_development_diagnostic,
@@ -48,12 +53,17 @@ from benchmarks.hosts.pass13_orchestrator import (
 from benchmarks.hosts.pass13_orchestrator import (
     sha256_file as _sha256_file,
 )
+from benchmarks.hosts.run_v013_host_task_qualification import (
+    HostTaskQualificationError,
+    load_exact_candidate_binding,
+)
 
 MODEL = "deepseek/deepseek-v4-flash"
 VARIANT = "max"
 # Compatibility-only fixture value used by non-executing unit seams. Formal
 # qualification passes the version from the external frozen identity.
 HISTORICAL_OPENCODE_VERSION_FIXTURE = "1.18.16"
+OPENCODE_SOURCE_COMMIT = "a3647eb025c7615159d417dcc49fc39fdaeba65b"
 TOOL_NAME = "deeplaw_knowledge_knowledge_support"
 RUN_COUNT = 3
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -70,10 +80,86 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GAP_CODE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,99}$")
 _GIT_OID = re.compile(r"^[0-9a-f]{40}$")
 _SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$")
+_CONTROL_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$")
+_CONTROL_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$")
 _ABSOLUTE_PATH = re.compile(
     rb'(?:^|[\s=:"\'])/(?!/)[A-Za-z0-9._~-]+(?:/[^\s"\'\\]*)?|'
     rb'(?:^|[\s="\'(])[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]'
 )
+_MAX_BROKER_CONTROL_BYTES = 256 * 1024
+_BROKER_CONTROL_READ_CHUNK_BYTES = 16 * 1024
+_BROKER_SOURCE_MAX_BYTES = 256 * 1024
+_OPENCODE_PACKAGE_MAX_BYTES = 128 * 1024 * 1024
+OPENCODE_BROKER_CONTROL_SCHEMA_VERSION = (
+    "deeplaw.opencode-owner-external-broker-control/v2"
+)
+OPENCODE_BROKER_CONTROL_ARGUMENT = "deeplaw-opencode-zero-model-preflight-v2"
+OPENCODE_ZERO_MODEL_REQUIRED_SEQUENCE = (
+    "GET /global/health",
+    "POST /session {}",
+    "POST /session/:parent/fork {}",
+)
+OPENCODE_ZERO_MODEL_OPTIONAL_SEQUENCE = (
+    *OPENCODE_ZERO_MODEL_REQUIRED_SEQUENCE,
+    "GET /session/:child",
+)
+OPENCODE_ZERO_MODEL_ALLOWED_ROUTES = (
+    "GET /global/health",
+    "POST /session",
+    "POST /session/:parent/fork",
+    "GET /session/:child",
+)
+_ZERO_MODEL_CONSTRAINTS = {
+    "ambient_plugin_allowed": False,
+    "event_barrier_timeout_seconds": 30,
+    "fork_request_body_sha256": hashlib.sha256(b"{}").hexdigest(),
+    "mcp_route_allowed": False,
+    "message_route_allowed": False,
+    "model_invocation_allowed": False,
+    "model_route_allowed": False,
+    "provider_request_allowed": False,
+    "provider_route_allowed": False,
+    "remote_workspace_forwarding_allowed": False,
+    "response_release_requires_child_event": True,
+    "session_create_body_sha256": hashlib.sha256(b"{}").hexdigest(),
+    "share_request_allowed": False,
+}
+_CONTROL_REQUEST_KEYS = {
+    "schema_version",
+    "operation",
+    "host",
+    "task_case",
+    "run_id",
+    "candidate_binding",
+    "run_binding",
+    "host_binary",
+    "broker_source_sha256",
+    "host_identity_sha256",
+    "host_identity_source_sha256",
+    "challenge",
+    "required_sequence",
+    "optional_sequence",
+    "allowed_routes",
+    "zero_model_constraints",
+}
+_CONTROL_RESPONSE_KEYS = {
+    "schema_version",
+    "operation",
+    "status",
+    "observed_sequence",
+    "forbidden_route_count",
+    "message_route_count",
+    "provider_route_count",
+    "model_route_count",
+    "mcp_route_count",
+    "model_invocation_count",
+    "provider_request_count",
+    "remote_workspace_forward_count",
+    "share_request_count",
+    "ambient_plugin_count",
+    "event_barrier",
+    "host_process_receipt",
+}
 _FORBIDDEN_FIELDS = (
     b'"auth_file"',
     b'"authentication_file"',
@@ -2106,6 +2192,162 @@ def _forget_checkpoint(
     )
 
 
+def _inspect_opencode_binary_static(
+    path: Path,
+    *,
+    identity: Mapping[str, Any],
+    repository: Path,
+) -> dict[str, Any]:
+    """Bind the OpenCode selector and exact target bytes without executing it."""
+
+    selected = Path(path).expanduser()
+    if not selected.is_absolute():
+        raise QualificationError("OpenCode executable path is outside the closed scope")
+
+    def parent_has_symlink(value: Path) -> bool:
+        current = Path(value.anchor)
+        try:
+            for part in value.parts[1:]:
+                current /= part
+                if stat.S_ISLNK(current.lstat().st_mode):
+                    return True
+        except OSError as exc:
+            raise QualificationError("OpenCode executable parent path is unavailable") from exc
+        return False
+
+    def signature(details: os.stat_result) -> tuple[Any, ...]:
+        return (
+            details.st_dev,
+            details.st_ino,
+            details.st_size,
+            details.st_mode,
+            details.st_uid,
+            details.st_nlink,
+            getattr(details, "st_mtime_ns", details.st_mtime),
+            getattr(details, "st_ctime_ns", details.st_ctime),
+        )
+
+    if parent_has_symlink(selected.parent):
+        raise QualificationError("OpenCode executable parent path contains a symlink")
+    try:
+        source_before = selected.lstat()
+        source_symlink = stat.S_ISLNK(source_before.st_mode)
+        direct_target = selected
+        selector_target: str | None = None
+        if source_symlink:
+            selector_target = os.readlink(selected)
+            raw_target = Path(selector_target)
+            direct_target = (
+                raw_target if raw_target.is_absolute() else selected.parent / raw_target
+            )
+            direct_target = Path(os.path.abspath(direct_target))
+        if parent_has_symlink(direct_target.parent):
+            raise QualificationError(
+                "OpenCode executable target parent path contains a symlink"
+            )
+        direct_before = direct_target.lstat()
+        if source_symlink and stat.S_ISLNK(direct_before.st_mode):
+            raise QualificationError(
+                "OpenCode executable selector must not be a symlink chain"
+            )
+        resolved = direct_target.resolve(strict=True)
+        target_before = resolved.lstat()
+    except QualificationError:
+        raise
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise QualificationError("OpenCode executable is unavailable") from exc
+    if (
+        stat.S_ISLNK(target_before.st_mode)
+        or not stat.S_ISREG(target_before.st_mode)
+        or target_before.st_nlink != 1
+    ):
+        raise QualificationError(
+            "OpenCode executable target must be a regular single-link file"
+        )
+    if not os.access(resolved, os.X_OK):
+        raise QualificationError("OpenCode executable target is not executable")
+    try:
+        resolved.relative_to(Path(repository).resolve(strict=True))
+    except ValueError:
+        pass
+    except (OSError, RuntimeError) as exc:
+        raise QualificationError("OpenCode repository binding is unavailable") from exc
+    else:
+        raise QualificationError("OpenCode executable target must be repository-external")
+
+    expected = host_preflight_receipt.host_binary_identity(identity, "opencode")
+
+    def topology_snapshot() -> tuple[Any, ...]:
+        if parent_has_symlink(selected.parent) or parent_has_symlink(direct_target.parent):
+            raise QualificationError(
+                "OpenCode executable parent path contains a symlink"
+            )
+        try:
+            selected_details = selected.lstat()
+            direct_details = direct_target.lstat()
+            resolved_details = resolved.lstat()
+            observed_selector = os.readlink(selected) if source_symlink else None
+        except OSError as exc:
+            raise QualificationError(
+                "OpenCode executable changed during static inspection"
+            ) from exc
+        return (
+            signature(selected_details),
+            signature(direct_details),
+            signature(resolved_details),
+            observed_selector,
+        )
+
+    before = topology_snapshot()
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        descriptor = os.open(resolved, flags)
+        try:
+            fd_before = os.fstat(descriptor)
+            digest = hashlib.sha256()
+            observed_bytes = 0
+            while True:
+                chunk = os.read(descriptor, _BROKER_CONTROL_READ_CHUNK_BYTES)
+                if not chunk:
+                    break
+                observed_bytes += len(chunk)
+                digest.update(chunk)
+            fd_after = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+    except OSError as exc:
+        raise QualificationError(
+            "OpenCode executable changed during static inspection"
+        ) from exc
+    after = topology_snapshot()
+    if (
+        before != after
+        or signature(fd_before) != signature(fd_after)
+        or signature(fd_before) != signature(target_before)
+        or observed_bytes != fd_before.st_size
+    ):
+        raise QualificationError("OpenCode executable changed during static inspection")
+    observed_sha256 = digest.hexdigest()
+    if observed_sha256 != expected["sha256"]:
+        raise QualificationError("OpenCode executable target hash differs from frozen identity")
+    return {
+        "host": "opencode",
+        "version": expected["version"],
+        "sha256": observed_sha256,
+        "source_symlink": source_symlink,
+        "selector_source_symlink": source_symlink,
+        "execution_target_regular": True,
+        "execution_target_single_link": True,
+        "repository_external": True,
+        "host_identity_sha256": host_preflight_receipt.host_identity_sha256(
+            identity["hosts"]["opencode"]
+        ),
+        "host_identity_source_sha256": str(identity["source_sha256"]),
+    }
+
+
 def _validate_binary(
     binary: Path,
     *,
@@ -2114,17 +2356,12 @@ def _validate_binary(
 ) -> str:
     if identity is not None:
         try:
-            observation = host_preflight_receipt.inspect_host_binary(
+            observation = _inspect_opencode_binary_static(
                 binary,
-                host="opencode",
                 identity=identity,
                 repository=repository or Path(__file__).resolve().parents[2],
             )
-        except (
-            host_preflight_receipt.HostIdentityValidationError,
-            OSError,
-            ValueError,
-        ) as exc:
+        except (QualificationError, OSError, ValueError) as exc:
             raise QualificationError(
                 "OpenCode executable did not match the frozen Host identity"
             ) from exc
@@ -2145,6 +2382,7 @@ def _validate_owner_broker_launcher(
     launcher: Path,
     *,
     host_binary: Path,
+    host_binary_sha256: str | None = None,
     repository: Path | None = None,
     expected_broker_sha256: str | None = None,
 ) -> str:
@@ -2179,11 +2417,792 @@ def _validate_owner_broker_launcher(
             "OpenCode credential broker launcher must be outside the repository"
         )
     launcher_sha256 = _sha256_file(launcher)
-    if launcher_sha256 == _sha256_file(host_binary):
+    bound_host_sha256 = (
+        _control_sha256(host_binary_sha256, label="Host binary")
+        if host_binary_sha256 is not None
+        else _sha256_file(host_binary)
+    )
+    if launcher_sha256 == bound_host_sha256:
         raise QualificationError("OpenCode credential broker launcher is not process-separated")
     if expected_broker_sha256 is not None and launcher_sha256 != expected_broker_sha256:
         raise QualificationError("OpenCode credential broker launcher hash mismatch")
     return launcher_sha256
+
+
+def _control_fail(message: str) -> None:
+    raise QualificationError(message)
+
+
+def _control_sha256(value: Any, *, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or _SHA256.fullmatch(value) is None
+        or value == "0" * 64
+    ):
+        _control_fail(f"{label} must be a nonzero lowercase SHA-256 digest")
+    return value
+
+
+def _control_timestamp(value: Any, *, label: str) -> datetime:
+    if not isinstance(value, str):
+        _control_fail(f"{label} must be a UTC timestamp")
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise QualificationError(f"{label} must be a UTC timestamp") from exc
+
+
+def _strict_control_json(raw: bytes) -> dict[str, Any]:
+    if not isinstance(raw, bytes) or not raw or len(raw) > _MAX_BROKER_CONTROL_BYTES:
+        _control_fail("OpenCode broker control response size is invalid")
+
+    def closed_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                _control_fail("OpenCode broker control response contains a duplicate field")
+            result[key] = value
+        return result
+
+    try:
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=closed_object,
+            parse_constant=lambda _value: _control_fail(
+                "OpenCode broker control response contains a non-finite number"
+            ),
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise QualificationError(
+            "OpenCode broker control response is not strict JSON"
+        ) from exc
+    if not isinstance(value, dict):
+        _control_fail("OpenCode broker control response must be an object")
+    return value
+
+
+def _validate_opencode_zero_model_preflight_request(
+    value: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != _CONTROL_REQUEST_KEYS:
+        _control_fail("OpenCode broker control request is not closed")
+    if (
+        value.get("schema_version") != OPENCODE_BROKER_CONTROL_SCHEMA_VERSION
+        or value.get("operation") != "zero_model_preflight"
+        or value.get("host") != "opencode"
+        or value.get("task_case") not in host_process_receipt_v2.TASK_CASES
+        or not isinstance(value.get("run_id"), str)
+        or _CONTROL_IDENTIFIER.fullmatch(str(value.get("run_id"))) is None
+        or value.get("required_sequence")
+        != list(OPENCODE_ZERO_MODEL_REQUIRED_SEQUENCE)
+        or value.get("optional_sequence")
+        != list(OPENCODE_ZERO_MODEL_OPTIONAL_SEQUENCE)
+        or value.get("allowed_routes") != list(OPENCODE_ZERO_MODEL_ALLOWED_ROUTES)
+        or value.get("zero_model_constraints") != _ZERO_MODEL_CONSTRAINTS
+    ):
+        _control_fail("OpenCode broker control request contract differs")
+
+    candidate = value.get("candidate_binding")
+    if not isinstance(candidate, Mapping) or set(candidate) != set(
+        host_process_receipt_v2.CANDIDATE_FIELDS
+    ):
+        _control_fail("OpenCode broker candidate binding is incomplete")
+    for field in ("commit", "tree"):
+        if not isinstance(candidate.get(field), str) or _GIT_OID.fullmatch(
+            str(candidate.get(field))
+        ) is None:
+            _control_fail("OpenCode broker candidate Git binding is invalid")
+    for field in ("lock_sha256", "wheel_sha256", "sdist_sha256"):
+        _control_sha256(candidate.get(field), label=f"candidate {field}")
+
+    run_binding = value.get("run_binding")
+    if not isinstance(run_binding, Mapping) or set(run_binding) != set(
+        host_process_receipt_v2.RUN_BINDING_FIELDS
+    ):
+        _control_fail("OpenCode broker run binding is incomplete")
+    if any(
+        type(run_binding.get(field)) is not int or run_binding[field] < 1
+        for field in host_process_receipt_v2.RUN_BINDING_FIELDS
+    ):
+        _control_fail("OpenCode broker run binding is invalid")
+
+    host_binary = value.get("host_binary")
+    if (
+        not isinstance(host_binary, Mapping)
+        or set(host_binary) != {"version", "sha256"}
+        or not isinstance(host_binary.get("version"), str)
+        or _CONTROL_VERSION.fullmatch(host_binary["version"]) is None
+    ):
+        _control_fail("OpenCode broker Host binary binding is invalid")
+    _control_sha256(host_binary.get("sha256"), label="Host binary")
+    for field in (
+        "broker_source_sha256",
+        "host_identity_sha256",
+        "host_identity_source_sha256",
+    ):
+        _control_sha256(value.get(field), label=field)
+
+    challenge = value.get("challenge")
+    if not isinstance(challenge, Mapping) or set(challenge) != {
+        "nonce_sha256",
+        "issued_at",
+        "expires_at",
+    }:
+        _control_fail("OpenCode broker freshness challenge is incomplete")
+    _control_sha256(challenge.get("nonce_sha256"), label="challenge nonce")
+    issued = _control_timestamp(challenge.get("issued_at"), label="challenge issued_at")
+    expires = _control_timestamp(
+        challenge.get("expires_at"), label="challenge expires_at"
+    )
+    lifetime = (expires - issued).total_seconds()
+    if lifetime <= 0 or lifetime > host_process_receipt_v2.MAX_RECEIPT_LIFETIME_SECONDS:
+        _control_fail("OpenCode broker freshness challenge lifetime is invalid")
+    return json.loads(
+        json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    )
+
+
+def build_opencode_zero_model_preflight_request(
+    *,
+    task_case: str,
+    run_id: str,
+    candidate_binding: Mapping[str, Any],
+    run_binding: Mapping[str, Any],
+    host_binary: Mapping[str, Any],
+    broker_source_sha256: str,
+    host_identity_sha256: str,
+    host_identity_source_sha256: str,
+    nonce_sha256: str,
+    issued_at: str,
+    expires_at: str,
+) -> dict[str, Any]:
+    """Build one path-free control challenge; it is never Formal evidence."""
+
+    return _validate_opencode_zero_model_preflight_request(
+        {
+            "schema_version": OPENCODE_BROKER_CONTROL_SCHEMA_VERSION,
+            "operation": "zero_model_preflight",
+            "host": "opencode",
+            "task_case": task_case,
+            "run_id": run_id,
+            "candidate_binding": dict(candidate_binding),
+            "run_binding": dict(run_binding),
+            "host_binary": dict(host_binary),
+            "broker_source_sha256": broker_source_sha256,
+            "host_identity_sha256": host_identity_sha256,
+            "host_identity_source_sha256": host_identity_source_sha256,
+            "challenge": {
+                "nonce_sha256": nonce_sha256,
+                "issued_at": issued_at,
+                "expires_at": expires_at,
+            },
+            "required_sequence": list(OPENCODE_ZERO_MODEL_REQUIRED_SEQUENCE),
+            "optional_sequence": list(OPENCODE_ZERO_MODEL_OPTIONAL_SEQUENCE),
+            "allowed_routes": list(OPENCODE_ZERO_MODEL_ALLOWED_ROUTES),
+            "zero_model_constraints": dict(_ZERO_MODEL_CONSTRAINTS),
+        }
+    )
+
+
+def validate_opencode_zero_model_preflight_response(
+    value: Mapping[str, Any],
+    *,
+    request: Mapping[str, Any],
+    observed_at: str,
+    seen_nonce_sha256s: MutableSet[str],
+) -> dict[str, Any]:
+    """Validate closed broker output without self-attesting its provenance."""
+
+    control = _validate_opencode_zero_model_preflight_request(request)
+    if not isinstance(value, Mapping) or set(value) != _CONTROL_RESPONSE_KEYS:
+        _control_fail("OpenCode broker control response is not closed")
+    observed_sequence = value.get("observed_sequence")
+    if (
+        value.get("schema_version") != OPENCODE_BROKER_CONTROL_SCHEMA_VERSION
+        or value.get("operation") != "zero_model_preflight"
+        or value.get("status") != "observed"
+        or observed_sequence
+        not in (
+            list(OPENCODE_ZERO_MODEL_REQUIRED_SEQUENCE),
+            list(OPENCODE_ZERO_MODEL_OPTIONAL_SEQUENCE),
+        )
+    ):
+        _control_fail("OpenCode broker observed an unexpected route sequence")
+    for field in (
+        "forbidden_route_count",
+        "message_route_count",
+        "provider_route_count",
+        "model_route_count",
+        "mcp_route_count",
+        "model_invocation_count",
+        "provider_request_count",
+        "remote_workspace_forward_count",
+        "share_request_count",
+        "ambient_plugin_count",
+    ):
+        if type(value.get(field)) is not int or value[field] != 0:
+            _control_fail("OpenCode broker observed forbidden Host, model, or route activity")
+    barrier = value.get("event_barrier")
+    if not isinstance(barrier, Mapping) or set(barrier) != {
+        "status",
+        "response_release",
+        "timed_out",
+        "child_plugin_event_count",
+        "event_type",
+        "timeout_seconds",
+        "elapsed_ms",
+        "parent_source",
+    }:
+        _control_fail("OpenCode broker child event barrier is not closed")
+    if (
+        barrier.get("status") != "satisfied"
+        or barrier.get("response_release") != "after_child_plugin_event"
+        or barrier.get("timed_out") is not False
+        or barrier.get("child_plugin_event_count") != 1
+        or barrier.get("event_type") != "session.created"
+        or barrier.get("timeout_seconds") != 30
+        or type(barrier.get("elapsed_ms")) is not int
+        or not 0 <= barrier["elapsed_ms"] <= 30_000
+        or barrier.get("parent_source") != "actual_ingress_route"
+    ):
+        _control_fail("OpenCode broker child event barrier was not satisfied")
+
+    receipt = value.get("host_process_receipt")
+    try:
+        admitted = host_process_receipt_v2.validate_receipt(
+            receipt,
+            expected_host="opencode",
+            expected_task_case=str(control["task_case"]),
+            expected_run_id=str(control["run_id"]),
+            expected_candidate=control["candidate_binding"],
+            expected_run_binding=control["run_binding"],
+            expected_broker_sha256=str(control["broker_source_sha256"]),
+            expected_host_identity_sha256=str(control["host_identity_sha256"]),
+            expected_host_identity_source_sha256=str(
+                control["host_identity_source_sha256"]
+            ),
+            expected_host_binary=control["host_binary"],
+            seen_nonce_sha256s=seen_nonce_sha256s,
+        )
+    except (TypeError, ValueError, host_process_receipt_v2.HostProcessReceiptV2Error) as exc:
+        raise QualificationError("OpenCode broker v2 receipt was rejected") from exc
+    if admitted["nonce_sha256"] != control["challenge"]["nonce_sha256"]:
+        _control_fail("OpenCode broker freshness challenge differs")
+    proof = admitted["proof"]
+    if proof["request_body_sha256"] != hashlib.sha256(b"{}").hexdigest():
+        _control_fail("OpenCode broker fork request body was not the exact empty object")
+
+    challenge_issued = _control_timestamp(
+        control["challenge"]["issued_at"], label="challenge issued_at"
+    )
+    challenge_expires = _control_timestamp(
+        control["challenge"]["expires_at"], label="challenge expires_at"
+    )
+    receipt_issued = _control_timestamp(admitted["issued_at"], label="receipt issued_at")
+    receipt_reference = _control_timestamp(
+        admitted["validation_reference_time"], label="receipt validation_reference_time"
+    )
+    receipt_expires = _control_timestamp(
+        admitted["expires_at"], label="receipt expires_at"
+    )
+    observed = _control_timestamp(observed_at, label="consumer observed_at")
+    if not (
+        challenge_issued
+        <= receipt_issued
+        <= receipt_reference
+        <= observed
+        <= receipt_expires
+        <= challenge_expires
+    ):
+        _control_fail("OpenCode broker response is outside its challenge window")
+    return admitted
+
+
+def _terminate_broker_process_group(process: subprocess.Popen[bytes]) -> None:
+    if os.name == "posix":
+        with suppress(ProcessLookupError, PermissionError):
+            os.killpg(process.pid, signal.SIGKILL)
+    with suppress(OSError):
+        process.kill()
+
+
+def _bounded_broker_control_exchange(
+    broker_executable: Path,
+    *,
+    payload: bytes,
+    timeout_seconds: float,
+) -> bytes:
+    """Consume one owner-external response with an in-flight combined bound."""
+
+    if os.name != "posix":
+        _control_fail("OpenCode broker process-group isolation is unavailable")
+    try:
+        process = subprocess.Popen(
+            [str(broker_executable), OPENCODE_BROKER_CONTROL_ARGUMENT],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env={
+                "PATH": os.defpath,
+                "LANG": "C.UTF-8",
+                "LC_ALL": "C.UTF-8",
+                "NO_COLOR": "1",
+            },
+            start_new_session=True,
+        )
+    except OSError as exc:
+        raise QualificationError(
+            "OpenCode owner-external broker control IPC failed to start"
+        ) from exc
+    if process.stdin is None or process.stdout is None or process.stderr is None:
+        _terminate_broker_process_group(process)
+        _control_fail("OpenCode owner-external broker control pipes are unavailable")
+
+    stdout_buffer = bytearray()
+    stderr_buffer = bytearray()
+    buffer_lock = threading.Lock()
+    overflow = threading.Event()
+    read_failure = threading.Event()
+    total_bytes = 0
+
+    def drain(stream: Any, target: bytearray) -> None:
+        nonlocal total_bytes
+        try:
+            while True:
+                chunk = stream.read1(_BROKER_CONTROL_READ_CHUNK_BYTES)
+                if not chunk:
+                    return
+                terminate = False
+                with buffer_lock:
+                    if overflow.is_set():
+                        continue
+                    total_bytes += len(chunk)
+                    if total_bytes > _MAX_BROKER_CONTROL_BYTES:
+                        stdout_buffer.clear()
+                        stderr_buffer.clear()
+                        overflow.set()
+                        terminate = True
+                    else:
+                        target.extend(chunk)
+                if terminate:
+                    _terminate_broker_process_group(process)
+        except OSError:
+            read_failure.set()
+            _terminate_broker_process_group(process)
+
+    readers = (
+        threading.Thread(target=drain, args=(process.stdout, stdout_buffer), daemon=True),
+        threading.Thread(target=drain, args=(process.stderr, stderr_buffer), daemon=True),
+    )
+    for reader in readers:
+        reader.start()
+    stdin_failed = False
+    try:
+        process.stdin.write(payload)
+        process.stdin.flush()
+    except (BrokenPipeError, OSError):
+        stdin_failed = True
+    finally:
+        with suppress(OSError):
+            process.stdin.close()
+
+    deadline = time.monotonic() + timeout_seconds
+    timed_out = False
+    try:
+        process.wait(timeout=max(0.001, deadline - time.monotonic()))
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        _terminate_broker_process_group(process)
+        with suppress(subprocess.TimeoutExpired):
+            process.wait(timeout=2)
+    for reader in readers:
+        reader.join(timeout=max(0.0, deadline - time.monotonic()))
+    if any(reader.is_alive() for reader in readers):
+        timed_out = True
+        _terminate_broker_process_group(process)
+        for stream in (process.stdout, process.stderr):
+            with suppress(OSError):
+                stream.close()
+        for reader in readers:
+            reader.join(timeout=1)
+
+    def fail_closed(message: str) -> None:
+        with buffer_lock:
+            stdout_buffer.clear()
+            stderr_buffer.clear()
+        _terminate_broker_process_group(process)
+        _control_fail(message)
+
+    if overflow.is_set():
+        fail_closed("OpenCode owner-external broker output limit exceeded")
+    if timed_out:
+        fail_closed("OpenCode owner-external broker control IPC timed out")
+    if read_failure.is_set() or stdin_failed or process.returncode != 0:
+        fail_closed("OpenCode owner-external broker control IPC failed")
+    if stderr_buffer:
+        fail_closed("OpenCode owner-external broker emitted unexpected stderr")
+    return bytes(stdout_buffer)
+
+
+def consume_opencode_zero_model_preflight(
+    broker_launcher: Path,
+    *,
+    request: Mapping[str, Any],
+    timeout_seconds: float = 60.0,
+    seen_nonce_sha256s: MutableSet[str],
+) -> dict[str, Any]:
+    """Consume one transient broker response and discard its raw bytes."""
+
+    control = _validate_opencode_zero_model_preflight_request(request)
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be positive")
+    payload = json.dumps(
+        control,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8") + b"\n"
+    raw = _bounded_broker_control_exchange(
+        broker_launcher,
+        payload=payload,
+        timeout_seconds=timeout_seconds,
+    )
+    observed_at = datetime.now(UTC).replace(microsecond=0).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    return validate_opencode_zero_model_preflight_response(
+        _strict_control_json(raw),
+        request=control,
+        observed_at=observed_at,
+        seen_nonce_sha256s=seen_nonce_sha256s,
+    )
+
+
+@contextmanager
+def _stage_exact_broker_executable(
+    path: Path,
+    *,
+    repository: Path,
+    host_binary: Path,
+    host_binary_sha256: str | None = None,
+    expected_sha256: str,
+) -> Iterator[Path]:
+    """Execute the exact inspected broker bytes from a private immutable copy."""
+
+    source = Path(path)
+    if not source.is_absolute():
+        _control_fail("OpenCode owner-external broker source must be absolute")
+    current = Path(source.anchor)
+    try:
+        for part in source.parent.parts[1:]:
+            current /= part
+            if stat.S_ISLNK(current.lstat().st_mode):
+                _control_fail(
+                    "OpenCode owner-external broker source parent contains a symlink"
+                )
+    except OSError as exc:
+        raise QualificationError(
+            "OpenCode owner-external broker source parent is unavailable"
+        ) from exc
+    observed = _validate_owner_broker_launcher(
+        source,
+        host_binary=host_binary,
+        host_binary_sha256=host_binary_sha256,
+        repository=repository,
+        expected_broker_sha256=expected_sha256,
+    )
+    if observed != expected_sha256:
+        _control_fail("OpenCode owner-external broker source hash differs")
+    try:
+        before = source.lstat()
+        if before.st_size < 1 or before.st_size > _BROKER_SOURCE_MAX_BYTES:
+            _control_fail("OpenCode owner-external broker source exceeds its byte bound")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        descriptor = os.open(source, flags)
+        try:
+            fd_before = os.fstat(descriptor)
+            raw = bytearray()
+            while True:
+                chunk = os.read(descriptor, _BROKER_CONTROL_READ_CHUNK_BYTES)
+                if not chunk:
+                    break
+                raw.extend(chunk)
+                if len(raw) > _BROKER_SOURCE_MAX_BYTES:
+                    _control_fail(
+                        "OpenCode owner-external broker source exceeds its byte bound"
+                    )
+            fd_after = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        after = source.lstat()
+    except OSError as exc:
+        raise QualificationError(
+            "OpenCode owner-external broker source changed while it was read"
+        ) from exc
+    signatures = {
+        (
+            details.st_dev,
+            details.st_ino,
+            details.st_size,
+            details.st_mode,
+            details.st_uid,
+            details.st_nlink,
+            getattr(details, "st_mtime_ns", details.st_mtime),
+            getattr(details, "st_ctime_ns", details.st_ctime),
+        )
+        for details in (before, fd_before, fd_after, after)
+    }
+    if len(signatures) != 1 or hashlib.sha256(raw).hexdigest() != expected_sha256:
+        _control_fail("OpenCode owner-external broker source changed while it was read")
+
+    with tempfile.TemporaryDirectory(prefix="deeplaw-opencode-broker-") as raw_root:
+        root = Path(raw_root).resolve(strict=True)
+        details = root.lstat()
+        if (
+            not stat.S_ISDIR(details.st_mode)
+            or stat.S_IMODE(details.st_mode) & 0o077
+            or (os.name != "nt" and details.st_uid != os.geteuid())
+        ):
+            _control_fail("OpenCode broker staging directory is unsafe")
+        staged = root / "broker-executable"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        descriptor = os.open(staged, flags, 0o700)
+        try:
+            offset = 0
+            while offset < len(raw):
+                offset += os.write(descriptor, raw[offset:])
+            os.fchmod(descriptor, 0o500)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        os.chmod(root, 0o500)
+        try:
+            if hashlib.sha256(staged.read_bytes()).hexdigest() != expected_sha256:
+                _control_fail("staged OpenCode broker bytes differ")
+            yield staged
+        finally:
+            os.chmod(root, 0o700)
+
+
+def _validate_opencode_package(
+    path: Path,
+    *,
+    identity: Mapping[str, Any],
+    repository: Path,
+) -> dict[str, str]:
+    """Bind the preflight to stable bytes from the frozen OpenCode release."""
+
+    host_item = identity.get("hosts", {}).get("opencode")
+    if not isinstance(host_item, Mapping):
+        _control_fail("OpenCode frozen Host identity is unavailable")
+    version = host_item.get("version")
+    source_commit = host_item.get("source_commit")
+    expected_sha256 = host_item.get("package_sha256")
+    if (
+        version != HISTORICAL_OPENCODE_VERSION_FIXTURE
+        or source_commit != OPENCODE_SOURCE_COMMIT
+        or not isinstance(expected_sha256, str)
+        or _SHA256.fullmatch(expected_sha256) is None
+        or expected_sha256 == "0" * 64
+    ):
+        _control_fail("OpenCode frozen package identity is not the pinned release")
+
+    source = Path(path)
+    if not source.is_absolute():
+        _control_fail("OpenCode package source must be absolute")
+    current = Path(source.anchor)
+    try:
+        for part in source.parent.parts[1:]:
+            current /= part
+            if stat.S_ISLNK(current.lstat().st_mode):
+                _control_fail("OpenCode package source parent contains a symlink")
+        before = source.lstat()
+        if (
+            stat.S_ISLNK(before.st_mode)
+            or not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or before.st_size < 1
+            or before.st_size > _OPENCODE_PACKAGE_MAX_BYTES
+        ):
+            _control_fail("OpenCode package source is not a bounded single-link file")
+        resolved = source.resolve(strict=True)
+        try:
+            resolved.relative_to(repository.resolve(strict=True))
+        except ValueError:
+            pass
+        else:
+            _control_fail("OpenCode package source must be repository-external")
+
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        descriptor = os.open(source, flags)
+        try:
+            fd_before = os.fstat(descriptor)
+            digest = hashlib.sha256()
+            observed_bytes = 0
+            while True:
+                chunk = os.read(descriptor, _BROKER_CONTROL_READ_CHUNK_BYTES)
+                if not chunk:
+                    break
+                observed_bytes += len(chunk)
+                if observed_bytes > _OPENCODE_PACKAGE_MAX_BYTES:
+                    _control_fail("OpenCode package source exceeds its byte bound")
+                digest.update(chunk)
+            fd_after = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        after = source.lstat()
+    except OSError as exc:
+        raise QualificationError(
+            "OpenCode package source changed while it was read"
+        ) from exc
+
+    signatures = {
+        (
+            details.st_dev,
+            details.st_ino,
+            details.st_size,
+            details.st_mode,
+            details.st_uid,
+            details.st_nlink,
+            getattr(details, "st_mtime_ns", details.st_mtime),
+            getattr(details, "st_ctime_ns", details.st_ctime),
+        )
+        for details in (before, fd_before, fd_after, after)
+    }
+    if len(signatures) != 1 or observed_bytes != before.st_size:
+        _control_fail("OpenCode package source changed while it was read")
+    observed_sha256 = digest.hexdigest()
+    if observed_sha256 != expected_sha256:
+        _control_fail("OpenCode package bytes differ from the frozen Host identity")
+    return {
+        "version": version,
+        "source_commit": source_commit,
+        "package_sha256": observed_sha256,
+    }
+
+
+def run_opencode_owner_external_zero_model_preflight(
+    *,
+    candidate_binding_input: Path,
+    candidate_wheel: Path | None = None,
+    host_identity_input: Path,
+    opencode_package: Path,
+    opencode_binary: Path,
+    opencode_broker: Path,
+    expected_broker_sha256: str,
+    task_case: str,
+    run_id: str,
+    evidence_run_id: int,
+    qualification_run_id: int,
+    repository: Path | None = None,
+    seen_nonce_sha256s: set[str] | None = None,
+) -> dict[str, Any]:
+    """Run a transient zero-model broker capability preflight, not a task run."""
+
+    selected_repository = repository or Path(__file__).resolve().parents[2]
+    if (
+        task_case not in host_process_receipt_v2.TASK_CASES
+        or not isinstance(run_id, str)
+        or _CONTROL_IDENTIFIER.fullmatch(run_id) is None
+        or type(evidence_run_id) is not int
+        or evidence_run_id < 1
+        or type(qualification_run_id) is not int
+        or qualification_run_id < 1
+        or not isinstance(expected_broker_sha256, str)
+        or _SHA256.fullmatch(expected_broker_sha256) is None
+        or expected_broker_sha256 == "0" * 64
+    ):
+        _control_fail("OpenCode zero-model run binding is invalid")
+    try:
+        candidate = load_exact_candidate_binding(
+            candidate_binding_input,
+            candidate_wheel=candidate_wheel,
+            repository=selected_repository,
+        )
+        identity = host_preflight_receipt.load_host_identity_input(
+            host_identity_input,
+            repository=selected_repository,
+        )
+        _validate_opencode_package(
+            opencode_package,
+            identity=identity,
+            repository=selected_repository,
+        )
+        expected_host_binary = host_preflight_receipt.host_binary_identity(
+            identity, "opencode"
+        )
+        _inspect_opencode_binary_static(
+            opencode_binary,
+            identity=identity,
+            repository=selected_repository,
+        )
+    except (
+        HostTaskQualificationError,
+        host_preflight_receipt.HostIdentityValidationError,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise QualificationError(
+            "OpenCode zero-model static candidate or Host binding was rejected"
+        ) from exc
+    issued = datetime.now(UTC).replace(microsecond=0)
+    expires = issued + timedelta(seconds=60)
+    nonce_sha256 = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+    request = build_opencode_zero_model_preflight_request(
+        task_case=task_case,
+        run_id=run_id,
+        candidate_binding=candidate,
+        run_binding={
+            "evidence_run_id": evidence_run_id,
+            "qualification_run_id": qualification_run_id,
+        },
+        host_binary=expected_host_binary,
+        broker_source_sha256=expected_broker_sha256,
+        host_identity_sha256=host_preflight_receipt.host_identity_sha256(
+            identity["hosts"]["opencode"]
+        ),
+        host_identity_source_sha256=str(identity["source_sha256"]),
+        nonce_sha256=nonce_sha256,
+        issued_at=issued.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        expires_at=expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+    try:
+        with _stage_exact_broker_executable(
+            opencode_broker,
+            repository=selected_repository,
+            host_binary=opencode_binary,
+            host_binary_sha256=expected_host_binary["sha256"],
+            expected_sha256=expected_broker_sha256,
+        ) as broker_executable:
+            admitted = consume_opencode_zero_model_preflight(
+                broker_executable,
+                request=request,
+                seen_nonce_sha256s=(
+                    seen_nonce_sha256s if seen_nonce_sha256s is not None else set()
+                ),
+            )
+    except (OSError, ValueError, QualificationError) as exc:
+        raise QualificationError(
+            "OpenCode owner-external zero-model preflight failed closed"
+        ) from exc
+    return {
+        "status": "passed",
+        "evidence_class": "zero_model_preflight_only",
+        "formal_admission": False,
+        "host": "opencode",
+        "observed_sequence": list(OPENCODE_ZERO_MODEL_REQUIRED_SEQUENCE),
+        "model_invocation_count": 0,
+        "provider_request_count": 0,
+        "broker_source_sha256": expected_broker_sha256,
+        "receipt_record_sha256": admitted["record_sha256"],
+    }
 
 
 def _run_opencode_command(
@@ -2568,6 +3587,7 @@ def preflight_opencode(
     project_root: Path | None = None,
     plugin_receipt: Mapping[str, Any] | None = None,
     expected_broker_sha256: str | None = None,
+    expected_host_binary_sha256: str | None = None,
     expected_version: str = HISTORICAL_OPENCODE_VERSION_FIXTURE,
     agent_name: str = "qualification",
 ) -> dict[str, Any]:
@@ -2579,6 +3599,7 @@ def preflight_opencode(
         _validate_owner_broker_launcher(
             host_launcher,
             host_binary=binary,
+            host_binary_sha256=expected_host_binary_sha256,
             repository=project_root,
             expected_broker_sha256=expected_broker_sha256,
         )
@@ -2598,21 +3619,8 @@ def preflight_opencode(
         for name, value in environment.items()
         if name not in _CANARY_NAMES and name != _OWNER_DOTENV_ENV_NAME
     }
-    version = _run_opencode_command(
-        binary,
-        args=("--version",),
-        environment=inspection_environment,
-        cwd=inspection_cwd,
-    )
-    _forbid_sensitive(version["stdout"] + version["stderr"], forbidden_values)
-    version_text = version["stdout"].decode("utf-8", errors="replace").strip()
-    if version["returncode"] != 0 or version_text not in {
-        expected_version,
-        f"opencode {expected_version}",
-    }:
-        raise QualificationError("OpenCode version differs from the frozen Host identity")
     models = _run_opencode_command(
-        binary,
+        host_launcher,
         args=("models", "deepseek"),
         environment=inspection_environment,
         cwd=inspection_cwd,
@@ -2623,7 +3631,7 @@ def preflight_opencode(
     )
     model_inventory = parse_model_inventory(models["stdout"], returncode=int(models["returncode"]))
     config = _run_opencode_command(
-        binary,
+        host_launcher,
         args=("debug", "config"),
         environment=inspection_environment,
         cwd=inspection_cwd,
@@ -2694,8 +3702,8 @@ def preflight_opencode(
         raise QualificationError("DeepSeek model availability probe failed")
     return {
         "version": expected_version,
-        "version_sha256": _sha256(version["stdout"]),
-        "version_bytes": len(version["stdout"]),
+        "version_sha256": _sha256(expected_version.encode("utf-8")),
+        "version_bytes": len(expected_version.encode("utf-8")),
         "model_inventory": model_inventory,
         "resolved_config": config_receipt,
         "external_plugin": {
@@ -4554,6 +5562,7 @@ def _execute_qualification_body(
     deeplaw_executable: Path,
     output_dir: Path,
     opencode_binary: Path,
+    opencode_package: Path | None = None,
     host_launcher: Path,
     human_gold_path: Path | None,
     owner_dotenv: Path | None = None,
@@ -4561,6 +5570,10 @@ def _execute_qualification_body(
     root: Path,
     source_revision_id: str | None = None,
     expected_broker_sha256: str | None = None,
+    candidate_binding_input: Path | None = None,
+    run_id: str | None = None,
+    evidence_run_id: int | None = None,
+    qualification_run_id: int | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
     if source_revision_id is not None:
@@ -4574,13 +5587,54 @@ def _execute_qualification_body(
         raise QualificationError(
             "OpenCode candidate runner must not receive Human Gold or reference labels"
         )
-    raise QualificationError(
-        "OpenCode owner-external public fork-route and child plugin-event "
-        f"correlation is unavailable; {mode} Host/model execution remains not_executed"
-    )
-    # The public execute seam validates every mode before entering this body.
-    # Keep the pathless direct diagnostic fixture for the existing no-provider
-    # unit seam; an identity-bound diagnostic body is validated here as well.
+    if mode == "qualification":
+        if (
+            host_identity_input is None
+            or opencode_package is None
+            or expected_broker_sha256 is None
+            or candidate_binding_input is None
+            or run_id is None
+            or evidence_run_id is None
+            or qualification_run_id is None
+        ):
+            raise QualificationError(
+                "OpenCode owner-external public fork-route and child plugin-event "
+                "correlation control input is unavailable; qualification Host/model "
+                "execution remains not_executed"
+            )
+        try:
+            preflight = run_opencode_owner_external_zero_model_preflight(
+                candidate_binding_input=candidate_binding_input,
+                candidate_wheel=candidate_wheel,
+                host_identity_input=host_identity_input,
+                opencode_package=opencode_package,
+                opencode_binary=opencode_binary,
+                opencode_broker=host_launcher,
+                expected_broker_sha256=expected_broker_sha256,
+                task_case="continuity",
+                run_id=run_id,
+                evidence_run_id=evidence_run_id,
+                qualification_run_id=qualification_run_id,
+                repository=repository,
+            )
+        except (OSError, ValueError, QualificationError) as exc:
+            raise QualificationError(
+                "OpenCode owner-external zero-model preflight failed closed"
+            ) from exc
+        if (
+            preflight.get("status") != "passed"
+            or preflight.get("evidence_class") != "zero_model_preflight_only"
+            or preflight.get("formal_admission") is not False
+        ):
+            raise QualificationError(
+                "OpenCode owner-external zero-model preflight was not admitted"
+            )
+    else:
+        raise QualificationError(
+            "OpenCode owner-external public fork-route and child plugin-event "
+            "correlation is unavailable; diagnostic Host/model execution remains "
+            "not_executed"
+        )
     if mode == "qualification" or host_identity_input is not None:
         owner_dotenv = _validate_owner_dotenv(
             owner_dotenv,
@@ -4613,9 +5667,8 @@ def _execute_qualification_body(
             expected_version = host_preflight_receipt.host_binary_identity(
                 host_identity, "opencode"
             )["version"]
-            host_preflight_receipt.inspect_host_binary(
+            _inspect_opencode_binary_static(
                 opencode_binary,
-                host="opencode",
                 identity=host_identity,
                 repository=repository,
             )
@@ -4683,6 +5736,7 @@ def _execute_qualification_body(
     broker_launcher_sha = _validate_owner_broker_launcher(
         host_launcher,
         host_binary=opencode_binary,
+        host_binary_sha256=binary_sha,
         repository=repository,
         expected_broker_sha256=expected_broker_sha256,
     )
@@ -4721,6 +5775,7 @@ def _execute_qualification_body(
         project_root=preflight_project,
         plugin_receipt=preflight_plugin_receipt,
         expected_broker_sha256=expected_broker_sha256,
+        expected_host_binary_sha256=binary_sha,
         expected_version=expected_version,
         agent_name=agent_name,
     )
@@ -4736,7 +5791,7 @@ def _execute_qualification_body(
         host={
             "name": "opencode",
             "version": expected_version,
-            "sha256": host_preflight_receipt.host_binary_sha256(opencode_binary),
+            "sha256": binary_sha,
         },
         broker_source=broker_source,
         status="passed",
@@ -4937,12 +5992,17 @@ def execute_qualification(
     deeplaw_executable: Path,
     output_dir: Path,
     opencode_binary: Path,
+    opencode_package: Path | None = None,
     host_launcher: Path,
     human_gold_path: Path | None,
     owner_dotenv: Path | None = None,
     host_identity_input: Path | None = None,
     source_revision_id: str | None = None,
     expected_broker_sha256: str | None = None,
+    candidate_binding_input: Path | None = None,
+    run_id: str | None = None,
+    evidence_run_id: int | None = None,
+    qualification_run_id: int | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
     """Run one Host mode with an external root and deterministic cleanup."""
@@ -4958,6 +6018,7 @@ def execute_qualification(
             deeplaw_executable=deeplaw_executable,
             output_dir=output_dir,
             opencode_binary=opencode_binary,
+            opencode_package=opencode_package,
             host_launcher=host_launcher,
             human_gold_path=human_gold_path,
             owner_dotenv=owner_dotenv,
@@ -4965,6 +6026,10 @@ def execute_qualification(
             root=root,
             source_revision_id=source_revision_id,
             expected_broker_sha256=expected_broker_sha256,
+            candidate_binding_input=candidate_binding_input,
+            run_id=run_id,
+            evidence_run_id=evidence_run_id,
+            qualification_run_id=qualification_run_id,
             mode=mode,
         )
     except BaseException as original:
@@ -5011,14 +6076,21 @@ def execute_qualification(
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("qualification", "diagnostic"), default="qualification")
-    parser.add_argument("--candidate-wheel", type=Path, required=True)
-    parser.add_argument("--deeplaw-executable", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--zero-model-preflight", action="store_true")
+    parser.add_argument("--candidate-wheel", type=Path)
+    parser.add_argument("--candidate-binding-input", type=Path)
+    parser.add_argument("--deeplaw-executable", type=Path)
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--opencode-binary", type=Path, required=True)
+    parser.add_argument("--opencode-package", type=Path)
     parser.add_argument("--opencode-launcher", type=Path, required=True)
     parser.add_argument("--opencode-dotenv", type=Path)
     parser.add_argument("--host-identity-input", type=Path)
     parser.add_argument("--expected-broker-sha256")
+    parser.add_argument("--task-case", choices=host_process_receipt_v2.TASK_CASES)
+    parser.add_argument("--run-id")
+    parser.add_argument("--evidence-run-id", type=int)
+    parser.add_argument("--qualification-run-id", type=int)
     parser.add_argument("--human-gold", type=Path)
     parser.add_argument("--source-revision-id")
     return parser.parse_args(argv)
@@ -5027,19 +6099,62 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
+        if args.zero_model_preflight:
+            required = {
+                "--candidate-binding-input": args.candidate_binding_input,
+                "--host-identity-input": args.host_identity_input,
+                "--opencode-package": args.opencode_package,
+                "--expected-broker-sha256": args.expected_broker_sha256,
+                "--task-case": args.task_case,
+                "--run-id": args.run_id,
+                "--evidence-run-id": args.evidence_run_id,
+                "--qualification-run-id": args.qualification_run_id,
+            }
+            if any(value is None for value in required.values()):
+                raise QualificationError(
+                    "OpenCode zero-model preflight is missing required control input"
+                )
+            result = run_opencode_owner_external_zero_model_preflight(
+                candidate_binding_input=args.candidate_binding_input,
+                candidate_wheel=args.candidate_wheel,
+                host_identity_input=args.host_identity_input,
+                opencode_package=args.opencode_package,
+                opencode_binary=args.opencode_binary,
+                opencode_broker=args.opencode_launcher,
+                expected_broker_sha256=args.expected_broker_sha256,
+                task_case=args.task_case,
+                run_id=args.run_id,
+                evidence_run_id=args.evidence_run_id,
+                qualification_run_id=args.qualification_run_id,
+            )
+            return 0 if result.get("status") == "passed" else 1
         if args.opencode_dotenv is None:
             raise QualificationError("OpenCode owner dotenv path is required")
+        if (
+            args.candidate_wheel is None
+            or args.deeplaw_executable is None
+            or args.output_dir is None
+            or args.opencode_package is None
+        ):
+            raise QualificationError(
+                "OpenCode qualification is missing required execution input"
+            )
         report = execute_qualification(
             candidate_wheel=args.candidate_wheel,
             deeplaw_executable=args.deeplaw_executable,
             output_dir=args.output_dir,
             opencode_binary=args.opencode_binary,
+            opencode_package=args.opencode_package,
             host_launcher=args.opencode_launcher,
             human_gold_path=args.human_gold,
             owner_dotenv=args.opencode_dotenv,
             host_identity_input=args.host_identity_input,
             source_revision_id=args.source_revision_id,
             expected_broker_sha256=args.expected_broker_sha256,
+            candidate_binding_input=args.candidate_binding_input,
+            run_id=args.run_id,
+            evidence_run_id=args.evidence_run_id,
+            qualification_run_id=args.qualification_run_id,
             mode=args.mode,
         )
     except (OSError, QualificationError) as exc:

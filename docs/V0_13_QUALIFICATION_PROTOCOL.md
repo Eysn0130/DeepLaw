@@ -238,10 +238,46 @@ or placed in a formal receipt slot. The Kernel workflow uses its current evidenc
 transient preflight qualification-run challenge because no future Commercial run may be predicted;
 that ephemeral binding can never be reused as a formal receipt.
 
-Passing this zero-model capability preflight only allows the Codex formal runner to move beyond its
-previous fail-before. It does not admit a Host task, prove the later model-bearing process, or close
-any Core Gate. Codex diagnostic mode and the OpenCode formal runner remain fail-before. Each of the
-six actual task processes must still return its own owner-external v2 receipt in the existing slot.
+The OpenCode runner now has the parallel path-free
+`deeplaw.opencode-owner-external-broker-control/v2` consumer. Its exact owner-only external broker,
+not the repository runner, exclusively starts and supervises the pinned OpenCode 1.18.16 Host,
+private loopback upstream, reverse proxy, and fresh plugin-event sink. The closed allowlist is only
+`GET /global/health` -> `POST /session {}` -> `POST /session/:parent/fork {}`, with an optional final
+`GET /session/:child`. Message, prompt, command, shell, summarize, init, revert, Provider, model,
+MCP, share, remote-workspace-forwarding, ambient-plugin, or any other route or invocation fails
+closed. Fork selects no Provider or model. The parent identity comes only from the actual public
+fork ingress path: pinned upstream `Session.fork` does not put `parentID` into `createNext`, so a
+response or plugin event cannot supply or repair parent lineage. The child returned by the HTTP
+response must equal the child in exactly one subsequent `session.created` plugin event on the same
+supervised process.
+
+Before that broker may execute, the runner binds the external OpenCode package through an unchanged
+stable FD to the frozen Host identity's package digest, exact version `1.18.16`, and source commit
+`a3647eb025c7615159d417dcc49fc39fdaeba65b`. The package must be a bounded,
+repository-external, non-symlink-parent, regular single-link file. This static check reads no
+dotenv, auth store, credential, or Secret and cannot start the Host.
+The runner likewise checks the OpenCode selector and exact target bytes without executing
+`opencode --version` or any other Host command: one selector symlink is allowed, while a parent
+symlink, symlink chain, non-regular, linked, non-executable, repository-internal, changed, or
+hash-mismatched target fails closed. Only the exact external broker may start or supervise the Host.
+
+OpenCode invokes the async plugin hook without awaiting its sink write. The broker must therefore
+hold the fork response at its reverse proxy until that matching child event satisfies a bounded
+30-second barrier; timeout, early response release, missing/duplicate/wrong event, mismatched child,
+or cross-process observation fails closed. The runner sends only a 60-second candidate/run/Host/
+broker/nonce challenge, consumes one strict response capped at 256 KiB combined stdout/stderr, and
+discards its raw bytes. It requires the existing `deeplaw.host-process-receipt/v2` family with the
+exact `{}` request-body digest and actual-route child-event proof. It neither creates nor repairs the
+receipt, route digest, parent, child, process identity, PID, nonce, handoff, or correlation digest.
+The external broker source is reopened through an unchanged stable FD, copied to a private
+non-writable path, and executed with a closed control environment. The Kernel workflow runs this
+transient preflight without the OpenCode dotenv, model selector, Provider inventory, or formal
+receipt output.
+
+Passing either zero-model capability preflight only allows that Host's formal runner to move beyond
+its previous fail-before. It does not admit a Host task, prove the later model-bearing process, or
+close any Core Gate. Both diagnostic modes remain fail-before. Each of the six actual task processes
+must still return its own owner-external v2 receipt in the existing slot.
 The v2, consumer, and Kernel validators establish only closed structure and exact cross-binding to
 the candidate, run IDs, retained per-Host broker source, Host identity, native-event digests, nonce,
 and time window. They cannot self-attest observation provenance; formal authority additionally
