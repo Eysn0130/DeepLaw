@@ -3251,6 +3251,10 @@ def _execute_codex(
 
     if mode not in {"qualification", "diagnostic"}:
         raise QualificationFailure("Codex execution mode is invalid")
+    if human_gold_path is not None:
+        raise QualificationFailure(
+            "Codex candidate runner must not receive Human Gold or reference labels"
+        )
     if mode == "qualification":
         if (
             host_identity_input is None
@@ -3301,10 +3305,6 @@ def _execute_codex(
     validated_keyring_home = (
         _validate_keyring_home(keyring_home) if keyring_home is not None else None
     )
-    if human_gold_path is not None:
-        raise QualificationFailure(
-            "Codex candidate runner must not receive Human Gold or reference labels"
-        )
     orchestrator = QualificationOrchestrator(
         host="codex",
         repository=repository,
