@@ -7167,6 +7167,69 @@
         {
           "junit": {
             "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_accepts_merge_first_parent_at_latest_frozen_main"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_accepts_merge_first_parent_at_latest_frozen_main"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_rejects_non_merge_or_parentless_integration_commit[no-parent]"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_non_merge_or_parentless_integration_commit[no-parent]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_rejects_non_merge_or_parentless_integration_commit[non-merge]"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_non_merge_or_parentless_integration_commit[non-merge]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_rejects_stale_or_missing_integrated_main[missing]"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_stale_or_missing_integrated_main[missing]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_rejects_stale_or_missing_integrated_main[stale]"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_stale_or_missing_integrated_main[stale]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_rejects_wrong_first_parent"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_wrong_first_parent"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_rejects_wrong_or_unresolvable_frozen_main[unresolvable]"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_wrong_or_unresolvable_frozen_main[unresolvable]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_rejects_wrong_or_unresolvable_frozen_main[wrong]"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_wrong_or_unresolvable_frozen_main[wrong]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_requires_frozen_main_commit"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_requires_frozen_main_commit"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
             "name": "test_construction_dry_run_is_no_write_and_uses_v3_contracts"
           },
           "node_id": "tests/test_v013_candidate_prep.py::test_construction_dry_run_is_no_write_and_uses_v3_contracts"
@@ -16958,9 +17021,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2401,
+      "count": 2410,
       "selection": "not qualification and not windows_native",
-      "sha256": "cacb8f0d6311b70d177fcc2fc3dc4be2caa8f43c35e3091c8a86cc1f12e897e1"
+      "sha256": "26f9dd92f9c19c31bdf53e0409e671e5dc15a62e9564ed48bec6fe16a53e3c81"
     },
     "windows": {
       "additional_cases": [
@@ -16993,13 +17056,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2405,
+      "count": 2414,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "d4a20cbb34260ab44a38f1824aca6af1492daec0ebf7aaa1c9873e4ebca6a370"
+      "sha256": "19d41b5c24efb00e72c96c21ef7a5b43460cf23c3c07c9dd771c87040f082cf5"
     }
   },
-  "manifest_sha256": "958552250b8247f4bfcad67da554c7aacbc5a7c7550242fb1ccce6961646206b",
+  "manifest_sha256": "95379fba9482d1749c459b5a5f37b95f76025b33eb67ef85f93567d073213c17",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

@@ -41,6 +41,7 @@ CLASSIFICATION_SCHEMA_VERSION = "deeplaw.v013-release-gate-classification/v9"
 CONSTRUCTION_STATUS = "construction_candidate_machine_evaluation_pending"
 PROFILE = "kernel_release_core"
 GATE_CLASSIFICATION = "v9"
+INTEGRATED_MAIN_REF = "refs/remotes/origin/main"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 GIT_OBJECT = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 
@@ -197,10 +198,16 @@ def _sha256(raw: bytes) -> str:
 
 
 def _assert_git_identity(
-    repository: Path, integration_commit: str, *, apply: bool
-) -> tuple[str, str, str]:
+    repository: Path,
+    integration_commit: str,
+    frozen_main_commit: str,
+    *,
+    apply: bool,
+) -> tuple[str, str, str, str]:
     if not isinstance(integration_commit, str) or not GIT_OBJECT.fullmatch(integration_commit):
         _fail("--integration-commit must be an exact Git commit")
+    if not isinstance(frozen_main_commit, str) or not GIT_OBJECT.fullmatch(frozen_main_commit):
+        _fail("--frozen-main-commit must be an exact Git commit")
     try:
         repository = repository.expanduser().resolve(strict=True)
     except OSError as error:
@@ -222,6 +229,64 @@ def _assert_git_identity(
     verified = _run_git(repository, ["rev-parse", f"{integration_commit}^{{commit}}"])
     if verified != integration_commit:
         _fail("--integration-commit is not the exact current commit")
+    try:
+        frozen_main = _run_git(
+            repository,
+            [
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                f"{frozen_main_commit}^{{commit}}",
+            ],
+        )
+    except CandidatePrepError as error:
+        raise CandidatePrepError("--frozen-main-commit cannot be resolved") from error
+    if not GIT_OBJECT.fullmatch(frozen_main):
+        _fail("--frozen-main-commit cannot be resolved")
+    if frozen_main != frozen_main_commit:
+        _fail("--frozen-main-commit is not the exact current commit")
+    try:
+        integrated_main = _run_git(
+            repository,
+            [
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                f"{INTEGRATED_MAIN_REF}^{{commit}}",
+            ],
+        )
+    except CandidatePrepError as error:
+        raise CandidatePrepError("remote-tracking origin/main cannot be resolved") from error
+    if not GIT_OBJECT.fullmatch(integrated_main):
+        _fail("remote-tracking origin/main cannot be resolved")
+    if integrated_main != integration_commit:
+        _fail("remote-tracking origin/main does not equal --integration-commit")
+    if frozen_main == integration_commit:
+        _fail("--frozen-main-commit must differ from --integration-commit")
+    try:
+        parent_record = _run_git(
+            repository,
+            [
+                "rev-list",
+                "--parents",
+                "-n",
+                "1",
+                "--end-of-options",
+                integration_commit,
+            ],
+        )
+    except CandidatePrepError as error:
+        raise CandidatePrepError("integration commit parents cannot be resolved") from error
+    parent_tokens = parent_record.split()
+    if not parent_tokens or parent_tokens[0] != integration_commit:
+        _fail("integration commit identity cannot be resolved")
+    if len(parent_tokens) < 3:
+        _fail("integration commit must be a merge with a first parent")
+    first_parent = parent_tokens[1]
+    if not GIT_OBJECT.fullmatch(first_parent):
+        _fail("integration commit first parent cannot be resolved")
+    if first_parent != frozen_main:
+        _fail("integration commit first parent differs from --frozen-main-commit")
     tree = _run_git(repository, ["rev-parse", "HEAD^{tree}"])
     if not GIT_OBJECT.fullmatch(tree):
         _fail("HEAD tree cannot be resolved")
@@ -231,7 +296,7 @@ def _assert_git_identity(
             _fail("apply is forbidden on the main branch")
         if not re.search(r"(?:candidate|release)", branch.casefold()):
             _fail("apply requires a candidate/release branch")
-    return head, tree, branch
+    return head, tree, branch, frozen_main
 
 
 def _expect_once(raw: bytes, old: bytes, new: bytes, *, label: str) -> bytes:
@@ -593,6 +658,7 @@ def _run_lock_check(repository: Path) -> None:
 def prepare_candidate(
     *,
     integration_commit: str,
+    frozen_main_commit: str,
     repository: Path = REPOSITORY,
     apply: bool = False,
     run_lock_check: bool = True,
@@ -603,7 +669,12 @@ def prepare_candidate(
         repository = Path(repository).expanduser().resolve(strict=True)
     except OSError as error:
         raise CandidatePrepError("repository is unavailable") from error
-    head, tree, branch = _assert_git_identity(repository, integration_commit, apply=apply)
+    head, tree, branch, frozen_main = _assert_git_identity(
+        repository,
+        integration_commit,
+        frozen_main_commit,
+        apply=apply,
+    )
     original: dict[str, bytes] = {}
     for relative in CURRENT_SURFACE_FILES:
         _resolved, original[relative] = _regular_repo_file(repository, relative)
@@ -611,7 +682,13 @@ def prepare_candidate(
     result: dict[str, Any] = {
         "schema_version": "deeplaw.v013-candidate-prep/v1",
         "mode": "apply" if apply else "dry-run",
-        "base": {"commit": head, "tree": tree, "branch": branch or None},
+        "base": {
+            "commit": head,
+            "integration_commit": head,
+            "tree": tree,
+            "branch": branch or None,
+            "frozen_main_commit": frozen_main,
+        },
         "candidate_identity": {
             "package_version": CANDIDATE_VERSION,
             "profile": PROFILE,
@@ -648,6 +725,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path, default=REPOSITORY)
     parser.add_argument("--integration-commit", required=True)
+    parser.add_argument("--frozen-main-commit", required=True)
     parser.add_argument(
         "--apply",
         action="store_true",
@@ -662,6 +740,7 @@ def main(argv: list[str] | None = None) -> int:
         result = prepare_candidate(
             repository=args.repository,
             integration_commit=args.integration_commit,
+            frozen_main_commit=args.frozen_main_commit,
             apply=args.apply,
         )
     except (CandidatePrepError, OSError, ValueError) as error:
@@ -677,6 +756,7 @@ __all__ = [
     "CONSTRUCTION_STATUS",
     "CURRENT_SURFACE_FILES",
     "GATE_CLASSIFICATION",
+    "INTEGRATED_MAIN_REF",
     "CandidatePrepError",
     "PreparationError",
     "main",

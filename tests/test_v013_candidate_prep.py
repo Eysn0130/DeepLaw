@@ -69,7 +69,16 @@ def _seed_repository(tmp_path: Path) -> Path:
     _git(repository, "config", "user.email", "candidate-prep@example.invalid")
     _git(repository, "config", "user.name", "candidate-prep")
     _git(repository, "add", ".")
-    _git(repository, "commit", "-q", "-m", "seed current surfaces")
+    _git(repository, "commit", "-q", "-m", "seed frozen main")
+    frozen_main = _commit(repository)
+    _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, frozen_main)
+    main_branch = _git(repository, "branch", "--show-current")
+    _git(repository, "checkout", "-q", "-b", "candidate-feature")
+    _git(repository, "commit", "--allow-empty", "-q", "-m", "candidate change")
+    _git(repository, "checkout", "-q", main_branch)
+    _git(repository, "checkout", "-q", "-b", "candidate-integration")
+    _git(repository, "merge", "--no-ff", "--no-edit", "candidate-feature")
+    _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, _commit(repository))
     return repository
 
 
@@ -81,10 +90,17 @@ def _snapshot(repository: Path, relatives: tuple[str, ...]) -> dict[str, bytes]:
     return {relative: (repository / relative).read_bytes() for relative in relatives}
 
 
-def _run(repository: Path, *, apply: bool = False) -> dict[str, Any]:
+def _frozen_main(repository: Path) -> str:
+    return _git(repository, "rev-parse", f"{prep.INTEGRATED_MAIN_REF}^1")
+
+
+def _run(
+    repository: Path, frozen_main_commit: str, *, apply: bool = False
+) -> dict[str, Any]:
     return prep.prepare_candidate(
         repository=repository,
         integration_commit=_commit(repository),
+        frozen_main_commit=frozen_main_commit,
         apply=apply,
     )
 
@@ -94,7 +110,7 @@ def test_construction_dry_run_is_no_write_and_uses_v3_contracts(tmp_path: Path) 
     tracked = (*prep.CURRENT_SURFACE_FILES, *HISTORY)
     before = _snapshot(repository, tracked)
 
-    result = _run(repository)
+    result = _run(repository, _frozen_main(repository))
 
     assert result["mode"] == "dry-run"
     assert result["write_performed"] is False
@@ -112,14 +128,158 @@ def test_construction_dry_run_is_no_write_and_uses_v3_contracts(tmp_path: Path) 
     assert _snapshot(repository, tracked) == before
 
 
+def test_cli_accepts_merge_first_parent_at_latest_frozen_main(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository = _seed_repository(tmp_path)
+    frozen_main = _frozen_main(repository)
+
+    result_code = prep.main(
+        [
+            "--repository",
+            str(repository),
+            "--integration-commit",
+            _commit(repository),
+            "--frozen-main-commit",
+            frozen_main,
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert result_code == 0
+    assert captured.err == ""
+    result = json.loads(captured.out)
+    assert result["mode"] == "dry-run"
+    assert result["base"]["commit"] == _commit(repository)
+    assert result["base"]["integration_commit"] == _commit(repository)
+    assert result["base"]["frozen_main_commit"] == frozen_main
+    assert result["write_performed"] is False
+
+
+def _run_cli(
+    repository: Path,
+    capsys: pytest.CaptureFixture[str],
+    frozen_main_commit: str,
+    *,
+    integration: str | None = None,
+) -> tuple[int, str]:
+    result_code = prep.main(
+        [
+            "--repository",
+            str(repository),
+            "--integration-commit",
+            integration or _commit(repository),
+            "--frozen-main-commit",
+            frozen_main_commit,
+        ]
+    )
+    captured = capsys.readouterr()
+    return result_code, captured.err
+
+
+def test_cli_rejects_wrong_first_parent(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repository = _seed_repository(tmp_path)
+    frozen_main = _frozen_main(repository)
+    _git(repository, "checkout", "-q", "-b", "wrong-integration")
+    _git(repository, "commit", "--allow-empty", "-q", "-m", "intermediate")
+    _git(repository, "checkout", "-q", "-b", "wrong-feature", frozen_main)
+    _git(repository, "commit", "--allow-empty", "-q", "-m", "wrong parent feature")
+    _git(repository, "checkout", "-q", "wrong-integration")
+    _git(repository, "merge", "--no-ff", "--no-edit", "wrong-feature")
+    _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, _commit(repository))
+
+    result_code, error = _run_cli(repository, capsys, frozen_main)
+
+    assert result_code == 1
+    assert "first parent" in error
+    assert str(repository) not in error
+
+
+@pytest.mark.parametrize("main_state", ["stale", "missing"])
+def test_cli_rejects_stale_or_missing_integrated_main(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], main_state: str
+) -> None:
+    repository = _seed_repository(tmp_path)
+    frozen_main = _frozen_main(repository)
+    if main_state == "stale":
+        _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, frozen_main)
+    else:
+        _git(repository, "update-ref", "-d", prep.INTEGRATED_MAIN_REF)
+
+    result_code, error = _run_cli(repository, capsys, frozen_main)
+
+    assert result_code == 1
+    assert "origin/main" in error
+    assert str(repository) not in error
+
+
+@pytest.mark.parametrize("frozen_state", ["wrong", "unresolvable"])
+def test_cli_rejects_wrong_or_unresolvable_frozen_main(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    frozen_state: str,
+) -> None:
+    repository = _seed_repository(tmp_path)
+    if frozen_state == "wrong":
+        frozen_argument = _git(repository, "rev-parse", "candidate-feature")
+    else:
+        frozen_argument = "f" * 40
+
+    result_code, error = _run_cli(repository, capsys, frozen_argument)
+
+    assert result_code == 1
+    assert "--frozen-main-commit" in error
+    assert str(repository) not in error
+
+
+def test_cli_requires_frozen_main_commit(tmp_path: Path) -> None:
+    repository = _seed_repository(tmp_path)
+    with pytest.raises(SystemExit) as raised:
+        prep.main(
+            [
+                "--repository",
+                str(repository),
+                "--integration-commit",
+                _commit(repository),
+            ]
+        )
+
+    assert raised.value.code == 2
+
+
+@pytest.mark.parametrize("integration_kind", ["non-merge", "no-parent"])
+def test_cli_rejects_non_merge_or_parentless_integration_commit(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    integration_kind: str,
+) -> None:
+    repository = _seed_repository(tmp_path)
+    frozen_main = _frozen_main(repository)
+    if integration_kind == "non-merge":
+        _git(repository, "checkout", "-q", "-b", "non-merge-integration", frozen_main)
+        _git(repository, "commit", "--allow-empty", "-q", "-m", "non-merge integration")
+    else:
+        tree = _git(repository, "rev-parse", f"{frozen_main}^{{tree}}")
+        root = _git(repository, "commit-tree", tree, "-m", "parentless integration")
+        _git(repository, "checkout", "-q", "--detach", root)
+    _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, _commit(repository))
+
+    result_code, error = _run_cli(repository, capsys, frozen_main)
+
+    assert result_code == 1
+    assert "merge with a first parent" in error
+    assert str(repository) not in error
+
+
 def test_apply_requires_independent_candidate_branch_and_preserves_v2_v8_history(
     tmp_path: Path,
 ) -> None:
     repository = _seed_repository(tmp_path)
     _git(repository, "checkout", "-q", "-b", "codex/v013-candidate-prep")
+    frozen_main = _frozen_main(repository)
     before_history = _snapshot(repository, HISTORY)
 
-    result = _run(repository, apply=True)
+    result = _run(repository, frozen_main, apply=True)
 
     assert result["write_performed"] is True
     assert 'version = "0.13.0"' in (repository / "pyproject.toml").read_text()
@@ -152,25 +312,29 @@ def test_apply_requires_independent_candidate_branch_and_preserves_v2_v8_history
 def test_apply_is_rejected_on_main_without_writing(tmp_path: Path) -> None:
     repository = _seed_repository(tmp_path)
     _git(repository, "branch", "-M", "main")
+    frozen_main = _frozen_main(repository)
     before = _snapshot(repository, prep.CURRENT_SURFACE_FILES)
     with pytest.raises(prep.CandidatePrepError, match="main branch"):
-        _run(repository, apply=True)
+        _run(repository, frozen_main, apply=True)
     assert _snapshot(repository, prep.CURRENT_SURFACE_FILES) == before
 
 
 def test_dirty_or_wrong_git_identity_fails_before_contract_transition(tmp_path: Path) -> None:
     repository = _seed_repository(tmp_path)
+    frozen_main = _frozen_main(repository)
     (repository / "dirty.txt").write_text("dirty\n", encoding="utf-8")
     with pytest.raises(prep.CandidatePrepError, match="clean"):
-        _run(repository)
+        _run(repository, frozen_main)
 
     clean_root = tmp_path / "clean"
     clean_root.mkdir()
     clean_repository = _seed_repository(clean_root)
+    clean_frozen_main = _frozen_main(clean_repository)
     with pytest.raises(prep.CandidatePrepError, match="HEAD"):
         prep.prepare_candidate(
             repository=clean_repository,
             integration_commit="f" * 40,
+            frozen_main_commit=clean_frozen_main,
             run_lock_check=False,
         )
 
@@ -178,6 +342,7 @@ def test_dirty_or_wrong_git_identity_fails_before_contract_transition(tmp_path: 
 @pytest.mark.parametrize("kind", ["wrong_version", "wrong_hash"])
 def test_wrong_construction_contract_or_hash_fails(tmp_path: Path, kind: str) -> None:
     repository = _seed_repository(tmp_path)
+    frozen_main = _frozen_main(repository)
     if kind == "wrong_version":
         path = repository / "pyproject.toml"
         path.write_bytes(
@@ -192,12 +357,16 @@ def test_wrong_construction_contract_or_hash_fails(tmp_path: Path, kind: str) ->
         path.write_text(json.dumps(value) + "\n", encoding="utf-8")
     _git(repository, "add", ".")
     _git(repository, "commit", "-q", "-m", "tamper")
+    _git(repository, "checkout", "-q", "-b", "tampered-integration", frozen_main)
+    _git(repository, "merge", "--no-ff", "--no-edit", "candidate-integration")
+    _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, _commit(repository))
     with pytest.raises(prep.CandidatePrepError):
-        _run(repository)
+        _run(repository, frozen_main)
 
 
 def test_old_external_input_cli_arguments_are_rejected(tmp_path: Path) -> None:
     repository = _seed_repository(tmp_path)
+    frozen_main = _frozen_main(repository)
     with pytest.raises(SystemExit):
         prep.main(
             [
@@ -205,6 +374,8 @@ def test_old_external_input_cli_arguments_are_rejected(tmp_path: Path) -> None:
                 str(repository),
                 "--integration-commit",
                 _commit(repository),
+                "--frozen-main-commit",
+                frozen_main,
                 "--external-input",
                 "holdout=/tmp/forbidden",
             ]
