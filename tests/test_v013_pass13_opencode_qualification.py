@@ -943,6 +943,24 @@ def _assert_zero_model_static_binary_topology_and_hash_fail_closed(
     expected_sha256 = hashlib.sha256(target_bytes).hexdigest()
     if topology == "hash_drift":
         expected_sha256 = "6" * 64
+        real_fstat = runner.os.fstat
+
+        def windows_normalized_fstat(fd: int) -> SimpleNamespace:
+            details = real_fstat(fd)
+            return SimpleNamespace(
+                st_dev=details.st_dev,
+                st_ino=details.st_ino,
+                st_size=details.st_size,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_nlink=details.st_nlink,
+                st_mtime=details.st_mtime + 1,
+                st_mtime_ns=details.st_mtime_ns + 1_000_000_000,
+                st_ctime=details.st_ctime + 1,
+                st_ctime_ns=details.st_ctime_ns + 1_000_000_000,
+            )
+
+        monkeypatch.setattr(runner.os, "fstat", windows_normalized_fstat)
     identity = {
         "hosts": {
             "opencode": {
@@ -1412,10 +1430,32 @@ def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path
                 st_ctime_ns=201,
             ),
         },
+        {
+            "path_before": metadata(st_ino=0),
+            "path_after": metadata(st_ino=0),
+            "fd_before": metadata(
+                st_ino=0,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=101,
+                st_mtime_ns=101,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+            "fd_after": metadata(
+                st_ino=0,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=101,
+                st_mtime_ns=101,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+        },
     ):
         with pytest.raises(runner.QualificationError, match="changed while it was read"):
             runner._validate_stable_path_fd_binding(
-                path_before=path_snapshot,
+                path_before=changed.get("path_before", path_snapshot),
                 path_after=changed["path_after"],
                 fd_before=changed.get("fd_before", windows_fd_snapshot),
                 fd_after=changed["fd_after"],

@@ -2251,15 +2251,15 @@ def _inspect_opencode_binary_static(
                 "OpenCode executable selector must not be a symlink chain"
             )
         resolved = direct_target.resolve(strict=True)
-        target_before = resolved.lstat()
+        initial_target = resolved.lstat()
     except QualificationError:
         raise
     except (OSError, RuntimeError, ValueError) as exc:
         raise QualificationError("OpenCode executable is unavailable") from exc
     if (
-        stat.S_ISLNK(target_before.st_mode)
-        or not stat.S_ISREG(target_before.st_mode)
-        or target_before.st_nlink != 1
+        stat.S_ISLNK(initial_target.st_mode)
+        or not stat.S_ISREG(initial_target.st_mode)
+        or initial_target.st_nlink != 1
     ):
         raise QualificationError(
             "OpenCode executable target must be a regular single-link file"
@@ -2277,7 +2277,7 @@ def _inspect_opencode_binary_static(
 
     expected = host_preflight_receipt.host_binary_identity(identity, "opencode")
 
-    def topology_snapshot() -> tuple[Any, ...]:
+    def topology_snapshot() -> tuple[tuple[Any, ...], os.stat_result]:
         if parent_has_symlink(selected.parent) or parent_has_symlink(direct_target.parent):
             raise QualificationError(
                 "OpenCode executable parent path contains a symlink"
@@ -2292,13 +2292,18 @@ def _inspect_opencode_binary_static(
                 "OpenCode executable changed during static inspection"
             ) from exc
         return (
-            signature(selected_details),
-            signature(direct_details),
-            signature(resolved_details),
-            observed_selector,
+            (
+                signature(selected_details),
+                signature(direct_details),
+                signature(resolved_details),
+                observed_selector,
+            ),
+            resolved_details,
         )
 
-    before = topology_snapshot()
+    before_topology, target_before = topology_snapshot()
+    if signature(initial_target) != signature(target_before):
+        raise QualificationError("OpenCode executable changed during static inspection")
     try:
         flags = (
             os.O_RDONLY
@@ -2325,14 +2330,17 @@ def _inspect_opencode_binary_static(
         raise QualificationError(
             "OpenCode executable changed during static inspection"
         ) from exc
-    after = topology_snapshot()
-    if (
-        before != after
-        or signature(fd_before) != signature(fd_after)
-        or signature(fd_before) != signature(target_before)
-        or observed_bytes != fd_before.st_size
-    ):
+    after_topology, target_after = topology_snapshot()
+    if before_topology != after_topology:
         raise QualificationError("OpenCode executable changed during static inspection")
+    _validate_stable_path_fd_binding(
+        path_before=target_before,
+        path_after=target_after,
+        fd_before=fd_before,
+        fd_after=fd_after,
+        observed_bytes=observed_bytes,
+        error_message="OpenCode executable changed during static inspection",
+    )
     observed_sha256 = digest.hexdigest()
     if observed_sha256 != expected["sha256"]:
         raise QualificationError("OpenCode executable target hash differs from frozen identity")
