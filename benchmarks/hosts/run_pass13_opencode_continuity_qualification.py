@@ -2300,7 +2300,11 @@ def _inspect_opencode_binary_static(
 
     before = topology_snapshot()
     try:
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
         if hasattr(os, "O_CLOEXEC"):
             flags |= os.O_CLOEXEC
         descriptor = os.open(resolved, flags)
@@ -3001,7 +3005,11 @@ def _stage_exact_broker_executable(
         before = source.lstat()
         if before.st_size < 1 or before.st_size > _BROKER_SOURCE_MAX_BYTES:
             _control_fail("OpenCode owner-external broker source exceeds its byte bound")
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
         if hasattr(os, "O_CLOEXEC"):
             flags |= os.O_CLOEXEC
         descriptor = os.open(source, flags)
@@ -3053,7 +3061,12 @@ def _stage_exact_broker_executable(
         ):
             _control_fail("OpenCode broker staging directory is unsafe")
         staged = root / "broker-executable"
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_BINARY", 0)
+        )
         if hasattr(os, "O_CLOEXEC"):
             flags |= os.O_CLOEXEC
         descriptor = os.open(staged, flags, 0o700)
@@ -3132,7 +3145,11 @@ def _validate_opencode_package(
         else:
             _control_fail("OpenCode package source must be repository-external")
 
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
         if hasattr(os, "O_CLOEXEC"):
             flags |= os.O_CLOEXEC
         descriptor = os.open(source, flags)
