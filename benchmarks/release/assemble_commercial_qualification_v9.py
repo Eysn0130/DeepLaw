@@ -27,6 +27,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.hosts import host_process_receipt_v2
 from benchmarks.release import kernel_qualification_bundle_v1
 from benchmarks.release.typed_qualification_evidence import parse_typed_evidence
 
@@ -652,6 +653,9 @@ def _validate_document_cross_bindings(
 def _validate_host_receipts(
     files: Mapping[str, tuple[Path, bytes]],
     references: Mapping[str, Mapping[str, Any]],
+    *,
+    candidate: Mapping[str, str],
+    run_ids: Mapping[str, int],
 ) -> set[tuple[str, str, str]]:
     preflight_hosts: list[str] = []
     process_hosts: list[str] = []
@@ -660,8 +664,9 @@ def _validate_host_receipts(
         "host-preflight-receipt.v1.schema.json", label="Host preflight schema"
     )
     process_schema = _schema(
-        "host-process-receipt.v1.schema.json", label="Host process schema"
+        host_process_receipt_v2.SCHEMA_FILENAME, label="Host process schema"
     )
+    seen_nonce_sha256s: set[str] = set()
     for relative, reference in references.items():
         artifact_kind = reference.get("artifact_kind")
         if artifact_kind not in {"host_preflight_receipt", "host_process_receipt"}:
@@ -673,11 +678,23 @@ def _validate_host_receipts(
             preflight_hosts.append(host)
         else:
             _validate_schema(value, process_schema, label="Host process receipt")
-            if value.get("record_sha256") != record_sha256(value):
-                _fail("Host process receipt record digest differs")
-            host = value.get("host")
-            task_case = value.get("task_case")
-            run_id = value.get("run_id")
+            try:
+                admitted = host_process_receipt_v2.validate_receipt(
+                    value,
+                    expected_candidate=candidate,
+                    expected_run_binding={
+                        "evidence_run_id": run_ids["evidence_run_id"],
+                        "qualification_run_id": run_ids["qualification_run_id"],
+                    },
+                    seen_nonce_sha256s=seen_nonce_sha256s,
+                )
+            except (TypeError, ValueError) as error:
+                raise CommercialQualificationAssemblerError(
+                    "Host process receipt v2 structural or cross-binding validation failed"
+                ) from error
+            host = admitted.get("host")
+            task_case = admitted.get("task_case")
+            run_id = admitted.get("run_id")
             process_hosts.append(host)
             process_runs.append((host, task_case, run_id))
     for label, hosts in (("preflight", preflight_hosts), ("process", process_hosts)):
@@ -1312,6 +1329,10 @@ def assemble_commercial_qualification(
         source_root,
         manifest=manifest,
     )
+    if manifest_value.get("record_sha256") != admitted.get(
+        "manifest_record_sha256"
+    ):
+        _fail("reopened bundle manifest differs from Kernel admission")
     (
         active,
         _active_raw,
@@ -1325,8 +1346,8 @@ def assemble_commercial_qualification(
         references,
         manifest_value["bindings"],
     )
-    process_runs = _validate_host_receipts(files, references)
     candidate = _candidate_from_active(active)
+    run_ids = _run_ids(manifest_value.get("run_ids"))
     _validate_document_cross_bindings(
         active,
         classification_value,
@@ -1337,7 +1358,20 @@ def assemble_commercial_qualification(
     )
     if manifest_value.get("candidate_binding") != candidate:
         _fail("bundle candidate binding differs from reopened active candidate")
-    run_ids = _run_ids(manifest_value.get("run_ids"))
+    process_runs = _validate_host_receipts(
+        files,
+        references,
+        candidate=candidate,
+        run_ids=run_ids,
+    )
+    admitted_process_runs = {
+        (str(item["host"]), str(item["task_case"]), str(item["run_id"]))
+        for item in admitted.get("process_receipt_runs", [])
+        if isinstance(item, Mapping)
+        and set(item) == {"host", "task_case", "run_id"}
+    }
+    if process_runs != admitted_process_runs or len(admitted_process_runs) != 6:
+        _fail("reopened Host process receipt inventory differs from Kernel admission")
     if expected_run_ids is not None and run_ids != _run_ids(expected_run_ids):
         _fail("bundle run ids differ from expected run ids")
     if expected_candidate is not None:

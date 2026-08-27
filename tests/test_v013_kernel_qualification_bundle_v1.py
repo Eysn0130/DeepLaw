@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from benchmarks.hosts import host_process_receipt_v2
 from benchmarks.release import kernel_qualification_bundle_v1 as bundle
 
 RUN_IDS = {
@@ -154,45 +155,151 @@ def _preflight(host: str) -> dict[str, Any]:
     }
 
 
+def _digest(label: str) -> str:
+    return hashlib.sha256(label.encode("utf-8")).hexdigest()
+
+
+def _native_event_binding(host: str, task_case: str, index: int) -> dict[str, str]:
+    prefix = f"{host}:{task_case}:{index}"
+    return {
+        "event_sequence_sha256": _digest(f"{prefix}:event-sequence"),
+        "session_identity_sha256": _digest(f"{prefix}:session-identity"),
+        "lifecycle_record_sha256": _digest(f"{prefix}:lifecycle-record"),
+    }
+
+
 def _process_receipt(host: str, task_case: str, index: int) -> dict[str, Any]:
-    value: dict[str, Any] = {
-        "schema_version": "deeplaw.host-process-receipt/v1",
-        "host": host,
-        "task_case": task_case,
-        "run_id": f"fixture-{host}-{index}",
-        "status": "exited",
-        "exit_code": 0,
-        "host_binary": {
-            "version": (
-                "codex-cli 0.148.0-alpha.15" if host == "codex" else "1.18.16"
+    process_identity = _digest(f"{host}:{task_case}:{index}:process")
+    native_binding = _native_event_binding(host, task_case, index)
+    if host == "codex":
+        proof = {
+            "proof_kind": "codex_stdio_hook_correlation",
+            "process_identity_sha256": process_identity,
+            "connection_sha256": _digest(f"{host}:{task_case}:{index}:connection"),
+            "initialize_request_sha256": _digest(
+                f"{host}:{task_case}:{index}:initialize-request"
             ),
-            "sha256": (
-                "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7"
-                if host == "codex"
-                else "a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f"
+            "initialized_notification_sha256": _digest(
+                f"{host}:{task_case}:{index}:initialized-notification"
             ),
-        },
-        "broker_source": {
+            "initialized_connection_count": 1,
+            "hook_session_sha256": _digest(f"{host}:{task_case}:{index}:hook-session"),
+            "hook_event_sha256": _digest(f"{host}:{task_case}:{index}:hook-event"),
+            "native_event_sequence_sha256": native_binding["event_sequence_sha256"],
+            "native_session_identity_sha256": native_binding[
+                "session_identity_sha256"
+            ],
+            "native_lifecycle_record_sha256": native_binding[
+                "lifecycle_record_sha256"
+            ],
+            "same_process": True,
+            "same_connection": True,
+        }
+        proof["connection_correlation_sha256"] = (
+            host_process_receipt_v2.correlation_sha256(
+                {
+                    key: proof[key]
+                    for key in (
+                        "process_identity_sha256",
+                        "connection_sha256",
+                        "initialize_request_sha256",
+                        "initialized_notification_sha256",
+                        "initialized_connection_count",
+                        "hook_session_sha256",
+                        "hook_event_sha256",
+                        "native_event_sequence_sha256",
+                        "native_session_identity_sha256",
+                        "native_lifecycle_record_sha256",
+                    )
+                }
+            )
+        )
+    else:
+        child_session = _digest(f"{host}:{task_case}:{index}:child-session")
+        proof = {
+            "proof_kind": "opencode_public_fork_route_correlation",
+            "process_identity_sha256": process_identity,
+            "request_method": "POST",
+            "route_observation_sha256": _digest(
+                f"{host}:{task_case}:{index}:actual-route"
+            ),
+            "request_body_sha256": _digest(f"{host}:{task_case}:{index}:request-body"),
+            "response_sha256": _digest(f"{host}:{task_case}:{index}:response"),
+            "parent_session_sha256": _digest(
+                f"{host}:{task_case}:{index}:parent-session"
+            ),
+            "child_session_sha256": child_session,
+            "child_plugin_event_sha256": _digest(
+                f"{host}:{task_case}:{index}:child-plugin-event"
+            ),
+            "child_plugin_session_sha256": child_session,
+            "native_event_sequence_sha256": native_binding["event_sequence_sha256"],
+            "native_session_identity_sha256": native_binding[
+                "session_identity_sha256"
+            ],
+            "native_lifecycle_record_sha256": native_binding[
+                "lifecycle_record_sha256"
+            ],
+            "same_process": True,
+            "actual_route_observed": True,
+        }
+        proof["route_correlation_sha256"] = (
+            host_process_receipt_v2.correlation_sha256(
+                {
+                    key: proof[key]
+                    for key in (
+                        "process_identity_sha256",
+                        "request_method",
+                        "route_observation_sha256",
+                        "request_body_sha256",
+                        "response_sha256",
+                        "parent_session_sha256",
+                        "child_session_sha256",
+                        "child_plugin_event_sha256",
+                        "child_plugin_session_sha256",
+                        "native_event_sequence_sha256",
+                        "native_session_identity_sha256",
+                        "native_lifecycle_record_sha256",
+                    )
+                }
+            )
+        )
+    return host_process_receipt_v2.build_receipt(
+        host=host,
+        task_case=task_case,
+        run_id=f"fixture-{host}-{index}",
+        candidate_binding=EXPECTED_CANDIDATE,
+        run_binding=RUN_IDS,
+        host_binary={"version": HOST_BINARY[host][0], "sha256": HOST_BINARY[host][1]},
+        broker_source={
             "repository_external": True,
             "owner_only_mode": True,
             "sha256": BROKER_SOURCE_SHA256[host],
         },
-        "isolation": {
+        host_identity_sha256=bundle.host_identity_sha256(HOST_IDENTITY["hosts"][host]),
+        host_identity_source_sha256=hashlib.sha256(
+            bundle.canonical_json(HOST_IDENTITY) + b"\n"
+        ).hexdigest(),
+        process_identity_sha256=process_identity,
+        broker_instance_sha256=_digest(f"{host}:{task_case}:{index}:broker-instance"),
+        nonce_sha256=_digest(f"{host}:{task_case}:{index}:nonce"),
+        issued_at="2026-08-27T00:00:00Z",
+        expires_at="2026-08-27T00:04:00Z",
+        validation_reference_time="2026-08-27T00:02:00Z",
+        selector_source_symlink=host == "opencode",
+        execution_target_regular=True,
+        execution_target_single_link=True,
+        status="exited",
+        exit_code=0,
+        native_event_binding=native_binding,
+        proof=proof,
+        isolation={
             "runner_received_secret": False,
             "mcp_received_secret": False,
             "ambient_auth_forwarded_to_mcp": False,
             "raw_output_retained": False,
         },
-        "host_identity_sha256": bundle.host_identity_sha256(HOST_IDENTITY["hosts"][host]),
-        "host_identity_source_sha256": hashlib.sha256(
-            bundle.canonical_json(HOST_IDENTITY) + b"\n"
-        ).hexdigest(),
-        "selector_source_symlink": host == "opencode",
-        "execution_target_regular": True,
-        "execution_target_single_link": True,
-    }
-    value["record_sha256"] = bundle.record_sha256(value)
-    return value
+    )
 
 
 def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -261,10 +368,8 @@ def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     for index in range(6):
         host = "codex" if index < 3 else "opencode"
         _write_json(root / "receipts" / host / f"preflight-{index}.json", _preflight(host))
-        _write_json(
-            root / "receipts" / host / f"process-{index}.json",
-            _process_receipt(host, task_cases[index % 3], index),
-        )
+        process_receipt = _process_receipt(host, task_cases[index % 3], index)
+        _write_json(root / "receipts" / host / f"process-{index}.json", process_receipt)
     for host, raw in BROKER_SOURCE_BYTES.items():
         path = root / "retained-broker-source" / f"{host}.launcher-source"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -276,13 +381,15 @@ def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         if value["kind"] == "host_event_sequence":
             host = "codex" if "codex" in path.as_posix() else "opencode"
             index = int(path.stem.rsplit("-", 1)[-1])
+            task_case = ("continuity", "living_wiki", "professional_evidence")[
+                index % 3
+            ]
             metrics.update(
                 host=host,
-                task_case=("continuity", "living_wiki", "professional_evidence")[
-                    index % 3
-                ],
+                task_case=task_case,
                 run_id=f"fixture-{host}-{index}",
                 host_identity_sha256=bundle.host_identity_sha256(HOST_IDENTITY["hosts"][host]),
+                **_native_event_binding(host, task_case, index),
             )
         return {
             "kind": value["kind"],
@@ -322,6 +429,28 @@ def test_build_and_validate_exact_candidate_bundle(
     assert validated["process_receipt_count"] == 6
     assert validated["broker_source_count"] == 2
     assert validated["corpus_roles"] == sorted(bundle.CORPUS_ROLES)
+
+
+def test_bundle_accepts_six_retained_v2_slots_without_parallel_receipt_family(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external_identity = _make_fixture(root, monkeypatch)
+    assert {path.name for path in tmp_path.iterdir()} == {
+        "bundle",
+        "external-host-exact-identity.json",
+    }
+
+    built = bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external_identity,
+    )
+
+    assert built["candidate_binding"] == EXPECTED_CANDIDATE
+    assert bundle.validate_bundle(root)["process_receipt_count"] == 6
 
 
 def test_external_host_identity_is_bound_and_replacement_fails(

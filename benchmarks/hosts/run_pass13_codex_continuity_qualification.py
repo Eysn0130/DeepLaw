@@ -3236,14 +3236,18 @@ def _execute_codex(
     keyring bridge permits only the current user's system ``HOME`` for the
     Codex Host process; all other profile roots remain explicit and closed.
 
-    ``qualification`` is the executable mode.  ``diagnostic`` is intentionally
-    unavailable until the public Hook supplies an independent owner-bound Host
-    session identity, and therefore fails closed before candidate preparation or
-    any Host execution.
+    Neither mode is executable until the public Hook and the owner-external
+    collector can bind one exact initialized stdio connection to the real Hook
+    session.  Both fail closed before candidate preparation or Host execution.
     """
 
     if mode not in {"qualification", "diagnostic"}:
         raise QualificationFailure("Codex execution mode is invalid")
+    if mode == "qualification":
+        raise QualificationFailure(
+            "Codex owner-external same-connection Hook session correlation is "
+            "unavailable; formal Host/model execution remains not_executed"
+        )
     if mode == "diagnostic":
         raise QualificationFailure(
             "Codex public Hook lacks an independent owner-bound Host session identity; "

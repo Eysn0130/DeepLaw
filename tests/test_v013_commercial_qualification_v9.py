@@ -189,6 +189,34 @@ def test_assembles_exact_27_gates_and_bound_report(
             assert value["inputs"] == []
 
 
+def test_reopened_bundle_manifest_must_match_kernel_admission(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = _prepare_bundle(tmp_path / "bundle", monkeypatch)
+    original_validate = bundle.validate_bundle
+
+    def validate_then_replace(path: Path, **kwargs: Any) -> dict[str, Any]:
+        admitted = original_validate(path, **kwargs)
+        manifest_path = root / bundle.MANIFEST_FILENAME
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["corpora"] = list(reversed(manifest["corpora"]))
+        manifest["record_sha256"] = bundle.record_sha256(manifest)
+        _write_json(manifest_path, manifest)
+        return admitted
+
+    monkeypatch.setattr(bundle, "validate_bundle", validate_then_replace)
+    _install_parser(monkeypatch)
+
+    with pytest.raises(
+        assembler.CommercialQualificationAssemblerError,
+        match="reopened bundle manifest differs from Kernel admission",
+    ):
+        assembler.assemble_commercial_qualification(
+            bundle_root=root,
+            output_root=tmp_path / "output",
+        )
+
+
 def test_core_failure_never_makes_report_release_ready(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-process-receipt.v2.schema.json",
+  "title": "DeepLaw owner-external Host process correlation receipt v2",
+  "description": "A closed, path-free, value-minimized control receipt binding one exact candidate Host task process to declared owner-external lifecycle observation metadata. Structural validation does not establish formal observation authority, which also requires exact external per-Host broker and formal workflow provenance. The receipt retains digests and bounded control metadata only, never raw identity, PID, command, path, environment, output, prompt, transcript, reasoning, authentication material, or Secret.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "authority_class",
+    "proof_source",
+    "host",
+    "task_case",
+    "run_id",
+    "status",
+    "exit_code",
+    "candidate_binding",
+    "run_binding",
+    "host_binary",
+    "broker_source",
+    "isolation",
+    "host_identity_sha256",
+    "host_identity_source_sha256",
+    "process_identity_sha256",
+    "broker_instance_sha256",
+    "nonce_sha256",
+    "issued_at",
+    "expires_at",
+    "validation_reference_time",
+    "selector_source_symlink",
+    "execution_target_regular",
+    "execution_target_single_link",
+    "native_event_binding",
+    "proof",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.host-process-receipt/v2"},
+    "authority_class": {"const": "owner_external_host_process_observation"},
+    "proof_source": {"const": "owner_external_broker_direct_observation"},
+    "host": {"enum": ["codex", "opencode"]},
+    "task_case": {
+      "enum": ["continuity", "living_wiki", "professional_evidence"]
+    },
+    "run_id": {"$ref": "#/$defs/identifier"},
+    "status": {"const": "exited"},
+    "exit_code": {"const": 0},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "run_binding": {"$ref": "#/$defs/runBinding"},
+    "host_binary": {"$ref": "#/$defs/hostBinary"},
+    "broker_source": {"$ref": "#/$defs/brokerSource"},
+    "isolation": {"$ref": "#/$defs/isolation"},
+    "host_identity_sha256": {"$ref": "#/$defs/sha256"},
+    "host_identity_source_sha256": {"$ref": "#/$defs/sha256"},
+    "process_identity_sha256": {"$ref": "#/$defs/sha256"},
+    "broker_instance_sha256": {"$ref": "#/$defs/sha256"},
+    "nonce_sha256": {"$ref": "#/$defs/sha256"},
+    "issued_at": {"$ref": "#/$defs/timestamp"},
+    "expires_at": {"$ref": "#/$defs/timestamp"},
+    "validation_reference_time": {"$ref": "#/$defs/timestamp"},
+    "selector_source_symlink": {"type": "boolean"},
+    "execution_target_regular": {"const": true},
+    "execution_target_single_link": {"const": true},
+    "native_event_binding": {"$ref": "#/$defs/nativeEventBinding"},
+    "proof": {
+      "oneOf": [
+        {"$ref": "#/$defs/codexProof"},
+        {"$ref": "#/$defs/opencodeProof"}
+      ]
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"host": {"const": "codex"}},
+        "required": ["host"]
+      },
+      "then": {
+        "properties": {
+          "selector_source_symlink": {"const": false},
+          "proof": {"$ref": "#/$defs/codexProof"}
+        }
+      },
+      "else": {
+        "properties": {"proof": {"$ref": "#/$defs/opencodeProof"}}
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "runBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_run_id", "qualification_run_id"],
+      "properties": {
+        "evidence_run_id": {"type": "integer", "minimum": 1},
+        "qualification_run_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "hostBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "brokerSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_external", "owner_only_mode", "sha256"],
+      "properties": {
+        "repository_external": {"const": true},
+        "owner_only_mode": {"const": true},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner_received_secret",
+        "mcp_received_secret",
+        "ambient_auth_forwarded_to_mcp",
+        "raw_output_retained"
+      ],
+      "properties": {
+        "runner_received_secret": {"const": false},
+        "mcp_received_secret": {"const": false},
+        "ambient_auth_forwarded_to_mcp": {"const": false},
+        "raw_output_retained": {"const": false}
+      }
+    },
+    "nativeEventBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_sequence_sha256",
+        "session_identity_sha256",
+        "lifecycle_record_sha256"
+      ],
+      "properties": {
+        "event_sequence_sha256": {"$ref": "#/$defs/sha256"},
+        "session_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "lifecycle_record_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "codexProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proof_kind",
+        "process_identity_sha256",
+        "connection_sha256",
+        "connection_correlation_sha256",
+        "initialize_request_sha256",
+        "initialized_notification_sha256",
+        "initialized_connection_count",
+        "hook_session_sha256",
+        "hook_event_sha256",
+        "native_event_sequence_sha256",
+        "native_session_identity_sha256",
+        "native_lifecycle_record_sha256",
+        "same_process",
+        "same_connection"
+      ],
+      "properties": {
+        "proof_kind": {"const": "codex_stdio_hook_correlation"},
+        "process_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "connection_sha256": {"$ref": "#/$defs/sha256"},
+        "connection_correlation_sha256": {"$ref": "#/$defs/sha256"},
+        "initialize_request_sha256": {"$ref": "#/$defs/sha256"},
+        "initialized_notification_sha256": {"$ref": "#/$defs/sha256"},
+        "initialized_connection_count": {"const": 1},
+        "hook_session_sha256": {"$ref": "#/$defs/sha256"},
+        "hook_event_sha256": {"$ref": "#/$defs/sha256"},
+        "native_event_sequence_sha256": {"$ref": "#/$defs/sha256"},
+        "native_session_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "native_lifecycle_record_sha256": {"$ref": "#/$defs/sha256"},
+        "same_process": {"const": true},
+        "same_connection": {"const": true}
+      }
+    },
+    "opencodeProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proof_kind",
+        "process_identity_sha256",
+        "request_method",
+        "route_observation_sha256",
+        "route_correlation_sha256",
+        "request_body_sha256",
+        "response_sha256",
+        "parent_session_sha256",
+        "child_session_sha256",
+        "child_plugin_event_sha256",
+        "child_plugin_session_sha256",
+        "native_event_sequence_sha256",
+        "native_session_identity_sha256",
+        "native_lifecycle_record_sha256",
+        "same_process",
+        "actual_route_observed"
+      ],
+      "properties": {
+        "proof_kind": {"const": "opencode_public_fork_route_correlation"},
+        "process_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "request_method": {"const": "POST"},
+        "route_observation_sha256": {"$ref": "#/$defs/sha256"},
+        "route_correlation_sha256": {"$ref": "#/$defs/sha256"},
+        "request_body_sha256": {"$ref": "#/$defs/sha256"},
+        "response_sha256": {"$ref": "#/$defs/sha256"},
+        "parent_session_sha256": {"$ref": "#/$defs/sha256"},
+        "child_session_sha256": {"$ref": "#/$defs/sha256"},
+        "child_plugin_event_sha256": {"$ref": "#/$defs/sha256"},
+        "child_plugin_session_sha256": {"$ref": "#/$defs/sha256"},
+        "native_event_sequence_sha256": {"$ref": "#/$defs/sha256"},
+        "native_session_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "native_lifecycle_record_sha256": {"$ref": "#/$defs/sha256"},
+        "same_process": {"const": true},
+        "actual_route_observed": {"const": true}
+      }
+    }
+  }
+}

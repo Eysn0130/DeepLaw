@@ -3,7 +3,7 @@
 The bundle is an inventory and integrity boundary, not a qualification report.
 Every retained file is re-read from the supplied root and bound by byte size and
 SHA-256.  Typed evidence is still validated by the public
-``parse_typed_evidence`` seam; Host preflight and external process receipts are
+``parse_typed_evidence`` seam; Host preflight and Host process receipts are
 retained as separate artifacts and never count as typed evidence passes.
 
 This module never reads authentication material, ``.env`` files, model output,
@@ -26,6 +26,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.hosts import host_process_receipt_v2
 from benchmarks.hosts.host_preflight_receipt import (
     HostIdentityValidationError,
     host_binary_identity,
@@ -54,7 +55,7 @@ ACTIVE_SCHEMA_FILENAME = "v013-active-qualification.v3.schema.json"
 CLASSIFICATION_SCHEMA_FILENAME = "v013-release-gate-classification.v9.schema.json"
 PROTOCOL_SCHEMA_FILENAME = "v013-qualification-protocol.v3.schema.json"
 HOST_PREFLIGHT_SCHEMA_FILENAME = "host-preflight-receipt.v1.schema.json"
-HOST_PROCESS_SCHEMA_FILENAME = "host-process-receipt.v1.schema.json"
+HOST_PROCESS_SCHEMA_FILENAME = host_process_receipt_v2.SCHEMA_FILENAME
 
 TYPED_COUNTS: dict[str, int] = {
     "candidate_full_junit": 1,
@@ -88,7 +89,7 @@ CANDIDATE_WORKFLOW_KINDS = frozenset(
     }
 )
 HOST_NAMES = frozenset({"codex", "opencode"})
-HOST_PROCESS_SCHEMA_VERSION = "deeplaw.host-process-receipt/v1"
+HOST_PROCESS_SCHEMA_VERSION = host_process_receipt_v2.SCHEMA_VERSION
 HOST_IDENTITY_SCHEMA_VERSION = "deeplaw.host-exact-identity/v1"
 MAX_FILE_BYTES = 64 * 1024 * 1024
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
@@ -741,9 +742,12 @@ def _validate_process_receipt(
     *,
     relative: str,
     host_identity: Mapping[str, Any],
+    candidate: Mapping[str, str],
+    run_ids: Mapping[str, int],
+    seen_nonce_sha256s: set[str],
 ) -> dict[str, Any]:
     if value is None or value.get("schema_version") != HOST_PROCESS_SCHEMA_VERSION:
-        _fail("Host process receipt must use the sanitized v1 schema")
+        _fail("Host process receipt must use the current v2 schema")
     _validate_schema(
         value,
         _schema(HOST_PROCESS_SCHEMA_FILENAME, label="Host process receipt schema"),
@@ -758,31 +762,38 @@ def _validate_process_receipt(
     if path_match is not None and path_match.group(1) != host:
         _fail("Host process receipt path and Host identity differ")
     expected_binary = host_binary_identity(host_identity, host)
-    host_binary = _mapping(value["host_binary"], label="Host process binary")
-    if (
-        host_binary.get("version") != expected_binary["version"]
-        or host_binary.get("sha256") != expected_binary["sha256"]
-        or value.get("host_identity_sha256")
-        != host_identity_sha256(host_identity["hosts"][host])
-        or value.get("host_identity_source_sha256") != host_identity["source_sha256"]
-        or value.get("execution_target_regular") is not True
-        or value.get("execution_target_single_link") is not True
-        or (
-            host == "codex" and value.get("selector_source_symlink") is not False
+    expected_host_identity_sha256 = host_identity_sha256(host_identity["hosts"][host])
+    try:
+        admitted = host_process_receipt_v2.validate_receipt(
+            value,
+            expected_host=host,
+            expected_candidate=candidate,
+            expected_run_binding={
+                "evidence_run_id": run_ids["evidence_run_id"],
+                "qualification_run_id": run_ids["qualification_run_id"],
+            },
+            expected_host_identity_sha256=expected_host_identity_sha256,
+            expected_host_identity_source_sha256=str(host_identity["source_sha256"]),
+            expected_host_binary=expected_binary,
+            seen_nonce_sha256s=seen_nonce_sha256s,
         )
-    ):
-        _fail("Host process receipt does not bind the frozen Host identity")
+    except (TypeError, ValueError, host_process_receipt_v2.HostProcessReceiptV2Error) as error:
+        raise KernelQualificationBundleError(
+            "Host process receipt v2 structural or cross-binding validation failed"
+        ) from error
     _reject_competitive_fields(value)
     return {
         "host": host,
-        "task_case": str(value["task_case"]),
-        "run_id": str(value["run_id"]),
-        "broker_sha256": str(value["broker_source"]["sha256"]),
-        "host_identity_sha256": str(value["host_identity_sha256"]),
-        "host_identity_source_sha256": str(value["host_identity_source_sha256"]),
-        "selector_source_symlink": bool(value["selector_source_symlink"]),
+        "task_case": str(admitted["task_case"]),
+        "run_id": str(admitted["run_id"]),
+        "broker_sha256": str(admitted["broker_source"]["sha256"]),
+        "host_identity_sha256": str(admitted["host_identity_sha256"]),
+        "host_identity_source_sha256": str(admitted["host_identity_source_sha256"]),
+        "selector_source_symlink": bool(admitted["selector_source_symlink"]),
         "execution_target_regular": True,
         "execution_target_single_link": True,
+        "nonce_sha256": str(admitted["nonce_sha256"]),
+        "native_event_binding": dict(admitted["native_event_binding"]),
     }
 
 
@@ -889,13 +900,14 @@ def _validate_inventory(
     typed_paths: dict[str, list[str]] = defaultdict(list)
     typed_values: dict[str, Mapping[str, Any]] = {}
     preflight_receipts: list[dict[str, str]] = []
-    process_receipts: list[dict[str, str]] = []
+    process_receipts: list[dict[str, Any]] = []
     process_tasks: dict[str, list[str]] = defaultdict(list)
     execution_identity: dict[str, dict[str, Any]] | None = None
     broker_sources: list[dict[str, str]] = []
     broker_source_paths: set[str] = set()
     referenced_source_paths: set[str] = set()
     receipt_paths: set[str] = set()
+    seen_process_nonce_sha256s: set[str] = set()
     for relative, reference in references.items():
         raw = files[relative][1]
         artifact_kind = reference["artifact_kind"]
@@ -926,7 +938,12 @@ def _validate_inventory(
             if evidence_kind is not None or parsed is None:
                 _fail("Host process receipt cannot be typed evidence")
             process_receipt = _validate_process_receipt(
-                parsed, relative=relative, host_identity=host_identity
+                parsed,
+                relative=relative,
+                host_identity=host_identity,
+                candidate=candidate,
+                run_ids=run_ids,
+                seen_nonce_sha256s=seen_process_nonce_sha256s,
             )
             process_receipts.append(process_receipt)
             process_tasks[process_receipt["host"]].append(process_receipt["task_case"])
@@ -1087,12 +1104,42 @@ def _validate_inventory(
     }
     if len(typed_host_runs) != 6 or typed_host_runs != retained_process_runs:
         _fail("Host process receipts do not bind the six typed Host task runs")
+    typed_host_by_run = {
+        (
+            str(item.get("metrics", {}).get("host")),
+            str(item.get("metrics", {}).get("task_case")),
+            str(item.get("metrics", {}).get("run_id")),
+        ): _mapping(item.get("metrics"), label="typed Host metrics")
+        for item in host_derived
+    }
+    metric_fields = {
+        "event_sequence_sha256": "event_sequence_sha256",
+        "session_identity_sha256": "session_identity_sha256",
+        "lifecycle_record_sha256": "lifecycle_record_sha256",
+    }
+    for receipt in process_receipts:
+        metrics = typed_host_by_run[
+            (receipt["host"], receipt["task_case"], receipt["run_id"])
+        ]
+        binding = _mapping(
+            receipt["native_event_binding"],
+            label="Host process native event binding",
+        )
+        if any(
+            binding[receipt_field] != metrics.get(metric_field)
+            for receipt_field, metric_field in metric_fields.items()
+        ):
+            _fail("Host process receipt native event digests differ from typed Host evidence")
     typed_counts = {kind: len(paths) for kind, paths in typed_paths.items()}
     return {
         "typed_counts": typed_counts,
         "typed_evidence_kind_counts": typed_counts,
         "preflight_receipt_count": len(preflight_hosts),
         "process_receipt_count": len(process_hosts),
+        "process_receipt_runs": [
+            {"host": host, "task_case": task_case, "run_id": run_id}
+            for host, task_case, run_id in sorted(retained_process_runs)
+        ],
         "broker_source_count": len(broker_sources),
         "corpus_roles": sorted(corpus_by_role),
         "candidate": dict(candidate),

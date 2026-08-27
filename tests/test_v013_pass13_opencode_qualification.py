@@ -392,6 +392,39 @@ def test_public_execute_requires_owner_dotenv_for_every_mode(
         )
 
 
+def test_all_modes_fail_before_candidate_or_host_without_v2_correlation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    entered_candidate = False
+
+    def forbidden_prepare(_self: object) -> None:
+        nonlocal entered_candidate
+        entered_candidate = True
+        raise AssertionError("candidate preparation must remain unreachable")
+
+    monkeypatch.setattr(
+        runner.QualificationOrchestrator,
+        "prepare_candidate",
+        forbidden_prepare,
+    )
+    for mode in ("qualification", "diagnostic"):
+        with pytest.raises(
+            runner.QualificationError,
+            match=r"fork-route and child plugin-event correlation.*not_executed",
+        ):
+            runner._execute_qualification_body(
+                candidate_wheel=tmp_path / "candidate.whl",
+                deeplaw_executable=tmp_path / "deeplaw",
+                output_dir=tmp_path / "output",
+                opencode_binary=tmp_path / "opencode",
+                host_launcher=tmp_path / "owner-broker",
+                human_gold_path=None,
+                root=tmp_path / "root",
+                mode=mode,
+            )
+    assert entered_candidate is False
+
+
 def test_owner_dotenv_path_is_not_retained_in_public_forbidden_output() -> None:
     dotenv = "/external/owner-only/.env"
     with pytest.raises(runner.QualificationError):

@@ -4574,6 +4574,10 @@ def _execute_qualification_body(
         raise QualificationError(
             "OpenCode candidate runner must not receive Human Gold or reference labels"
         )
+    raise QualificationError(
+        "OpenCode owner-external public fork-route and child plugin-event "
+        f"correlation is unavailable; {mode} Host/model execution remains not_executed"
+    )
     # The public execute seam validates every mode before entering this body.
     # Keep the pathless direct diagnostic fixture for the existing no-provider
     # unit seam; an identity-bound diagnostic body is validated here as well.

@@ -7727,6 +7727,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_commercial_qualification_v9",
+            "name": "test_reopened_bundle_manifest_must_match_kernel_admission"
+          },
+          "node_id": "tests/test_v013_commercial_qualification_v9.py::test_reopened_bundle_manifest_must_match_kernel_admission"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_commercial_qualification_v9",
             "name": "test_tamper_and_candidate_mismatch_fail_closed"
           },
           "node_id": "tests/test_v013_commercial_qualification_v9.py::test_tamper_and_candidate_mismatch_fail_closed"
@@ -8503,6 +8510,55 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_production_seams_reject_unattested_codex_connection_and_synthetic_opencode_fork"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_production_seams_reject_unattested_codex_connection_and_synthetic_opencode_fork"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_v2_codex_cross_connection_and_hook_session_fail_closed"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_v2_codex_cross_connection_and_hook_session_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_v2_opencode_requires_actual_route_parent_child_and_plugin_event"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_v2_opencode_requires_actual_route_parent_child_and_plugin_event"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_v2_time_window_and_nonce_replay_are_permanently_reproducible"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_v2_time_window_and_nonce_replay_are_permanently_reproducible"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_v2_wrong_expected_bindings_and_record_tamper_fail_closed"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_v2_wrong_expected_bindings_and_record_tamper_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_valid_v2_receipts_are_closed_path_free_and_exactly_bound[codex]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_valid_v2_receipts_are_closed_path_free_and_exactly_bound[codex]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_valid_v2_receipts_are_closed_path_free_and_exactly_bound[opencode]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_valid_v2_receipts_are_closed_path_free_and_exactly_bound[opencode]"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_host_task_evidence",
             "name": "test_v013_host_task_authorized_forget_is_not_hidden_mutation"
           },
@@ -8689,6 +8745,13 @@
             "name": "test_build_and_validate_exact_candidate_bundle"
           },
           "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_build_and_validate_exact_candidate_bundle"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_bundle_accepts_six_retained_v2_slots_without_parallel_receipt_family"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_accepts_six_retained_v2_slots_without_parallel_receipt_family"
         },
         {
           "junit": {
@@ -9722,6 +9785,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_all_modes_fail_before_candidate_or_host_without_v2_correlation"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_all_modes_fail_before_candidate_or_host_without_v2_correlation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
             "name": "test_ambient_inventory_map_names_are_all_disabled_with_safe_keys"
           },
           "node_id": "tests/test_v013_pass13_codex_qualification.py::test_ambient_inventory_map_names_are_all_disabled_with_safe_keys"
@@ -10054,6 +10124,13 @@
             "name": "test_actual_assistant_response_model_comes_from_plugin_metadata"
           },
           "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_actual_assistant_response_model_comes_from_plugin_metadata"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_all_modes_fail_before_candidate_or_host_without_v2_correlation"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_all_modes_fail_before_candidate_or_host_without_v2_correlation"
         },
         {
           "junit": {
@@ -16874,9 +16951,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2389,
+      "count": 2400,
       "selection": "not qualification and not windows_native",
-      "sha256": "03cfc12035e26c0ca807aa78dcd4b6079f000a88c3d0e25ff58fe4cb84f8e3d7"
+      "sha256": "7d4c8c4304e3d4e701428622c43b5dbc952a84cc84dc84d19e2fb72fc15e86aa"
     },
     "windows": {
       "additional_cases": [
@@ -16909,13 +16986,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2393,
+      "count": 2404,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "a1b479673a2cbc2762796e99c4f491b4d4c0339c564087b09fe40952a378af87"
+      "sha256": "2b63058bf1d10a431706452a13564717815f22383b1407bb803257d2049d0db5"
     }
   },
-  "manifest_sha256": "14a5fd35436080909926d7c9348341d541fa223e66aeebc3eea94e22a715d833",
+  "manifest_sha256": "35ca68428f8839fde0e819a91d368372a3e238d189dc9b35a8896da90ea440f5",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

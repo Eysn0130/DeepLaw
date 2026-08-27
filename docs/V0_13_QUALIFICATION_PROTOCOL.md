@@ -14,7 +14,9 @@ The machine-readable protocol is
 `contracts/v013-qualification-protocol.v3.schema.json`; the frozen bytes are
 `benchmarks/v013/qualification-protocol-v3.json` and its recorded SHA-256. Protocol v1-v2 and Gate
 v1-v8 remain historical compatibility inputs. They are not rewritten or used as current state.
-The frozen v1 Host receipt is `invalidated-for-current-qualification`; current Host evidence uses
+The frozen Host process receipt v1 remains a historical compatibility record and is
+`invalidated-for-current-qualification`; current Gate v9 control admission requires the sibling
+`deeplaw.host-process-receipt/v2`. Current Host evidence continues to use
 `deeplaw.host-continuity-qualification/v2`.
 
 ## Product and Provider boundary
@@ -195,12 +197,34 @@ Trace and Ledger receipts remain outside the Provider Capsule.
 Each of the six task runs also retains two separate, sanitized control records. The
 `deeplaw.host-preflight-receipt/v1` record contains only the closed preflight stage and reason
 code, exact Host binary version/hash, and repository-external broker source hash/byte count/mode.
-The `deeplaw.host-process-receipt/v1` record binds the Host/task/run, exact binary, per-Host
-identity SHA, exact external identity source SHA, and broker source hash, successful exit, and
-negative isolation booleans. Neither record permits a command,
-environment, path, PID, stdout/stderr, prompt, transcript, hidden reasoning, authentication
-material, or Secret. A development diagnostic or an untyped process record is not qualification
-evidence.
+The frozen `deeplaw.host-process-receipt/v1` shape and validator remain unchanged for historical
+compatibility, but v1 cannot occupy a current formal `host_process_receipt` slot. The current
+`deeplaw.host-process-receipt/v2` record additionally binds the exact candidate and run IDs,
+declared owner-external broker source and observation bindings, exact process identity distinct from
+Host identity, one-time nonce, bounded issued/expiry/reference interval, and the existing
+native-event aggregate digests. Codex v2 requires one exact initialized stdio connection correlated
+to the real Hook session on that process. OpenCode v2 requires the per-Host broker's direct
+observation of the actual public fork POST, its parent/child response identities, and the subsequent
+child plugin event. Runner-constructed fork objects, fixed request digests, caller-only parent
+values, PID, thread digests, or broker nonces cannot become Host identity or satisfy v2 admission.
+Duplicate, replayed, expired, future-issued, cross-candidate, cross-run, cross-task, cross-process,
+cross-connection, and cross-session records fail closed.
+
+The bound validation reference time makes an admitted historical bundle reproducible without
+silently disabling expiry checks. Neither control record permits a command, environment, path,
+PID, stdout/stderr, raw identity, Provider body, prompt, transcript, hidden reasoning,
+authentication material, or Secret. A development diagnostic, runner-side observation, v1 record,
+or untyped process record is not current qualification evidence. The current public Host seams do
+not themselves supply owner-external v2 correlation. Both formal runners therefore reject before
+candidate preparation, turn, or model execution in qualification and diagnostic modes, and neither
+runner emits v2. The v2 and Kernel validators establish only closed structure and exact
+cross-binding to the candidate, run IDs, retained per-Host broker source, Host identity, native-event
+digests, nonce, and time window. They cannot self-attest observation provenance. Formal observation
+authority must instead come from a future exact repository-external per-Host broker at the target
+observation seam plus formal workflow provenance. The six existing Kernel `host_process_receipt`
+slots are the only receipt inventory; Kernel and Commercial reopen their exact bytes and
+cross-bindings. No second external receipt directory is required, retained, or uploaded. Focused
+contract acceptance is not formal Host evidence, and Codex x3/OpenCode x3 remains `not_executed`.
 
 ### Living Wiki
 

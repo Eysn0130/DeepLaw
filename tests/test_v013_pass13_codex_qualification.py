@@ -335,6 +335,36 @@ def test_owner_broker_launcher_symlink_is_rejected(tmp_path: Path) -> None:
         )
 
 
+def test_all_modes_fail_before_candidate_or_host_without_v2_correlation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    entered_candidate = False
+
+    def forbidden_prepare(_self: object) -> None:
+        nonlocal entered_candidate
+        entered_candidate = True
+        raise AssertionError("candidate preparation must remain unreachable")
+
+    monkeypatch.setattr(
+        qualification.QualificationOrchestrator,
+        "prepare_candidate",
+        forbidden_prepare,
+    )
+    for mode in ("qualification", "diagnostic"):
+        with pytest.raises(qualification.QualificationFailure, match="unavailable"):
+            qualification._execute_codex(
+                candidate_wheel=tmp_path / "candidate.whl",
+                deeplaw_executable=tmp_path / "deeplaw",
+                output_dir=tmp_path / "output",
+                profile_root=tmp_path / "profile",
+                human_gold_path=None,
+                codex_binary=tmp_path / "codex",
+                codex_launcher=tmp_path / "owner-broker",
+                mode=mode,
+            )
+    assert entered_candidate is False
+
+
 def test_returned_model_identity_does_not_promote_request_model_pin() -> None:
     assert qualification._returned_model_identity(
         {
