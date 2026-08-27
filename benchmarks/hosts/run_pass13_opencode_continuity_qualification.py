@@ -2879,6 +2879,53 @@ def consume_opencode_zero_model_preflight(
     )
 
 
+def _broker_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
+    return (
+        details.st_dev,
+        details.st_ino,
+        details.st_size,
+        details.st_mode,
+        details.st_uid,
+        details.st_nlink,
+        getattr(details, "st_mtime_ns", details.st_mtime),
+        getattr(details, "st_ctime_ns", details.st_ctime),
+    )
+
+
+def _validate_stable_broker_path_fd_binding(
+    *,
+    path_before: os.stat_result,
+    path_after: os.stat_result,
+    fd_before: os.stat_result,
+    fd_after: os.stat_result,
+    observed_bytes: int,
+) -> None:
+    """Bind stable pathname and FD observations without cross-interface metadata drift."""
+
+    if (
+        _broker_stat_signature(path_before) != _broker_stat_signature(path_after)
+        or _broker_stat_signature(fd_before) != _broker_stat_signature(fd_after)
+    ):
+        _control_fail("OpenCode owner-external broker source changed while it was read")
+
+    # Windows may normalize mode, uid, and timestamps differently for lstat()
+    # and fstat(). Cross-bind only file type, size, and the stable volume/file
+    # identity; an unavailable file identity fails closed instead of falling
+    # back to digest-only correlation.
+    path_identity = (path_before.st_dev, path_before.st_ino)
+    fd_identity = (fd_before.st_dev, fd_before.st_ino)
+    if (
+        not stat.S_ISREG(path_before.st_mode)
+        or not stat.S_ISREG(fd_before.st_mode)
+        or path_before.st_ino == 0
+        or fd_before.st_ino == 0
+        or path_identity != fd_identity
+        or path_before.st_size != fd_before.st_size
+        or observed_bytes != fd_before.st_size
+    ):
+        _control_fail("OpenCode owner-external broker source changed while it was read")
+
+
 @contextmanager
 def _stage_exact_broker_executable(
     path: Path,
@@ -2942,20 +2989,14 @@ def _stage_exact_broker_executable(
         raise QualificationError(
             "OpenCode owner-external broker source changed while it was read"
         ) from exc
-    signatures = {
-        (
-            details.st_dev,
-            details.st_ino,
-            details.st_size,
-            details.st_mode,
-            details.st_uid,
-            details.st_nlink,
-            getattr(details, "st_mtime_ns", details.st_mtime),
-            getattr(details, "st_ctime_ns", details.st_ctime),
-        )
-        for details in (before, fd_before, fd_after, after)
-    }
-    if len(signatures) != 1 or hashlib.sha256(raw).hexdigest() != expected_sha256:
+    _validate_stable_broker_path_fd_binding(
+        path_before=before,
+        path_after=after,
+        fd_before=fd_before,
+        fd_after=fd_after,
+        observed_bytes=len(raw),
+    )
+    if hashlib.sha256(raw).hexdigest() != expected_sha256:
         _control_fail("OpenCode owner-external broker source changed while it was read")
 
     with tempfile.TemporaryDirectory(prefix="deeplaw-opencode-broker-") as raw_root:

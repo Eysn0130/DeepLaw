@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -1275,6 +1277,85 @@ def test_owner_broker_launcher_must_be_owner_only_and_process_separated(
 
 
 def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path) -> None:
+    def metadata(**updates: int) -> SimpleNamespace:
+        values = {
+            "st_dev": 7,
+            "st_ino": 11,
+            "st_size": 19,
+            "st_mode": stat.S_IFREG | 0o700,
+            "st_uid": 501,
+            "st_nlink": 1,
+            "st_mtime": 100,
+            "st_mtime_ns": 100,
+            "st_ctime": 200,
+            "st_ctime_ns": 200,
+        }
+        values.update(updates)
+        return SimpleNamespace(**values)
+
+    path_snapshot = metadata()
+    windows_fd_snapshot = metadata(
+        st_mode=stat.S_IFREG | 0o600,
+        st_uid=0,
+        st_mtime=101,
+        st_mtime_ns=101,
+        st_ctime=201,
+        st_ctime_ns=201,
+    )
+    runner._validate_stable_broker_path_fd_binding(
+        path_before=path_snapshot,
+        path_after=path_snapshot,
+        fd_before=windows_fd_snapshot,
+        fd_after=windows_fd_snapshot,
+        observed_bytes=19,
+    )
+    for changed in (
+        {
+            "path_after": metadata(st_mtime=999, st_mtime_ns=999),
+            "fd_after": windows_fd_snapshot,
+        },
+        {
+            "path_after": path_snapshot,
+            "fd_after": metadata(
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=999,
+                st_mtime_ns=999,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+        },
+        {
+            "path_after": path_snapshot,
+            "fd_after": metadata(
+                st_ino=12,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=101,
+                st_mtime_ns=101,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+            "fd_before": metadata(
+                st_ino=12,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=101,
+                st_mtime_ns=101,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+        },
+    ):
+        with pytest.raises(runner.QualificationError, match="changed while it was read"):
+            runner._validate_stable_broker_path_fd_binding(
+                path_before=path_snapshot,
+                path_after=changed["path_after"],
+                fd_before=changed.get("fd_before", windows_fd_snapshot),
+                fd_after=changed["fd_after"],
+                observed_bytes=19,
+            )
+
     host = tmp_path / "opencode"
     host.write_bytes(b"host-binary")
     broker = tmp_path / "owner-broker"
