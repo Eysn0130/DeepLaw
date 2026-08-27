@@ -1,6 +1,6 @@
 # DeepLaw 2.0 Legal Pack 技术设计：面向 Agent 的可验证法律知识
 
-Status: **v0.12.0 Beta Legal Pack architecture and research roadmap**, reviewed 2026-08-17.
+Status: **v0.12.0 Beta Legal Pack architecture and research roadmap**, reviewed 2026-08-28.
 
 > **Files in. Verifiable knowledge out.**
 > 文件进入，Agent 得到可验证的知识。
@@ -20,8 +20,8 @@ Source-native Evidence Library（Legal Pack 属于此策略面）和 Living Wiki
 advertisement 由 general `knowledge_support` input v7/output v6 仅暴露 query/context/explain；
 法律查询继续通过独立、只读的 `law_support` seam，不把法律管理或写入隐藏在查询中。
 
-当前资格状态诚实边界：active profile 为 `machine_evaluated_no_human_attestation`，status 为
-`machine_evaluation_pending`，Gate classification 为 v8，`release_ready=false`、`claim_eligible=false`；
+当前资格状态诚实边界：active qualification protocol v3，profile 为 `kernel_release_core`，status 为
+`machine_evaluation_pending`，Gate classification 为 v9，`release_ready=false`、`claim_eligible=false`；
 真实 Host、Legal exact-source、Wiki、Context、scale、platform 与供应链证据均以 source-specific
 receipts 记录，缺失时保持 `not_executed`。本状态不授权 `0.13.0` tag 或 release。
 

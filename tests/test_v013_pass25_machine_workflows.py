@@ -539,6 +539,42 @@ def test_release_reopens_v9_kernel_provenance_and_keeps_public_state_separate() 
     assert '--jq .status' in workflow
     assert '--jq .name' in workflow
     assert '--jq .path' in workflow
+    assert (
+        "commercial_manifest_sha256: ${{ steps.publish_manifest.outputs."
+        "commercial_manifest_sha256 }}"
+        in workflow
+    )
+    assert "id: publish_manifest" in workflow
+    assert (
+        "EXPECTED_COMMERCIAL_MANIFEST_SHA256: ${{ needs.publish.outputs."
+        "commercial_manifest_sha256 }}"
+        in workflow
+    )
+    public = workflow.split("\n  public-redownload:", maxsplit=1)[1]
+    assert "commercial-release-manifest.v9.schema.json" in public
+    assert "Draft202012Validator" in public
+    assert "FormatChecker" in public
+    assert "object_pairs_hook" in public
+    assert "parse_constant" in public
+    assert 'manifest["record_sha256"]' in public
+    assert "record_sha256(manifest)" in public
+    assert 'PUBLIC_DOWNLOAD_DIR: ${{ runner.temp }}/downloads' in public
+    assert 'requested_download_dir = Path(os.environ["PUBLIC_DOWNLOAD_DIR"])' in public
+    assert "download_dir = requested_download_dir.resolve(strict=True)" in public
+    assert "os.chdir(download_dir)" in public
+    assert '"repository": "Eysn0130/DeepLaw"' in public
+    assert '"version": "0.13.0"' in public
+    assert '"tag": os.environ["RELEASE_TAG"]' in public
+    assert '"commit": os.environ["RELEASE_COMMIT"]' in public
+    assert '"tree": os.environ["RELEASE_TREE"]' in public
+    assert 'manifest["release_ready"] is not True' in public
+    assert 'manifest["kernel_release_claim_eligible"] is not True' in public
+    assert 'manifest["human_attested_claim_eligible"] is not False' in public
+    assert 'manifest["competitive_claim_eligible"] is not False' in public
+    assert 'manifest["artifact_binding"]' in public
+    assert 'Path(artifact["path"]).name != path.name' in public
+    assert 'artifact["sha256"] != sha(path)' in public
+    assert 'len(wheels) != 1 or len(sdists) != 1' in public
     for forbidden in (
         "release_provenance_v7",
         "external_qualification_bundle_v3",

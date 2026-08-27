@@ -266,6 +266,22 @@ def test_active_v3_pending_template_is_separate_and_release_closed() -> None:
     assert active["competitive_claim_eligible"] is False
     assert active["owner_release_confirmation"] == "required_at_release_decision"
 
+    legal_pack_doc = (REPOSITORY / "docs/DEEPLAW_2.md").read_text(encoding="utf-8")
+    adapters_doc = (REPOSITORY / "docs/AGENT_ADAPTERS.md").read_text(encoding="utf-8")
+    security_doc = (REPOSITORY / "SECURITY.md").read_text(encoding="utf-8")
+    assert "active qualification protocol v3" in legal_pack_doc
+    assert "profile 为 `kernel_release_core`" in legal_pack_doc
+    assert "Gate classification 为 v9" in legal_pack_doc
+    assert "`release_ready=false`" in legal_pack_doc
+    assert "not_executed" in legal_pack_doc
+    assert "Real model/session tasks on Codex/OpenCode" in adapters_doc
+    assert "Active profile is `kernel_release_core`" in adapters_doc
+    assert "not_executed" in adapters_doc
+    assert "host-preflight-receipt/v1" in security_doc
+    assert "host-process-receipt/v2" in security_doc
+    assert "host-process-receipt/v1" in security_doc
+    assert "historical/invalidated" in security_doc
+
 
 def test_active_v3_stage_transitions_do_not_require_optional_external_hashes() -> None:
     schema = _load(ACTIVE_SCHEMA)

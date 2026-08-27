@@ -34,6 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.release.outputs.tag }}
+      tag_object_sha: ${{ steps.release.outputs.tag_object_sha }}
       commit: ${{ steps.release.outputs.commit }}
       tree: ${{ steps.release.outputs.tree }}
       version: ${{ steps.release.outputs.version }}
@@ -64,8 +65,16 @@ jobs:
           test "${OWNER_RELEASE_CONFIRMATION}" = "publish-v0.13.0"
           test "${TARGET_TAG}" = "v0.13.0"
           test "${GITHUB_REF}" = "refs/tags/${TARGET_TAG}"
-          commit=$(git rev-parse HEAD)
-          test "${commit}" = "$(git rev-list -n 1 "${TARGET_TAG}")"
+          test "$(git cat-file -t "${TARGET_TAG}")" = tag
+          tag_object_sha=$(git rev-parse "${TARGET_TAG}")
+          commit=$(git rev-parse "${TARGET_TAG}^{commit}")
+          test "${commit}" = "$(git rev-parse HEAD)"
+          remote_tag_type=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TARGET_TAG}" --jq .object.type)
+          remote_tag_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TARGET_TAG}" --jq .object.sha)
+          test "${remote_tag_type}" = tag
+          test "${remote_tag_sha}" = "${tag_object_sha}"
           version=$(python - <<'PY'
           import pathlib
           import tomllib
@@ -109,6 +118,7 @@ jobs:
           test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${evidence_run_id}" --jq .head_sha)" = "${candidate_head}"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qualification_run_id}" --jq .head_sha)" = "${candidate_head}"
           echo "tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "tag_object_sha=${tag_object_sha}" >> "${GITHUB_OUTPUT}"
           echo "commit=${commit}" >> "${GITHUB_OUTPUT}"
           echo "tree=${tree}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
@@ -338,6 +348,8 @@ jobs:
       attestations: write
       contents: write
       id-token: write
+    outputs:
+      commercial_manifest_sha256: ${{ steps.publish_manifest.outputs.commercial_manifest_sha256 }}
     steps:
       - name: Download the same verified artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -354,6 +366,7 @@ jobs:
           path: ${{ runner.temp }}/commercial
 
       - name: Copy closed public evidence and write checksums
+        id: publish_manifest
         shell: bash
         run: |
           set -euo pipefail
@@ -362,6 +375,10 @@ jobs:
           cp "${RUNNER_TEMP}/commercial/openvex.json" "${RUNNER_TEMP}/publish/"
           cp "${RUNNER_TEMP}/commercial/installed-licenses.json" "${RUNNER_TEMP}/publish/"
           cp "${RUNNER_TEMP}/commercial/reproducible-build.json" "${RUNNER_TEMP}/publish/"
+          commercial_manifest_sha256=$(sha256sum \
+            "${RUNNER_TEMP}/publish/commercial-release-manifest.json" | cut -d ' ' -f 1)
+          [[ "${commercial_manifest_sha256}" =~ ^[0-9a-f]{64}$ ]]
+          echo "commercial_manifest_sha256=${commercial_manifest_sha256}" >> "${GITHUB_OUTPUT}"
           cd "${RUNNER_TEMP}/publish"
           sha256sum -- * > SHA256SUMS
 
@@ -391,9 +408,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_TAG_OBJECT_SHA: ${{ needs.resolve.outputs.tag_object_sha }}
+          RELEASE_TITLE: DeepLaw 0.13.0 Beta — machine-evaluated technical release
+          RELEASE_NOTES: Machine-evaluated Beta release; no Human Gold, human review, legal expert review, or legal authority attestation is claimed.
         shell: bash
         run: |
           set -euo pipefail
+          remote_tag_type=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.type)
+          remote_tag_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
+          test "${remote_tag_type}" = tag
+          test "${remote_tag_sha}" = "${RELEASE_TAG_OBJECT_SHA}"
           allowed_assets=$(mktemp)
           find "${RUNNER_TEMP}/publish" -maxdepth 1 -type f -print0 \
             | while IFS= read -r -d '' artifact; do basename "${artifact}"; done \
@@ -415,10 +441,11 @@ jobs:
             fi
           fi
           if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            gh release create "${RELEASE_TAG}" --verify-tag --draft --prerelease --generate-notes
-          else
-            test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
+            gh release create "${RELEASE_TAG}" --verify-tag --draft --prerelease --title "${RELEASE_TITLE}" --notes "${RELEASE_NOTES}"
           fi
+          test "$(gh release view "${RELEASE_TAG}" --json name --jq .name)" = "${RELEASE_TITLE}"
+          test "$(gh release view "${RELEASE_TAG}" --json body --jq .body)" = "${RELEASE_NOTES}"
+          test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
           release_id=$(gh api \
             "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)
           while IFS= read -r -d '' artifact; do
@@ -461,14 +488,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_TAG_OBJECT_SHA: ${{ needs.resolve.outputs.tag_object_sha }}
+          RELEASE_TITLE: DeepLaw 0.13.0 Beta — machine-evaluated technical release
+          RELEASE_NOTES: Machine-evaluated Beta release; no Human Gold, human review, legal expert review, or legal authority attestation is claimed.
         shell: bash
         run: |
           set -euo pipefail
+          remote_tag_type=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.type)
+          remote_tag_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
+          test "${remote_tag_type}" = tag
+          test "${remote_tag_sha}" = "${RELEASE_TAG_OBJECT_SHA}"
+          test "$(gh release view "${RELEASE_TAG}" --json name --jq .name)" = "${RELEASE_TITLE}"
+          test "$(gh release view "${RELEASE_TAG}" --json body --jq .body)" = "${RELEASE_NOTES}"
+          test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
           if [[ "$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft)" = true ]]; then
             gh release edit "${RELEASE_TAG}" --draft=false
-          else
-            test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
           fi
+          test "$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft)" = false
+          test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
 
   public-redownload:
     name: Verify public redownload and signature bundles
@@ -498,6 +537,7 @@ jobs:
       - name: Publicly redownload immutable release without credentials
         env:
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          EXPECTED_COMMERCIAL_MANIFEST_SHA256: ${{ needs.publish.outputs.commercial_manifest_sha256 }}
         shell: bash
         run: |
           set -euo pipefail
@@ -512,6 +552,7 @@ jobs:
               --output "${name}" "${base}/${name}"
           done < SHA256SUMS
           sha256sum --check SHA256SUMS
+          test "$(sha256sum commercial-release-manifest.json | cut -d ' ' -f 1)" = "${EXPECTED_COMMERCIAL_MANIFEST_SHA256}"
           for artifact in *.whl *.tar.gz; do
             curl --fail --location --silent --show-error \
               --output "${artifact}.sigstore.json" \
@@ -557,6 +598,8 @@ jobs:
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
           RELEASE_TREE: ${{ needs.resolve.outputs.tree }}
+          EXPECTED_COMMERCIAL_MANIFEST_SHA256: ${{ needs.publish.outputs.commercial_manifest_sha256 }}
+          PUBLIC_DOWNLOAD_DIR: ${{ runner.temp }}/downloads
         shell: bash
         run: |
           set -euo pipefail
@@ -573,8 +616,45 @@ jobs:
 
           from jsonschema import Draft202012Validator, FormatChecker
 
+          requested_download_dir = Path(os.environ["PUBLIC_DOWNLOAD_DIR"])
+          if requested_download_dir.is_symlink() or not requested_download_dir.is_dir():
+              raise SystemExit("public download directory is unavailable")
+          download_dir = requested_download_dir.resolve(strict=True)
+          os.chdir(download_dir)
+
           def sha(path: Path) -> str:
               return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          def reject_pairs(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise SystemExit("strict JSON contains a duplicate key")
+                  result[key] = value
+              return result
+
+          def reject_constant(value):
+              raise SystemExit(f"strict JSON contains a non-finite constant: {value}")
+
+          def strict_json(path: Path):
+              return json.loads(
+                  path.read_bytes().decode("utf-8", errors="strict"),
+                  object_pairs_hook=reject_pairs,
+                  parse_constant=reject_constant,
+              )
+
+          def canonical_json(value) -> bytes:
+              return json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  allow_nan=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+              ).encode("utf-8")
+
+          def record_sha256(value) -> str:
+              body = {key: item for key, item in value.items() if key != "record_sha256"}
+              return hashlib.sha256(canonical_json(body)).hexdigest()
 
           def require_regular(path: Path) -> None:
               try:
@@ -607,22 +687,67 @@ jobs:
               if listed.name != columns[1].removeprefix("*"):
                   raise SystemExit("SHA256SUMS contains an unsafe asset name")
               require_regular(listed)
-          manifest = json.loads(commercial_manifest.read_text(encoding="utf-8"))
-          release = manifest.get("release")
+          manifest = strict_json(commercial_manifest)
+          if not isinstance(manifest, dict):
+              raise SystemExit("public commercial manifest must be an object")
+          if sha(commercial_manifest) != os.environ["EXPECTED_COMMERCIAL_MANIFEST_SHA256"]:
+              raise SystemExit("public commercial manifest hash differs from pre-publish output")
+          manifest_schema_path = Path(os.environ["GITHUB_WORKSPACE"]) / "contracts" / (
+              "commercial-release-manifest.v9.schema.json"
+          )
+          manifest_schema = strict_json(manifest_schema_path)
+          if not isinstance(manifest_schema, dict):
+              raise SystemExit("commercial manifest schema must be an object")
+          Draft202012Validator.check_schema(manifest_schema)
+          manifest_errors = sorted(
+              Draft202012Validator(
+                  manifest_schema,
+                  format_checker=FormatChecker(),
+              ).iter_errors(manifest),
+              key=lambda error: list(error.path),
+          )
+          if manifest_errors:
+              raise SystemExit(
+                  f"commercial manifest schema violation: {manifest_errors[0].message}"
+              )
+          if manifest["record_sha256"] != record_sha256(manifest):
+              raise SystemExit("public commercial manifest record digest differs")
+          release = manifest["release"]
           expected_release = {
+              "repository": "Eysn0130/DeepLaw",
+              "version": "0.13.0",
               "tag": os.environ["RELEASE_TAG"],
               "commit": os.environ["RELEASE_COMMIT"],
               "tree": os.environ["RELEASE_TREE"],
           }
-          if not isinstance(release, dict) or any(
-              release.get(key) != value for key, value in expected_release.items()
-          ):
+          if not isinstance(release, dict) or release != expected_release:
               raise SystemExit("public commercial manifest is not bound to the immutable release")
+          if manifest["release_ready"] is not True:
+              raise SystemExit("public commercial manifest is not release-ready")
+          if manifest["kernel_release_claim_eligible"] is not True:
+              raise SystemExit("public commercial manifest is not Kernel-eligible")
+          if manifest["human_attested_claim_eligible"] is not False:
+              raise SystemExit("public commercial manifest claims human attestation")
+          if manifest["competitive_claim_eligible"] is not False:
+              raise SystemExit("public commercial manifest claims competitive evidence")
           wheel_sha = sha(wheels[0])
           sdist_sha = sha(sdists[0])
+          artifact_binding = manifest["artifact_binding"]
+          if not isinstance(artifact_binding, dict):
+              raise SystemExit("public commercial manifest artifact binding is invalid")
+          for kind, path in (("wheel", wheels[0]), ("sdist", sdists[0])):
+              artifact = artifact_binding.get(kind)
+              if not isinstance(artifact, dict):
+                  raise SystemExit(f"public commercial manifest {kind} binding is invalid")
+              if Path(artifact["path"]).name != path.name or artifact["sha256"] != sha(path):
+                  raise SystemExit(
+                      f"public commercial manifest {kind} differs from anonymous download"
+                  )
           binding = {"wheel_sha256": wheel_sha, "sdist_sha256": sdist_sha}
           release_binding = {
-              **expected_release,
+              "tag": expected_release["tag"],
+              "commit": expected_release["commit"],
+              "tree": expected_release["tree"],
               "commercial_manifest_sha256": sha(commercial_manifest),
               "sha256s_sha256": sha(checksums),
           }
@@ -665,7 +790,8 @@ jobs:
           schema_path = Path(os.environ["GITHUB_WORKSPACE"]) / "contracts" / (
               "post-public-verification.v2.schema.json"
           )
-          schema = json.loads(schema_path.read_text(encoding="utf-8"))
+          schema = strict_json(schema_path)
+          Draft202012Validator.check_schema(schema)
           errors = sorted(
               Draft202012Validator(
                   schema,
@@ -696,13 +822,22 @@ jobs:
           retention-days: 90
           path: ${{ runner.temp }}/downloads/post-public-verification.json
 
-      - name: Attach post-public receipt and clear prerelease state
+      - name: Attach post-public receipt and retain Beta prerelease state
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_TAG_OBJECT_SHA: ${{ needs.resolve.outputs.tag_object_sha }}
+          RELEASE_TITLE: DeepLaw 0.13.0 Beta — machine-evaluated technical release
+          RELEASE_NOTES: Machine-evaluated Beta release; no Human Gold, human review, legal expert review, or legal authority attestation is claimed.
         shell: bash
         run: |
           set -euo pipefail
+          remote_tag_type=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.type)
+          remote_tag_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
+          test "${remote_tag_type}" = tag
+          test "${remote_tag_sha}" = "${RELEASE_TAG_OBJECT_SHA}"
           receipt="${RUNNER_TEMP}/downloads/post-public-verification.json"
           release_id=$(gh api \
             "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)
@@ -722,4 +857,7 @@ jobs:
           else
             gh release upload "${RELEASE_TAG}" "${receipt}"
           fi
-          gh release edit "${RELEASE_TAG}" --prerelease=false
+          test "$(gh release view "${RELEASE_TAG}" --json name --jq .name)" = "${RELEASE_TITLE}"
+          test "$(gh release view "${RELEASE_TAG}" --json body --jq .body)" = "${RELEASE_NOTES}"
+          test "$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft)" = false
+          test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true

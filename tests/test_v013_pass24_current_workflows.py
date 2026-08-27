@@ -109,7 +109,10 @@ def test_release_is_manual_three_run_provenance_then_draft_and_public_verify() -
     assert "--candidate-run-id" in workflow
     assert "--evidence-run-id" in workflow
     assert "--qualification-run-id" in workflow
-    assert "gh release create \"${RELEASE_TAG}\" --verify-tag --draft" in workflow
+    assert (
+        'gh release create "${RELEASE_TAG}" --verify-tag --draft --prerelease '
+        '--title "${RELEASE_TITLE}" --notes "${RELEASE_NOTES}"'
+    ) in workflow
     assert "gh release edit \"${RELEASE_TAG}\" --draft=false" in workflow
     assert "Publicly redownload immutable release without credentials" in workflow
     assert "post-public-verification.json" in workflow
@@ -121,3 +124,35 @@ def test_release_is_manual_three_run_provenance_then_draft_and_public_verify() -
     assert "--candidate-machine-reference-binding" not in workflow
     assert "public_release_verified" in workflow
     assert "release_provenance_v7" not in workflow
+    assert 'tag_object_sha: ${{ steps.release.outputs.tag_object_sha }}' in workflow
+    assert 'git cat-file -t "${TARGET_TAG}"' in workflow
+    assert 'test "$(git cat-file -t "${TARGET_TAG}")" = tag' in workflow
+    assert 'git rev-parse "${TARGET_TAG}^{commit}"' in workflow
+    assert 'git/ref/tags/${TARGET_TAG}' in workflow
+    assert 'test "${remote_tag_type}" = tag' in workflow
+    assert 'test "${remote_tag_sha}" = "${tag_object_sha}"' in workflow
+    assert (
+        "DeepLaw 0.13.0 Beta — machine-evaluated technical release" in workflow
+    )
+    assert (
+        "Machine-evaluated Beta release; no Human Gold, human review, legal expert review, "
+        "or legal authority attestation is claimed."
+        in workflow
+    )
+    assert '--title "${RELEASE_TITLE}"' in workflow
+    assert '--notes "${RELEASE_NOTES}"' in workflow
+    assert 'gh release view "${RELEASE_TAG}" --json name --jq .name' in workflow
+    assert 'gh release view "${RELEASE_TAG}" --json body --jq .body' in workflow
+    assert 'gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease' in workflow
+    assert workflow.count('test "${remote_tag_sha}" = "${RELEASE_TAG_OBJECT_SHA}"') >= 3
+    assert workflow.count('--json name --jq .name') >= 3
+    assert workflow.count('--json body --jq .body') >= 3
+    assert "--prerelease=false" not in workflow
+    assert (
+        'test "$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft)" = false'
+        in workflow
+    )
+    assert (
+        'test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true'
+        in workflow
+    )

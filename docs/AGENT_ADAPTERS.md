@@ -32,7 +32,7 @@ The default/Advanced/Compatibility/Experimental/Retire Candidate classification 
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
 | Obsidian CLI bridge and bundle | **Source candidate / local-only** | exact-candidate synthetic macOS load/verify/rename/edit/reconcile/conflict-recovery seam executed; Human/blind and broader qualification pending |
 | Tolaria external MCP bridge | **`integration_limited`** | exact `v2026-08-11` source/hash contract and local CLI harness; Desktop/UI seam not executed |
-| Real model/session tasks on all hosts | **Pending under machine-only profile** | Active profile is `machine_evaluated_no_human_attestation`; required Codex/OpenCode runs and mapped Core evidence remain source-specific `not_executed` until a fresh exact candidate/input/receipt binding; historical candidate evidence is not Human Gold or legal attestation |
+| Real model/session tasks on Codex/OpenCode | **Pending under machine-only profile** | Active profile is `kernel_release_core`; required Codex/OpenCode runs and mapped Core evidence remain source-specific `not_executed` until a fresh exact candidate/input/receipt binding; historical candidate evidence is not Human Gold or legal attestation |
 
 The compiler workflow and grant boundary are specified in
 [`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). The default plugin remains read-only. A host

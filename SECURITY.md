@@ -26,8 +26,9 @@ The v9 manifest binds exact candidate artifacts, Kernel evidence bundle, Host ta
 cross-platform, supply-chain, provenance, and public-redownload evidence. Optional Capability and
 Competitive/Research Claim gates remain explicit `not_executed` non-claims and do not substitute
 for Kernel evidence.
-Real Host qualification retains only the closed `host-preflight-receipt/v1` and
-`host-process-receipt/v1` control records. They bind safe reason/status codes, exact binary and
+Real Host qualification retains the closed `host-preflight-receipt/v1` and current
+`host-process-receipt/v2` control records. `host-process-receipt/v1` is historical/invalidated and
+cannot satisfy current qualification. They bind safe reason/status codes, exact binary and
 repository-external broker hashes, owner-only broker mode, and negative isolation facts. Raw
 commands, environment values, paths, process identifiers, stdout/stderr, prompts, transcripts,
 hidden reasoning, authentication material, and Secrets are forbidden from those records.

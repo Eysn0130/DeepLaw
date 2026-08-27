@@ -166,6 +166,9 @@ def _validate_event_value(value: Any, *, schema_version: str | None = None) -> d
         raise NativeHostObservationError("fork parent identity is only valid on a fork event")
     if parent is not None:
         _non_placeholder_digest(parent, field="parent_session_sha256")
+    if host == "codex":
+        identity = value["host_identity"]
+        _non_placeholder_digest(identity["binary_sha256"], field="binary_sha256")
     if host == "opencode":
         identity = value["host_identity"]
         _non_placeholder_digest(identity["executable_sha256"], field="executable_sha256")

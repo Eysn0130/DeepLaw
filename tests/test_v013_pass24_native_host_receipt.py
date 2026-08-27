@@ -291,6 +291,13 @@ def test_opencode_placeholder_artifact_digest_is_rejected() -> None:
     with pytest.raises(NativeHostObservationError):
         parse_native_host_event(event)
 
+    for codex_event in (_codex_event(), _current_codex_event()):
+        codex_identity = codex_event["host_identity"]
+        assert isinstance(codex_identity, dict)
+        codex_identity["binary_sha256"] = "0" * 64
+        with pytest.raises(NativeHostObservationError):
+            parse_native_host_event(codex_event)
+
 
 def test_regular_non_symlink_file_and_size_bound_are_enforced(tmp_path: Path) -> None:
     event_path = tmp_path / "event.json"
