@@ -23,9 +23,9 @@ content-minimized Run/Checkpoint/Artifact identities. Transcript, prompt, raw lo
 reasoning are never automatically ingested as memory.
 
 The package and main remain `0.12.0 Beta` with `release_ready=false`. The active qualification
-binding is [`benchmarks/v013/active-qualification-v2.json`](../benchmarks/v013/active-qualification-v2.json):
-`status=machine_evaluation_pending`, `profile=machine_evaluated_no_human_attestation`, and Gate
-classification v8. Required Core evidence is source-specific and remains `not_executed` until a
+binding is [`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json):
+`status=machine_evaluation_pending`, `profile=kernel_release_core`, and Gate classification v9.
+Required Core evidence is source-specific and remains `not_executed` until a
 fresh exact candidate, artifact, inputs and receipts are bound. Machine reviewers are not Human
 Gold, legal experts, `human_verified`, or a release decision.
 

@@ -1,0 +1,775 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-release-gate-classification.v9.schema.json",
+  "title": "DeepLaw v0.13 executable release gate classification v9",
+  "description": "Closed machine-only Gate v9 inventory. The 0.12.0 candidate remains a not-executed HOLD; optional capability and comparative/research rows cannot block Core assembly.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "classification_id",
+    "profile",
+    "construction_package_version",
+    "release_target",
+    "categories",
+    "assembly_policy",
+    "gates"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.v013-release-gate-classification/v9"
+    },
+    "classification_id": {
+      "const": "deeplaw-v013-commercial-gates-v9"
+    },
+    "profile": {
+      "const": "kernel_release_core"
+    },
+    "construction_package_version": {
+      "const": "0.12.0"
+    },
+    "release_target": {
+      "const": "0.13.0"
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/category"
+      }
+    },
+    "assembly_policy": {
+      "$ref": "#/$defs/assemblyPolicy"
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 27,
+      "maxItems": 27,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/gate"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "category_id": {
+                "const": "core"
+              }
+            },
+            "required": ["category_id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "category_id": {
+                "const": "capability"
+              }
+            },
+            "required": ["category_id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "category_id": {
+                "const": "competitive_research"
+              }
+            },
+            "required": ["category_id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "categories": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "category_id": {
+                "const": "competitive_research"
+              },
+              "gate_ids": {
+                "allOf": [
+                  {"contains": {"const": "machine_reference_isolation"}},
+                  {"contains": {"const": "qualification_comparative_holdout"}},
+                  {"contains": {"const": "final_blind_comparative_holdout"}},
+                  {"contains": {"const": "agent_review_panel"}},
+                  {"contains": {"const": "scorer_a"}},
+                  {"contains": {"const": "scorer_b"}},
+                  {"contains": {"const": "arbiter"}},
+                  {"contains": {"const": "comparative_incremental_benefit"}},
+                  {"contains": {"const": "superiority"}},
+                  {"contains": {"const": "sota"}}
+                ]
+              }
+            },
+            "required": ["category_id", "gate_ids"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+    },
+    "category": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "category_id",
+        "required",
+        "not_claimed_allowed",
+        "gate_ids"
+      ],
+      "properties": {
+        "category": {
+          "enum": ["Core", "Capability", "Competitive/Research Claim"]
+        },
+        "category_id": {
+          "enum": ["core", "capability", "competitive_research"]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "not_claimed_allowed": {
+          "type": "boolean"
+        },
+        "gate_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"category_id": {"const": "core"}},
+            "required": ["category_id"]
+          },
+          "then": {
+            "properties": {
+              "category": {"const": "Core"},
+              "required": {"const": true},
+              "not_claimed_allowed": {"const": false},
+              "gate_ids": {
+                "const": [
+                  "canonical_integrity",
+                  "migration_recovery",
+                  "secret_host_isolation",
+                  "bounded_context",
+                  "source_citation_locator",
+                  "living_wiki",
+                  "scale_performance",
+                  "supported_platforms",
+                  "reproducible_supply_chain",
+                  "codex",
+                  "opencode",
+                  "selective_forget",
+                  "timeline"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"category_id": {"const": "capability"}},
+            "required": ["category_id"]
+          },
+          "then": {
+            "properties": {
+              "category": {"const": "Capability"},
+              "required": {"const": false},
+              "not_claimed_allowed": {"const": true},
+              "gate_ids": {
+                "const": [
+                  "official_legal_pack",
+                  "semantic_restore",
+                  "claude",
+                  "gui_desktop_interoperability"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"category_id": {"const": "competitive_research"}},
+            "required": ["category_id"]
+          },
+          "then": {
+            "properties": {
+              "category": {"const": "Competitive/Research Claim"},
+              "required": {"const": false},
+              "not_claimed_allowed": {"const": true},
+              "gate_ids": {"minItems": 10}
+            }
+          }
+        }
+      ]
+    },
+    "assemblyPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assembly_enabled", "reason_code"],
+      "properties": {
+        "assembly_enabled": {"const": false},
+        "reason_code": {"const": "awaiting_all_core_gate_pass"}
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "tool_version",
+        "binary_sha256",
+        "source_commit",
+        "config_selector",
+        "model_id",
+        "expected_response_model_id",
+        "reasoning_effort",
+        "argv_prefix"
+      ],
+      "properties": {
+        "host": {"type": ["string", "null"]},
+        "tool_version": {"type": ["string", "null"]},
+        "binary_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_commit": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "config_selector": {"type": ["string", "null"]},
+        "model_id": {"type": ["string", "null"]},
+        "expected_response_model_id": {"type": ["string", "null"]},
+        "reasoning_effort": {
+          "type": ["string", "null"],
+          "enum": ["low", "medium", "high", "xhigh", "max", null]
+        },
+        "argv_prefix": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "maxItems": 32
+        },
+        "plugin_policy": {"const": "single_exact_candidate_plugin"},
+        "ambient_project_plugins": {"const": "forbidden"}
+      }
+    },
+    "threshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric", "minimum", "maximum"],
+      "properties": {
+        "metric": {"$ref": "#/$defs/identifier"},
+        "minimum": {"type": ["number", "null"]},
+        "maximum": {"type": ["number", "null"]}
+      }
+    },
+    "hardZero": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_field", "failure_ids", "maximum_allowed"],
+      "properties": {
+        "source_field": {"const": "gate_result.hard_failures"},
+        "failure_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "maximum_allowed": {"const": 0}
+      }
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "python_version"],
+      "properties": {
+        "platform": {"enum": ["linux", "macos", "windows"]},
+        "python_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"}
+      }
+    },
+    "scaleContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_governed_objects",
+        "vault",
+        "above_10000",
+        "deferred_100000",
+        "warm_samples",
+        "required_metrics",
+        "hard_failure_ids"
+      ],
+      "properties": {
+        "active_governed_objects": {"const": 10000},
+        "vault": {"const": "Vault"},
+        "above_10000": {"const": "experimental_unqualified"},
+        "deferred_100000": {"const": "v0.14"},
+        "warm_samples": {"const": 30},
+        "required_metrics": {
+          "const": [
+            "p50",
+            "p95",
+            "max",
+            "rss",
+            "storage",
+            "file_count",
+            "build",
+            "rebuild",
+            "full_incremental_noop_equivalence",
+            "user_bytes",
+            "provider_bound"
+          ]
+        },
+        "hard_failure_ids": {
+          "const": [
+            "active_governed_object_count_mismatch",
+            "experimental_over_10000_claimed_qualified",
+            "100000_not_deferred_to_v0.14",
+            "warm_samples_below_30",
+            "missing_p50",
+            "missing_p95",
+            "missing_max",
+            "query_p95_exceeded",
+            "context_p95_exceeded",
+            "query_max_exceeded",
+            "context_max_exceeded",
+            "rss_missing",
+            "storage_missing",
+            "file_count_missing",
+            "build_duration_missing",
+            "rebuild_duration_missing",
+            "full_incremental_noop_mismatch",
+            "user_bytes_unbounded",
+            "provider_bound_exceeded"
+          ]
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "category",
+        "category_id",
+        "required",
+        "not_claimed_only",
+        "status",
+        "passed",
+        "claim",
+        "assembly_enabled",
+        "validator_id",
+        "validator_version",
+        "implementation_status",
+        "accepted_input_schema_versions",
+        "minimum_distinct_run_count",
+        "required_unique_dimensions",
+        "required_task_cases",
+        "constraints",
+        "required_corpus_roles",
+        "artifact_kinds",
+        "thresholds",
+        "hard_zero_derivation",
+        "source_duties",
+        "scale_contract",
+        "allowed_applicability",
+        "required_execution_platforms",
+        "output_schema_versions"
+      ],
+      "properties": {
+        "gate_id": {
+          "enum": [
+            "canonical_integrity",
+            "migration_recovery",
+            "secret_host_isolation",
+            "bounded_context",
+            "source_citation_locator",
+            "living_wiki",
+            "scale_performance",
+            "supported_platforms",
+            "reproducible_supply_chain",
+            "codex",
+            "opencode",
+            "selective_forget",
+            "timeline",
+            "official_legal_pack",
+            "semantic_restore",
+            "claude",
+            "gui_desktop_interoperability",
+            "machine_reference_isolation",
+            "qualification_comparative_holdout",
+            "final_blind_comparative_holdout",
+            "agent_review_panel",
+            "scorer_a",
+            "scorer_b",
+            "arbiter",
+            "comparative_incremental_benefit",
+            "superiority",
+            "sota"
+          ]
+        },
+        "category": {"enum": ["Core", "Capability", "Competitive/Research Claim"]},
+        "category_id": {"enum": ["core", "capability", "competitive_research"]},
+        "required": {"type": "boolean"},
+        "not_claimed_only": {"type": "boolean"},
+        "status": {"enum": ["not_executed", "failed", "passed"]},
+        "passed": {"type": "boolean"},
+        "claim": {"type": "boolean"},
+        "assembly_enabled": {"const": false},
+        "validator_id": {"$ref": "#/$defs/identifier"},
+        "validator_version": {"$ref": "#/$defs/identifier"},
+        "implementation_status": {
+          "enum": ["ready", "not_claimed_only"]
+        },
+        "accepted_input_schema_versions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "minimum_distinct_run_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "required_unique_dimensions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "required_task_cases": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "constraints": {"$ref": "#/$defs/constraints"},
+        "required_corpus_roles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "candidate_full",
+              "candidate_platform",
+              "host_qualification",
+              "professional_evidence",
+              "living_wiki",
+              "scale_10000",
+              "supply_chain"
+            ]
+          }
+        },
+        "artifact_kinds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "thresholds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/threshold"}
+        },
+        "hard_zero_derivation": {"$ref": "#/$defs/hardZero"},
+        "source_duties": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "scale_contract": {
+          "type": ["object", "null"],
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/scaleContract"}
+          ]
+        },
+        "allowed_applicability": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["applicable", "not_applicable"]}
+        },
+        "required_execution_platforms": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/platform"}
+        },
+        "output_schema_versions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "not_executed"}},
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "passed": {"const": false},
+              "claim": {"const": false}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"status": {"const": "failed"}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"passed": {"const": false}, "claim": {"const": false}}}
+        },
+        {
+          "if": {
+            "properties": {"status": {"const": "passed"}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"passed": {"const": true}}}
+        },
+        {
+          "if": {
+            "properties": {"category_id": {"const": "core"}},
+            "required": ["category_id"]
+          },
+          "then": {
+            "properties": {
+              "category": {"const": "Core"},
+              "required": {"const": true},
+              "not_claimed_only": {"const": false},
+              "implementation_status": {"const": "ready"},
+              "minimum_distinct_run_count": {"minimum": 1},
+              "accepted_input_schema_versions": {
+                "const": ["deeplaw.typed-qualification-evidence/v3"]
+              },
+              "output_schema_versions": {
+                "const": ["deeplaw.provenance-bound-gate-result/v5"]
+              },
+              "required_corpus_roles": {"minItems": 1},
+              "artifact_kinds": {"minItems": 1},
+              "required_execution_platforms": {"minItems": 1}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"category_id": {"enum": ["capability", "competitive_research"]}},
+            "required": ["category_id"]
+          },
+          "then": {
+            "properties": {
+              "required": {"const": false},
+              "not_claimed_only": {"const": true},
+              "status": {"const": "not_executed"},
+              "passed": {"const": false},
+              "claim": {"const": false},
+              "implementation_status": {"const": "not_claimed_only"},
+              "accepted_input_schema_versions": {"maxItems": 0},
+              "minimum_distinct_run_count": {"const": 0},
+              "required_unique_dimensions": {"maxItems": 0},
+              "required_task_cases": {"maxItems": 0},
+              "required_corpus_roles": {"maxItems": 0},
+              "artifact_kinds": {"maxItems": 0},
+              "thresholds": {"maxItems": 0},
+              "source_duties": {"maxItems": 0},
+              "required_execution_platforms": {"maxItems": 0},
+              "output_schema_versions": {
+                "const": ["deeplaw.provenance-bound-gate-result/v5"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"gate_id": {"const": "source_citation_locator"}},
+            "required": ["gate_id"]
+          },
+          "then": {
+            "properties": {
+              "category_id": {"const": "core"},
+              "artifact_kinds": {"const": ["professional_evidence_rows"]},
+              "source_duties": {
+                "const": [
+                  "original_bytes",
+                  "original_hash",
+                  "document",
+                  "version",
+                  "fragment",
+                  "locator",
+                  "wrong_version_rejection",
+                  "effective_date",
+                  "exception",
+                  "proviso",
+                  "cross_reference",
+                  "false_authority",
+                  "ocr_critical_token_gap",
+                  "wiki_exact_source_drill_down"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"gate_id": {"const": "living_wiki"}},
+            "required": ["gate_id"]
+          },
+          "then": {
+            "properties": {
+              "category_id": {"const": "core"},
+              "artifact_kinds": {"const": ["wiki_journey_rows"]},
+              "required_task_cases": {
+                "const": [
+                  "alias_same_name_identity",
+                  "rename_move",
+                  "external_edit_reconcile",
+                  "backlink_outlink",
+                  "source_successor",
+                  "wrong_merge_rejection",
+                  "user_file_protection",
+                  "full_incremental_noop_equivalence"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"gate_id": {"const": "scale_performance"}},
+            "required": ["gate_id"]
+          },
+          "then": {
+            "properties": {
+              "category_id": {"const": "core"},
+              "scale_contract": {"$ref": "#/$defs/scaleContract"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"gate_id": {"enum": ["codex", "opencode", "secret_host_isolation", "timeline"]}},
+            "required": ["gate_id"]
+          },
+          "then": {
+            "properties": {
+              "category_id": {"const": "core"},
+              "required_task_cases": {
+                "const": ["continuity", "living_wiki", "professional_evidence"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"gate_id": {"const": "selective_forget"}},
+            "required": ["gate_id"]
+          },
+          "then": {
+            "properties": {
+              "category_id": {"const": "core"},
+              "artifact_kinds": {"const": ["host_event_sequence"]},
+              "required_task_cases": {"const": ["continuity"]}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"gate_id": {"const": "codex"}},
+            "required": ["gate_id"]
+          },
+          "then": {
+            "properties": {
+              "constraints": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["host", "tool_version", "binary_sha256", "source_commit", "config_selector", "model_id", "expected_response_model_id", "reasoning_effort", "argv_prefix"],
+                "properties": {
+                  "host": {"const": "codex"},
+                  "tool_version": {"const": null},
+                  "binary_sha256": {"const": null},
+                  "source_commit": {"type": "null"},
+                  "config_selector": {"type": "null"},
+                  "model_id": {"const": "gpt-5.6-luna"},
+                  "expected_response_model_id": {"const": "gpt-5.6-luna"},
+                  "reasoning_effort": {"const": "max"},
+                  "argv_prefix": {"const": ["codex", "app-server", "--stdio"]}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"gate_id": {"const": "opencode"}},
+            "required": ["gate_id"]
+          },
+          "then": {
+            "properties": {
+              "constraints": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["host", "tool_version", "binary_sha256", "source_commit", "config_selector", "model_id", "expected_response_model_id", "reasoning_effort", "argv_prefix", "plugin_policy", "ambient_project_plugins"],
+                "properties": {
+                  "host": {"const": "opencode"},
+                  "tool_version": {"const": null},
+                  "binary_sha256": {"const": null},
+                  "source_commit": {"const": null},
+                  "config_selector": {"const": "deepseek/deepseek-v4-flash"},
+                  "model_id": {"const": "deepseek-v4-flash"},
+                  "expected_response_model_id": {"const": "deepseek-v4-flash"},
+                  "reasoning_effort": {"const": null},
+                  "argv_prefix": {"const": ["opencode", "run", "--format", "json"]},
+                  "plugin_policy": {"const": "single_exact_candidate_plugin"},
+                  "ambient_project_plugins": {"const": "forbidden"}
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

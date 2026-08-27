@@ -33,19 +33,22 @@ _HOST_READINESS_PROFILES: dict[str, dict[str, Any]] = {
     "codex": {
         "plugin_id": "deeplaw-knowledge-os@deeplaw",
         "load_options": ["direct_mcp_config", "codex_plugin"],
-        "host_version_for_current_qualification": "codex-cli 0.148.0-alpha.15",
+        "host_version_for_current_qualification": None,
+        "host_identity_source": "owner_external_frozen_input",
         "verification_command": ["codex", "mcp", "list"],
     },
     "claude-code": {
         "plugin_id": "deeplaw-knowledge-os@deeplaw",
         "load_options": ["project_mcp_config", "claude_plugin"],
         "host_version_for_current_qualification": None,
+        "host_identity_source": "owner_external_frozen_input",
         "verification_command": ["claude", "mcp", "list"],
     },
     "opencode": {
         "plugin_id": "deeplaw-native",
         "load_options": ["project_mcp_config", "project_native_plugin"],
-        "host_version_for_current_qualification": "1.18.16",
+        "host_version_for_current_qualification": None,
+        "host_identity_source": "owner_external_frozen_input",
         "verification_command": ["opencode", "mcp", "list"],
     },
 }

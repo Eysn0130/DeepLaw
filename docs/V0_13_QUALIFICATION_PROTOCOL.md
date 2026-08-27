@@ -1,20 +1,22 @@
 # DeepLaw v0.13 Qualification Protocol
 
-Status: **v2 protocol frozen; machine-only candidate binding pending**
-Reviewed: **2026-08-17**
+Status: **v3 Kernel-release protocol frozen; exact candidate binding pending**
+Reviewed: **2026-08-21**
 
 Package and main remain `0.12.0 Beta`. The active record is
-[`benchmarks/v013/active-qualification-v2.json`](../benchmarks/v013/active-qualification-v2.json):
-`status=machine_evaluation_pending`, `profile=machine_evaluated_no_human_attestation`,
-`release_ready=false`, and `claim_eligible=false`. The current classification is Gate v8. This
+[`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json):
+`status=machine_evaluation_pending`, `profile=kernel_release_core`,
+`release_ready=false`, and `claim_eligible=false`. The current classification is Gate v9. This
 protocol does not authorize a `0.13.0` tag/release, RC, GA, Human Gold, legal attestation, or a
 competitive claim.
 
 The machine-readable protocol is
-`contracts/v013-qualification-protocol.v2.schema.json`; the frozen bytes are
-`benchmarks/v013/qualification-protocol-v2.json` and its recorded SHA-256. Protocol v1 and Gate
-v1-v7 remain historical compatibility inputs. They are not rewritten or used as current state.
-The frozen v1 Host receipt is `invalidated-for-current-qualification`; current Host evidence uses
+`contracts/v013-qualification-protocol.v3.schema.json`; the frozen bytes are
+`benchmarks/v013/qualification-protocol-v3.json` and its recorded SHA-256. Protocol v1-v2 and Gate
+v1-v8 remain historical compatibility inputs. They are not rewritten or used as current state.
+The frozen Host process receipt v1 remains a historical compatibility record and is
+`invalidated-for-current-qualification`; current Gate v9 control admission requires the sibling
+`deeplaw.host-process-receipt/v2`. Current Host evidence continues to use
 `deeplaw.host-continuity-qualification/v2`.
 
 ## Product and Provider boundary
@@ -57,17 +59,19 @@ human or legal attestation.
 
 The runner remains **diagnostic first**: a source-free diagnostic must succeed before any costly
 external task is attempted, but it is never qualification evidence. Older protocol prose described
-the next stage as external Human Gold; under the frozen v2 machine-only profile that stage is an
-isolated machine-reference evaluation with no human or legal attestation.
+the next stage as external Human Gold; under v3, Human, legal-expert, machine-reference, blind,
+panel, scorer, and arbiter evidence is outside Kernel Release Core unless its separate claim is
+attempted.
 
 ## Exact candidate and invalidation
 
 Before any formal task, candidate preparation must bind one clean prospective integration commit
 whose first parent is the latest frozen main. It must update only current version surfaces to
-`0.13.0`, verify every owner-controlled external input SHA-256, and leave the active record in the
+`0.13.0` and leave the active record in the
 construction state required by Candidate Full. Candidate preparation supports dry-run and fails
-closed; it does not accept `0.12.0`, null external hashes, a dirty tree, an unverified path, or a
-Secret-bearing input.
+closed; it does not accept a dirty tree, wrong integration commit, main-branch apply, or a
+Secret-bearing input. Competitive/research external inputs are not candidate-preparation
+prerequisites.
 
 Candidate Full produces exactly one reproducible wheel and one sdist and binds:
 
@@ -76,14 +80,16 @@ Candidate Full produces exactly one reproducible wheel and one sdist and binds:
 - wheel/sdist filename, byte size, and SHA-256;
 - retained artifact manifest;
 - SBOM, installed licenses, OpenVEX, and provenance;
-- exact external input hashes; and
 - exact workflow/run identity.
 
-External and Commercial Qualification download those same artifacts and never rebuild them. A
+Kernel Qualification Evidence and Commercial Qualification download those same artifacts and never
+rebuild them. A
 change to behavior code, dependency, documentation contract, commit/tree, wheel/sdist bytes, or an
 external input invalidates the current qualification. A replacement candidate requires a fresh
-build and fresh Candidate Full, External, and Commercial runs. The same artifact/input pair is not
-rerun to select a favorable model result; a failure is diagnosed, fixed, and refrozen.
+build and fresh Candidate Full, Kernel Qualification Evidence, and Commercial Qualification runs.
+The same artifact/input pair is not rerun to select a favorable model result; apart from the single
+bounded transport retry permitted by the Host task contract, a failure is diagnosed, fixed, and
+refrozen.
 
 Main remains `0.12.0` throughout qualification. If main moves, the candidate is invalid. After all
 gates pass, main may only fast-forward to the exact qualified commit; squash, rebase, or a new merge
@@ -91,14 +97,18 @@ commit cannot reuse prior qualification.
 
 ## Security-domain contract
 
-Reference freezer, candidate Host, scorer A, scorer B, and arbiter must execute in distinct
-ephemeral security domains enforced by separate runners, VMs/containers, UID/ACL/mount namespace,
-or an equivalent operating-system boundary. Directory names, mode `0700`, `env -i`, distinct
-process IDs, or caller-authored isolation booleans are insufficient.
+Each candidate Host and its credential broker must execute across the closed Host/MCP process
+boundary. The owner-only repository-external broker admits the exact Host binary and delivers a
+Secret only to that Host subprocess; DeepLaw MCP receives a closed environment. Fail-before
+canaries must prove that neither Secret nor ambient authentication reaches MCP, and the retained
+broker source/hash plus sanitized process receipt must agree. If a
+Competitive/Research claim is attempted, its reference freezer, scorer A, scorer B, and arbiter
+must additionally use distinct OS-enforced security domains.
 
-The retained isolation evidence must bind executable hashes, process tree, mount/ACL policy,
-network/IPC policy, domain identity, and negative-canary observations derived from retained bytes.
-The domains share no filesystem, IPC, or transcript:
+The Host isolation evidence binds the exact executable version/hash, repository-external broker
+source hash/byte count/owner-only mode, successful process receipt, and negative-canary results.
+Competitive security domains additionally retain process/mount/ACL/network/IPC observations. They
+share no reference, scorer output, or transcript:
 
 - the candidate cannot read sealed references, expected labels, scorer inputs, or scorer outputs;
 - a scorer receives only sanitized candidate output and the sealed reference;
@@ -106,8 +116,9 @@ The domains share no filesystem, IPC, or transcript:
 - credential brokers deliver a Secret only to the exact Host process. DeepLaw runners, reference
   freezer, scorers, arbiter, and evidence assembler receive no Secret or `.env` path/content.
 
-Failure to prove an OS-enforced domain, a negative canary, or closed Secret delivery blocks
-`secret_host_isolation` and `machine_reference_isolation`.
+Failure to prove an OS-enforced Host boundary, a negative canary, or closed Secret delivery blocks
+the Kernel `secret_host_isolation` gate. Missing machine-reference/scorer isolation blocks only the
+corresponding Competitive/Research claim.
 
 ## Frozen minimum Kernel compatibility map
 
@@ -116,12 +127,12 @@ It is derived from the following version-bound behavior tasks; there is no gener
 
 | Reference/baseline | Required in-scope Kernel behavior tasks | Existing Core gates and evidence | Explicitly outside this baseline |
 | --- | --- | --- | --- |
-| OpenWiki released v0.3.1 / `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc` (peeled commit) | Compile a source/repository into a maintainable Wiki; prove full/incremental equivalence, idempotent update, and user-file protection | `canonical_integrity`, `migration_recovery`, `scale_performance`, `supported_platforms`; public CLI/MCP receipts over the exact candidate | OpenWiki UI, provider/connector breadth, ecosystem size, or overall product comparison |
-| Tolaria `v2026-08-11` / `cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d` | Read Markdown/Wikilinks; perform controlled edits; detect conflict and reconcile; preserve source-successor identity and reject a wrong merge | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `secret_host_isolation`; real-file/editor receipts | Tolaria Desktop GUI, visual design, and its runtime |
-| Obsidian official public format/API help, accessed 2026-08-11; API snapshot `obsidian@1.13.2` / `cc1744324150c632416857c98964f87b1574a5fc` | Preserve Markdown, Wikilinks, aliases, backlinks/outlinks, rename/move identity, and edit/reconcile behavior on real files | `canonical_integrity`, `migration_recovery`, `source_citation_locator`, `machine_reference_isolation`; real-file/editor receipts | Obsidian UI, Sync, marketplace, and complete Canvas UX |
-| LLM Wiki behavior category (not a comparator project) | Agent-generated or updated knowledge retains provenance, revision, Authority, scope, sensitivity, and Ledger state; Source Revision is never rewritten | `canonical_integrity`, `secret_host_isolation`, `source_citation_locator`, `machine_reference_isolation` | Any named-product or superiority claim without a separately frozen comparator |
-| Codex `0.148.0-alpha.15` / `gpt-5.6-luna` / `reasoning=max` | Three real task families: cold/new; resume/fork/concurrent-worktree; compaction/forget, including stale checkpoint and wrong task line | `codex`, `bounded_context`, `secret_host_isolation`, `selective_forget`; First Correct Action, Decision Preservation, Wrong-State Admission, and actual Provider bytes/tokens | Codex runtime ownership, UI, marketplace, or static/no-model smoke |
-| OpenCode `1.18.16` / `deepseek/deepseek-v4-flash` | The same three real Host task families and wrong-state challenges with independently isolated Secret handling | `opencode`, `bounded_context`, `secret_host_isolation`, `selective_forget`; the same outcomes and actual Provider bytes/tokens | OpenCode runtime, UI, ecosystem, or config-only smoke |
+| OpenWiki / `f078160e248f889d66ee37dc0d431854f50d3294c` | Compile a source/repository into a maintainable Wiki; prove full/incremental/no-op equivalence and user-file protection | `canonical_integrity`, `living_wiki`, `scale_performance`; public CLI/MCP receipts over the exact candidate | OpenWiki UI, provider/connector breadth, ecosystem size, or overall product comparison |
+| Tolaria / `367a91416477c90bbfae766dc06add3de6ae75a7` | Read Markdown/Wikilinks; controlled edits; conflict/reconcile; source-successor identity; wrong-merge rejection | `canonical_integrity`, `living_wiki`, `source_citation_locator`; real-file receipts | Tolaria Desktop GUI, visual design, and runtime |
+| Obsidian API / `cc1744324150c632416857c98964f87b1574a5fc` | Preserve Markdown, Wikilinks, aliases, backlinks/outlinks, rename/move identity, and edit/reconcile behavior | `living_wiki`; real-file receipts | Obsidian UI, Sync, marketplace, and complete Canvas UX |
+| LLM Wiki / `350eec8a284e159b2e4cfd068d808cbf203a6cc5` | Agent-derived knowledge retains provenance, revision, Authority, scope, sensitivity, and Ledger state; Source Revision is never rewritten | `canonical_integrity`, `living_wiki`, `source_citation_locator` | Any named-product or superiority claim without a separately frozen comparator |
+| Codex owner-supplied exact identity / `gpt-5.6-luna` / `reasoning=max` | Three distinct real tasks: Continuity, Living Wiki, and Professional Evidence | `codex`, `bounded_context`, `secret_host_isolation`, `living_wiki`, `source_citation_locator`, `selective_forget`, `timeline`; actual Provider bytes/tokens | Codex runtime ownership, UI, marketplace, or static/no-model smoke |
+| OpenCode owner-supplied exact identity / `deepseek/deepseek-v4-flash` | The same three real tasks with independently isolated Secret handling | `opencode` and the same shared Core duties; actual Provider bytes/tokens | OpenCode runtime, UI, ecosystem, or config-only smoke |
 
 Before every mapped task and Core gate passes, the only permitted statement is:
 
@@ -137,23 +148,40 @@ that it is perfect, SOTA, leading, fully verified, RC, or GA.
 
 ## Frozen real task set
 
+Before any real Host execution, the repository builds one path-free external-collector handoff
+with exactly six slots in frozen order: Codex/OpenCode crossed with Continuity, Living Wiki, and
+Professional Evidence. It binds the complete canonical frozen task-catalog descriptor; each slot binds the
+catalog's domain-seed seam descriptor, its Host-specific `native_host_task_v3` driver descriptor
+including the frozen argv/plugin policy, the owner-external per-Host identity digest
+and exact identity-source digest, the six typed-source slots, and the two control-receipt slots.
+The handoff is a pre-execution input summary, never Host evidence: every slot and the top-level
+record remain literal `status=not_executed`, `executed=false`, `claim_eligible=false`, and
+`release_ready=false`. It contains no seed or prompt payload, Provider body, path, command,
+environment, authentication or Secret material, transcript, reasoning, stdout, or stderr. The
+external collector consumes this handoff and produces evidence separately; a handoff cannot close
+any gate or change the active/package/native/typed-v3/bundle contracts.
+
 ### Host continuity
 
-Codex requires at least three distinct runs using exact `codex-cli 0.148.0-alpha.15`, binary
-SHA-256 `7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7`, requested model
-`gpt-5.6-luna`, and `reasoning=max`. Authentication uses the supported official existing-login
-seam without reading, copying, printing, or retaining auth. The receipt records the actual returned
-model identity and date; the selector is not represented as an immutable model snapshot.
+Codex requires exactly three distinct runs using the exact executable identity from the
+repository-external owner input, requested model `gpt-5.6-luna`, and `reasoning=max`.
+Authentication uses the supported official existing-login seam without reading, copying, printing,
+or retaining auth. The receipt records the actual returned model identity and date; the selector is
+not represented as an immutable model snapshot.
 
-The Codex and OpenCode executable coordinates below were re-observed locally at
-`2026-08-20T12:38:48Z`; this observation rotates the current input contract but is not Host task or
-qualification evidence.
+OpenCode requires exactly three distinct runs using the exact executable, source, and package
+identity from that same external-input family, selector `deepseek/deepseek-v4-flash`, and expected
+response model `deepseek-v4-flash`. Its owner-only `.env` is read only by the credential broker.
+Exact executable/package hashes are external qualification inputs and sanitized receipt fields;
+DeepLaw runners receive no Secret. The exact identity source SHA is retained and compared at bundle
+validation, so replacing version, SHA, Host, run, or candidate bindings fails closed.
 
-OpenCode requires at least three distinct runs using exact `1.18.16`, source commit
-`a3647eb025c7615159d417dcc49fc39fdaeba65b`, selector
-`deepseek/deepseek-v4-flash`, and expected response model `deepseek-v4-flash`. Its owner-only
-`.env` is read only by the credential broker. Exact executable/package hashes are private inputs
-and sanitized receipt fields; DeepLaw runners and scorers receive no Secret.
+The current Gate v9 OpenCode task prefix is non-pure and frozen as
+`["opencode", "run", "--format", "json"]`. It uses exactly one exact candidate project plugin;
+the source and installed plugin bytes and hashes must agree, and ambient project plugins are
+forbidden. OpenCode `--pure` disables the external plugin path required for native plugin-hook
+evidence, so it is not part of this runner contract. This policy correction does not execute a
+Host task: current Gate statuses remain literal `not_executed`.
 
 Across the six runs, the task set covers new thread, ordinary resume without task handle,
 fork/child task, compaction, concurrent worktree, stale checkpoint, workspace divergence, wrong
@@ -161,21 +189,213 @@ task line, selective forget, and no-binding/ambiguous-binding Gap. The public jo
 `init/doctor -> task start -> task locate -> task-neutral host connect -> explicit session bind ->
 new thread/resume -> fork -> compaction -> stale/wrong challenges -> selective forget`.
 
+Every Host task receipt records First Correct Action, Decision Preservation, Wrong-State
+Admission, the required duty or unresolved Gap, Provider bytes, actual native Provider tokens,
+selected identities, duplicate/distractor evidence, and no-hidden-mutation status. Local Query
+Trace and Ledger receipts remain outside the Provider Capsule.
+
+Each of the six task runs also retains two separate, sanitized control records. The
+`deeplaw.host-preflight-receipt/v1` record contains only the closed preflight stage and reason
+code, exact Host binary version/hash, and repository-external broker source hash/byte count/mode.
+The frozen `deeplaw.host-process-receipt/v1` shape and validator remain unchanged for historical
+compatibility, but v1 cannot occupy a current formal `host_process_receipt` slot. The current
+`deeplaw.host-process-receipt/v2` record additionally binds the exact candidate and run IDs,
+declared owner-external broker source and observation bindings, exact process identity distinct from
+Host identity, one-time nonce, bounded issued/expiry/reference interval, and the existing
+native-event aggregate digests. Codex v2 requires one exact initialized stdio connection correlated
+to the real Hook session on that process. OpenCode v2 requires the per-Host broker's direct
+observation of the actual public fork POST, its parent/child response identities, and the subsequent
+child plugin event. Runner-constructed fork objects, fixed request digests, caller-only parent
+values, PID, thread digests, or broker nonces cannot become Host identity or satisfy v2 admission.
+Duplicate, replayed, expired, future-issued, cross-candidate, cross-run, cross-task, cross-process,
+cross-connection, and cross-session records fail closed.
+
+The bound validation reference time makes an admitted historical bundle reproducible without
+silently disabling expiry checks. Neither control record permits a command, environment, path,
+PID, stdout/stderr, raw identity, Provider body, prompt, transcript, hidden reasoning,
+authentication material, or Secret. A development diagnostic, runner-side observation, v1 record,
+or untyped process record is not current qualification evidence.
+
+The Codex runner now has one public, path-free, breaking-v4
+`deeplaw.codex-owner-external-broker-control/v4` challenge/response IPC seam, invoked with the
+exact argument `deeplaw-codex-zero-model-preflight-v4`; v3 and earlier are rejected for the
+current preflight.
+The public seam is pinned to OpenAI Codex upstream commit dated 2026-08-23,
+`e8f485bdf82a4cb9283e3e5305011b7b9d360b38`: thread construction schedules startup prewarm and
+then queues pending `SessionStart` (`codex-rs/core/src/session/session.rs:1531-1558`), `run_turn`
+dispatches that pending event and,
+when the hook stops, returns before the later sampling path
+(`codex-rs/core/src/session/turn.rs:262-264`, with sampling at `357-394`), and the hook runtime/event contract honors `continue:false`
+with public Hook status `stopped` (`codex-rs/core/src/hook_runtime.rs:111-164`;
+`codex-rs/hooks/src/events/session_start.rs:216-284`). A stopped hook does not make the Turn fail:
+the App Server emits `TurnStatus::Completed` when there is no turn error
+(`codex-rs/app-server/src/bespoke_event_handling.rs:1488-1500`).
+The same pinned lifecycle schedules startup prewarm at `thread/start` before the pending
+`SessionStart` hook: the prewarm path can perform WebSocket or auth work, including when WebSockets
+are disabled (`codex-rs/core/src/session_startup_prewarm.rs:184-231,250-324`). A stopped hook
+therefore does not, by itself, prove that a Provider saw zero connections or requests.
+The exact production sequence is therefore one fresh ephemeral thread with exactly one public
+`turn/start`: `initialize -> initialized -> thread/start -> turn/start -> SessionStart -> stdin/close`.
+There is no public `shutdown` RPC; `stdin/close` is the broker's public close path: stdio EOF closes
+the connection (`codex-rs/app-server-transport/src/transport/stdio.rs:24-80`). The broker owns the
+synchronous `SessionStart` command hook, which immediately returns the
+JSON `{"continue":false}`. Its public Hook run status must be `stopped`, and the proof boundary is
+`stop_boundary=before_run_sampling_request`.
+
+The six-step sequence is the closed broker lifecycle projection, not a claim that app-server emits
+no other local lifecycle notifications. At this pinned revision every server notification uses the
+public `{method,params,emittedAtMs}` envelope
+(`codex-rs/app-server-protocol/src/protocol/common.rs:1921-1936`;
+`codex-rs/app-server/src/outgoing_message.rs:729-738`). Immediately after `initialized`, app-server
+also sends `remoteControl/status/changed` to that connection
+(`codex-rs/app-server/src/lib.rs:1075-1090`). The broker must start app-server with the pinned
+one-shot `CODEX_INTERNAL_APP_SERVER_REMOTE_CONTROL_DISABLED=1` marker, which selects
+`DisabledEphemeral` before worker threads start (`codex-rs/app-server/src/main.rs:60-100`;
+`codex-rs/app-server-transport/src/transport/remote_control/mod.rs:87-96`), and must observe exactly
+one closed status object with `status=disabled` and `environmentId=null`. `connecting`, `connected`,
+`errored`, a duplicate, or a missing disabled notification fails closed. The marker is consumed and
+removed by app-server; it is not forwarded to a Provider or Hook.
+
+Pinned `thread/start` sends its response before the unique `thread/started` notification
+(`codex-rs/app-server/src/request_processors/thread_processor.rs:1502-1539`), so the broker must
+bind both objects before sending `turn/start` without assuming the reverse wire order. The public
+Hook run enum serializes its native event name as lower-camel `sessionStart`; the broker validates
+that native spelling and projects only the established v4 contract spelling `SessionStart`.
+Warnings, thread status changes, Turn events, and Hook events remain closed by method, field shape,
+identity correlation, count, and lifecycle position; they do not expand the six-step v4 response.
+
+The v4 request and response must carry the exact broker-owned provider guard
+`{owner:"broker", transport:"loopback_http", provider_id:"deeplaw_zero_model_preflight", requires_openai_auth:false, supports_websockets:false}`.
+The isolated custom provider binds the resolved model provider to a broker-owned loopback counter;
+it neither reads nor forwards ambient OpenAI authentication. The broker may report
+`provider_request_count=0` only when it directly observes `accepted_connection_count=0` and
+`request_count=0` at that guard, in addition to `model_inventory_count=0`,
+`model_invocation_count=0`, and `sampling_count=0`. The serialized sanitized CLI result must show
+`evidence_class=zero_model_preflight_only`, `formal_admission=false`, and `turn_start_count=1`.
+Thread creation alone, a diagnostic sidecar, login state, or a fixture is not formal Host task
+evidence; the `thread_id_sha256` field is never renamed to `session_sha256`.
+
+The v2 receipt shape remains unchanged, but its existing native digests must bind the v4
+observation rather than arbitrary broker labels. `native_event_binding.event_sequence_sha256` is
+the SHA-256 of canonical UTF-8 JSON (sorted keys, compact separators, no NaN) over
+`{schema_version:"deeplaw.codex-zero-model-native-event-sequence/v1", events:[the exact six
+observed methods]}`. `native_event_binding.lifecycle_record_sha256` uses the same encoding over a
+closed object with `schema_version="deeplaw.codex-zero-model-native-lifecycle/v1"` plus the v4
+`control_schema_version`, `operation`, `status`, `observed_sequence`,
+`fresh_ephemeral_thread`, all seven activity counters, `provider_guard`, and
+`session_start_hook`. The consumer recomputes both digests from the response and compares them with
+the receipt. The receipt's existing same-process/same-connection correlation then binds those
+digests to the exact Host process and stdio connection. Rehashing a receipt around an unrelated
+native digest must still fail closed.
+
+Construction-time zero-model preflight does not require or manufacture a frozen `0.13.0`
+candidate. Before candidate preparation, its only permitted `0.12.0` artifact input is a closed,
+canonical, self-hashed, repository-external
+`deeplaw.v013-external-kit-manifest/v2` control manifest. That manifest binds the clean current
+commit/tree, `uv.lock`, exact `0.12.0` wheel and sdist bytes, this qualification protocol, the
+active v3 schema, the v4 Codex control schema, and literal `formal_n6=not_executed`,
+`human_gold=not_executed`, `release_ready=false`. Its `formal_admission` is always false. The
+construction manifest is accepted only by the Codex/OpenCode zero-model preflight loaders; the
+formal frozen-candidate loader rejects it. After candidate preparation, the existing frozen active
+v3 input remains exact `candidate_version=0.13.0`,
+`construction_package_version=0.12.0`, `release_target=0.13.0`, and binds only exact `0.13.0`
+artifacts. Neither input class can be relabelled as the other.
+
+The preflight reopens the applicable exact candidate or construction binding, the owner-only
+repository-external exact broker source, Codex binary, and Host identity. It creates a fresh
+60-second nonce challenge bound to the task and evidence/qualification run IDs. The exact
+broker subprocess must directly return one transient v4 object showing the sequence and
+observations above, exactly one initialized stdio connection, the same exact Host process and
+connection, and a real Hook session identity distinct from the native session digest. Any extra
+turn, model inventory or invocation, Provider connection/request, sampling, stderr, duplicate JSON key,
+missing/expired/replayed nonce, or cross-bound value fails closed. Combined broker stdout/stderr is
+capped at 256 KiB while the process is running; overflow immediately terminates the isolated
+broker process group, clears both buffers, and returns only a typed failure. The exact owner-only
+broker source is read through an unchanged stable FD, copied to a private non-writable execution
+path, and run from that copy, so replacing the inspected source path cannot substitute executable
+bytes. Candidate manifest/wheel/sdist and the Codex binary are likewise checked as
+repository-external, non-symlink-parent, regular single-link files with stable FD/stat identity;
+the repository `uv.lock` uses the same stable read under the clean HEAD/tree binding. The raw
+broker response is validated in memory and discarded; it is not uploaded, retained, or placed in a
+formal receipt slot. The sanitized CLI summary is preflight-only and cannot be reused as a formal
+receipt. The Kernel workflow uses its current evidence run ID as the transient preflight
+qualification-run challenge because no future Commercial run may be predicted; that ephemeral
+binding can never be reused as a formal receipt.
+
+If the external broker source is interpreter-backed, the construction kit must also pin and
+reopen the exact interpreter bytes, version, ownership, writability, link topology, and executable
+identity before parsing the control request. An ambient `python3` selected only by `PATH` is not an
+exact execution binding. The current POSIX construction kit records this interpreter dependency in
+its control-only installation receipt; Windows interpreter/ACL execution remains literal
+`not_executed` and unsupported fail-closed for that kit.
+
+The OpenCode runner now has the parallel path-free
+`deeplaw.opencode-owner-external-broker-control/v2` consumer. Its exact owner-only external broker,
+not the repository runner, exclusively starts and supervises the pinned OpenCode 1.18.16 Host,
+private loopback upstream, reverse proxy, and fresh plugin-event sink. The closed allowlist is only
+`GET /global/health` -> `POST /session {}` -> `POST /session/:parent/fork {}`, with an optional final
+`GET /session/:child`. Message, prompt, command, shell, summarize, init, revert, Provider, model,
+MCP, share, remote-workspace-forwarding, ambient-plugin, or any other route or invocation fails
+closed. Fork selects no Provider or model. The parent identity comes only from the actual public
+fork ingress path: pinned upstream `Session.fork` does not put `parentID` into `createNext`, so a
+response or plugin event cannot supply or repair parent lineage. The child returned by the HTTP
+response must equal the child in exactly one subsequent `session.created` plugin event on the same
+supervised process.
+
+Before that broker may execute, the runner binds the external OpenCode package through an unchanged
+stable FD to the frozen Host identity's package digest, exact version `1.18.16`, and source commit
+`a3647eb025c7615159d417dcc49fc39fdaeba65b`. The package must be a bounded,
+repository-external, non-symlink-parent, regular single-link file. This static check reads no
+dotenv, auth store, credential, or Secret and cannot start the Host.
+The runner likewise checks the OpenCode selector and exact target bytes without executing
+`opencode --version` or any other Host command: one selector symlink is allowed, while a parent
+symlink, symlink chain, non-regular, linked, non-executable, repository-internal, changed, or
+hash-mismatched target fails closed. Only the exact external broker may start or supervise the Host.
+
+OpenCode invokes the async plugin hook without awaiting its sink write. The broker must therefore
+hold the fork response at its reverse proxy until that matching child event satisfies a bounded
+30-second barrier; timeout, early response release, missing/duplicate/wrong event, mismatched child,
+or cross-process observation fails closed. The runner sends only a 60-second candidate/run/Host/
+broker/nonce challenge, consumes one strict response capped at 256 KiB combined stdout/stderr, and
+discards its raw bytes. It requires the existing `deeplaw.host-process-receipt/v2` family with the
+exact `{}` request-body digest and actual-route child-event proof. It neither creates nor repairs the
+receipt, route digest, parent, child, process identity, PID, nonce, handoff, or correlation digest.
+The external broker source is reopened through an unchanged stable FD, copied to a private
+non-writable path, and executed with a closed control environment. The Kernel workflow runs this
+transient preflight without the OpenCode dotenv, model selector, Provider inventory, or formal
+receipt output.
+
+Passing either zero-model capability preflight only allows that Host's formal runner to move beyond
+its previous fail-before. It does not admit a Host task, prove the later model-bearing process, or
+close any Core Gate. Both diagnostic modes remain fail-before. Each of the six actual task processes
+must still return its own owner-external v2 receipt in the existing slot.
+The v2, consumer, and Kernel validators establish only closed structure and exact cross-binding to
+the candidate, run IDs, retained per-Host broker source, Host identity, native-event digests, nonce,
+and time window. They cannot self-attest observation provenance; formal authority additionally
+requires the exact external broker process and formal workflow provenance. The six existing Kernel
+`host_process_receipt` slots remain the only receipt inventory; Kernel and Commercial reopen their
+exact bytes and cross-bindings. No second external receipt directory is created or uploaded.
+Focused contract acceptance is not formal Host evidence, and Codex x3/OpenCode x3 remains
+`not_executed`.
+
 ### Living Wiki
 
 The retained real tasks cover alias/same-name identity, rename/move, external edit/reconcile,
 backlink/outlink, source successor, wrong merge, protected/user-owned file protection,
-full/incremental equivalence, Wiki-to-exact-Source drill-down, and the retained physical profile at
-1k/10k/100k scale. Scale receipts inventory the actual artifact families and do not generalize one
+full/incremental/no-op equivalence, Wiki-to-exact-Source drill-down, and the retained physical
+profile at exactly 10k active governed objects. Scale receipts inventory the actual artifact
+families and do not generalize one
 file profile to every Statement, Relation, or Wiki layout.
 
-### Evidence and Legal
+### Professional Evidence and optional Legal Pack capability
 
-Evidence tasks bind exact source bytes for PDF, DOCX, HTML, and Markdown; Document, Version,
+Kernel professional-evidence tasks bind exact source bytes for PDF, DOCX, HTML, and Markdown; Document, Version,
 Fragment, Locator, quote, effective date, exception/proviso/cross-reference, OCR critical token,
-wrong version/false Authority, acceptable Gap, and exact Source drill-down. The current Gate also
-requires the exact signed Legal Pack. Agent interpretation remains `legal_authority=false`; the
-machine-only profile does not claim legal-expert review.
+wrong version/false Authority, acceptable Gap, and exact Source drill-down. The Core task also
+requires Wiki-to-exact-Source drill-down and source-byte/hash preservation. An exact signed official
+Legal Pack is a separate Capability gate. Its absence does not block the generic Kernel and must
+remain `not_executed`/unclaimed. Agent interpretation remains `legal_authority=false`; the
+machine-only profile does not claim Human or legal-expert review.
 
 ### Context
 
@@ -198,38 +418,54 @@ wrong-state admission, and provider overflow have maximum allowed count zero. Co
 exception, temporal uncertainty, and an acceptable Gap are evidence duties rather than retrieval
 noise.
 
-## Gate v8 and execution order
+## Gate v9 and execution order
 
-All 14 Core gates are required:
+All 13 Kernel Release Core gates are required:
 
 1. `canonical_integrity`
 2. `migration_recovery`
 3. `secret_host_isolation`
 4. `bounded_context`
-5. `legal_evidence`
-6. `source_citation_locator`
+5. `source_citation_locator`
+6. `living_wiki`
 7. `scale_performance`
 8. `supported_platforms`
 9. `reproducible_supply_chain`
-10. `machine_reference_isolation`
-11. `codex`
-12. `opencode`
-13. `selective_forget`
-14. `timeline`
+10. `codex`
+11. `opencode`
+12. `selective_forget`
+13. `timeline`
 
-Gate v8 stays `assembly_enabled=false` with `awaiting_all_core_gate_pass` until source-specific
+Gate v9 stays `assembly_enabled=false` with `awaiting_all_core_gate_pass` until source-specific
 validators reopen every retained input and derive zero hard failures. Validator availability is a
-code property, not evidence. Capability gates may remain `not_claimed` only when the capability is
-not declared. Competitive gates remain independent.
+code property, not evidence. `official_legal_pack`, `semantic_restore`, `claude`, and
+`gui_desktop_interoperability` are Capability gates. Machine-reference isolation, comparative
+blind holdouts, review panels, scorer A/B, arbitration, incremental benefit, superiority, and SOTA
+are Competitive/Research Claim gates. Missing optional evidence remains `not_executed` with its
+claim false and cannot block Kernel release.
+
+The v0.13 scale gate executes exactly 10,000 active governed Knowledge Objects per Vault. Before
+the measured lane, the public retrieval query and context compile each run exactly one warmup;
+the report retains each warmup's elapsed time, one-sample count, exclusion marker, and Provider
+payload bytes. Warmup values are excluded from exactly 30 measured query/context samples. The
+measured lane reports p50/p95/max and applies hard ceilings of p95 <= 2,000 ms and max <= 5,000 ms
+per surface; the query/context worst case is the typed Gate metric. It also proves RSS, storage,
+file count, build/rebuild duration, full/incremental/no-op equivalence, user-byte protection, and
+the Provider hard bound. More than 10,000 is experimental; 100,000 sharding/bundling belongs to
+v0.14 and is not a v0.13 Core gate.
 
 Formal order is:
 
-1. Candidate Full: exact 0.13.0 commit, reproducible wheel/sdist, exact-wheel journey, scale,
+1. Candidate Full: exact 0.13.0 commit, reproducible wheel/sdist, exact-wheel journey, exact 10k,
    required Python/3-OS matrix, SBOM/licenses/OpenVEX/provenance.
-2. External Qualification: download the same artifact, run isolated Host/Evidence/Wiki/Context
-   tasks, and retain only sanitized evidence.
-3. Commercial Qualification: download the same artifact, reopen every source, and derive all 14
-   Core gates, `assembly_enabled`, `release_ready`, and bounded machine technical claims.
+2. Kernel Qualification Evidence: download the same artifact, run isolated
+   Host/Evidence/Wiki/Context tasks through the exact owner-controlled external collector, retain
+   the no-Secret broker sources, and upload only sanitized evidence. The collector and both brokers
+   are repository-external, owner-only, exact-hash inputs; their presence is a prerequisite, not
+   product runtime.
+3. Commercial Qualification: download the same artifact, reopen every source, and derive all 13
+   Core gates plus explicit optional-claim statuses, `assembly_enabled`, `release_ready`, and
+   bounded Kernel technical claims.
 
 ## Release boundary
 

@@ -1,12 +1,12 @@
 # DeepLaw Living Wiki Compiler
 
 Status: **Current source candidate; package/main 0.12.0 Beta; release_ready=false**, reviewed
-2026-08-17. The Living Wiki is one of three product roles on the shared governed kernel, alongside
+2026-08-21. The Living Wiki is one of three product roles on the shared governed kernel, alongside
 Task Continuity / Governed Project Knowledge and Source-native Evidence Library. Its projections
 are rebuildable and source-linked; Wiki pages are not a complete editable canonical copy of a
 professional source. Qualification remains bound to
-[`benchmarks/v013/active-qualification-v2.json`](../benchmarks/v013/active-qualification-v2.json):
-`machine_evaluation_pending`, profile `machine_evaluated_no_human_attestation`, Gate v8, with no
+[`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json):
+`machine_evaluation_pending`, profile `kernel_release_core`, Gate v9, with no
 `0.13.0` tag or release. Historical receipts are development evidence only, not Human Gold,
 legal-expert attestation, or release qualification.
 

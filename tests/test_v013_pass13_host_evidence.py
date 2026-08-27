@@ -645,6 +645,24 @@ def test_report_consistency_freezes_scenarios_reads_tokens_and_aggregates() -> N
         validate_host_report_consistency(report)
 
 
+def test_v2_accepts_only_the_exact_codex_keyring_bridge_isolation_variant() -> None:
+    schema = json.loads(
+        (
+            Path(__file__).parents[1]
+            / "contracts"
+            / "host-continuity-qualification.v2.schema.json"
+        ).read_text(
+            encoding="utf-8"
+        )
+    )
+    validator = Draft202012Validator(schema["$defs"]["codexKeyringBridgeIsolation"])
+    receipt = pass13_evidence.isolation_receipt(host="codex", keyring_bridge=True)
+    assert list(validator.iter_errors(receipt)) == []
+
+    receipt["codex_home_isolated"] = False
+    assert list(validator.iter_errors(receipt))
+
+
 def test_historical_v1_metric_digest_ignores_absent_v2_native_receipts() -> None:
     expected = {
         "cold_start": "fcf1f79017ca545a588855606ac8f8c030b51b4a8ac5407c9eac6a5e2ca37720",

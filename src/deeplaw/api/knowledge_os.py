@@ -21,7 +21,7 @@ from ..knowledge_autonomy import (
     autonomous_core_installed,
 )
 from ..knowledge_store import KnowledgeVault
-from ..persistent_read_runtime import PersistentReadRuntime
+from ..persistent_read_runtime import PersistentReadRuntime, _SourceIntegrityRuntimeError
 from ..read_services import SourceReadService, WikiReadService
 from ..retrieval import PurposeAwareRetrievalService
 
@@ -339,10 +339,20 @@ class _CompilationsAPI:
 @dataclass(frozen=True)
 class _RetrievalAPI:
     _root: Path
+    _runtime_factory: Callable[[], PersistentReadRuntime]
 
     def query(self, query: str, **options: Any) -> dict[str, Any]:
+        snapshot = options.pop("_runtime_snapshot", None)
         service = PurposeAwareRetrievalService(self._root)
-        return _invoke(service.query, query, **options)
+        if snapshot is None:
+            try:
+                runtime = _invoke(self._runtime_factory)
+                snapshot = _invoke(runtime.get_snapshot, operation="query")
+            except KnowledgeOSConflictError as error:
+                if not isinstance(error.__cause__, _SourceIntegrityRuntimeError):
+                    raise
+                return _invoke(service.query, query, **options)
+        return _invoke(service.query, query, _runtime_snapshot=snapshot, **options)
 
 
 @dataclass(frozen=True)
@@ -676,7 +686,7 @@ class KnowledgeOS:
 
     @property
     def retrieval(self) -> _RetrievalAPI:
-        return _RetrievalAPI(self._root)
+        return _RetrievalAPI(self._root, self._ensure_runtime)
 
     @property
     def context(self) -> _ContextAPI:

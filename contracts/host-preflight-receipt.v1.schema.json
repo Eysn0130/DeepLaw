@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-preflight-receipt.v1.schema.json",
+  "title": "DeepLaw Host preflight receipt v1",
+  "description": "Safe, typed fail-before observation for a Codex or OpenCode Host. This receipt never contains process payloads or authentication material.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "host",
+    "broker_source",
+    "status",
+    "stage",
+    "reason_code",
+    "observed"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.host-preflight-receipt/v1"
+    },
+    "host": {
+      "$ref": "#/$defs/host"
+    },
+    "broker_source": {
+      "$ref": "#/$defs/brokerSource"
+    },
+    "status": {
+      "enum": ["passed", "failed"]
+    },
+    "stage": {
+      "enum": [
+        "broker",
+        "host_binary",
+        "auth",
+        "model",
+        "transport",
+        "mcp",
+        "usage",
+        "preflight",
+        "complete"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        "preflight_passed",
+        "broker_missing",
+        "broker_not_regular",
+        "broker_hash_mismatch",
+        "host_binary_mismatch",
+        "auth_unavailable",
+        "model_unavailable",
+        "transport_start_failed",
+        "mcp_not_advertised",
+        "usage_receipt_missing",
+        "preflight_internal_error"
+      ]
+    },
+    "observed": {
+      "$ref": "#/$defs/observed"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "passed"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "stage": {"const": "complete"},
+          "reason_code": {"const": "preflight_passed"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "failed"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "reason_code": {"not": {"const": "preflight_passed"}},
+          "stage": {"not": {"const": "complete"}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nullableSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "sha256"],
+      "properties": {
+        "name": {
+          "enum": ["codex", "opencode"]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/nullableSha256"
+        }
+      }
+    },
+    "brokerSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "repository_external",
+        "sha256",
+        "bytes",
+        "owner_only_mode",
+        "expected_sha256"
+      ],
+      "properties": {
+        "source_kind": {
+          "const": "repository_external_launcher"
+        },
+        "repository_external": {
+          "type": "boolean"
+        },
+        "sha256": {
+          "$ref": "#/$defs/nullableSha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "owner_only_mode": {
+          "type": "boolean"
+        },
+        "expected_sha256": {
+          "$ref": "#/$defs/nullableSha256"
+        }
+      }
+    },
+    "observed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["check_count", "elapsed_ms"],
+      "properties": {
+        "check_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        }
+      }
+    }
+  }
+}

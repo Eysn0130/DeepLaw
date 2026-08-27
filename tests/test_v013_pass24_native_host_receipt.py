@@ -30,6 +30,14 @@ OPENCODE_IDENTITY = {
     "executable_sha256": "a" * 64,
     "package_sha256": "b" * 64,
 }
+CURRENT_CODEX_IDENTITY = {
+    "binary_version": "codex-cli 0.149.0-alpha.4.3",
+    "binary_sha256": "dd304ffe232fa9e782ed3e5358776d270e394c2fb85cab846f989823f0843313",
+    "request_model": "gpt-5.6-luna",
+    "reasoning_effort": "max",
+    "auth_status_command": "codex login status",
+    "auth_material_access": "forbidden",
+}
 EXACT_ROUTE = {
     "status": "exact",
     "binding_sha256": "3" * 64,
@@ -86,6 +94,68 @@ def _opencode_event(
         },
         **({"route": route} if route is not None else {}),
     }
+
+
+def _current_codex_event() -> dict[str, object]:
+    return {
+        "schema_version": "deeplaw.native-host-event/v3",
+        "provenance_level": "native_plugin_hook",
+        "host": "codex",
+        "host_identity": dict(CURRENT_CODEX_IDENTITY),
+        "execution_identity": {
+            "selector_source_symlink": False,
+            "execution_target_regular": True,
+            "execution_target_single_link": True,
+        },
+        "event_type": "SessionStart",
+        "event_sequence": {"index": 0},
+        "session_sha256": "1" * 64,
+        "parent_session_sha256": None,
+        "observation": {"methods_observed": ["hook.received"], "status": "received"},
+    }
+
+
+def test_current_codex_moving_identity_uses_the_public_v3_event_and_receipt_seam() -> None:
+    event = _current_codex_event()
+    parsed = parse_native_host_event(event)
+    receipt = observe_native_host_event(event)
+
+    assert parsed["host_identity"] == CURRENT_CODEX_IDENTITY
+    assert receipt["schema_version"] == "deeplaw.native-host-lifecycle-receipt/v3"
+    assert receipt["execution_identity"] == event["execution_identity"]
+
+
+def test_current_identity_marked_as_historical_v2_fails_before_typed_admission() -> None:
+    event = _current_codex_event()
+    event["schema_version"] = "deeplaw.native-host-event/v2"
+    with pytest.raises(NativeHostObservationError):
+        parse_native_host_event(event)
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    (
+        ("binary_version", ""),
+        ("binary_sha256", "not-a-sha"),
+        ("request_model", "gpt-5.5"),
+    ),
+)
+def test_current_v3_identity_replacements_fail_closed(
+    field: str, replacement: str
+) -> None:
+    event = deepcopy(_current_codex_event())
+    identity = event["host_identity"]
+    assert isinstance(identity, dict)
+    identity[field] = replacement
+    with pytest.raises(NativeHostObservationError):
+        parse_native_host_event(event)
+
+
+def test_current_v3_host_replacement_fails_closed() -> None:
+    event = _current_codex_event()
+    event["host"] = "unknown"
+    with pytest.raises(NativeHostObservationError):
+        parse_native_host_event(event)
 
 
 def test_codex_receipt_binds_exact_identity_and_not_legacy_fact() -> None:
@@ -220,6 +290,13 @@ def test_opencode_placeholder_artifact_digest_is_rejected() -> None:
     identity["executable_sha256"] = "0" * 64
     with pytest.raises(NativeHostObservationError):
         parse_native_host_event(event)
+
+    for codex_event in (_codex_event(), _current_codex_event()):
+        codex_identity = codex_event["host_identity"]
+        assert isinstance(codex_identity, dict)
+        codex_identity["binary_sha256"] = "0" * 64
+        with pytest.raises(NativeHostObservationError):
+            parse_native_host_event(codex_event)
 
 
 def test_regular_non_symlink_file_and_size_bound_are_enforced(tmp_path: Path) -> None:

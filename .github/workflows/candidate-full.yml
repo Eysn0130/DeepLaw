@@ -52,8 +52,8 @@ jobs:
           uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
             --dist "${RUNNER_TEMP}/verified-dist" \
             --output "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json"
-          uv run --frozen python -m benchmarks.release.freeze_qualification_candidate_v2 \
-            --template benchmarks/v013/active-qualification-v2.json \
+          uv run --frozen python -m benchmarks.release.freeze_qualification_candidate_v3 \
+            --template benchmarks/v013/active-qualification-v3.json \
             --reproducible-report "${RUNNER_TEMP}/verified-dist/reproducible-build.json" \
             --artifact-manifest "${RUNNER_TEMP}/verified-dist/retained-artifact-manifest.json" \
             --output "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json"
@@ -64,7 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv export --frozen --no-dev --no-emit-project --no-emit-local --no-sources \
+          uv export --frozen --no-dev --no-emit-project --no-emit-local \
             --output-file "${RUNNER_TEMP}/verified-dist/candidate-requirements.txt"
 
       - name: Derive closed pre-publish supply-chain evidence from the verified bytes
@@ -175,11 +175,91 @@ jobs:
           retention-days: 90
           path: ${{ runner.temp }}/exact-wheel-execution.json
 
-  windows-calibration:
-    name: Measure exact Windows Python 3.12 module durations
+  scale_ten_thousand:
+    name: Execute exact verified wheel at the 10k supported boundary
+    needs: verified-artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out exact candidate scale runner
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install closed scale runtime
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+
+      - name: Download the exact verified candidate artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-candidate-artifacts
+          path: ${{ runner.temp }}/verified-dist
+
+      - name: Execute the public 10k qualification path once
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/verified-dist"
+          manifest="${dist}/retained-artifact-manifest.json"
+          requirements="${dist}/candidate-requirements.txt"
+          output="${RUNNER_TEMP}/scale-10000/v013-scale-qualification-v9.json"
+          venv="${RUNNER_TEMP}/scale-10000-venv"
+          uv lock --check
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --repository . --dist "${dist}" --output "${manifest}" --verify
+          test -s "${requirements}"
+          test "$(find "${dist}" -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')" = 1
+          test "$(find "${dist}" -maxdepth 1 -type f -name '*.tar.gz' | wc -l | tr -d ' ')" = 1
+          wheel="$(find "${dist}" -maxdepth 1 -type f -name '*.whl')"
+          sdist="$(find "${dist}" -maxdepth 1 -type f -name '*.tar.gz')"
+          wheel_sha256="$(sha256sum "${wheel}" | cut -d ' ' -f 1)"
+          sdist_sha256="$(sha256sum "${sdist}" | cut -d ' ' -f 1)"
+          lock_sha256="$(sha256sum uv.lock | cut -d ' ' -f 1)"
+          candidate_commit="$(git rev-parse HEAD)"
+          candidate_tree="$(git rev-parse HEAD^{tree})"
+          candidate_version="$(python -c 'import pathlib,tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])')"
+          mkdir "${RUNNER_TEMP}/scale-10000"
+          uv venv "${venv}" --python "3.12" --seed
+          uv pip install --python "${venv}/bin/python" \
+            --require-hashes --requirements "${requirements}"
+          uv pip install --python "${venv}/bin/python" --no-deps "${wheel}"
+          "${venv}/bin/python" -m benchmarks.v013.scale_qualification_v9 \
+            --execute-10k \
+            --wheel "${wheel}" \
+            --sdist "${sdist}" \
+            --lock-sha256 "${lock_sha256}" \
+            --candidate-commit "${candidate_commit}" \
+            --candidate-tree "${candidate_tree}" \
+            --candidate-version "${candidate_version}" \
+            --candidate-wheel-sha256 "${wheel_sha256}" \
+            --candidate-sdist-sha256 "${sdist_sha256}" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --output "${output}"
+
+      - name: Retain exact 10k scale evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scale-10000-evidence
+          if-no-files-found: error
+          retention-days: 90
+          path: ${{ runner.temp }}/scale-10000/v013-scale-qualification-v9.json
+
+  windows-calibration-shards:
+    name: Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3
     needs: verified-artifact
     runs-on: windows-latest
-    timeout-minutes: 100
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - 1
+          - 2
+          - 3
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -201,21 +281,44 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: verified-candidate-artifacts
-          path: ${{ runner.temp }}/verified-dist
+          path: ${{ runner.temp }}/inputs/verified-candidate-artifacts
 
-      - name: Execute duration calibration
-        env:
-          PYTHONUTF8: "1"
-        run: >-
-          uv run --frozen pytest --strict-markers
-          -m "not qualification"
-          --junitxml="${{ runner.temp }}/windows-calibration.xml"
-
-      - name: Fresh-install the exact Windows Python 3.12 artifact
+      - name: Select deterministic unweighted calibration shard
         shell: bash
         run: |
           set -euo pipefail
-          dist="${RUNNER_TEMP}/verified-dist"
+          uv run --frozen python -m benchmarks.release.candidate_regression \
+            select \
+            --shard-count 3 \
+            --shard-index "${{ matrix.shard }}" \
+            --output "${RUNNER_TEMP}/candidate-test-shard.json" \
+            --paths-output "${RUNNER_TEMP}/candidate-test-files.txt"
+
+      - name: Execute duration calibration shard
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          set -euo pipefail
+          mapfile -t test_files < "${RUNNER_TEMP}/candidate-test-files.txt"
+          uv run --frozen pytest --strict-markers \
+            -m "not qualification" \
+            --junitxml="${RUNNER_TEMP}/candidate-tests.xml" \
+            "${test_files[@]}"
+          uv run --frozen python -m benchmarks.release.candidate_regression \
+            receipt \
+            --junit "${RUNNER_TEMP}/candidate-tests.xml" \
+            --output "${RUNNER_TEMP}/candidate-skip-receipt.json" \
+            --matrix-os windows-latest \
+            --matrix-python "3.12" \
+            --shard-manifest "${RUNNER_TEMP}/candidate-test-shard.json"
+
+      - name: Fresh-install the exact Windows Python 3.12 artifact
+        if: matrix.shard == 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist="${RUNNER_TEMP}/inputs/verified-candidate-artifacts"
           uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
             --repository . --dist "${dist}" \
             --output "${dist}/retained-artifact-manifest.json" --verify
@@ -224,12 +327,49 @@ jobs:
           uv pip install --python "${RUNNER_TEMP}/fresh/Scripts/python.exe" "${wheel}"
           "${RUNNER_TEMP}/fresh/Scripts/deeplaw.exe" --version
 
-      - name: Freeze duration weights
-        run: >-
-          uv run --frozen python -m benchmarks.release.candidate_regression
-          weights
-          --junit "${{ runner.temp }}/windows-calibration.xml"
-          --output "${{ runner.temp }}/windows-duration-weights.json"
+      - name: Retain exact duration calibration shard
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-calibration-shard-${{ matrix.shard }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            ${{ runner.temp }}/candidate-tests.xml
+            ${{ runner.temp }}/candidate-test-shard.json
+            ${{ runner.temp }}/candidate-skip-receipt.json
+
+  windows-calibration:
+    name: Aggregate exact Windows Python 3.12 duration calibration
+    needs: windows-calibration-shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Download exact calibration shard receipts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: windows-calibration-shard-*
+          path: ${{ runner.temp }}/windows-calibration-shards
+
+      - name: Aggregate complete disjoint calibration and freeze actual weights
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m benchmarks.release.candidate_regression \
+            aggregate \
+            --input-directory "${RUNNER_TEMP}/windows-calibration-shards" \
+            --matrix-python "3.12" \
+            --output "${RUNNER_TEMP}/windows-calibration-aggregate.json" \
+            --junit-output "${RUNNER_TEMP}/windows-calibration.xml"
+          python -m benchmarks.release.candidate_regression \
+            weights \
+            --junit "${RUNNER_TEMP}/windows-calibration.xml" \
+            --output "${RUNNER_TEMP}/windows-duration-weights.json"
 
       - name: Retain exact duration calibration
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -239,6 +379,7 @@ jobs:
           retention-days: 90
           path: |
             ${{ runner.temp }}/windows-calibration.xml
+            ${{ runner.temp }}/windows-calibration-aggregate.json
             ${{ runner.temp }}/windows-duration-weights.json
 
   posix-matrix:
@@ -453,11 +594,12 @@ jobs:
     needs:
       - verified-artifact
       - exact-wheel
+      - scale_ten_thousand
       - windows-calibration
       - posix-matrix
       - windows-shards
       - windows-aggregate
-    if: ${{ always() && needs['verified-artifact'].result == 'success' && needs['exact-wheel'].result == 'success' && needs['windows-calibration'].result == 'success' && needs['posix-matrix'].result == 'success' && needs['windows-shards'].result == 'success' && needs['windows-aggregate'].result == 'success' }}
+    if: ${{ always() && needs['verified-artifact'].result == 'success' && needs['exact-wheel'].result == 'success' && needs['scale_ten_thousand'].result == 'success' && needs['windows-calibration'].result == 'success' && needs['posix-matrix'].result == 'success' && needs['windows-shards'].result == 'success' && needs['windows-aggregate'].result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -478,6 +620,12 @@ jobs:
         with:
           name: exact-wheel-evidence
           path: ${{ runner.temp }}/candidate-full-raw-evidence/exact-wheel-evidence
+
+      - name: Download the exact 10k scale receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: scale-10000-evidence
+          path: ${{ runner.temp }}/candidate-full-raw-evidence/scale-10000-evidence
 
       - name: Download every raw platform artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -521,6 +669,7 @@ jobs:
             test -s "${verified}/${required}"
           done
           test -s "${raw}/exact-wheel-evidence/exact-wheel-execution.json"
+          test -s "${raw}/scale-10000-evidence/v013-scale-qualification-v9.json"
           test "$(find "${raw}/platform-artifacts" -type f -name 'candidate-tests.xml' | wc -l | tr -d ' ')" = 14
           test "$(find "${raw}/windows-duration-calibration" -type f -name 'windows-calibration.xml' | wc -l | tr -d ' ')" = 1
           test "$(find "${raw}/platform-artifacts" -type f -name 'windows-aggregate.json' | wc -l | tr -d ' ')" = 2

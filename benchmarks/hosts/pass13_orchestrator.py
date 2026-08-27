@@ -28,6 +28,7 @@ from benchmarks.hosts import pass13_evidence
 PACKAGE_VERSION = "0.12.0"
 REPORT_SCHEMA_VERSION = "deeplaw.host-continuity-qualification/v2"
 RUNTIME_CONTRACT_NAMES = (
+    "host-preflight-receipt.v1.schema.json",
     "host-continuity-qualification.v1.schema.json",
     "host-continuity-qualification.v2.schema.json",
     "host-continuity-development-diagnostic.v1.schema.json",

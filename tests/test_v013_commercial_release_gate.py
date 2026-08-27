@@ -17,6 +17,7 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 V5 = "deeplaw.commercial-release-manifest/v5"
 V6 = "deeplaw.commercial-release-manifest/v6"
 V8 = "deeplaw.commercial-release-manifest/v8"
+V9 = "deeplaw.commercial-release-manifest/v9"
 VERSION = "0.13.0"
 COMMIT = "a" * 40
 TREE = "b" * 40
@@ -150,13 +151,13 @@ def _refresh(manifest: dict[str, Any]) -> None:
     manifest["record_sha256"] = _record_digest(manifest)
 
 
-def test_v013_current_selects_v8_and_legacy_v6_stays_explicit() -> None:
+def test_v013_current_selects_v9_and_legacy_v6_stays_explicit() -> None:
     assert release_policy.required_manifest_schema_version("0.12.9") == V5
-    assert release_policy.required_manifest_schema_version(VERSION) == V8
+    assert release_policy.required_manifest_schema_version(VERSION) == V9
     assert release_policy.required_legacy_manifest_schema_version(VERSION) == V6
-    with pytest.raises(release_policy.ReleasePolicyError, match="release_provenance_v8"):
+    with pytest.raises(release_policy.ReleasePolicyError, match="release_provenance_v9"):
         release_policy.validate_manifest_for_release(
-            {"schema_version": V8},
+            {"schema_version": V9},
             release_version=VERSION,
         )
 
@@ -256,11 +257,10 @@ def test_publish_and_post_release_validate_semantics_before_envelope() -> None:
     validation = workflow.split("\n  validate-assets:", maxsplit=1)[1].split(
         "\n  fresh-install:", maxsplit=1
     )[0]
-    assert "benchmarks.release.release_provenance_v8" in validation
+    assert "benchmarks.release.release_provenance_v9" in validation
     assert "--assets-root" in validation
-    assert "--candidate-run-id" in validation
-    assert "--evidence-run-id" in validation
-    assert "--qualification-run-id" in validation
+    assert "--bundle-root" in validation
+    assert "--report" in validation
     public = workflow.split("\n  public-redownload:", maxsplit=1)[1]
     assert "gh release download" not in public
     assert "https://github.com/${GITHUB_REPOSITORY}/releases/download" in public
@@ -270,30 +270,27 @@ def test_publish_and_post_release_validate_semantics_before_envelope() -> None:
     assert "gh attestation verify" in public
 
 
-def test_historical_assembler_closes_v013_in_favor_of_current_v8_path() -> None:
+def test_historical_assembler_closes_v013_in_favor_of_current_v9_path() -> None:
     source = (REPOSITORY / "benchmarks/release/commercial_release.py").read_text(
         encoding="utf-8"
     )
-    assert "release_provenance_v8" in source
-    assert "retained evidence" in source
+    assert "release_provenance_v9" in source
+    assert "retained Kernel evidence" in source
 
 
-def test_v013_commercial_qualification_recomputes_v8_from_verified_artifacts() -> None:
+def test_v013_commercial_qualification_recomputes_v9_from_verified_artifacts() -> None:
     workflow = (
         REPOSITORY / ".github/workflows/commercial-qualification.yml"
     ).read_text(
         encoding="utf-8"
     )
     assert "verified-candidate-artifacts" in workflow
-    assert "v013-qualification-evidence" in workflow
-    assert "candidate-full-raw-evidence" in workflow
-    assert "benchmarks.release.assemble_commercial_qualification_v8" in workflow
-    assert "benchmarks.release.release_provenance_v8" in workflow
-    assert "v013-gate-classification-v8.json" in workflow
-    assert "qualification-protocol-v2.json" in workflow
-    assert "machine-only" in workflow
-    assert "post_build_machine_reference_binding" in workflow
-    assert "--candidate-machine-reference-binding" in workflow
+    assert "kernel-qualification-evidence" in workflow
+    assert "benchmarks.release.kernel_qualification_bundle_v1" in workflow
+    assert "benchmarks.release.assemble_commercial_qualification_v9" in workflow
+    assert "benchmarks.release.release_provenance_v9" in workflow
+    assert "post_build_machine_reference_binding" not in workflow
+    assert "--candidate-machine-reference-binding" not in workflow
     assert "trusted-human-approver" not in workflow
     assert "uv build" not in workflow
 

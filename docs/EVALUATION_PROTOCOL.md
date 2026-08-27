@@ -1,10 +1,10 @@
 # DeepLaw Evaluation Protocol
 
-Status: **v2 current repository-visible development protocol; package/main 0.12.0 Beta**.
-Reviewed 2026-08-17. Active qualification is
-[`benchmarks/v013/active-qualification-v2.json`](../benchmarks/v013/active-qualification-v2.json)
+Status: **v3 Kernel-release protocol; package/main 0.12.0 Beta**.
+Reviewed 2026-08-21. Active qualification is
+[`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json)
 with `status=machine_evaluation_pending`, profile
-`machine_evaluated_no_human_attestation`, and Gate classification v8. The 14 v8 Core gates remain
+`kernel_release_core`, and Gate classification v9. The 13 v9 Kernel Release Core gates remain
 required; `release_ready=false`, `claim_eligible=false`, and no `0.13.0` tag/release follows from
 this document.
 
@@ -22,13 +22,31 @@ forbidden. Protocol v2 and repository Gold development v3 are the current defaul
 fixtures. They are public, label-visible, repository-visible, non-independent, and never release or
 claim evidence.
 
-The v0.13 machine-only release gate additionally requires repository-external machine reference
-inputs, OS-enforced isolation receipts, frozen qualification/final-blind holdouts, passing real
-Host/model tasks, exact Legal Pack evidence, complete current-candidate scale, and cross-platform
-results. Pass 11 retains
+The v0.13 machine-only Kernel release gate additionally requires OS-enforced Host/Secret-isolation
+receipts, passing exact-artifact real Host/model tasks, professional-source evidence, the exact
+10,000-object support boundary, and cross-platform/supply-chain results. Official signed Legal Pack
+evidence, semantic restore, Claude, and GUI/Desktop evidence gate only those Capability claims.
+Blind comparative holdouts, machine-reference isolation, panels, scorers, arbitration, and
+comparative results gate only Competitive/Research claims. Pass 11 retains
 some claim-ineligible exact-candidate Host, editor, scale, and artifact observations, but they do
-not supply this complete external gate set and are not part of this repository-visible development
+not supply the complete v9 Core gate set and are not part of this repository-visible development
 protocol. See [`V0_13_PASS11_FINAL_DISPOSITION.md`](V0_13_PASS11_FINAL_DISPOSITION.md).
+
+## Gate v9 release boundary
+
+Kernel Release Core consists of `canonical_integrity`, `migration_recovery`,
+`secret_host_isolation`, `bounded_context`, `source_citation_locator`, `living_wiki`,
+`scale_performance`, `supported_platforms`, `reproducible_supply_chain`, `codex`, `opencode`,
+`selective_forget`, and `timeline`. Every one must be recomputed as `passed` from retained evidence
+for the exact candidate wheel/sdist before `release_ready=true` is mechanically possible.
+
+Capability and Competitive/Research entries are always retained in the result inventory. An
+unexecuted entry is `not_executed` with its claim flag false; it is never silently omitted or
+converted to a Core failure. Generic professional-source evidence must cover original bytes/hash,
+Document/Version/Fragment/Locator, wrong-version rejection, effective date, exception/proviso and
+cross-reference duties, false-Authority hard failure, OCR critical-token Gap, and Wiki-to-exact-
+Source drill-down. This does not establish official Legal Pack status, Human/legal-expert
+attestation, `human_verified`, legal applicability, or a verdict.
 
 DeepLaw's evaluation architecture uses:
 

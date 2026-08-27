@@ -32,7 +32,7 @@ The default/Advanced/Compatibility/Experimental/Retire Candidate classification 
 | No-model OpenCode adapter lifecycle | **Supported local-only** | official CLI resolved config, agent/skill discovery, MCP handshake, enable/disable, local adapter upgrade/removal and isolation |
 | Obsidian CLI bridge and bundle | **Source candidate / local-only** | exact-candidate synthetic macOS load/verify/rename/edit/reconcile/conflict-recovery seam executed; Human/blind and broader qualification pending |
 | Tolaria external MCP bridge | **`integration_limited`** | exact `v2026-08-11` source/hash contract and local CLI harness; Desktop/UI seam not executed |
-| Real model/session tasks on all hosts | **Pending under machine-only profile** | Active profile is `machine_evaluated_no_human_attestation`; required Codex/OpenCode runs and mapped Core evidence remain source-specific `not_executed` until a fresh exact candidate/input/receipt binding; historical candidate evidence is not Human Gold or legal attestation |
+| Real model/session tasks on Codex/OpenCode | **Pending under machine-only profile** | Active profile is `kernel_release_core`; required Codex/OpenCode runs and mapped Core evidence remain source-specific `not_executed` until a fresh exact candidate/input/receipt binding; historical candidate evidence is not Human Gold or legal attestation |
 
 The compiler workflow and grant boundary are specified in
 [`LIVING_WIKI_COMPILER.md`](LIVING_WIKI_COMPILER.md). The default plugin remains read-only. A host
@@ -492,6 +492,13 @@ Both paths retain only delivery hashes, byte/counter fields, status and Gap code
 must make zero Provider-side continuity tool calls. Reference freezing and scoring run later in
 separate processes and remain machine evaluation unless an independent human attestation actually
 exists.
+
+For the current Gate v9 OpenCode runner, the frozen task prefix is non-pure:
+`["opencode", "run", "--format", "json"]`. The isolated project contains exactly one exact
+candidate plugin whose source and installed bytes/hashes must match; ambient project plugins are
+forbidden. `--pure` is not compatible with the native plugin-hook delivery required by this
+qualification path. This is a runner-policy contract only; real Host tasks and their Gate results
+remain `not_executed` until an external collector retains the required evidence.
 
 The disabled sidecars, owner-only enable/disable path, read-only boundary, and exact event
 mappings are documented in `adapters/codex/README.md` and `adapters/opencode/README.md`; static

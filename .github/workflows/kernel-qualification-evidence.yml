@@ -1,0 +1,500 @@
+name: Kernel Qualification Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful Candidate Full run for this exact candidate commit.
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: kernel-qualification-evidence-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: Execute and retain exact-candidate Kernel evidence
+    runs-on: [self-hosted, macOS, deeplaw-kernel-qualification]
+    timeout-minutes: 360
+    steps:
+      - name: Check out the exact candidate verifier
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install the closed validator runtime
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Verify Candidate Full identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_RUN_ID}" =~ ^[0-9]+$ ]]
+          test "${CANDIDATE_RUN_ID}" != "${GITHUB_RUN_ID}"
+          api="repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}"
+          test "$(gh api "${api}" --jq .status)" = completed
+          test "$(gh api "${api}" --jq .conclusion)" = success
+          test "$(gh api "${api}" --jq .head_sha)" = "${GITHUB_SHA}"
+          test "$(gh api "${api}" --jq .name)" = "Candidate Full"
+          test "$(gh api "${api}" --jq .path)" = ".github/workflows/candidate-full.yml"
+
+      - name: Download the one verified artifact source
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: verified-candidate-artifacts
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/candidate-inputs/verified-dist
+
+      - name: Download Candidate Full raw evidence including exact 10k
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: candidate-full-raw-evidence
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/candidate-inputs/candidate-full-raw-evidence
+
+      - name: Validate owner-controlled Host prerequisites without reading credentials
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv lock --check
+          uv sync --frozen --extra dev
+          python - <<'PY'
+          import hashlib
+          import os
+          import stat
+          from pathlib import Path
+
+          from benchmarks.hosts.host_preflight_receipt import (
+              HostIdentityValidationError,
+              inspect_host_binary,
+              load_host_identity_input_with_bytes,
+          )
+
+          repository = Path(os.environ["GITHUB_WORKSPACE"]).resolve(strict=True)
+
+          def exact_file(
+              name: str,
+              *,
+              executable: bool,
+              owner_only: bool,
+              verify_content_hash: bool = True,
+          ) -> Path:
+              raw = os.environ.get(name)
+              if not raw:
+                  raise SystemExit(f"missing qualification prerequisite: {name}")
+              path = Path(raw)
+              if not path.is_absolute():
+                  raise SystemExit(f"qualification prerequisite is not absolute: {name}")
+              details = path.lstat()
+              if not stat.S_ISREG(details.st_mode) or path.is_symlink() or details.st_nlink != 1:
+                  raise SystemExit(f"qualification prerequisite is not a regular file: {name}")
+              if executable and not os.access(path, os.X_OK):
+                  raise SystemExit(f"qualification prerequisite is not executable: {name}")
+              if owner_only and (details.st_uid != os.geteuid() or stat.S_IMODE(details.st_mode) & 0o077):
+                  raise SystemExit(f"qualification prerequisite is not owner-only: {name}")
+              try:
+                  path.resolve(strict=True).relative_to(repository)
+              except ValueError:
+                  pass
+              else:
+                  raise SystemExit(f"qualification prerequisite must be repository-external: {name}")
+              if verify_content_hash:
+                  expected = os.environ.get(f"{name}_SHA256")
+                  observed = hashlib.sha256(path.read_bytes()).hexdigest()
+                  if not expected or observed != expected:
+                      raise SystemExit(f"qualification prerequisite hash mismatch: {name}")
+              return path
+
+          exact_file("DEEPLAW_KERNEL_EVIDENCE_COLLECTOR", executable=True, owner_only=True)
+          exact_file("DEEPLAW_CODEX_CREDENTIAL_BROKER", executable=True, owner_only=True)
+          exact_file("DEEPLAW_OPENCODE_CREDENTIAL_BROKER", executable=True, owner_only=True)
+          identity_path = exact_file(
+              "DEEPLAW_HOST_IDENTITY_INPUT",
+              executable=False,
+              owner_only=True,
+              verify_content_hash=False,
+          )
+          # Metadata only: the validator must never read or hash the dotenv bytes.
+          exact_file(
+              "DEEPLAW_OPENCODE_DOTENV",
+              executable=False,
+              owner_only=True,
+              verify_content_hash=False,
+          )
+          identity, identity_bytes = load_host_identity_input_with_bytes(
+              identity_path, repository=repository
+          )
+          frozen_root = Path(os.environ["RUNNER_TEMP"]) / "candidate-inputs"
+          frozen_root.mkdir(parents=True, exist_ok=True)
+          frozen_path = frozen_root / "frozen-host-exact-identity.json"
+          frozen_tmp = frozen_root / ".frozen-host-exact-identity.tmp"
+          if frozen_path.exists() or frozen_path.is_symlink() or frozen_tmp.exists() or frozen_tmp.is_symlink():
+              raise SystemExit("frozen Host identity target already exists")
+          descriptor = os.open(
+              frozen_tmp,
+              os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+              0o600,
+          )
+          try:
+              os.write(descriptor, identity_bytes)
+              os.fsync(descriptor)
+          finally:
+              os.close(descriptor)
+          frozen_tmp.chmod(0o600)
+          os.replace(frozen_tmp, frozen_path)
+          frozen_details = frozen_path.lstat()
+          if (
+              not stat.S_ISREG(frozen_details.st_mode)
+              or frozen_path.is_symlink()
+              or frozen_details.st_nlink != 1
+              or stat.S_IMODE(frozen_details.st_mode) & 0o077
+          ):
+              raise SystemExit("frozen Host identity target is unsafe")
+          if frozen_path.read_bytes() != identity_bytes:
+              raise SystemExit("frozen Host identity bytes changed")
+          codex_binary = exact_file(
+              "DEEPLAW_CODEX_BINARY",
+              executable=True,
+              owner_only=False,
+              verify_content_hash=False,
+          )
+          opencode_binary = Path(os.environ.get("DEEPLAW_OPENCODE_BINARY", ""))
+          if not opencode_binary.is_absolute():
+              raise SystemExit("OpenCode selector must be absolute")
+          try:
+              codex_observed = inspect_host_binary(
+                  codex_binary,
+                  host="codex",
+                  identity=identity,
+                  repository=repository,
+              )
+              opencode_observed = inspect_host_binary(
+                  opencode_binary,
+                  host="opencode",
+                  identity=identity,
+                  repository=repository,
+              )
+          except (HostIdentityValidationError, OSError, ValueError) as error:
+              raise SystemExit("Host executable does not match the external frozen identity") from error
+          execution_identity = {
+              "schema_version": "deeplaw.host-execution-identity/v1",
+              "hosts": {
+                  host: {
+                      "selector_source_symlink": bool(observed["selector_source_symlink"]),
+                      "execution_target_regular": observed["execution_target_regular"] is True,
+                      "execution_target_single_link": observed["execution_target_single_link"] is True,
+                      "host_identity_sha256": observed["host_identity_sha256"],
+                      "host_identity_source_sha256": observed["host_identity_source_sha256"],
+                  }
+                  for host, observed in (("codex", codex_observed), ("opencode", opencode_observed))
+              },
+          }
+          (frozen_root / "host-execution-identity.json").write_text(
+              __import__("json").dumps(
+                  execution_identity,
+                  sort_keys=True,
+                  separators=(",", ":"),
+          ) + "\n",
+              encoding="utf-8",
+          )
+          (frozen_root / "host-execution-identity.json").chmod(0o600)
+          package = exact_file(
+              "DEEPLAW_OPENCODE_PACKAGE",
+              executable=False,
+              owner_only=False,
+              verify_content_hash=False,
+          )
+          if hashlib.sha256(package.read_bytes()).hexdigest() != identity["hosts"]["opencode"]["package_sha256"]:
+              raise SystemExit("OpenCode package does not match the external frozen identity")
+          PY
+          verified="${RUNNER_TEMP}/candidate-inputs/verified-dist"
+          raw="${RUNNER_TEMP}/candidate-inputs/candidate-full-raw-evidence"
+          uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
+            --repository . --dist "${verified}" \
+            --output "${verified}/retained-artifact-manifest.json" --verify
+          test -s "${verified}/frozen-active-qualification.json"
+          test -s "${raw}/scale-10000-evidence/v013-scale-qualification-v9.json"
+
+      - name: Build and validate the pre-execution Host task handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          frozen_identity="${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"
+          host_task_handoff="${RUNNER_TEMP}/candidate-inputs/host-task-handoff.json"
+          test -f "${frozen_identity}"
+          test ! -e "${host_task_handoff}"
+          uv run --frozen python -m benchmarks.hosts.run_v013_host_task_qualification \
+            --build-handoff \
+            --host-identity-input "${frozen_identity}" \
+            > "${host_task_handoff}"
+          uv run --frozen python -m benchmarks.hosts.run_v013_host_task_qualification \
+            --validate-handoff "${host_task_handoff}" \
+            --host-identity-input "${frozen_identity}" \
+            > /dev/null
+          test -s "${host_task_handoff}"
+
+      - name: Run Codex owner-external zero-model preflight
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${EVIDENCE_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${DEEPLAW_CODEX_CREDENTIAL_BROKER_SHA256}" =~ ^[0-9a-f]{64}$ ]]
+          codex_preflight="${RUNNER_TEMP}/codex-zero-model-preflight-v4.json"
+          test ! -e "${codex_preflight}"
+          uv run --frozen python -m benchmarks.hosts.run_v013_host_task_qualification \
+            --codex-zero-model-preflight \
+            --candidate-binding-input "${RUNNER_TEMP}/candidate-inputs/verified-dist/frozen-active-qualification.json" \
+            --host-identity-input "${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json" \
+            --codex-binary "${DEEPLAW_CODEX_BINARY}" \
+            --codex-broker "${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \
+            --expected-codex-broker-sha256 "${DEEPLAW_CODEX_CREDENTIAL_BROKER_SHA256}" \
+            --task-case continuity \
+            --run-id "codex-zero-model-preflight-${CANDIDATE_RUN_ID}-${EVIDENCE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --qualification-run-id "${EVIDENCE_RUN_ID}" \
+            > "${codex_preflight}"
+          uv run --frozen python - "${codex_preflight}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          try:
+              result = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          except (OSError, UnicodeError, json.JSONDecodeError) as error:
+              raise SystemExit("Codex zero-model preflight output is not strict JSON") from error
+          if not isinstance(result, dict):
+              raise SystemExit("Codex zero-model preflight output is not an object")
+
+          sequence = [
+              "initialize",
+              "initialized",
+              "thread/start",
+              "turn/start",
+              "SessionStart",
+              "stdin/close",
+          ]
+          provider_guard = result.get("provider_guard")
+          if (
+              result.get("status") != "passed"
+              or result.get("evidence_class") != "zero_model_preflight_only"
+              or result.get("formal_admission") is not False
+              or result.get("control_schema_version")
+              != "deeplaw.codex-owner-external-broker-control/v4"
+              or result.get("observed_sequence") != sequence
+              or result.get("fresh_ephemeral_thread") is not True
+              or not isinstance(provider_guard, dict)
+              or set(provider_guard) != {
+                  "owner",
+                  "transport",
+                  "provider_id",
+                  "requires_openai_auth",
+                  "supports_websockets",
+              }
+              or provider_guard.get("owner") != "broker"
+              or provider_guard.get("transport") != "loopback_http"
+              or provider_guard.get("provider_id")
+              != "deeplaw_zero_model_preflight"
+              or provider_guard.get("requires_openai_auth") is not False
+              or provider_guard.get("supports_websockets") is not False
+          ):
+              raise SystemExit("Codex zero-model preflight sequence or admission is invalid")
+
+          expected_counts = {
+              "turn_start_count": 1,
+              "model_inventory_count": 0,
+              "model_invocation_count": 0,
+              "provider_request_count": 0,
+              "sampling_count": 0,
+              "accepted_connection_count": 0,
+              "request_count": 0,
+          }
+          if any(
+              type(result.get(field)) is not int or result[field] != expected
+              for field, expected in expected_counts.items()
+          ):
+              raise SystemExit("Codex zero-model preflight activity counts are invalid")
+
+          hook = result.get("session_start_hook")
+          hook_response = hook.get("response") if isinstance(hook, dict) else None
+          if (
+              not isinstance(hook, dict)
+              or set(hook) != {
+                  "event_name",
+                  "status",
+                  "owner",
+                  "handler_type",
+                  "execution_mode",
+                  "response",
+                  "stop_boundary",
+                  "event_sha256",
+              }
+              or hook.get("event_name") != "SessionStart"
+              or hook.get("status") != "stopped"
+              or hook.get("owner") != "broker"
+              or hook.get("handler_type") != "command"
+              or hook.get("execution_mode") != "sync"
+              or not isinstance(hook_response, dict)
+              or set(hook_response) != {"continue"}
+              or hook_response.get("continue") is not False
+              or hook.get("stop_boundary") != "before_run_sampling_request"
+          ):
+              raise SystemExit("Codex zero-model preflight SessionStart stop is invalid")
+          PY
+          # This runner-local summary is intentionally outside every later upload path.
+
+      - name: Run OpenCode owner-external zero-model preflight
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${EVIDENCE_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER_SHA256}" =~ ^[0-9a-f]{64}$ ]]
+          uv run --frozen python -m benchmarks.hosts.run_pass13_opencode_continuity_qualification \
+            --zero-model-preflight \
+            --candidate-binding-input "${RUNNER_TEMP}/candidate-inputs/verified-dist/frozen-active-qualification.json" \
+            --host-identity-input "${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json" \
+            --opencode-package "${DEEPLAW_OPENCODE_PACKAGE}" \
+            --opencode-binary "${DEEPLAW_OPENCODE_BINARY}" \
+            --opencode-launcher "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \
+            --expected-broker-sha256 "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER_SHA256}" \
+            --task-case continuity \
+            --run-id "opencode-zero-model-preflight-${CANDIDATE_RUN_ID}-${EVIDENCE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --qualification-run-id "${EVIDENCE_RUN_ID}" \
+            > /dev/null
+
+      - name: Execute Codex x3, OpenCode x3, and deterministic Kernel evidence
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="${RUNNER_TEMP}/kernel-evidence-staging"
+          frozen_identity="${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"
+          execution_identity="${RUNNER_TEMP}/candidate-inputs/host-execution-identity.json"
+          host_task_handoff="${RUNNER_TEMP}/candidate-inputs/host-task-handoff.json"
+          test -f "${frozen_identity}"
+          test -f "${execution_identity}"
+          test -f "${host_task_handoff}"
+          export DEEPLAW_FROZEN_HOST_IDENTITY="${frozen_identity}"
+          test ! -e "${output}"
+          mkdir "${output}"
+          "${DEEPLAW_KERNEL_EVIDENCE_COLLECTOR}" \
+            --candidate-input-root "${RUNNER_TEMP}/candidate-inputs" \
+            --verified-dist "${RUNNER_TEMP}/candidate-inputs/verified-dist" \
+            --candidate-full-raw-root "${RUNNER_TEMP}/candidate-inputs/candidate-full-raw-evidence" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --codex-binary "${DEEPLAW_CODEX_BINARY}" \
+            --codex-version "$(uv run --frozen python -c 'from benchmarks.hosts.host_preflight_receipt import load_host_identity_input; import os; from pathlib import Path; print(load_host_identity_input(Path(os.environ["DEEPLAW_FROZEN_HOST_IDENTITY"]), repository=Path.cwd(), require_external=False)["hosts"]["codex"]["binary_version"])')" \
+            --codex-model "gpt-5.6-luna" \
+            --codex-reasoning "max" \
+            --codex-broker "${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \
+            --opencode-binary "${DEEPLAW_OPENCODE_BINARY}" \
+            --opencode-package "${DEEPLAW_OPENCODE_PACKAGE}" \
+            --opencode-version "$(uv run --frozen python -c 'from benchmarks.hosts.host_preflight_receipt import load_host_identity_input; import os; from pathlib import Path; print(load_host_identity_input(Path(os.environ["DEEPLAW_FROZEN_HOST_IDENTITY"]), repository=Path.cwd(), require_external=False)["hosts"]["opencode"]["version"])')" \
+            --opencode-model "deepseek/deepseek-v4-flash" \
+            --opencode-broker "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \
+            --opencode-dotenv "${DEEPLAW_OPENCODE_DOTENV}" \
+            --host-identity-input "${frozen_identity}" \
+            --host-task-handoff "${host_task_handoff}" \
+            --transport-retry-limit 1 \
+            --output "${output}"
+          test ! -e "${output}/.env"
+          test ! -e "${output}/auth.json"
+          test ! -e "${output}/transcript"
+          test ! -e "${output}/reasoning"
+          test ! -e "${output}/stdout"
+          test ! -e "${output}/stderr"
+          test -z "$(find "${output}" -type f -name '*host-task-handoff*' -print -quit)"
+          if find "${output}" -type f \
+            -exec cmp -s "{}" "${host_task_handoff}" \; -print -quit | grep -q .; then
+            exit 1
+          fi
+          mkdir "${output}/retained-broker-source"
+          cp "${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \
+            "${output}/retained-broker-source/codex.launcher-source"
+          cp "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \
+            "${output}/retained-broker-source/opencode.launcher-source"
+          mkdir "${output}/candidate-inventory"
+          cp "${frozen_identity}" \
+            "${output}/candidate-inventory/host-exact-identity.json"
+          cp "${execution_identity}" \
+            "${output}/candidate-inventory/host-execution-identity.json"
+
+      - name: Reopen every typed receipt with the repository validator
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+          STAGING_ROOT: ${{ runner.temp }}/kernel-evidence-staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="${STAGING_ROOT}"
+          frozen_identity="${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"
+          test -f "${frozen_identity}"
+          mkdir -p \
+            "${root}/benchmarks/v013" \
+            "${root}/benchmarks/release"
+          cp "${RUNNER_TEMP}/candidate-inputs/verified-dist/frozen-active-qualification.json" \
+            "${root}/benchmarks/v013/active-qualification-v3.json"
+          cp benchmarks/v013/qualification-protocol-v3.json \
+            "${root}/benchmarks/v013/qualification-protocol-v3.json"
+          cp benchmarks/release/v013-gate-classification-v9.json \
+            "${root}/benchmarks/release/v013-gate-classification-v9.json"
+          # A temporary non-future qualification identity proves that the raw
+          # evidence is already a valid closed bundle. Commercial Qualification
+          # rebuilds the manifest with its actual workflow run id.
+          sentinel=9223372036854775807
+          uv run --frozen python -m benchmarks.release.kernel_qualification_bundle_v1 build \
+            --root "${root}" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --qualification-run-id "${sentinel}" \
+            --host-identity-input "${frozen_identity}" \
+            > "${RUNNER_TEMP}/kernel-bundle-validation.json"
+          uv run --frozen python -m benchmarks.release.kernel_qualification_bundle_v1 validate \
+            --root "${root}" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --qualification-run-id "${sentinel}" \
+            --host-identity-input "${frozen_identity}" \
+            >> "${RUNNER_TEMP}/kernel-bundle-validation.json"
+          rm "${root}/bundle-manifest.json"
+          test -z "$(find "${root}" -type l -print -quit)"
+          test -z "$(find "${root}" -type f \( -name '.env' -o -iname '*auth*' -o -iname '*secret*' -o -iname '*prompt*' -o -iname '*transcript*' -o -iname '*reasoning*' -o -iname '*stdout*' -o -iname '*stderr*' \) -print -quit)"
+
+      - name: Upload only the sanitized Kernel evidence staging tree
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kernel-qualification-evidence
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+          path: ${{ runner.temp }}/kernel-evidence-staging/

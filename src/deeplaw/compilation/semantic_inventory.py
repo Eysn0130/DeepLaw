@@ -567,11 +567,39 @@ class SemanticInventoryBuilder:
         frozen_applicability_digest = coverage.get("applicability_digest")
         if frozen_applicability_digest != digest:
             raise RuntimeError("v3 semantic inventory applicability digest is invalid")
+        existing_facts = runtime_facts.get("existing")
+        if not isinstance(existing_facts, dict):
+            raise RuntimeError("v3 semantic inventory existing facts are unavailable")
+        # The bounded Vault-wide identity sample is local inventory evidence.  It is
+        # already bound by ``inventory_sha256`` and is not task-shaped finalization
+        # context.  The Provider receives aggregate existing-state facts here and
+        # exact observation-relevant matches through ``existing_canonical_knowledge``.
+        provider_runtime_facts = {
+            **runtime_facts,
+            "existing": {
+                key: value for key, value in existing_facts.items() if key != "knowledge_ids"
+            },
+        }
+        provider_runtime_facts["facts_sha256"] = sha256_bytes(
+            canonical_json(
+                {
+                    key: value
+                    for key, value in provider_runtime_facts.items()
+                    if key != "facts_sha256"
+                }
+            ).encode("utf-8")
+        )
         provider_coverage = {
             key: value
             for key, value in coverage.items()
-            if key not in {"applicability", "existing_admitted_candidates"}
+            if key
+            not in {
+                "applicability",
+                "existing_admitted_candidates",
+                "runtime_facts",
+            }
         }
+        provider_coverage["runtime_facts"] = provider_runtime_facts
         inventory_summary = {
             key: inventory[key]
             for key in (

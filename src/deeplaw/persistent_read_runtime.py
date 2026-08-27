@@ -27,6 +27,10 @@ class _DerivedReadSnapshotUnavailable(RuntimeError):
     """The optional fast read binding is absent or no longer current."""
 
 
+class _SourceIntegrityRuntimeError(RuntimeError):
+    """The startup source-file integrity check rejected the read snapshot."""
+
+
 def _preverify_derived_read_snapshot(root: Path) -> dict[str, Any]:
     """Verify exact at-rest bytes before SQLite opens its first read connection."""
 
@@ -708,7 +712,9 @@ class PersistentReadRuntime:
                 source_ids = tuple(row[0] for row in source_rows)
                 source_integrity = legacy.verify_source_files(source_ids)
                 if not source_integrity.get("valid"):
-                    raise RuntimeError("knowledge source integrity is invalid; Agent reads stopped")
+                    raise _SourceIntegrityRuntimeError(
+                        "knowledge source integrity is invalid; Agent reads stopped"
+                    )
             else:
                 legacy_integrity, autonomous_integrity = fast_integrity
                 legacy_audit_head = legacy.audit_head

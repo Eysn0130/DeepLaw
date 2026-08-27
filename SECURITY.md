@@ -7,9 +7,9 @@ source administration remain local CLI work. The repository distributes code
 under Apache License 2.0; it does not distribute legal-source packages, case
 documents, generated vault/release databases, or OCR corpora.
 
-Current product and qualification boundary (2026-08-17): package/main remain `0.12.0 Beta`,
+Current product and qualification boundary (2026-08-21): package/main remain `0.12.0 Beta`,
 `release_ready=false`, active status is `machine_evaluation_pending`, profile is
-`machine_evaluated_no_human_attestation`, and Gate classification is v8. The three product roles
+`kernel_release_core`, and Gate classification is v9. The three product roles
 (Task Continuity / Governed Project Knowledge, Source-native Evidence Library, Living Wiki) share
 one governed kernel and Context Compiler. Transcript, prompt, raw log and hidden reasoning are not
 automatically persisted as memory. Current `knowledge_support` advertisement is input v7/output v6
@@ -20,17 +20,25 @@ only. Missing qualification evidence remains `not_executed`; no tag or release f
 
 Security fixes are evaluated for the current software release, `v0.12.0`, and the `main` branch.
 Historical v0.12 release artifacts retain their manifest-v5 contract. The current `0.13.x`
-machine-only path is fail-closed on commercial manifest v8; old v5-v7 manifests,
+machine-only path is fail-closed on commercial manifest v9; old v5-v8 manifests,
 repository-visible development Gold, or no-model Host smoke cannot satisfy model-task acceptance.
-The v8 manifest binds exact candidate artifacts and hashed repository-external machine references,
-Host, Legal Pack, scale, cross-platform, supply-chain, provenance, and public-redownload evidence.
+The v9 manifest binds exact candidate artifacts, Kernel evidence bundle, Host tasks, 10k scale,
+cross-platform, supply-chain, provenance, and public-redownload evidence. Optional Capability and
+Competitive/Research Claim gates remain explicit `not_executed` non-claims and do not substitute
+for Kernel evidence.
+Real Host qualification retains the closed `host-preflight-receipt/v1` and current
+`host-process-receipt/v2` control records. `host-process-receipt/v1` is historical/invalidated and
+cannot satisfy current qualification. They bind safe reason/status codes, exact binary and
+repository-external broker hashes, owner-only broker mode, and negative isolation facts. Raw
+commands, environment values, paths, process identifiers, stdout/stderr, prompts, transcripts,
+hidden reasoning, authentication material, and Secrets are forbidden from those records.
 Unknown later
 versions have no implicit manifest downgrade. Comparative leadership remains separately gated with
 `competitive_claim_eligible=false`. Older versions, local knowledge-release artifacts, and
 third-party packages are not separately supported unless a release notice says otherwise.
 The published v0.12 manifest records `commercial_release_eligible=true` and
 `quality_protocol_eligible=true`; those historical flags do not qualify this v0.13 source
-candidate or bypass manifest v8.
+candidate or bypass manifest v9.
 
 ## Report a vulnerability privately
 

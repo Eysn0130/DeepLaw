@@ -20,12 +20,17 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from benchmarks.hosts import pass16_continuity_cases, pass17_development_diagnostic
+from benchmarks.hosts import (
+    host_preflight_receipt,
+    pass16_continuity_cases,
+    pass17_development_diagnostic,
+)
 from benchmarks.hosts.codex_app_server_client import CodexAppServerClient
 from benchmarks.hosts.pass13_evidence import (
     EvidenceValidationError,
@@ -47,10 +52,15 @@ from benchmarks.hosts.pass13_orchestrator import (
 from benchmarks.hosts.pass13_orchestrator import (
     sha256_file as _sha256_file,
 )
+from benchmarks.hosts.run_v013_host_task_qualification import (
+    run_codex_owner_external_zero_model_preflight,
+)
 
 MODEL = "gpt-5.6-luna"
 REASONING_EFFORT = "max"
-CODEX_VERSION = "codex-cli 0.148.0-alpha.15"
+# Compatibility-only fixture value used by unit seams that do not execute a
+# formal Host.  Formal qualification always supplies the external identity.
+HISTORICAL_CODEX_VERSION_FIXTURE = "codex-cli 0.148.0-alpha.15"
 RUN_COUNT = 3
 TIMEOUT_SECONDS = 300.0
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -138,6 +148,28 @@ class QualificationFailure(RuntimeError):
     """A Host qualification requirement failed closed."""
 
 
+class _PreflightTemporaryDirectory:
+    """Retain a fail-before receipt before its runner-owned root is removed."""
+
+    def __init__(self, *, prefix: str, on_error: Callable[[BaseException], None]) -> None:
+        self._directory = tempfile.TemporaryDirectory(prefix=prefix)
+        self._on_error = on_error
+
+    def __enter__(self) -> str:
+        return self._directory.__enter__()
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
+        if exc_value is not None:
+            try:
+                self._on_error(exc_value)
+            except BaseException as receipt_error:
+                exc_value.add_note(
+                    "Host preflight receipt was not retained before cleanup: "
+                    f"{type(receipt_error).__name__}"
+                )
+        return self._directory.__exit__(exc_type, exc_value, traceback)
+
+
 def _repository() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -207,6 +239,70 @@ def _validate_profile_root(
     return resolved
 
 
+def _current_system_home() -> Path:
+    """Resolve the current user's real system home without trusting ``HOME``."""
+
+    try:
+        effective_uid = os.geteuid()
+    except AttributeError:
+        effective_uid = None
+    if effective_uid is not None:
+        try:
+            import pwd
+
+            home = Path(pwd.getpwuid(effective_uid).pw_dir)
+        except (ImportError, KeyError, OSError, TypeError, ValueError) as exc:
+            raise QualificationFailure("current user system home is unavailable") from exc
+    else:
+        try:
+            home = Path.home()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise QualificationFailure("current user system home is unavailable") from exc
+    if not home.is_absolute():
+        raise QualificationFailure("current user system home is not absolute")
+    try:
+        resolved = home.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise QualificationFailure("current user system home is unavailable") from exc
+    if resolved != home:
+        raise QualificationFailure("current user system home must not be a symlink")
+    return resolved
+
+
+def _validate_keyring_home(keyring_home: Path | None) -> Path:
+    """Validate the one system directory allowed for the Codex keyring bridge."""
+
+    if keyring_home is None:
+        raise QualificationFailure("Codex keyring home is required for the keyring bridge")
+    home = Path(keyring_home)
+    if not home.is_absolute():
+        raise QualificationFailure("Codex keyring home must be absolute")
+    try:
+        metadata = home.lstat()
+    except (OSError, ValueError) as exc:
+        raise QualificationFailure("Codex keyring home must be an existing directory") from exc
+    if stat.S_ISLNK(metadata.st_mode):
+        raise QualificationFailure("Codex keyring home must not be a symlink")
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise QualificationFailure("Codex keyring home must be an existing directory")
+    try:
+        resolved = home.resolve(strict=True)
+        current_home = _current_system_home()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise QualificationFailure("Codex keyring home is unavailable") from exc
+    if resolved != home:
+        raise QualificationFailure("Codex keyring home must not contain a symlink")
+    if resolved != current_home:
+        raise QualificationFailure("Codex keyring home must be the current user system home")
+    try:
+        effective_uid = os.geteuid()
+    except AttributeError:
+        effective_uid = None
+    if effective_uid is not None and metadata.st_uid != effective_uid:
+        raise QualificationFailure("Codex keyring home must be owned by the current user")
+    return resolved
+
+
 def _host_environment(
     codex_binary: Path,
     profile_root: Path,
@@ -214,6 +310,7 @@ def _host_environment(
     *,
     runtime_executable: Path | None = None,
     inherit_existing_login: bool = False,
+    keyring_home: Path | None = None,
 ) -> dict[str, str]:
     """Build a closed Host environment without consulting ambient login state.
 
@@ -228,6 +325,9 @@ def _host_environment(
             "ambient Codex login inheritance is disabled; use the owner credential broker"
         )
     profile_root = _validate_profile_root(profile_root, allow_create=True)
+    validated_keyring_home = (
+        _validate_keyring_home(keyring_home) if keyring_home is not None else None
+    )
     roots = _profile_roots(profile_root)
     for root in set(roots.values()):
         if root.is_symlink():
@@ -245,6 +345,8 @@ def _host_environment(
             root.chmod(0o700)
     environment = {name: value for name in _HOST_ENV_NAMES if (value := os.environ.get(name))}
     environment.update({name: str(root) for name, root in roots.items()})
+    if validated_keyring_home is not None:
+        environment["HOME"] = str(validated_keyring_home)
     path_entries = [str(codex_binary.parent)]
     if runtime_executable is not None:
         path_entries.insert(0, str(Path(runtime_executable).parent))
@@ -260,20 +362,26 @@ def _isolation_receipt(
     environment: Mapping[str, str],
     *,
     inherit_existing_login: bool = False,
+    keyring_home: Path | None = None,
 ) -> dict[str, Any]:
     if inherit_existing_login:
         raise QualificationFailure(
             "ambient Codex login inheritance is disabled; use the owner credential broker"
         )
-    expected = {
-        "HOME": profile_root / "home",
-        "CODEX_HOME": profile_root / "codex",
-        "XDG_CONFIG_HOME": profile_root / "xdg-config",
-        "XDG_DATA_HOME": profile_root / "xdg-data",
-    }
+    expected = _profile_roots(profile_root)
+    if keyring_home is not None:
+        expected = {name: path for name, path in expected.items() if name != "HOME"}
     if any(environment.get(name) != str(path) for name, path in expected.items()):
         raise QualificationFailure("Codex temporary profile isolation is inconsistent")
-    return isolation_receipt(host="codex")
+    if keyring_home is None:
+        expected_home = profile_root / "home"
+        if environment.get("HOME") != str(expected_home):
+            raise QualificationFailure("Codex temporary profile isolation is inconsistent")
+        return isolation_receipt(host="codex")
+    validated_keyring_home = _validate_keyring_home(keyring_home)
+    if environment.get("HOME") != str(validated_keyring_home):
+        raise QualificationFailure("Codex keyring bridge environment is inconsistent")
+    return isolation_receipt(host="codex", keyring_bridge=True)
 
 
 def _closed_mcp_wrapper_source(runtime_python: Path, executable: Path, vault: Path) -> str:
@@ -2440,7 +2548,7 @@ def _run_scenario(
     return run
 
 
-def _validate_codex_binary(binary: Path) -> Path:
+def _validate_codex_binary(binary: Path, *, repository: Path | None = None) -> Path:
     """Validate and return the exact static Codex binary supplied by the owner.
 
     The binary is used only for static version/hash attestation.  All login,
@@ -2454,13 +2562,25 @@ def _validate_codex_binary(binary: Path) -> Path:
         details = path.lstat()
     except OSError as exc:
         raise QualificationFailure("Codex binary is unavailable") from exc
-    if not stat.S_ISREG(details.st_mode) or path.is_symlink() or not os.access(path, os.X_OK):
+    if (
+        not stat.S_ISREG(details.st_mode)
+        or path.is_symlink()
+        or details.st_nlink != 1
+        or not os.access(path, os.X_OK)
+    ):
         raise QualificationFailure("Codex binary must be a regular executable")
     try:
-        path.resolve(strict=True)
+        resolved = path.resolve(strict=True)
+        repository_path = (repository or _repository()).resolve(strict=True)
     except (OSError, RuntimeError, ValueError) as exc:
         raise QualificationFailure("Codex binary is unavailable") from exc
-    return path
+    try:
+        resolved.relative_to(repository_path)
+    except ValueError:
+        pass
+    else:
+        raise QualificationFailure("Codex binary must be repository-external")
+    return resolved
 
 
 def _validate_owner_broker_launcher(
@@ -2468,6 +2588,7 @@ def _validate_owner_broker_launcher(
     *,
     host_binary: Path,
     repository: Path | None = None,
+    expected_broker_sha256: str | None = None,
 ) -> str:
     """Validate an external owner-only broker without reading credentials."""
 
@@ -2505,6 +2626,8 @@ def _validate_owner_broker_launcher(
         raise QualificationFailure("Codex credential broker launcher is unavailable") from exc
     if launcher_sha256 == binary_sha256:
         raise QualificationFailure("Codex credential broker launcher is not process-separated")
+    if expected_broker_sha256 is not None and launcher_sha256 != expected_broker_sha256:
+        raise QualificationFailure("Codex credential broker launcher hash mismatch")
     return launcher_sha256
 
 
@@ -2599,6 +2722,7 @@ def _codex_authentication_receipt(
 def _validate_codex_version(
     completed: Any,
     *,
+    expected_version: str = HISTORICAL_CODEX_VERSION_FIXTURE,
     canaries: Mapping[str, str] = (),
 ) -> str:
     """Accept only the exact pinned Codex CLI version on stdout."""
@@ -2619,9 +2743,9 @@ def _validate_codex_version(
         stderr = b""
     version_bytes = stdout + stderr
     expected_stdout = {
-        CODEX_VERSION.encode("utf-8"),
-        (CODEX_VERSION + "\n").encode("utf-8"),
-        (CODEX_VERSION + "\r\n").encode("utf-8"),
+        expected_version.encode("utf-8"),
+        (expected_version + "\n").encode("utf-8"),
+        (expected_version + "\r\n").encode("utf-8"),
     }
     canary_values = tuple(
         value
@@ -2635,7 +2759,7 @@ def _validate_codex_version(
         or any(value.encode("utf-8") in version_bytes for value in canary_values)
     ):
         raise QualificationFailure("Codex version preflight failed")
-    return CODEX_VERSION
+    return expected_version
 
 
 def _configured_mcp_server_names(value: Any) -> list[str]:
@@ -3057,7 +3181,42 @@ def _prepare_codex_diagnostic(
     }
 
 
-def execute(
+def _retain_codex_failed_preflight(
+    *,
+    output_dir: Path,
+    codex_binary: Path,
+    codex_launcher: Path,
+    expected_broker_sha256: str | None,
+    host_identity: Mapping[str, Any] | None,
+    error: BaseException,
+) -> None:
+    target = Path(output_dir).resolve(strict=False)
+    receipt_path = target / host_preflight_receipt.RECEIPT_FILENAME
+    if receipt_path.exists() or not target.is_dir() or target.is_symlink():
+        return
+    expected_version = "unknown"
+    if isinstance(host_identity, Mapping):
+        with suppress(
+            KeyError,
+            TypeError,
+            host_preflight_receipt.HostIdentityValidationError,
+        ):
+            expected_version = host_preflight_receipt.host_binary_identity(
+                host_identity, "codex"
+            )["version"]
+    failed = host_preflight_receipt.failed_receipt(
+        host_name="codex",
+        host_version=expected_version,
+        host_binary=Path(codex_binary),
+        broker_path=Path(codex_launcher),
+        repository=_repository(),
+        expected_broker_sha256=expected_broker_sha256,
+        error=error,
+    )
+    host_preflight_receipt.write_receipt(target, failed)
+
+
+def _execute_codex(
     *,
     candidate_wheel: Path,
     deeplaw_executable: Path,
@@ -3066,31 +3225,86 @@ def execute(
     human_gold_path: Path | None,
     codex_binary: Path,
     codex_launcher: Path,
+    host_identity_input: Path | None = None,
+    expected_broker_sha256: str | None = None,
+    candidate_binding_input: Path | None = None,
+    run_id: str | None = None,
+    evidence_run_id: int | None = None,
+    qualification_run_id: int | None = None,
+    keyring_home: Path | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
-    """Execute current qualification or one claim-ineligible diagnostic.
+    """Execute the current qualification mode; diagnostic requests fail closed.
 
     This function intentionally performs no authentication-file access.  Every
     login, MCP, and App Server call is routed through the explicitly supplied
     external owner-only broker; the runner receives neither the owner's
-    HOME/CODEX_HOME nor any authentication path/value.
+    CODEX_HOME nor any authentication path/value.  When supplied, the
+    keyring bridge permits only the current user's system ``HOME`` for the
+    Codex Host process; all other profile roots remain explicit and closed.
+
+    Qualification may proceed only after the exact owner-external broker proves
+    a zero-model same-process, same-connection SessionStart preflight. Diagnostic
+    mode remains unavailable. Missing or rejected control input fails before
+    candidate preparation or Host execution.
     """
 
-    repository = _repository()
-    profile_root = _validate_profile_root(profile_root, repository=repository)
     if mode not in {"qualification", "diagnostic"}:
         raise QualificationFailure("Codex execution mode is invalid")
     if human_gold_path is not None:
         raise QualificationFailure(
             "Codex candidate runner must not receive Human Gold or reference labels"
         )
-    codex_binary = _validate_codex_binary(codex_binary)
-    codex_launcher_sha256 = _validate_owner_broker_launcher(
-        codex_launcher,
-        host_binary=codex_binary,
-        repository=repository,
+    if mode == "qualification":
+        if (
+            host_identity_input is None
+            or expected_broker_sha256 is None
+            or candidate_binding_input is None
+            or run_id is None
+            or evidence_run_id is None
+            or qualification_run_id is None
+        ):
+            raise QualificationFailure(
+                "Codex owner-external same-connection Hook session correlation "
+                "control input is unavailable; formal Host/model execution remains "
+                "not_executed"
+            )
+        try:
+            preflight = run_codex_owner_external_zero_model_preflight(
+                candidate_binding_input=candidate_binding_input,
+                candidate_wheel=candidate_wheel,
+                host_identity_input=host_identity_input,
+                codex_binary=codex_binary,
+                codex_broker=codex_launcher,
+                expected_broker_sha256=expected_broker_sha256,
+                task_case="continuity",
+                run_id=run_id,
+                evidence_run_id=evidence_run_id,
+                qualification_run_id=qualification_run_id,
+                repository=_repository(),
+            )
+        except Exception as exc:
+            raise QualificationFailure(
+                "Codex owner-external zero-model preflight failed closed"
+            ) from exc
+        if (
+            preflight.get("status") != "passed"
+            or preflight.get("evidence_class") != "zero_model_preflight_only"
+            or preflight.get("formal_admission") is not False
+        ):
+            raise QualificationFailure(
+                "Codex owner-external zero-model preflight was not admitted"
+            )
+    if mode == "diagnostic":
+        raise QualificationFailure(
+            "Codex public Hook lacks an independent owner-bound Host session identity; "
+            "diagnostic execution is unavailable"
+        )
+    repository = _repository()
+    profile_root = _validate_profile_root(profile_root, repository=repository)
+    validated_keyring_home = (
+        _validate_keyring_home(keyring_home) if keyring_home is not None else None
     )
-    codex_launcher = Path(codex_launcher)
     orchestrator = QualificationOrchestrator(
         host="codex",
         repository=repository,
@@ -3106,6 +3320,55 @@ def execute(
     }
 
     selected_output.mkdir(parents=True)
+    host_identity: Mapping[str, Any] | None = None
+    expected_version = HISTORICAL_CODEX_VERSION_FIXTURE
+    if host_identity_input is None:
+        if mode == "qualification":
+            raise QualificationFailure(
+                "Codex formal qualification requires the repository-external Host identity input"
+            )
+    else:
+        try:
+            host_identity = host_preflight_receipt.load_host_identity_input(
+                host_identity_input, repository=repository
+            )
+            expected_version = host_preflight_receipt.host_binary_identity(
+                host_identity, "codex"
+            )["version"]
+        except (host_preflight_receipt.HostIdentityValidationError, OSError, ValueError) as exc:
+            raise QualificationFailure("Codex Host identity input was rejected") from exc
+    if host_identity is None:
+        # Keep the diagnostic/unit seam compatible with its intentionally
+        # lightweight binary stub.  Formal qualification always takes the
+        # identity-bound branch below.
+        codex_binary = _validate_codex_binary(codex_binary)
+    else:
+        codex_binary = _validate_codex_binary(codex_binary, repository=repository)
+    if host_identity is not None:
+        try:
+            execution_probe = host_preflight_receipt.inspect_host_binary(
+                codex_binary,
+                host="codex",
+                identity=host_identity,
+                repository=repository,
+            )
+        except (
+            host_preflight_receipt.HostIdentityValidationError,
+            OSError,
+            ValueError,
+        ) as exc:
+            raise QualificationFailure(
+                "Codex executable did not match the frozen Host identity"
+            ) from exc
+        if execution_probe.get("source_symlink") is not False:
+            raise QualificationFailure("Codex executable selector must not be a symlink")
+    codex_launcher_sha256 = _validate_owner_broker_launcher(
+        codex_launcher,
+        host_binary=codex_binary,
+        repository=repository,
+        expected_broker_sha256=expected_broker_sha256,
+    )
+    codex_launcher = Path(codex_launcher)
     runs: list[dict[str, Any]] = []
     lifecycle_methods: set[str] = set()
     lifecycle_requests: set[str] = set()
@@ -3146,17 +3409,29 @@ def execute(
         if mode == "qualification"
         else [("development_diagnostic", "cold_start")]
     )
-    with tempfile.TemporaryDirectory(prefix="deeplaw-pass17-") as temporary:
+    with _PreflightTemporaryDirectory(
+        prefix="deeplaw-pass17-",
+        on_error=lambda error: _retain_codex_failed_preflight(
+            output_dir=selected_output,
+            codex_binary=codex_binary,
+            codex_launcher=codex_launcher,
+            expected_broker_sha256=expected_broker_sha256,
+            host_identity=host_identity,
+            error=error,
+        ),
+    ) as temporary:
         work_dir = Path(temporary)
         host_environment = _host_environment(
             codex_binary,
             profile_root,
             canaries,
             runtime_executable=runtime["_executable"],
+            keyring_home=validated_keyring_home,
         )
         host_isolation = _isolation_receipt(
             profile_root,
             host_environment,
+            keyring_home=validated_keyring_home,
         )
         plugin_receipt = _install_candidate_codex_plugin(
             runtime_python=runtime["_runtime_python"],
@@ -3176,7 +3451,11 @@ def execute(
             timeout=30,
             env=host_environment,
         )
-        codex_version = _validate_codex_version(version_process, canaries=canaries)
+        codex_version = _validate_codex_version(
+            version_process,
+            expected_version=expected_version,
+            canaries=canaries,
+        )
         authentication_receipt = _codex_authentication_receipt(
             codex_launcher,
             host_environment,
@@ -3261,6 +3540,28 @@ def execute(
             inventory_client.close()
             if inventory_client.secret_leak:
                 security["secret_leak"] = True
+
+        broker_source = host_preflight_receipt.inspect_broker_source(
+            codex_launcher,
+            repository=repository,
+            host_binary=codex_binary,
+            expected_sha256=expected_broker_sha256,
+        )
+        if broker_source.get("failure_reason_code") is not None:
+            raise QualificationFailure("Codex broker source preflight failed")
+        codex_preflight = host_preflight_receipt.build_receipt(
+            host={
+                "name": "codex",
+                "version": codex_version,
+                "sha256": host_preflight_receipt.host_binary_sha256(codex_binary),
+            },
+            broker_source=broker_source,
+            status="passed",
+            stage="complete",
+            reason_code="preflight_passed",
+            check_count=5,
+        )
+        host_preflight_receipt.write_receipt(selected_output, codex_preflight)
 
         for index, (reported_scenario, engine_scenario) in enumerate(run_specs, 1):
             state = states[reported_scenario]
@@ -3542,7 +3843,7 @@ def execute(
             "python_version": platform.python_version(),
             "isolation": host_isolation,
         },
-        host_attestation=host_attestation,
+            host_attestation=host_attestation,
         tool_schema=tool_schema,
         runs=runs,
         lifecycle={
@@ -3608,6 +3909,62 @@ def execute(
     return report
 
 
+def execute(
+    *,
+    candidate_wheel: Path,
+    deeplaw_executable: Path,
+    output_dir: Path,
+    profile_root: Path,
+    human_gold_path: Path | None,
+    codex_binary: Path,
+    codex_launcher: Path,
+    host_identity_input: Path | None = None,
+    expected_broker_sha256: str | None = None,
+    candidate_binding_input: Path | None = None,
+    run_id: str | None = None,
+    evidence_run_id: int | None = None,
+    qualification_run_id: int | None = None,
+    keyring_home: Path | None = None,
+    mode: str = "qualification",
+) -> dict[str, Any]:
+    """Run Codex qualification while retaining a safe fail-before receipt."""
+
+    try:
+        return _execute_codex(
+            candidate_wheel=candidate_wheel,
+            deeplaw_executable=deeplaw_executable,
+            output_dir=output_dir,
+            profile_root=profile_root,
+            human_gold_path=human_gold_path,
+            codex_binary=codex_binary,
+            codex_launcher=codex_launcher,
+            host_identity_input=host_identity_input,
+            expected_broker_sha256=expected_broker_sha256,
+            candidate_binding_input=candidate_binding_input,
+            run_id=run_id,
+            evidence_run_id=evidence_run_id,
+            qualification_run_id=qualification_run_id,
+            keyring_home=keyring_home,
+            mode=mode,
+        )
+    except BaseException as original:
+        try:
+            _retain_codex_failed_preflight(
+                output_dir=Path(output_dir),
+                codex_binary=Path(codex_binary),
+                codex_launcher=Path(codex_launcher),
+                expected_broker_sha256=expected_broker_sha256,
+                host_identity=None,
+                error=original,
+            )
+        except BaseException as receipt_error:
+            original.add_note(
+                "Host preflight receipt was not retained: "
+                f"{type(receipt_error).__name__}"
+            )
+        raise
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run current Codex Host receipt workflow")
     parser.add_argument("--mode", choices=("qualification", "diagnostic"), default="qualification")
@@ -3618,11 +3975,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--human-gold")
     parser.add_argument("--codex-binary", required=True)
     parser.add_argument("--codex-launcher", required=True)
+    parser.add_argument("--host-identity-input")
+    parser.add_argument("--expected-broker-sha256")
+    parser.add_argument("--candidate-binding-input")
+    parser.add_argument("--run-id")
+    parser.add_argument("--evidence-run-id", type=int)
+    parser.add_argument("--qualification-run-id", type=int)
+    parser.add_argument(
+        "--keyring-home",
+        help="current user's real system home used only by the Codex keyring bridge",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if not args.keyring_home:
+        raise QualificationFailure(
+            "Codex keyring home is required; pass --keyring-home explicitly"
+        )
     report = execute(
         candidate_wheel=Path(args.candidate_wheel),
         deeplaw_executable=Path(args.deeplaw_executable),
@@ -3631,6 +4002,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         human_gold_path=Path(args.human_gold) if args.human_gold else None,
         codex_binary=Path(args.codex_binary),
         codex_launcher=Path(args.codex_launcher),
+        host_identity_input=Path(args.host_identity_input) if args.host_identity_input else None,
+        expected_broker_sha256=args.expected_broker_sha256,
+        candidate_binding_input=(
+            Path(args.candidate_binding_input) if args.candidate_binding_input else None
+        ),
+        run_id=args.run_id,
+        evidence_run_id=args.evidence_run_id,
+        qualification_run_id=args.qualification_run_id,
+        keyring_home=Path(args.keyring_home),
         mode=args.mode,
     )
     print(canonical_json(report))

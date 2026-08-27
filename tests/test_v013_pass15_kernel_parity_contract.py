@@ -10,9 +10,9 @@ from jsonschema import Draft202012Validator
 from benchmarks.release import release_policy
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v8.json"
+CLASSIFICATION = REPOSITORY / "benchmarks/release/v013-gate-classification-v9.json"
 CLASSIFICATION_SCHEMA = (
-    REPOSITORY / "contracts/v013-release-gate-classification.v8.schema.json"
+    REPOSITORY / "contracts/v013-release-gate-classification.v9.schema.json"
 )
 
 
@@ -50,7 +50,7 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
     gates = {item["gate_id"]: item for item in classification["gates"]}  # type: ignore[index]
     for gate_id in ("codex", "opencode"):
         assert gates[gate_id]["accepted_input_schema_versions"] == [
-            "deeplaw.typed-qualification-evidence/v2"
+            "deeplaw.typed-qualification-evidence/v3"
         ]
         assert gates[gate_id]["minimum_distinct_run_count"] == 3
         assert gates[gate_id]["required_unique_dimensions"] == [
@@ -62,8 +62,8 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
         ]
     assert gates["codex"]["constraints"] == {
         "host": "codex",
-        "tool_version": "codex-cli 0.148.0-alpha.15",
-        "binary_sha256": "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7",
+        "tool_version": None,
+        "binary_sha256": None,
         "source_commit": None,
         "config_selector": None,
         "model_id": "gpt-5.6-luna",
@@ -71,7 +71,9 @@ def test_active_host_gates_use_the_shared_current_continuity_contract() -> None:
         "reasoning_effort": "max",
         "argv_prefix": ["codex", "app-server", "--stdio"],
     }
-    assert gates["opencode"]["constraints"]["tool_version"] == "1.18.16"
+    assert gates["opencode"]["constraints"]["tool_version"] is None
+    assert gates["opencode"]["constraints"]["binary_sha256"] is None
+    assert gates["opencode"]["constraints"]["source_commit"] is None
 
 
 def test_living_wiki_core_is_not_bundled_with_optional_graph_analytics() -> None:
@@ -104,11 +106,11 @@ def test_readme_en_describes_a_source_candidate_not_a_stable_core() -> None:
     assert "Local regressions, mocks, dry-runs, old reports" in readme
 
 
-def test_prd_132_uses_current_status_sources_and_freezes_kernel_scope() -> None:
+def test_prd_133_uses_current_status_sources_and_freezes_kernel_scope() -> None:
     prd = (REPOSITORY / "docs/PRODUCT_REQUIREMENTS.md").read_text(encoding="utf-8")
     prose = " ".join(prd.split())
-    assert "PRD revision: **1.3.2**" in prd
-    assert "Reviewed: **2026-08-17**" in prd
+    assert "PRD revision: **1.3.3**" in prd
+    assert "Reviewed: **2026-08-21**" in prd
     assert "DeepLaw Kernel distribution" in prd
     assert "A first-party GUI is not included in the v0.13 release scope" in prose
     assert "minimum ecosystem capability parity" in prd
@@ -151,26 +153,25 @@ def test_frozen_behavior_map_claim_boundary_and_candidate_status_are_explicit() 
     )
     reuse = (REPOSITORY / "docs/UPSTREAM_REUSE.md").read_text(encoding="utf-8")
     notices = (REPOSITORY / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    protocol_prose = " ".join(protocol.split())
     for required in (
-        "630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc",
-        "cb45f26649a7500e0bdb5dd0b8f0412e9c1daf4d",
+        "f078160e248f889d66ee37dc0d431854f50d3294c",
+        "367a91416477c90bbfae766dc06add3de6ae75a7",
+        "cc1744324150c632416857c98964f87b1574a5fc",
+        "350eec8a284e159b2e4cfd068d808cbf203a6cc5",
         "Markdown/Wikilink",
         "wrong merge",
         "backlinks/outlinks",
-        "LLM Wiki behavior category",
-        "cold/new",
-        "resume/fork/concurrent-worktree",
-        "compaction/forget",
+        "Continuity",
+        "Living Wiki",
+        "Professional Evidence",
         "First Correct Action",
         "Decision Preservation",
         "Wrong-State Admission",
         "actual Provider bytes/tokens",
     ):
-        assert required in protocol
-    assert (
-        "OpenWiki released v0.3.1 / `630eb9ec3fa22a4bed2d347fc3ea3a6a3bd22abc`"
-        " (peeled commit)"
-    ) in protocol
+        assert required in protocol_prose
+    assert "OpenWiki / `f078160e248f889d66ee37dc0d431854f50d3294c`" in protocol
     for reviewed in (research, reuse, notices):
         assert "7531d615216e8cbccf464f66cfbbae3668871c84" in reviewed
         assert "package-version-0.3.1 review snapshot" in reviewed
@@ -179,11 +180,8 @@ def test_frozen_behavior_map_claim_boundary_and_candidate_status_are_explicit() 
         "DeepLaw meets the frozen v0.13 Kernel compatibility baseline defined by the "
         "qualification protocol."
     ) in " ".join(protocol.split())
-    assert "Active gate classification: `v8`" in traceability
-    assert (
-        "Active qualification profile: `machine_evaluated_no_human_attestation`"
-        in traceability
-    )
+    assert "Active gate classification: `v9`" in traceability
+    assert "Active qualification profile: `kernel_release_core`" in traceability
     assert "public-seam, source-free development closure runner" in traceability
     assert "knowledge-support input v7/output v6" in traceability
     assert "Caller-authored PASS values" in traceability

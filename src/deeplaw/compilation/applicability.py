@@ -30,6 +30,7 @@ MAX_RUNTIME_FRAGMENTS = 10_000
 MAX_RUNTIME_RELATIONS = 10_000
 MAX_RUNTIME_REFS = 256
 MAX_RUNTIME_SOURCE_TEXT_CHARS = 4 * 1024 * 1024
+MAX_DUTY_BASIS_REFS = 16
 
 _DATE_SIGNAL = re.compile(r"\b(?:19|20)\d{2}[-/.]\d{1,2}(?:[-/.]\d{1,2})?\b")
 _QUESTION_SIGNAL = re.compile(r"(?:\?|\bwho\b|\bwhat\b|\bwhen\b|\bwhere\b|\bwhy\b|\bhow\b)", re.I)
@@ -545,7 +546,12 @@ def _basis(rule_id: str, facts: dict[str, Any], refs: list[str], *, reason: str)
         "affected_synthesis_count": facts["affected_syntheses"]["count"],
         "truncated": facts["truncated"],
     }
-    stable_refs, _ = _bounded_strings(sorted(set(refs)))
+    # Fifteen duty reports share one 64 KiB Provider-visible finalization
+    # budget.  The frozen local facts remain inventory-hash-bound; each duty
+    # receives a deterministic sample rather than duplicating every ref.
+    stable_refs, _ = _bounded_strings(
+        sorted(set(refs)), maximum=MAX_DUTY_BASIS_REFS
+    )
     return {
         "rule_id": rule_id,
         "facts": closed_facts,

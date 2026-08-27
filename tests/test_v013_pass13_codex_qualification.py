@@ -75,6 +75,106 @@ def test_pass13_runner_uses_a_closed_temporary_host_profile(
     assert str(tmp_path) not in json.dumps(receipt, sort_keys=True)
 
 
+def test_keyring_bridge_requires_the_real_current_user_home(tmp_path: Path) -> None:
+    with pytest.raises(qualification.QualificationFailure, match="keyring home is required"):
+        qualification._validate_keyring_home(None)
+
+    wrong_home = tmp_path / "wrong-home"
+    wrong_home.mkdir()
+    with pytest.raises(qualification.QualificationFailure, match="current user system home"):
+        qualification._validate_keyring_home(wrong_home)
+
+
+def test_cli_requires_keyring_home_before_execution(tmp_path: Path) -> None:
+    with pytest.raises(qualification.QualificationFailure, match="keyring home is required"):
+        qualification.main(
+            [
+                "--mode",
+                "diagnostic",
+                "--candidate-wheel",
+                str(tmp_path / "candidate.whl"),
+                "--deeplaw-executable",
+                str(tmp_path / "deeplaw"),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--profile-root",
+                str(tmp_path / "profile"),
+                "--codex-binary",
+                str(tmp_path / "codex"),
+                "--codex-launcher",
+                str(tmp_path / "owner-broker"),
+            ]
+        )
+
+
+def test_keyring_bridge_keeps_codex_profile_roots_closed_and_receipt_path_free(
+    tmp_path: Path,
+) -> None:
+    profile = tmp_path / "profile"
+    keyring_home = qualification._current_system_home()
+    parent_home = os.environ.get("HOME")
+    parent_codex_home = os.environ.get("CODEX_HOME")
+    environment = qualification._host_environment(
+        Path("/opt/codex"),
+        profile,
+        keyring_home=keyring_home,
+    )
+
+    assert Path(environment["HOME"]) == keyring_home
+    assert Path(environment["CODEX_HOME"]) == profile / "codex"
+    assert Path(environment["XDG_CONFIG_HOME"]) == profile / "xdg-config"
+    assert Path(environment["XDG_DATA_HOME"]) == profile / "xdg-data"
+    receipt = qualification._isolation_receipt(
+        profile,
+        environment,
+        keyring_home=keyring_home,
+    )
+    assert receipt == {
+        "profile_kind": "temporary_closed_with_keyring_bridge",
+        "home_isolated": False,
+        "codex_home_isolated": True,
+        "xdg_config_home_isolated": True,
+        "xdg_data_home_isolated": True,
+        "ambient_host_state_inherited": True,
+        "ambient_plugins_inherited": False,
+        "ambient_apps_inherited": False,
+        "ambient_hooks_inherited": False,
+        "secret_values_retained": False,
+        "auth_class": "chatgpt_login",
+    }
+    assert str(profile) not in json.dumps(receipt, sort_keys=True)
+    assert os.environ.get("HOME") == parent_home
+    assert os.environ.get("CODEX_HOME") == parent_codex_home
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["XDG_CACHE_HOME", "XDG_STATE_HOME", "TMPDIR", "TMP", "TEMP", "USERPROFILE"],
+)
+def test_keyring_bridge_receipt_rejects_ambient_profile_root(
+    tmp_path: Path,
+    name: str,
+) -> None:
+    profile = tmp_path / "profile"
+    keyring_home = qualification._current_system_home()
+    environment = qualification._host_environment(
+        Path("/opt/codex"),
+        profile,
+        keyring_home=keyring_home,
+    )
+    environment[name] = str(keyring_home)
+
+    with pytest.raises(
+        qualification.QualificationFailure,
+        match="temporary profile isolation is inconsistent",
+    ):
+        qualification._isolation_receipt(
+            profile,
+            environment,
+            keyring_home=keyring_home,
+        )
+
+
 def test_app_server_argv_is_read_only_and_exposes_one_mcp_tool(tmp_path: Path) -> None:
     codex_binary = Path("/opt/codex")
     argv = qualification._app_server_argv(
@@ -164,7 +264,7 @@ def test_codex_login_receipt_hashes_status_without_reading_auth_file(
         "raw_sha256": qualification._sha256(Completed.stdout),
         "raw_bytes": len(Completed.stdout),
     }
-    assert calls == [["/opt/owner-broker", "login", "status"]]
+    assert calls == [[str(Path("/opt/owner-broker")), "login", "status"]]
 
 
 def test_owner_broker_launcher_is_external_owner_only_and_process_separated(
@@ -185,14 +285,15 @@ def test_owner_broker_launcher_is_external_owner_only_and_process_separated(
         repository=repository,
     ) == qualification._sha256_file(launcher)
 
-    launcher.chmod(0o750)
-    with pytest.raises(qualification.QualificationFailure, match="owner-only"):
-        qualification._validate_owner_broker_launcher(
-            launcher,
-            host_binary=host,
-            repository=repository,
-        )
-    launcher.chmod(0o700)
+    if os.name != "nt":
+        launcher.chmod(0o750)
+        with pytest.raises(qualification.QualificationFailure, match="owner-only"):
+            qualification._validate_owner_broker_launcher(
+                launcher,
+                host_binary=host,
+                repository=repository,
+            )
+        launcher.chmod(0o700)
     launcher.write_bytes(host.read_bytes())
     with pytest.raises(qualification.QualificationFailure, match="process-separated"):
         qualification._validate_owner_broker_launcher(
@@ -232,6 +333,122 @@ def test_owner_broker_launcher_symlink_is_rejected(tmp_path: Path) -> None:
             host_binary=host,
             repository=repository,
         )
+
+
+def test_all_modes_fail_before_candidate_or_host_without_v2_correlation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    entered_candidate = False
+
+    def forbidden_prepare(_self: object) -> None:
+        nonlocal entered_candidate
+        entered_candidate = True
+        raise AssertionError("candidate preparation must remain unreachable")
+
+    monkeypatch.setattr(
+        qualification.QualificationOrchestrator,
+        "prepare_candidate",
+        forbidden_prepare,
+    )
+    for mode in ("qualification", "diagnostic"):
+        with pytest.raises(qualification.QualificationFailure, match="unavailable"):
+            qualification._execute_codex(
+                candidate_wheel=tmp_path / "candidate.whl",
+                deeplaw_executable=tmp_path / "deeplaw",
+                output_dir=tmp_path / "output",
+                profile_root=tmp_path / "profile",
+                human_gold_path=None,
+                codex_binary=tmp_path / "codex",
+                codex_launcher=tmp_path / "owner-broker",
+                mode=mode,
+            )
+    assert entered_candidate is False
+    order: list[str] = []
+
+    def observed_preflight(**kwargs: object) -> dict[str, object]:
+        order.append("owner_external_preflight")
+        assert kwargs["task_case"] == "continuity"
+        assert kwargs["run_id"] == "codex-continuity-101"
+        return {
+            "status": "passed",
+            "evidence_class": "zero_model_preflight_only",
+            "formal_admission": False,
+        }
+
+    def reached_candidate(_self: object) -> None:
+        order.append("candidate_preparation")
+        raise RuntimeError("candidate sentinel")
+
+    monkeypatch.setattr(
+        qualification,
+        "run_codex_owner_external_zero_model_preflight",
+        observed_preflight,
+    )
+    monkeypatch.setattr(
+        qualification.QualificationOrchestrator,
+        "prepare_candidate",
+        reached_candidate,
+    )
+    (tmp_path / "profile").mkdir()
+    with pytest.raises(RuntimeError, match="candidate sentinel"):
+        qualification._execute_codex(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "output",
+            profile_root=tmp_path / "profile",
+            human_gold_path=None,
+            codex_binary=tmp_path / "codex",
+            codex_launcher=tmp_path / "owner-broker",
+            host_identity_input=tmp_path / "host-identity.json",
+            expected_broker_sha256="a" * 64,
+            candidate_binding_input=tmp_path / "frozen-active-qualification.json",
+            run_id="codex-continuity-101",
+            evidence_run_id=101,
+            qualification_run_id=202,
+            mode="qualification",
+        )
+    assert order == ["owner_external_preflight", "candidate_preparation"]
+    entered_candidate = False
+
+    def rejected_preflight(**_kwargs: object) -> dict[str, object]:
+        raise ValueError("stale broker record")
+
+    def forbidden_prepare(_self: object) -> None:
+        nonlocal entered_candidate
+        entered_candidate = True
+        raise AssertionError("candidate preparation must remain unreachable")
+
+    monkeypatch.setattr(
+        qualification,
+        "run_codex_owner_external_zero_model_preflight",
+        rejected_preflight,
+    )
+    monkeypatch.setattr(
+        qualification.QualificationOrchestrator,
+        "prepare_candidate",
+        forbidden_prepare,
+    )
+    with pytest.raises(
+        qualification.QualificationFailure,
+        match="zero-model preflight failed closed",
+    ):
+        qualification._execute_codex(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "output",
+            profile_root=tmp_path / "profile",
+            human_gold_path=None,
+            codex_binary=tmp_path / "codex",
+            codex_launcher=tmp_path / "owner-broker",
+            host_identity_input=tmp_path / "host-identity.json",
+            expected_broker_sha256="a" * 64,
+            candidate_binding_input=tmp_path / "frozen-active-qualification.json",
+            run_id="codex-continuity-101",
+            evidence_run_id=101,
+            qualification_run_id=202,
+            mode="qualification",
+        )
+    assert entered_candidate is False
 
 
 def test_returned_model_identity_does_not_promote_request_model_pin() -> None:
@@ -364,7 +581,7 @@ def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
         },
         host_attestation={
             **qualification._placeholder_attestation(),
-            "version": qualification.CODEX_VERSION,
+            "version": qualification.HISTORICAL_CODEX_VERSION_FIXTURE,
         },
         tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
             [knowledge_tool_definition(autonomous=True)]

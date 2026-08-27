@@ -3,14 +3,23 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
-from benchmarks.hosts import pass13_evidence
+from benchmarks.hosts import (
+    host_process_receipt_v2,
+    pass13_evidence,
+)
 from benchmarks.hosts import (
     run_pass13_opencode_continuity_qualification as runner,
 )
+from benchmarks.release.kernel_qualification_bundle_v1 import host_identity_sha256
 from deeplaw.task_context import build_task_context_binding
 
 _TASK_BINDING = build_task_context_binding(
@@ -21,6 +30,170 @@ _TASK_BINDING = build_task_context_binding(
     base_revision="5" * 40,
     dirty_state_sha256="6" * 64,
 )
+
+_REPOSITORY = Path(__file__).resolve().parents[1]
+_HOST_TASK_CASES = _REPOSITORY / "benchmarks/hosts/v013-host-task-cases-v1.json"
+_GATE_CLASSIFICATION = (
+    _REPOSITORY / "benchmarks/release/v013-gate-classification-v9.json"
+)
+
+_ZERO_MODEL_CANDIDATE = {
+    "commit": "1" * 40,
+    "tree": "2" * 40,
+    "lock_sha256": "3" * 64,
+    "wheel_sha256": "4" * 64,
+    "sdist_sha256": "5" * 64,
+}
+_ZERO_MODEL_RUN_BINDING = {
+    "evidence_run_id": 202,
+    "qualification_run_id": 303,
+}
+_ZERO_MODEL_HOST_ITEM = {
+    "version": "1.18.16",
+    "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+    "config_selector": "deepseek/deepseek-v4-flash",
+    "expected_response_model_id": "deepseek-v4-flash",
+    "executable_sha256": "6" * 64,
+    "package_sha256": "7" * 64,
+    "runtime": "host_bun_runtime_only",
+    "dotenv_policy": "owner_only_external_strict_parser",
+    "secret_visibility": "forbidden",
+}
+
+
+def _digest(label: str) -> str:
+    return hashlib.sha256(label.encode("utf-8")).hexdigest()
+
+
+def _zero_model_receipt(*, nonce_sha256: str, now: datetime) -> dict[str, Any]:
+    process = _digest("opencode-zero-model-process")
+    child = _digest("opencode-zero-model-child")
+    native = {
+        "event_sequence_sha256": _digest("opencode-zero-model-events"),
+        "session_identity_sha256": child,
+        "lifecycle_record_sha256": _digest("opencode-zero-model-lifecycle"),
+    }
+    proof = {
+        "proof_kind": "opencode_public_fork_route_correlation",
+        "process_identity_sha256": process,
+        "request_method": "POST",
+        "route_observation_sha256": _digest("actual-public-fork-route"),
+        "request_body_sha256": hashlib.sha256(b"{}").hexdigest(),
+        "response_sha256": _digest("actual-fork-response"),
+        "parent_session_sha256": _digest("actual-ingress-parent"),
+        "child_session_sha256": child,
+        "child_plugin_event_sha256": _digest("actual-child-plugin-event"),
+        "child_plugin_session_sha256": child,
+        "native_event_sequence_sha256": native["event_sequence_sha256"],
+        "native_session_identity_sha256": native["session_identity_sha256"],
+        "native_lifecycle_record_sha256": native["lifecycle_record_sha256"],
+        "same_process": True,
+        "actual_route_observed": True,
+    }
+    proof["route_correlation_sha256"] = host_process_receipt_v2.correlation_sha256(
+        {
+            key: proof[key]
+            for key in (
+                "process_identity_sha256",
+                "request_method",
+                "route_observation_sha256",
+                "request_body_sha256",
+                "response_sha256",
+                "parent_session_sha256",
+                "child_session_sha256",
+                "child_plugin_event_sha256",
+                "child_plugin_session_sha256",
+                "native_event_sequence_sha256",
+                "native_session_identity_sha256",
+                "native_lifecycle_record_sha256",
+            )
+        }
+    )
+    issued = now - timedelta(seconds=1)
+    expires = now + timedelta(seconds=30)
+    return host_process_receipt_v2.build_receipt(
+        host="opencode",
+        task_case="continuity",
+        run_id="opencode-zero-model-preflight-202-303",
+        candidate_binding=_ZERO_MODEL_CANDIDATE,
+        run_binding=_ZERO_MODEL_RUN_BINDING,
+        host_binary={"version": "1.18.16", "sha256": "6" * 64},
+        broker_source={
+            "repository_external": True,
+            "owner_only_mode": True,
+            "sha256": "8" * 64,
+        },
+        host_identity_sha256=host_identity_sha256(_ZERO_MODEL_HOST_ITEM),
+        host_identity_source_sha256="9" * 64,
+        process_identity_sha256=process,
+        broker_instance_sha256=_digest("opencode-zero-model-broker-instance"),
+        nonce_sha256=nonce_sha256,
+        issued_at=issued.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        expires_at=expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        validation_reference_time=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        selector_source_symlink=True,
+        execution_target_regular=True,
+        execution_target_single_link=True,
+        status="exited",
+        exit_code=0,
+        native_event_binding=native,
+        proof=proof,
+        isolation={
+            "runner_received_secret": False,
+            "mcp_received_secret": False,
+            "ambient_auth_forwarded_to_mcp": False,
+            "raw_output_retained": False,
+        },
+    )
+
+
+def _zero_model_request(*, nonce_sha256: str, now: datetime) -> dict[str, Any]:
+    return runner.build_opencode_zero_model_preflight_request(
+        task_case="continuity",
+        run_id="opencode-zero-model-preflight-202-303",
+        candidate_binding=_ZERO_MODEL_CANDIDATE,
+        run_binding=_ZERO_MODEL_RUN_BINDING,
+        host_binary={"version": "1.18.16", "sha256": "6" * 64},
+        broker_source_sha256="8" * 64,
+        host_identity_sha256=host_identity_sha256(_ZERO_MODEL_HOST_ITEM),
+        host_identity_source_sha256="9" * 64,
+        nonce_sha256=nonce_sha256,
+        issued_at=(now - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        expires_at=(now + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+
+
+def _zero_model_response(*, nonce_sha256: str, now: datetime) -> dict[str, Any]:
+    return {
+        "schema_version": runner.OPENCODE_BROKER_CONTROL_SCHEMA_VERSION,
+        "operation": "zero_model_preflight",
+        "status": "observed",
+        "observed_sequence": list(runner.OPENCODE_ZERO_MODEL_REQUIRED_SEQUENCE),
+        "forbidden_route_count": 0,
+        "message_route_count": 0,
+        "provider_route_count": 0,
+        "model_route_count": 0,
+        "mcp_route_count": 0,
+        "model_invocation_count": 0,
+        "provider_request_count": 0,
+        "remote_workspace_forward_count": 0,
+        "share_request_count": 0,
+        "ambient_plugin_count": 0,
+        "event_barrier": {
+            "status": "satisfied",
+            "response_release": "after_child_plugin_event",
+            "timed_out": False,
+            "child_plugin_event_count": 1,
+            "event_type": "session.created",
+            "timeout_seconds": 30,
+            "elapsed_ms": 7,
+            "parent_source": "actual_ingress_route",
+        },
+        "host_process_receipt": _zero_model_receipt(
+            nonce_sha256=nonce_sha256,
+            now=now,
+        ),
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -227,11 +400,802 @@ def _preflight_plugin_fixture(tmp_path: Path) -> tuple[Path, dict[str, object], 
     return project, receipt, resolved
 
 
-def test_runner_has_no_dotenv_or_provider_secret_input_surface() -> None:
+def test_runner_routes_owner_dotenv_only_to_external_broker() -> None:
     source = Path(runner.__file__).read_text(encoding="utf-8")
     assert not hasattr(runner, "load_deepseek_key")
     assert "--dotenv" not in source
     assert "load_deepseek_key" not in source
+    assert "--opencode-dotenv" in source
+    assert runner._OWNER_DOTENV_ENV_NAME == "DEEPLAW_OWNER_DOTENV"
+
+
+def _owner_dotenv(path: Path) -> Path:
+    path.write_bytes(b"synthetic owner dotenv metadata fixture")
+    if os.name != "nt":
+        path.chmod(0o600)
+    return path
+
+
+def test_owner_dotenv_metadata_validation_fails_closed(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+
+    with pytest.raises(runner.QualificationError, match="required"):
+        runner._validate_owner_dotenv(None, repository=repository)
+    with pytest.raises(runner.QualificationError, match="absolute"):
+        runner._validate_owner_dotenv(Path(".env"), repository=repository)
+    with pytest.raises(runner.QualificationError, match="unavailable"):
+        runner._validate_owner_dotenv(external / "missing.env", repository=repository)
+
+    target = _owner_dotenv(external / "target.env")
+    symlink = external / "symlink.env"
+    symlink.symlink_to(target)
+    with pytest.raises(runner.QualificationError, match="non-symlink"):
+        runner._validate_owner_dotenv(symlink, repository=repository)
+
+    real_parent = external / "real-parent"
+    real_parent.mkdir()
+    parent_target = _owner_dotenv(real_parent / "parent-target.env")
+    parent_symlink = tmp_path / "parent-link"
+    parent_symlink.symlink_to(real_parent, target_is_directory=True)
+    with pytest.raises(runner.QualificationError, match="parent must not be a symlink"):
+        runner._validate_owner_dotenv(
+            parent_symlink / parent_target.name,
+            repository=repository,
+        )
+
+    hardlink = external / "hardlink.env"
+    try:
+        hardlink.hardlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"hardlink fixture unavailable: {exc}")
+    with pytest.raises(runner.QualificationError, match="one link"):
+        runner._validate_owner_dotenv(hardlink, repository=repository)
+
+    if os.name != "nt":
+        non_owner_only = _owner_dotenv(external / "group-readable.env")
+        non_owner_only.chmod(0o640)
+        with pytest.raises(runner.QualificationError, match="owner-only"):
+            runner._validate_owner_dotenv(non_owner_only, repository=repository)
+
+    inside_repository = _owner_dotenv(repository / ".env")
+    with pytest.raises(runner.QualificationError, match="outside the repository"):
+        runner._validate_owner_dotenv(inside_repository, repository=repository)
+
+    oversized = _owner_dotenv(external / "oversized.env")
+    oversized.write_bytes(b"x" * (runner.MAX_OWNER_DOTENV_BYTES + 1))
+    if os.name != "nt":
+        oversized.chmod(0o600)
+    with pytest.raises(runner.QualificationError, match="size bound"):
+        runner._validate_owner_dotenv(oversized, repository=repository)
+
+
+def test_owner_dotenv_is_metadata_only_and_reaches_launcher_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    dotenv = _owner_dotenv(tmp_path / "external.env")
+
+    original_read_bytes = Path.read_bytes
+    original_open = Path.open
+
+    def forbidden_read_bytes(self: Path) -> bytes:
+        if self == dotenv:
+            raise AssertionError("runner must not read the owner dotenv")
+        return original_read_bytes(self)
+
+    def forbidden_open(self: Path, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        if self == dotenv:
+            raise AssertionError("runner must not open the owner dotenv")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", forbidden_read_bytes)
+    monkeypatch.setattr(Path, "open", forbidden_open)
+    monkeypatch.setattr(
+        runner,
+        "_sha256_file",
+        lambda path: (_ for _ in ()).throw(
+            AssertionError("runner must not hash the owner dotenv")
+        )
+        if path == dotenv
+        else "a" * 64,
+    )
+
+    environment = runner.build_host_environment(
+        root=tmp_path,
+        opencode_binary=tmp_path / "bin" / "opencode",
+        node_binary=tmp_path / "bin" / "node",
+        owner_dotenv=dotenv,
+        repository=repository,
+    )
+    assert environment[runner._OWNER_DOTENV_ENV_NAME] == str(dotenv.resolve())
+    assert runner._OWNER_DOTENV_ENV_NAME not in runner._build_mcp_environment(
+        tmp_path, node_binary=tmp_path / "bin" / "node"
+    )
+
+    captured: list[dict[str, str]] = []
+
+    def fake_run(*_args: object, **kwargs: object) -> dict[str, object]:
+        value = kwargs["environment"]
+        assert isinstance(value, dict)
+        captured.append(value)
+        return {
+            "stdout": _availability_events(),
+            "stderr": b"",
+            "returncode": 0,
+            "elapsed_ms": 1,
+            "timed_out": False,
+            "output_overflow": False,
+        }
+
+    monkeypatch.setattr(runner, "_run_opencode_command", fake_run)
+    result = runner._probe_model_availability(
+        tmp_path / "owner-broker",
+        environment=environment,
+        cwd=tmp_path,
+    )
+    assert result["status"] == "available"
+    assert captured
+    assert captured[0][runner._OWNER_DOTENV_ENV_NAME] == str(dotenv.resolve())
+
+
+@pytest.mark.parametrize("mode", ["qualification", "diagnostic"])
+def test_public_execute_requires_owner_dotenv_for_every_mode(
+    mode: str, tmp_path: Path
+) -> None:
+    with pytest.raises(runner.QualificationError, match="required"):
+        runner.execute_qualification(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "output",
+            opencode_binary=tmp_path / "opencode",
+            host_launcher=tmp_path / "owner-broker",
+            human_gold_path=None,
+            owner_dotenv=None,
+            mode=mode,
+        )
+
+
+def test_all_modes_fail_before_candidate_or_host_without_v2_correlation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    entered_candidate = False
+
+    def forbidden_prepare(_self: object) -> None:
+        nonlocal entered_candidate
+        entered_candidate = True
+        raise AssertionError("candidate preparation must remain unreachable")
+
+    monkeypatch.setattr(
+        runner.QualificationOrchestrator,
+        "prepare_candidate",
+        forbidden_prepare,
+    )
+    for mode in ("qualification", "diagnostic"):
+        with pytest.raises(
+            runner.QualificationError,
+            match=r"fork-route and child plugin-event correlation.*not_executed",
+        ):
+            runner._execute_qualification_body(
+                candidate_wheel=tmp_path / "candidate.whl",
+                deeplaw_executable=tmp_path / "deeplaw",
+                output_dir=tmp_path / "output",
+                opencode_binary=tmp_path / "opencode",
+                host_launcher=tmp_path / "owner-broker",
+                human_gold_path=None,
+                root=tmp_path / "root",
+                mode=mode,
+            )
+    assert entered_candidate is False
+
+
+def _assert_owner_external_zero_model_response_binds_actual_fork_and_barrier() -> None:
+    now = datetime.now(UTC).replace(microsecond=0)
+    nonce = _digest("opencode-zero-model-nonce")
+    request = _zero_model_request(nonce_sha256=nonce, now=now)
+    response = _zero_model_response(nonce_sha256=nonce, now=now)
+
+    admitted = runner.validate_opencode_zero_model_preflight_response(
+        response,
+        request=request,
+        observed_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        seen_nonce_sha256s=set(),
+    )
+
+    proof = admitted["proof"]
+    assert proof["request_body_sha256"] == hashlib.sha256(b"{}").hexdigest()
+    assert proof["parent_session_sha256"] != proof["child_session_sha256"]
+    assert proof["child_session_sha256"] == proof["child_plugin_session_sha256"]
+    assert response["event_barrier"] == {
+        "status": "satisfied",
+        "response_release": "after_child_plugin_event",
+        "timed_out": False,
+        "child_plugin_event_count": 1,
+        "event_type": "session.created",
+        "timeout_seconds": 30,
+        "elapsed_ms": 7,
+        "parent_source": "actual_ingress_route",
+    }
+
+
+def _assert_owner_external_consumer_rejects_duplicate_json_and_never_self_signs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(runner.QualificationError, match="duplicate"):
+        runner._strict_control_json(b'{"status":"observed","status":"forged"}')
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    nonce = _digest("opencode-no-self-sign")
+    request = _zero_model_request(nonce_sha256=nonce, now=now)
+    response = _zero_model_response(nonce_sha256=nonce, now=now)
+    monkeypatch.setattr(
+        host_process_receipt_v2,
+        "build_receipt",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("consumer must not create a v2 receipt")
+        ),
+    )
+    assert runner.validate_opencode_zero_model_preflight_response(
+        response,
+        request=request,
+        observed_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        seen_nonce_sha256s=set(),
+    )["record_sha256"] == response["host_process_receipt"]["record_sha256"]
+
+
+def _assert_owner_external_consumer_rejects_nonce_replay() -> None:
+    now = datetime.now(UTC).replace(microsecond=0)
+    nonce = _digest("opencode-replayed-zero-model-nonce")
+    request = _zero_model_request(nonce_sha256=nonce, now=now)
+    response = _zero_model_response(nonce_sha256=nonce, now=now)
+    seen: set[str] = set()
+    runner.validate_opencode_zero_model_preflight_response(
+        response,
+        request=request,
+        observed_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        seen_nonce_sha256s=seen,
+    )
+    with pytest.raises(runner.QualificationError, match="v2 receipt"):
+        runner.validate_opencode_zero_model_preflight_response(
+            response,
+            request=request,
+            observed_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            seen_nonce_sha256s=seen,
+        )
+
+
+def _assert_owner_external_zero_model_response_rejects_forbidden_activity(
+    field: str,
+    value: int,
+    message: str,
+) -> None:
+    now = datetime.now(UTC).replace(microsecond=0)
+    nonce = _digest(f"opencode-zero-model-{field}")
+    response = _zero_model_response(nonce_sha256=nonce, now=now)
+    response[field] = value
+    with pytest.raises(runner.QualificationError, match=message):
+        runner.validate_opencode_zero_model_preflight_response(
+            response,
+            request=_zero_model_request(nonce_sha256=nonce, now=now),
+            observed_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            seen_nonce_sha256s=set(),
+        )
+
+
+def _assert_owner_external_zero_model_response_rejects_unobserved_correlation(
+    mutation: str,
+) -> None:
+    now = datetime.now(UTC).replace(microsecond=0)
+    nonce = _digest(f"opencode-zero-model-{mutation}")
+    request = _zero_model_request(nonce_sha256=nonce, now=now)
+    response = _zero_model_response(nonce_sha256=nonce, now=now)
+    if mutation == "barrier_timeout":
+        response["event_barrier"]["timed_out"] = True
+    elif mutation == "barrier_not_satisfied":
+        response["event_barrier"]["status"] = "pending"
+    elif mutation == "missing_child_event":
+        response["event_barrier"]["child_plugin_event_count"] = 0
+    elif mutation == "wrong_event_type":
+        response["event_barrier"]["event_type"] = "session.updated"
+    elif mutation == "response_released_early":
+        response["event_barrier"]["response_release"] = "before_child_plugin_event"
+    elif mutation == "unexpected_route":
+        response["observed_sequence"].append("POST /session/:parent/message")
+    else:
+        receipt = response["host_process_receipt"]
+        receipt["proof"]["request_body_sha256"] = hashlib.sha256(b'{"x":1}').hexdigest()
+        receipt["proof"]["route_correlation_sha256"] = (
+            host_process_receipt_v2.correlation_sha256(
+                {
+                    key: receipt["proof"][key]
+                    for key in (
+                        "process_identity_sha256",
+                        "request_method",
+                        "route_observation_sha256",
+                        "request_body_sha256",
+                        "response_sha256",
+                        "parent_session_sha256",
+                        "child_session_sha256",
+                        "child_plugin_event_sha256",
+                        "child_plugin_session_sha256",
+                        "native_event_sequence_sha256",
+                        "native_session_identity_sha256",
+                        "native_lifecycle_record_sha256",
+                    )
+                }
+            )
+        )
+        receipt["record_sha256"] = host_process_receipt_v2.record_sha256(receipt)
+    with pytest.raises(runner.QualificationError):
+        runner.validate_opencode_zero_model_preflight_response(
+            response,
+            request=request,
+            observed_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            seen_nonce_sha256s=set(),
+        )
+
+
+def _assert_formal_runner_crosses_fail_before_only_after_external_preflight(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    order: list[str] = []
+
+    def observed_preflight(**kwargs: object) -> dict[str, object]:
+        order.append("owner_external_preflight")
+        assert kwargs["task_case"] == "continuity"
+        assert kwargs["run_id"] == "opencode-continuity-202"
+        return {
+            "status": "passed",
+            "evidence_class": "zero_model_preflight_only",
+            "formal_admission": False,
+        }
+
+    def reached_candidate(_self: object) -> None:
+        order.append("candidate_preparation")
+        raise RuntimeError("candidate sentinel")
+
+    monkeypatch.setattr(
+        runner,
+        "run_opencode_owner_external_zero_model_preflight",
+        observed_preflight,
+    )
+    monkeypatch.setattr(
+        runner.QualificationOrchestrator,
+        "prepare_candidate",
+        reached_candidate,
+    )
+    with pytest.raises(RuntimeError, match="candidate sentinel"):
+        owner_dotenv = _owner_dotenv(tmp_path / "owner.env")
+        runner._execute_qualification_body(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "output",
+            opencode_binary=tmp_path / "opencode",
+            opencode_package=tmp_path / "opencode-package",
+            host_launcher=tmp_path / "owner-broker",
+            human_gold_path=None,
+            owner_dotenv=owner_dotenv,
+            host_identity_input=tmp_path / "host-identity.json",
+            candidate_binding_input=tmp_path / "frozen-active-qualification.json",
+            expected_broker_sha256="8" * 64,
+            run_id="opencode-continuity-202",
+            evidence_run_id=202,
+            qualification_run_id=303,
+            root=tmp_path / "root",
+            mode="qualification",
+        )
+    assert order == ["owner_external_preflight", "candidate_preparation"]
+
+
+def _assert_zero_model_preflight_is_static_until_external_broker_control(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    now = datetime.now(UTC).replace(microsecond=0)
+    nonce = _digest("opencode-static-preflight-nonce")
+    receipt = _zero_model_receipt(nonce_sha256=nonce, now=now)
+    opencode_target = tmp_path / "opencode-target"
+    opencode_target.write_bytes(b"static opencode target")
+    opencode_target.chmod(0o700)
+    opencode_selector = tmp_path / "opencode"
+    opencode_selector.symlink_to(opencode_target.name)
+    opencode_package = tmp_path / "opencode-package"
+    opencode_package.write_bytes(b"pinned opencode 1.18.16 package")
+    identity = {
+        "schema_version": "deeplaw.host-exact-identity/v1",
+        "hosts": {
+            "opencode": {
+                **_ZERO_MODEL_HOST_ITEM,
+                "executable_sha256": hashlib.sha256(
+                    opencode_target.read_bytes()
+                ).hexdigest(),
+                "package_sha256": hashlib.sha256(
+                    opencode_package.read_bytes()
+                ).hexdigest(),
+            }
+        },
+        "source_sha256": "9" * 64,
+        "source_bytes": 512,
+    }
+    calls: list[str] = []
+    loaded_candidate_inputs: list[Path] = []
+
+    def load_candidate(path: Path, **kwargs: object) -> dict[str, Any]:
+        del kwargs
+        loaded_candidate_inputs.append(path)
+        return dict(_ZERO_MODEL_CANDIDATE)
+
+    monkeypatch.setattr(
+        runner,
+        "load_zero_model_candidate_binding",
+        load_candidate,
+    )
+    monkeypatch.setattr(
+        runner.host_preflight_receipt,
+        "load_host_identity_input",
+        lambda *args, **kwargs: identity,
+    )
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("static preflight must not execute any Host command")
+        ),
+    )
+
+    @contextmanager
+    def staged(*args, **kwargs):
+        del args, kwargs
+        calls.append("stage_exact_broker")
+        yield tmp_path / "staged-broker"
+
+    def consumed(_broker: Path, **kwargs: object) -> dict[str, Any]:
+        calls.append("consume_external_broker")
+        request = kwargs["request"]
+        response = _zero_model_response(
+            nonce_sha256=request["challenge"]["nonce_sha256"],
+            now=datetime.now(UTC).replace(microsecond=0),
+        )
+        response["host_process_receipt"] = receipt
+        response["host_process_receipt"]["nonce_sha256"] = request["challenge"][
+            "nonce_sha256"
+        ]
+        response["host_process_receipt"]["record_sha256"] = (
+            host_process_receipt_v2.record_sha256(response["host_process_receipt"])
+        )
+        return response["host_process_receipt"]
+
+    monkeypatch.setattr(runner, "_stage_exact_broker_executable", staged)
+    monkeypatch.setattr(runner, "consume_opencode_zero_model_preflight", consumed)
+    monkeypatch.setattr(
+        runner,
+        "_run_opencode_command",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("static preflight must not execute OpenCode")
+        ),
+    )
+    result = runner.run_opencode_owner_external_zero_model_preflight(
+        candidate_binding_input=tmp_path / "construction-kit-manifest.json",
+        host_identity_input=tmp_path / "host-identity.json",
+        opencode_package=opencode_package,
+        opencode_binary=opencode_selector,
+        opencode_broker=tmp_path / "owner-broker",
+        expected_broker_sha256="8" * 64,
+        task_case="continuity",
+        run_id="opencode-zero-model-preflight-202-303",
+        evidence_run_id=202,
+        qualification_run_id=303,
+        repository=_REPOSITORY,
+    )
+    assert calls == ["stage_exact_broker", "consume_external_broker"]
+    assert loaded_candidate_inputs == [tmp_path / "construction-kit-manifest.json"]
+    assert result == {
+        "status": "passed",
+        "evidence_class": "zero_model_preflight_only",
+        "formal_admission": False,
+        "host": "opencode",
+        "observed_sequence": list(runner.OPENCODE_ZERO_MODEL_REQUIRED_SEQUENCE),
+        "model_invocation_count": 0,
+        "provider_request_count": 0,
+        "broker_source_sha256": "8" * 64,
+        "receipt_record_sha256": receipt["record_sha256"],
+    }
+
+
+def _assert_zero_model_static_binary_topology_and_hash_fail_closed(
+    topology: str,
+    message: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    target_parent = repository if topology == "repository_internal" else external
+    target = target_parent / "opencode-target"
+    target_bytes = b"exact static opencode target"
+    target.write_bytes(target_bytes)
+    target.chmod(0o700)
+    selector = target_parent / "opencode"
+    selector.symlink_to(target.name)
+    selected = selector
+
+    if topology == "selector_chain":
+        intermediate = target_parent / "opencode-intermediate"
+        intermediate.symlink_to(target.name)
+        selector.unlink()
+        selector.symlink_to(intermediate.name)
+    elif topology == "parent_symlink":
+        linked_parent = tmp_path / "linked-external"
+        linked_parent.symlink_to(external.name)
+        selected = linked_parent / "opencode"
+    elif topology == "target_hardlink":
+        os.link(target, target_parent / "opencode-hardlink")
+    elif topology == "target_not_executable":
+        target.chmod(0o600)
+    elif topology == "target_not_regular":
+        target.unlink()
+        target.mkdir()
+
+    expected_sha256 = hashlib.sha256(target_bytes).hexdigest()
+    if topology == "hash_drift":
+        expected_sha256 = "6" * 64
+        real_fstat = runner.os.fstat
+
+        def windows_normalized_fstat(fd: int) -> SimpleNamespace:
+            details = real_fstat(fd)
+            return SimpleNamespace(
+                st_dev=details.st_dev,
+                st_ino=details.st_ino,
+                st_size=details.st_size,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_nlink=details.st_nlink,
+                st_mtime=details.st_mtime + 1,
+                st_mtime_ns=details.st_mtime_ns + 1_000_000_000,
+                st_ctime=details.st_ctime + 1,
+                st_ctime_ns=details.st_ctime_ns + 1_000_000_000,
+            )
+
+        monkeypatch.setattr(runner.os, "fstat", windows_normalized_fstat)
+    identity = {
+        "hosts": {
+            "opencode": {
+                **_ZERO_MODEL_HOST_ITEM,
+                "executable_sha256": expected_sha256,
+            }
+        },
+        "source_sha256": "9" * 64,
+    }
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("static binary inspection must not execute a Host command")
+        ),
+    )
+    with pytest.raises(runner.QualificationError, match=message):
+        runner._inspect_opencode_binary_static(
+            selected,
+            identity=identity,
+            repository=repository,
+        )
+
+
+def _assert_zero_model_static_boundary_reaches_only_external_broker_popen(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    opencode_target = tmp_path / "opencode-target"
+    opencode_target.write_bytes(b"static opencode target")
+    opencode_target.chmod(0o700)
+    opencode_selector = tmp_path / "opencode"
+    opencode_selector.symlink_to(opencode_target.name)
+    opencode_package = tmp_path / "opencode-package"
+    opencode_package.write_bytes(b"pinned opencode package")
+    broker = tmp_path / "owner-broker"
+    broker.write_bytes(b"#!/bin/sh\nexit 99\n")
+    broker.chmod(0o700)
+    broker_sha256 = hashlib.sha256(broker.read_bytes()).hexdigest()
+    identity = {
+        "schema_version": "deeplaw.host-exact-identity/v1",
+        "hosts": {
+            "opencode": {
+                **_ZERO_MODEL_HOST_ITEM,
+                "executable_sha256": hashlib.sha256(
+                    opencode_target.read_bytes()
+                ).hexdigest(),
+                "package_sha256": hashlib.sha256(
+                    opencode_package.read_bytes()
+                ).hexdigest(),
+            }
+        },
+        "source_sha256": "9" * 64,
+        "source_bytes": 512,
+    }
+    monkeypatch.setattr(
+        runner,
+        "load_zero_model_candidate_binding",
+        lambda *args, **kwargs: dict(_ZERO_MODEL_CANDIDATE),
+    )
+    monkeypatch.setattr(
+        runner.host_preflight_receipt,
+        "load_host_identity_input",
+        lambda *args, **kwargs: identity,
+    )
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("runner must not execute an OpenCode Host command")
+        ),
+    )
+    popen_calls: list[tuple[list[str], dict[str, object]]] = []
+
+    class BrokerControlReached(Exception):
+        pass
+
+    def broker_popen(argv: list[str], **kwargs: object) -> None:
+        popen_calls.append((argv, kwargs))
+        assert argv[0] != str(opencode_selector)
+        assert argv[0] != str(opencode_target)
+        assert Path(argv[0]).name == "broker-executable"
+        assert argv[1:] == [runner.OPENCODE_BROKER_CONTROL_ARGUMENT]
+        raise BrokerControlReached
+
+    arguments = {
+        "candidate_binding_input": tmp_path / "frozen-active-qualification.json",
+        "host_identity_input": tmp_path / "host-identity.json",
+        "opencode_package": opencode_package,
+        "opencode_binary": opencode_selector,
+        "opencode_broker": broker,
+        "expected_broker_sha256": broker_sha256,
+        "task_case": "continuity",
+        "run_id": "opencode-zero-model-preflight-202-303",
+        "evidence_run_id": 202,
+        "qualification_run_id": 303,
+        "repository": _REPOSITORY,
+    }
+    if os.name == "nt":
+        # Native ACL hardening uses bounded PowerShell children. Exercise that
+        # production path before intercepting only the final broker exchange.
+        def broker_exchange(
+            broker_executable: Path,
+            *,
+            payload: bytes,
+            timeout_seconds: float,
+        ) -> bytes:
+            assert payload
+            popen_calls.append(
+                (
+                    [
+                        str(broker_executable),
+                        runner.OPENCODE_BROKER_CONTROL_ARGUMENT,
+                    ],
+                    {"timeout_seconds": timeout_seconds},
+                )
+            )
+            assert broker_executable != opencode_selector
+            assert broker_executable != opencode_target
+            assert broker_executable.name == "broker-executable"
+            raise BrokerControlReached
+
+        monkeypatch.setattr(runner, "_bounded_broker_control_exchange", broker_exchange)
+        with pytest.raises(BrokerControlReached):
+            runner.run_opencode_owner_external_zero_model_preflight(**arguments)
+    else:
+        monkeypatch.setattr(runner.subprocess, "Popen", broker_popen)
+        with pytest.raises(BrokerControlReached):
+            runner.run_opencode_owner_external_zero_model_preflight(**arguments)
+    assert len(popen_calls) == 1
+
+
+def _assert_zero_model_static_package_binding_rejects_unpinned_release(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "opencode-package"
+    package.write_bytes(b"pinned opencode package bytes")
+    package_sha256 = hashlib.sha256(package.read_bytes()).hexdigest()
+    identity = {
+        "hosts": {
+            "opencode": {
+                **_ZERO_MODEL_HOST_ITEM,
+                "package_sha256": package_sha256,
+            }
+        }
+    }
+    binding_messages: list[str] = []
+    stable_binding = runner._validate_stable_path_fd_binding
+
+    def observed_binding(**kwargs: object) -> None:
+        binding_messages.append(str(kwargs["error_message"]))
+        stable_binding(**kwargs)
+
+    monkeypatch.setattr(runner, "_validate_stable_path_fd_binding", observed_binding)
+    assert runner._validate_opencode_package(
+        package,
+        identity=identity,
+        repository=_REPOSITORY,
+    ) == {
+        "version": "1.18.16",
+        "source_commit": runner.OPENCODE_SOURCE_COMMIT,
+        "package_sha256": package_sha256,
+    }
+    assert binding_messages == ["OpenCode package source changed while it was read"]
+
+    identity["hosts"]["opencode"]["source_commit"] = "a" * 40
+    with pytest.raises(runner.QualificationError, match="pinned release"):
+        runner._validate_opencode_package(
+            package,
+            identity=identity,
+            repository=_REPOSITORY,
+        )
+
+    identity["hosts"]["opencode"]["source_commit"] = runner.OPENCODE_SOURCE_COMMIT
+    package.write_bytes(b"different package bytes")
+    with pytest.raises(runner.QualificationError, match="bytes differ"):
+        runner._validate_opencode_package(
+            package,
+            identity=identity,
+            repository=_REPOSITORY,
+        )
+
+
+def _assert_zero_model_cli_requires_no_dotenv_or_formal_output(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    observed: dict[str, object] = {}
+
+    def preflight(**kwargs: object) -> dict[str, object]:
+        observed.update(kwargs)
+        return {"status": "passed"}
+
+    monkeypatch.setattr(
+        runner,
+        "run_opencode_owner_external_zero_model_preflight",
+        preflight,
+    )
+    assert runner.main(
+        [
+            "--zero-model-preflight",
+            "--candidate-binding-input",
+            str(tmp_path / "frozen-active-qualification.json"),
+            "--host-identity-input",
+            str(tmp_path / "host-identity.json"),
+            "--opencode-package",
+            str(tmp_path / "opencode-package"),
+            "--opencode-binary",
+            str(tmp_path / "opencode"),
+            "--opencode-launcher",
+            str(tmp_path / "owner-broker"),
+            "--expected-broker-sha256",
+            "8" * 64,
+            "--task-case",
+            "continuity",
+            "--run-id",
+            "opencode-zero-model-preflight-202-303",
+            "--evidence-run-id",
+            "202",
+            "--qualification-run-id",
+            "303",
+        ]
+    ) == 0
+    assert observed["candidate_wheel"] is None
+    assert observed["opencode_package"] == tmp_path / "opencode-package"
+    assert "owner_dotenv" not in observed
+    assert "output_dir" not in observed
+
+
+def test_owner_dotenv_path_is_not_retained_in_public_forbidden_output() -> None:
+    dotenv = "/external/owner-only/.env"
+    with pytest.raises(runner.QualificationError):
+        runner._forbid_sensitive(
+            json.dumps({"error": dotenv}).encode("utf-8"),
+            forbidden_values=(dotenv,),
+        )
 
 
 def test_sensitive_scan_accepts_public_https_but_rejects_private_paths() -> None:
@@ -272,7 +1236,20 @@ def test_project_plugin_mode_has_no_legacy_pure_or_project_config_bypass(
     assert "OPENCODE_DISABLE_PROJECT_CONFIG" not in environment
     assert "--pure" not in runner._opencode_cli_turn_args()
     assert "plugin" not in runner.build_opencode_config()
+    catalog = json.loads(_HOST_TASK_CASES.read_text(encoding="utf-8"))
+    classification = json.loads(_GATE_CLASSIFICATION.read_text(encoding="utf-8"))
+    runner_prefix = ["opencode", *runner._opencode_cli_turn_args()[:3]]
+    opencode_gate = next(
+        row for row in classification["gates"] if row["gate_id"] == "opencode"
+    )
 
+    assert runner_prefix == ["opencode", "run", "--format", "json"]
+    assert catalog["host_constraints"]["opencode"]["argv_prefix"] == runner_prefix
+    assert opencode_gate["constraints"]["argv_prefix"] == runner_prefix
+    assert opencode_gate["constraints"]["plugin_policy"] == (
+        "single_exact_candidate_plugin"
+    )
+    assert opencode_gate["constraints"]["ambient_project_plugins"] == "forbidden"
 
 def test_prepare_scenario_state_installs_exact_plugin_bytes_and_receipt(
     tmp_path: Path,
@@ -354,13 +1331,169 @@ def test_owner_broker_launcher_must_be_owner_only_and_process_separated(
         launcher, host_binary=host
     ) == hashlib.sha256(b"broker-launcher").hexdigest()
 
-    launcher.chmod(0o750)
-    with pytest.raises(runner.QualificationError, match="owner-only"):
-        runner._validate_owner_broker_launcher(launcher, host_binary=host)
-    launcher.chmod(0o700)
+    if os.name != "nt":
+        launcher.chmod(0o750)
+        with pytest.raises(runner.QualificationError, match="owner-only"):
+            runner._validate_owner_broker_launcher(launcher, host_binary=host)
+        launcher.chmod(0o700)
     launcher.write_bytes(host.read_bytes())
     with pytest.raises(runner.QualificationError, match="process-separated"):
         runner._validate_owner_broker_launcher(launcher, host_binary=host)
+
+
+def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path) -> None:
+    assert runner._windows_acl_hardening_verified(
+        {
+            "platform": "nt",
+            "applied": True,
+            "verification": {"permissions_verified": True},
+        }
+    )
+    for invalid_report in (
+        None,
+        {"platform": "nt", "applied": False},
+        {
+            "platform": "nt",
+            "applied": True,
+            "verification": {"permissions_verified": False},
+        },
+    ):
+        assert not runner._windows_acl_hardening_verified(invalid_report)
+
+    def metadata(**updates: int) -> SimpleNamespace:
+        values = {
+            "st_dev": 7,
+            "st_ino": 11,
+            "st_size": 19,
+            "st_mode": stat.S_IFREG | 0o700,
+            "st_uid": 501,
+            "st_nlink": 1,
+            "st_mtime": 100,
+            "st_mtime_ns": 100,
+            "st_ctime": 200,
+            "st_ctime_ns": 200,
+        }
+        values.update(updates)
+        return SimpleNamespace(**values)
+
+    path_snapshot = metadata()
+    windows_fd_snapshot = metadata(
+        st_mode=stat.S_IFREG | 0o600,
+        st_uid=0,
+        st_mtime=101,
+        st_mtime_ns=101,
+        st_ctime=201,
+        st_ctime_ns=201,
+    )
+    runner._validate_stable_path_fd_binding(
+        path_before=path_snapshot,
+        path_after=path_snapshot,
+        fd_before=windows_fd_snapshot,
+        fd_after=windows_fd_snapshot,
+        observed_bytes=19,
+        error_message="OpenCode owner-external broker source changed while it was read",
+    )
+    for changed in (
+        {
+            "path_after": metadata(st_mtime=999, st_mtime_ns=999),
+            "fd_after": windows_fd_snapshot,
+        },
+        {
+            "path_after": path_snapshot,
+            "fd_after": metadata(
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=999,
+                st_mtime_ns=999,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+        },
+        {
+            "path_after": path_snapshot,
+            "fd_after": metadata(
+                st_ino=12,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=101,
+                st_mtime_ns=101,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+            "fd_before": metadata(
+                st_ino=12,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=101,
+                st_mtime_ns=101,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+        },
+        {
+            "path_before": metadata(st_ino=0),
+            "path_after": metadata(st_ino=0),
+            "fd_before": metadata(
+                st_ino=0,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=101,
+                st_mtime_ns=101,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+            "fd_after": metadata(
+                st_ino=0,
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_mtime=101,
+                st_mtime_ns=101,
+                st_ctime=201,
+                st_ctime_ns=201,
+            ),
+        },
+    ):
+        with pytest.raises(runner.QualificationError, match="changed while it was read"):
+            runner._validate_stable_path_fd_binding(
+                path_before=changed.get("path_before", path_snapshot),
+                path_after=changed["path_after"],
+                fd_before=changed.get("fd_before", windows_fd_snapshot),
+                fd_after=changed["fd_after"],
+                observed_bytes=19,
+                error_message=(
+                    "OpenCode owner-external broker source changed while it was read"
+                ),
+            )
+
+    host = tmp_path / "opencode"
+    host.write_bytes(b"host-binary")
+    broker = tmp_path / "owner-broker"
+    broker.write_bytes(b"#!/bin/sh\nexit 0\n")
+    broker.chmod(0o700)
+    expected = hashlib.sha256(broker.read_bytes()).hexdigest()
+
+    with runner._stage_exact_broker_executable(
+        broker,
+        repository=_REPOSITORY,
+        host_binary=host,
+        expected_sha256=expected,
+    ) as staged:
+        assert staged != broker
+        assert staged.read_bytes() == broker.read_bytes()
+        broker.write_bytes(b"#!/bin/sh\nexit 91\n")
+        assert hashlib.sha256(staged.read_bytes()).hexdigest() == expected
+        if os.name == "nt":
+            from deeplaw.windows_acl import native_windows_path_acl_report
+
+            assert native_windows_path_acl_report(staged.parent)[
+                "permissions_verified"
+            ]
+            assert native_windows_path_acl_report(staged)["permissions_verified"]
+        else:
+            assert stat.S_IMODE(staged.parent.stat().st_mode) == 0o500
+            assert staged.parent.stat().st_uid == os.geteuid()
+            assert stat.S_IMODE(staged.stat().st_mode) == 0o500
+    assert not staged.exists()
 
 
 def test_timeout_terminates_the_created_process_group(
@@ -447,9 +1580,108 @@ def test_session_identity_is_safe_for_cli_and_loopback_paths() -> None:
             )
 
 
+def _assert_owner_external_regression_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tmp_path.mkdir()
+    _assert_owner_external_zero_model_response_binds_actual_fork_and_barrier()
+    with monkeypatch.context() as scoped:
+        _assert_owner_external_consumer_rejects_duplicate_json_and_never_self_signs(
+            scoped
+        )
+    _assert_owner_external_consumer_rejects_nonce_replay()
+    for field in (
+        "forbidden_route_count",
+        "message_route_count",
+        "provider_route_count",
+        "model_route_count",
+        "mcp_route_count",
+        "model_invocation_count",
+        "provider_request_count",
+        "remote_workspace_forward_count",
+        "share_request_count",
+        "ambient_plugin_count",
+    ):
+        _assert_owner_external_zero_model_response_rejects_forbidden_activity(
+            field,
+            1,
+            "forbidden",
+        )
+    for mutation in (
+        "barrier_timeout",
+        "barrier_not_satisfied",
+        "missing_child_event",
+        "wrong_event_type",
+        "response_released_early",
+        "unexpected_route",
+        "nonempty_fork_body",
+    ):
+        _assert_owner_external_zero_model_response_rejects_unobserved_correlation(
+            mutation
+        )
+
+    def case_root(name: str) -> Path:
+        selected = tmp_path / name
+        selected.mkdir()
+        return selected
+
+    with monkeypatch.context() as scoped:
+        _assert_formal_runner_crosses_fail_before_only_after_external_preflight(
+            scoped,
+            case_root("formal-runner"),
+        )
+    with monkeypatch.context() as scoped:
+        _assert_zero_model_preflight_is_static_until_external_broker_control(
+            scoped,
+            case_root("static-preflight"),
+        )
+    topology_cases = [
+        ("hash_drift", "hash differs"),
+        ("selector_chain", "symlink chain"),
+        ("parent_symlink", "parent path"),
+        ("target_hardlink", "single-link"),
+        ("target_not_regular", "regular single-link"),
+        ("repository_internal", "repository-external"),
+    ]
+    if os.name != "nt":
+        topology_cases.insert(-1, ("target_not_executable", "not executable"))
+    for index, (topology, message) in enumerate(topology_cases):
+        with monkeypatch.context() as scoped:
+            _assert_zero_model_static_binary_topology_and_hash_fail_closed(
+                topology,
+                message,
+                scoped,
+                case_root(f"topology-{index}"),
+            )
+    with monkeypatch.context() as scoped:
+        _assert_zero_model_static_boundary_reaches_only_external_broker_popen(
+            scoped,
+            case_root("broker-boundary"),
+        )
+    with monkeypatch.context() as scoped:
+        _assert_zero_model_static_package_binding_rejects_unpinned_release(
+            scoped,
+            case_root("package-binding"),
+        )
+    with monkeypatch.context() as scoped:
+        _assert_zero_model_cli_requires_no_dotenv_or_formal_output(
+            scoped,
+            case_root("zero-model-cli"),
+        )
+    _assert_owner_broker_executes_from_exact_private_staged_bytes(
+        case_root("staged-broker")
+    )
+
+
 def test_preflight_keeps_owner_broker_out_of_static_inspection_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Preserve the frozen node ID; Host commands now route only through the broker.
+    _assert_owner_external_regression_bundle(
+        monkeypatch,
+        tmp_path / "owner-external-regressions",
+    )
     project, plugin_receipt, resolved = _preflight_plugin_fixture(tmp_path)
     calls: list[tuple[tuple[str, ...], dict[str, str]]] = []
     availability_environments: list[dict[str, str]] = []
@@ -461,11 +1693,10 @@ def test_preflight_keeps_owner_broker_out_of_static_inspection_commands(
         environment: dict[str, str],
         cwd: Path,
     ) -> dict[str, object]:
-        del binary, cwd
+        assert binary == tmp_path / "owner-broker"
+        del cwd
         calls.append((args, environment))
-        if args == ("--version",):
-            stdout = b"1.18.16\n"
-        elif args == ("models", "deepseek"):
+        if args == ("models", "deepseek"):
             stdout = b"deepseek/deepseek-v4-flash\n"
         else:
             assert args == ("debug", "config")
@@ -540,6 +1771,19 @@ def test_preflight_keeps_owner_broker_out_of_static_inspection_commands(
             plugin_receipt=plugin_receipt,
         )
 
+    resolved["instructions"] = ["D:/private/runtime"]
+    monkeypatch.setattr(runner, "_run_opencode_command", run_command)
+    with pytest.raises(runner.QualificationError, match="absolute path"):
+        runner.preflight_opencode(
+            binary=tmp_path / "opencode",
+            host_launcher=tmp_path / "owner-broker",
+            deeplaw_executable=tmp_path / "deeplaw",
+            environment={},
+            cwd=tmp_path,
+            project_root=project,
+            plugin_receipt=plugin_receipt,
+        )
+
 
 def test_preflight_rejects_a_canary_resolved_into_debug_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -555,9 +1799,9 @@ def test_preflight_rejects_a_canary_resolved_into_debug_config(
         environment: dict[str, str],
         cwd: Path,
     ) -> dict[str, object]:
-        del binary, environment, cwd
+        assert binary == tmp_path / "owner-broker"
+        del environment, cwd
         outputs = {
-            ("--version",): b"1.18.16\n",
             ("models", "deepseek"): b"deepseek/deepseek-v4-flash\n",
             ("debug", "config"): runner._encoded(resolved),
         }
@@ -606,9 +1850,9 @@ def test_resolved_config_must_bind_the_unique_installed_project_plugin(
         environment: dict[str, str],
         cwd: Path,
     ) -> dict[str, object]:
-        del binary, environment, cwd
+        assert binary == tmp_path / "owner-broker"
+        del environment, cwd
         outputs = {
-            ("--version",): b"1.18.16\n",
             ("models", "deepseek"): b"deepseek/deepseek-v4-flash\n",
             ("debug", "config"): runner._encoded(resolved),
         }
@@ -1184,6 +2428,7 @@ def test_execute_success_cleans_external_isolated_root(
         opencode_binary=tmp_path / "opencode",
         host_launcher=tmp_path / "owner-broker",
         human_gold_path=tmp_path / "human-gold.json",
+        owner_dotenv=_owner_dotenv(tmp_path / "owner.env"),
     )
     assert result == {"status": "executed"}
     assert created and not created[0].exists()
@@ -1212,6 +2457,7 @@ def test_execute_failure_cleans_root_and_preserves_original_exception(
             opencode_binary=tmp_path / "opencode",
             host_launcher=tmp_path / "owner-broker",
             human_gold_path=tmp_path / "human-gold.json",
+            owner_dotenv=_owner_dotenv(tmp_path / "owner.env"),
         )
     assert created and not created[0].exists()
 
@@ -1258,8 +2504,12 @@ def test_main_returns_nonzero_for_nonexecuted_report(
             str(tmp_path / "output"),
             "--opencode-binary",
             str(tmp_path / "opencode"),
+            "--opencode-package",
+            str(tmp_path / "opencode-package"),
             "--opencode-launcher",
             str(tmp_path / "owner-broker"),
+            "--opencode-dotenv",
+            str(tmp_path / "owner.env"),
             "--human-gold",
             str(tmp_path / "human-gold.json"),
         ]

@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/native-host-event.v3.schema.json",
+  "title": "DeepLaw Native Host Observation Event v3",
+  "description": "A content-minimized current Native Host observation. Exact executable identity is supplied by the owner-controlled external input; this contract freezes only shape and policy.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provenance_level",
+    "host",
+    "host_identity",
+    "execution_identity",
+    "event_type",
+    "event_sequence",
+    "session_sha256",
+    "parent_session_sha256",
+    "observation"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.native-host-event/v3"},
+    "provenance_level": {"const": "native_plugin_hook"},
+    "host": {"enum": ["codex", "opencode"]},
+    "host_identity": {
+      "oneOf": [
+        {"$ref": "#/$defs/codexIdentity"},
+        {"$ref": "#/$defs/opencodeIdentity"}
+      ]
+    },
+    "execution_identity": {"$ref": "#/$defs/executionIdentity"},
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreCompact",
+        "PostCompact",
+        "SessionEnd",
+        "chat.message",
+        "session",
+        "fork",
+        "compaction"
+      ]
+    },
+    "event_sequence": {"$ref": "#/$defs/eventSequence"},
+    "session_sha256": {"$ref": "#/$defs/sha256"},
+    "parent_session_sha256": {"$ref": "#/$defs/nullableSha256"},
+    "observation": {"$ref": "#/$defs/observation"},
+    "route": {"$ref": "#/$defs/route"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"host": {"const": "codex"}},
+        "required": ["host"]
+      },
+      "then": {
+        "properties": {
+          "host_identity": {"$ref": "#/$defs/codexIdentity"},
+          "execution_identity": {
+            "properties": {"selector_source_symlink": {"const": false}}
+          },
+          "event_type": {
+            "enum": [
+              "SessionStart",
+              "UserPromptSubmit",
+              "PreCompact",
+              "PostCompact",
+              "SessionEnd"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"host": {"const": "opencode"}},
+        "required": ["host"]
+      },
+      "then": {
+        "properties": {
+          "host_identity": {"$ref": "#/$defs/opencodeIdentity"},
+          "event_type": {
+            "enum": ["chat.message", "session", "fork", "compaction"]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nullableSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$"
+    },
+    "codexIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binary_version",
+        "binary_sha256",
+        "request_model",
+        "reasoning_effort",
+        "auth_status_command",
+        "auth_material_access"
+      ],
+      "properties": {
+        "binary_version": {"$ref": "#/$defs/version"},
+        "binary_sha256": {"$ref": "#/$defs/sha256"},
+        "request_model": {"const": "gpt-5.6-luna"},
+        "reasoning_effort": {"const": "max"},
+        "auth_status_command": {"const": "codex login status"},
+        "auth_material_access": {"const": "forbidden"}
+      }
+    },
+    "opencodeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source_commit",
+        "config_selector",
+        "expected_response_model_id",
+        "executable_sha256",
+        "package_sha256",
+        "runtime",
+        "dotenv_policy",
+        "secret_visibility"
+      ],
+      "properties": {
+        "version": {"$ref": "#/$defs/version"},
+        "source_commit": {"$ref": "#/$defs/git"},
+        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
+        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "executable_sha256": {"$ref": "#/$defs/sha256"},
+        "package_sha256": {"$ref": "#/$defs/sha256"},
+        "runtime": {"const": "host_bun_runtime_only"},
+        "dotenv_policy": {"const": "owner_only_external_strict_parser"},
+        "secret_visibility": {"const": "forbidden"}
+      }
+    },
+    "executionIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selector_source_symlink",
+        "execution_target_regular",
+        "execution_target_single_link"
+      ],
+      "properties": {
+        "selector_source_symlink": {"type": "boolean"},
+        "execution_target_regular": {"const": true},
+        "execution_target_single_link": {"const": true}
+      }
+    },
+    "eventSequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "sequence_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["methods_observed", "status"],
+      "properties": {
+        "methods_observed": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"
+          }
+        },
+        "status": {"enum": ["received", "completed", "gap"]}
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": [
+            "exact",
+            "unbound",
+            "mismatch",
+            "stale",
+            "forgotten",
+            "ambiguous"
+          ]
+        },
+        "binding_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "task_handle_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "project_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "repository_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "worktree_sha256": {"$ref": "#/$defs/nullableSha256"}
+      }
+    }
+  }
+}

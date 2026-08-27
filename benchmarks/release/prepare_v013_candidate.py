@@ -2,9 +2,9 @@
 
 This command is deliberately smaller than the v2 freezer.  It turns the
 tracked 0.12 source-candidate surfaces into a 0.13 construction template only
-after the current Git identity and all owner-supplied external input digests
-have been checked.  It does not build, qualify, sign, tag, publish, or freeze
-an artifact.  Dry-run is the default; ``--apply`` is the only write mode.
+after the current Git identity and the Gate v9/qualification v3 contracts have
+been checked.  It does not build, qualify, sign, tag, publish, or freeze an
+artifact.  Dry-run is the default; ``--apply`` is the only write mode.
 """
 
 from __future__ import annotations
@@ -23,29 +23,27 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from jsonschema import Draft202012Validator
+
 REPOSITORY = Path(__file__).resolve().parents[2]
 OLD_VERSION = "0.12.0"
 CANDIDATE_VERSION = "0.13.0"
-ACTIVE_RELATIVE = "benchmarks/v013/active-qualification-v2.json"
-ACTIVE_SCHEMA_VERSION = "deeplaw.v013-active-qualification/v2"
+ACTIVE_RELATIVE = "benchmarks/v013/active-qualification-v3.json"
+ACTIVE_SCHEMA_RELATIVE = "contracts/v013-active-qualification.v3.schema.json"
+PROTOCOL_RELATIVE = "benchmarks/v013/qualification-protocol-v3.json"
+PROTOCOL_HASH_RELATIVE = "benchmarks/v013/qualification-protocol-v3.sha256"
+PROTOCOL_SCHEMA_RELATIVE = "contracts/v013-qualification-protocol.v3.schema.json"
+CLASSIFICATION_RELATIVE = "benchmarks/release/v013-gate-classification-v9.json"
+CLASSIFICATION_SCHEMA_RELATIVE = "contracts/v013-release-gate-classification.v9.schema.json"
+ACTIVE_SCHEMA_VERSION = "deeplaw.v013-active-qualification/v3"
+PROTOCOL_SCHEMA_VERSION = "deeplaw.v013-qualification-protocol/v3"
+CLASSIFICATION_SCHEMA_VERSION = "deeplaw.v013-release-gate-classification/v9"
 CONSTRUCTION_STATUS = "construction_candidate_machine_evaluation_pending"
-PROFILE = "machine_evaluated_no_human_attestation"
-GATE_CLASSIFICATION = "v8"
-MAX_EXTERNAL_INPUT_BYTES = 512 * 1024 * 1024
+PROFILE = "kernel_release_core"
+GATE_CLASSIFICATION = "v9"
+INTEGRATED_MAIN_REF = "refs/remotes/origin/main"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 GIT_OBJECT = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
-
-EXTERNAL_INPUT_NAMES = (
-    "semantic_machine_proposal_sha256",
-    "qualification_holdout_sha256",
-    "final_blind_holdout_sha256",
-    "agent_review_panel_sha256",
-    "runner_sha256",
-    "scorer_a_sha256",
-    "scorer_b_sha256",
-    "arbitration_sha256",
-    "isolation_sha256",
-)
 
 # This is an explicit inventory, not a glob.  In particular, historical
 # evidence, v1 files, and version strings in tests are intentionally absent.
@@ -73,6 +71,15 @@ CURRENT_SURFACE_FILES = (
     "benchmarks/semantic/build_machine_review_consensus.py",
     "security/openvex.json",
     ACTIVE_RELATIVE,
+)
+
+CONTRACT_FILES = (
+    ACTIVE_SCHEMA_RELATIVE,
+    PROTOCOL_RELATIVE,
+    PROTOCOL_HASH_RELATIVE,
+    PROTOCOL_SCHEMA_RELATIVE,
+    CLASSIFICATION_RELATIVE,
+    CLASSIFICATION_SCHEMA_RELATIVE,
 )
 
 VERSION_SURFACE_FILES = (
@@ -146,7 +153,7 @@ def _has_symlink_component(path: Path) -> bool:
 
 
 def _regular_repo_file(repository: Path, relative: str) -> tuple[Path, bytes]:
-    if relative not in CURRENT_SURFACE_FILES:
+    if relative not in CURRENT_SURFACE_FILES and relative not in CONTRACT_FILES:
         _fail("candidate-prep attempted an unlisted tracked target")
     selected = repository / relative
     if _has_symlink_component(selected) or selected.is_symlink():
@@ -191,10 +198,16 @@ def _sha256(raw: bytes) -> str:
 
 
 def _assert_git_identity(
-    repository: Path, integration_commit: str, *, apply: bool
-) -> tuple[str, str, str]:
+    repository: Path,
+    integration_commit: str,
+    frozen_main_commit: str,
+    *,
+    apply: bool,
+) -> tuple[str, str, str, str]:
     if not isinstance(integration_commit, str) or not GIT_OBJECT.fullmatch(integration_commit):
         _fail("--integration-commit must be an exact Git commit")
+    if not isinstance(frozen_main_commit, str) or not GIT_OBJECT.fullmatch(frozen_main_commit):
+        _fail("--frozen-main-commit must be an exact Git commit")
     try:
         repository = repository.expanduser().resolve(strict=True)
     except OSError as error:
@@ -216,6 +229,64 @@ def _assert_git_identity(
     verified = _run_git(repository, ["rev-parse", f"{integration_commit}^{{commit}}"])
     if verified != integration_commit:
         _fail("--integration-commit is not the exact current commit")
+    try:
+        frozen_main = _run_git(
+            repository,
+            [
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                f"{frozen_main_commit}^{{commit}}",
+            ],
+        )
+    except CandidatePrepError as error:
+        raise CandidatePrepError("--frozen-main-commit cannot be resolved") from error
+    if not GIT_OBJECT.fullmatch(frozen_main):
+        _fail("--frozen-main-commit cannot be resolved")
+    if frozen_main != frozen_main_commit:
+        _fail("--frozen-main-commit is not the exact current commit")
+    try:
+        integrated_main = _run_git(
+            repository,
+            [
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                f"{INTEGRATED_MAIN_REF}^{{commit}}",
+            ],
+        )
+    except CandidatePrepError as error:
+        raise CandidatePrepError("remote-tracking origin/main cannot be resolved") from error
+    if not GIT_OBJECT.fullmatch(integrated_main):
+        _fail("remote-tracking origin/main cannot be resolved")
+    if integrated_main != integration_commit:
+        _fail("remote-tracking origin/main does not equal --integration-commit")
+    if frozen_main == integration_commit:
+        _fail("--frozen-main-commit must differ from --integration-commit")
+    try:
+        parent_record = _run_git(
+            repository,
+            [
+                "rev-list",
+                "--parents",
+                "-n",
+                "1",
+                "--end-of-options",
+                integration_commit,
+            ],
+        )
+    except CandidatePrepError as error:
+        raise CandidatePrepError("integration commit parents cannot be resolved") from error
+    parent_tokens = parent_record.split()
+    if not parent_tokens or parent_tokens[0] != integration_commit:
+        _fail("integration commit identity cannot be resolved")
+    if len(parent_tokens) < 3:
+        _fail("integration commit must be a merge with a first parent")
+    first_parent = parent_tokens[1]
+    if not GIT_OBJECT.fullmatch(first_parent):
+        _fail("integration commit first parent cannot be resolved")
+    if first_parent != frozen_main:
+        _fail("integration commit first parent differs from --frozen-main-commit")
     tree = _run_git(repository, ["rev-parse", "HEAD^{tree}"])
     if not GIT_OBJECT.fullmatch(tree):
         _fail("HEAD tree cannot be resolved")
@@ -225,99 +296,7 @@ def _assert_git_identity(
             _fail("apply is forbidden on the main branch")
         if not re.search(r"(?:candidate|release)", branch.casefold()):
             _fail("apply requires a candidate/release branch")
-    return head, tree, branch
-
-
-def _verify_external_input(
-    repository: Path,
-    name: str,
-    path: Path,
-    expected: str,
-    used_paths: set[Path],
-) -> str:
-    if not SHA256.fullmatch(expected):
-        _fail(f"external input {name} expected SHA-256 is invalid")
-    selected = Path(path).expanduser()
-    if _has_symlink_component(selected) or selected.is_symlink():
-        _fail(f"external input {name} must not use a symlink")
-    try:
-        resolved = selected.resolve(strict=True)
-        if repository in resolved.parents or resolved == repository:
-            _fail(f"external input {name} must be outside the repository")
-        file_stat = resolved.stat()
-        if not stat.S_ISREG(file_stat.st_mode):
-            _fail(f"external input {name} must be a regular file")
-        if stat.S_IMODE(file_stat.st_mode) & 0o077 or not stat.S_IMODE(file_stat.st_mode) & 0o400:
-            _fail(f"external input {name} is not owner-only")
-        owner_uid = getattr(os, "getuid", lambda: None)()
-        if owner_uid is not None and file_stat.st_uid != owner_uid:
-            _fail(f"external input {name} is not owner-controlled")
-        if file_stat.st_nlink != 1:
-            _fail(f"external input {name} is multiply linked")
-        if not 1 <= file_stat.st_size <= MAX_EXTERNAL_INPUT_BYTES:
-            _fail(f"external input {name} exceeds its byte bound")
-        if resolved in used_paths:
-            _fail(f"external input {name} duplicates another input")
-        used_paths.add(resolved)
-        digest = hashlib.sha256()
-        observed_size = 0
-        with resolved.open("rb") as handle:
-            while chunk := handle.read(1024 * 1024):
-                digest.update(chunk)
-                observed_size += len(chunk)
-        after = resolved.stat()
-    except CandidatePrepError:
-        raise
-    except OSError as error:
-        raise CandidatePrepError(f"external input {name} is unavailable") from error
-    if (
-        observed_size != file_stat.st_size
-        or after.st_size != file_stat.st_size
-        or after.st_ino != file_stat.st_ino
-        or after.st_uid != file_stat.st_uid
-        or after.st_nlink != file_stat.st_nlink
-        or stat.S_IMODE(after.st_mode) != stat.S_IMODE(file_stat.st_mode)
-        or after.st_ctime_ns != file_stat.st_ctime_ns
-        or after.st_mtime_ns != file_stat.st_mtime_ns
-    ):
-        _fail(f"external input {name} changed while it was read")
-    observed = digest.hexdigest()
-    if observed != expected:
-        _fail(f"external input {name} SHA-256 does not match the owner value")
-    return observed
-
-
-def _normalise_external_inputs(
-    repository: Path,
-    external_inputs: Mapping[str, Any],
-    expected_hashes: Mapping[str, str] | None,
-) -> dict[str, str]:
-    if set(external_inputs) != set(EXTERNAL_INPUT_NAMES):
-        _fail("external input names must exactly match active qualification v2")
-    if expected_hashes is not None and set(expected_hashes) != set(EXTERNAL_INPUT_NAMES):
-        _fail("external expected SHA names must exactly match active qualification v2")
-    used_paths: set[Path] = set()
-    result: dict[str, str] = {}
-    for name in EXTERNAL_INPUT_NAMES:
-        item = external_inputs[name]
-        path: Any = item
-        expected: Any = expected_hashes.get(name) if expected_hashes is not None else None
-        if isinstance(item, Mapping):
-            path = item.get("path")
-            if expected is None:
-                expected = item.get("sha256")
-        elif isinstance(item, (tuple, list)):
-            if len(item) != 2:
-                _fail(f"external input {name} must contain path and SHA-256")
-            path, inline_expected = item
-            if expected is None:
-                expected = inline_expected
-        if not isinstance(path, (str, Path)) or not isinstance(expected, str):
-            _fail(f"external input {name} requires an owner SHA-256")
-        result[name] = _verify_external_input(
-            repository, name, Path(path), expected, used_paths
-        )
-    return result
+    return head, tree, branch, frozen_main
 
 
 def _expect_once(raw: bytes, old: bytes, new: bytes, *, label: str) -> bytes:
@@ -334,13 +313,51 @@ def _expect_regex(raw: bytes, pattern: bytes, replacement: bytes, *, label: str)
     return result
 
 
+OPTIONAL_EXTERNAL_HASH_NAMES = (
+    "semantic_machine_proposal_sha256",
+    "qualification_holdout_sha256",
+    "final_blind_holdout_sha256",
+    "agent_review_panel_sha256",
+    "scorer_a_sha256",
+    "scorer_b_sha256",
+    "arbiter_sha256",
+)
+
+
+def _validate_contract(
+    value: Mapping[str, Any], schema: Mapping[str, Any], *, label: str
+) -> None:
+    try:
+        errors = sorted(
+            Draft202012Validator(schema).iter_errors(value),
+            key=lambda error: list(error.path),
+        )
+    except Exception as error:
+        raise CandidatePrepError(f"{label} schema validation failed") from error
+    if errors:
+        location = ".".join(str(item) for item in errors[0].path) or "$"
+        _fail(f"{label} schema validation failed at {location}")
+
+
+def _load_contract(
+    repository: Path, relative: str, *, label: str
+) -> tuple[dict[str, Any], bytes]:
+    _resolved, raw = _regular_repo_file(repository, relative)
+    value = _strict_json(raw, label=label)
+    return value, raw
+
+
 def _check_active_template(active: Mapping[str, Any], lock_raw: bytes) -> None:
     if active.get("schema_version") != ACTIVE_SCHEMA_VERSION:
-        _fail("active qualification schema is not v2")
+        _fail("active qualification schema is not v3")
     if active.get("profile") != PROFILE or active.get("status") != "machine_evaluation_pending":
         _fail("active qualification is not the clean 0.12 machine-pending template")
     if active.get("candidate_version") != OLD_VERSION:
         _fail("active qualification is not the 0.12 template")
+    if active.get("construction_package_version") != OLD_VERSION:
+        _fail("active qualification construction package is not 0.12")
+    if active.get("release_target") != CANDIDATE_VERSION:
+        _fail("active qualification release target is not 0.13")
     binding = active.get("candidate_binding")
     if not isinstance(binding, dict) or binding.get("package_version") != OLD_VERSION:
         _fail("active qualification candidate binding is not 0.12")
@@ -358,26 +375,114 @@ def _check_active_template(active: Mapping[str, Any], lock_raw: bytes) -> None:
     if binding.get("lock_sha256") != _sha256(lock_raw):
         _fail("active qualification lock digest is stale")
     external = active.get("external_inputs")
-    if not isinstance(external, dict) or set(external) != set(EXTERNAL_INPUT_NAMES):
-        _fail("active qualification external input inventory is not v2")
-    if any(value is not None for value in external.values()):
+    if not isinstance(external, dict):
+        _fail("active qualification external input inventory is invalid")
+    if set(external) != {
+        *OPTIONAL_EXTERNAL_HASH_NAMES,
+        "status",
+        "null_is_non_blocking",
+        "required_for_candidate_binding",
+    }:
+        _fail("active qualification external input inventory is not v3")
+    if any(external[name] is not None for name in OPTIONAL_EXTERNAL_HASH_NAMES):
         _fail("active qualification already contains external input hashes")
+    if external.get("status") != "not_executed" or external.get("null_is_non_blocking") is not True:
+        _fail("active qualification optional inputs are not explicitly non-blocking")
+    if external.get("required_for_candidate_binding") is not False:
+        _fail("active qualification optional inputs are candidate prerequisites")
     if active.get("blocker") != "machine_evaluation_not_executed":
         _fail("active qualification blocker is not machine-evaluation pending")
+    for section in ("core_statuses", "capability_claims", "competitive_claims"):
+        rows = active.get(section)
+        if not isinstance(rows, list) or any(
+            row.get("status") != "not_executed"
+            or row.get("passed") is not False
+            or row.get("claim") is not False
+            for row in rows
+            if isinstance(row, Mapping)
+        ):
+            _fail(f"active qualification {section} is not not-executed")
     for field in (
         "release_ready",
         "claim_eligible",
-        "machine_qualification_claim_eligible",
+        "kernel_release_claim_eligible",
         "competitive_claim_eligible",
     ):
         if active.get(field) is not False:
             _fail("active qualification contains a release or claim assertion")
 
 
+def _check_contracts(
+    repository: Path, active: Mapping[str, Any], lock_raw: bytes
+) -> None:
+    active_schema, _ = _load_contract(
+        repository, ACTIVE_SCHEMA_RELATIVE, label="active qualification v3 schema"
+    )
+    protocol, protocol_raw = _load_contract(
+        repository, PROTOCOL_RELATIVE, label="qualification protocol v3"
+    )
+    _resolved, protocol_hash_raw = _regular_repo_file(repository, PROTOCOL_HASH_RELATIVE)
+    protocol_schema, _ = _load_contract(
+        repository, PROTOCOL_SCHEMA_RELATIVE, label="qualification protocol v3 schema"
+    )
+    classification, classification_raw = _load_contract(
+        repository, CLASSIFICATION_RELATIVE, label="Gate v9 classification"
+    )
+    classification_schema, _ = _load_contract(
+        repository, CLASSIFICATION_SCHEMA_RELATIVE, label="Gate v9 classification schema"
+    )
+    for schema, label in (
+        (active_schema, "active qualification v3 schema"),
+        (protocol_schema, "qualification protocol v3 schema"),
+        (classification_schema, "Gate v9 classification schema"),
+    ):
+        try:
+            Draft202012Validator.check_schema(schema)
+        except Exception as error:
+            raise CandidatePrepError(f"{label} is invalid") from error
+    _validate_contract(active, active_schema, label="active qualification v3")
+    _validate_contract(protocol, protocol_schema, label="qualification protocol v3")
+    _validate_contract(classification, classification_schema, label="Gate v9 classification")
+    classification_digest = _sha256(classification_raw)
+    protocol_digest = _sha256(protocol_raw)
+    try:
+        sidecar = protocol_hash_raw.decode("ascii").split()
+    except UnicodeError as error:
+        raise CandidatePrepError("qualification protocol hash sidecar is not ASCII") from error
+    if sidecar != [protocol_digest, "qualification-protocol-v3.json"]:
+        _fail("qualification protocol hash sidecar differs from exact bytes")
+    active_classification = active.get("classification_binding")
+    active_protocol = active.get("protocol_binding")
+    if not isinstance(active_classification, Mapping) or not isinstance(active_protocol, Mapping):
+        _fail("active qualification contract bindings are missing")
+    if (
+        active_classification.get("relative_path") != CLASSIFICATION_RELATIVE
+        or active_classification.get("sha256") != classification_digest
+    ):
+        _fail("active qualification Gate v9 binding differs from exact bytes")
+    if (
+        active_protocol.get("relative_path") != PROTOCOL_RELATIVE
+        or active_protocol.get("sha256") != protocol_digest
+    ):
+        _fail("active qualification protocol v3 binding differs from exact bytes")
+    protocol_classification = protocol.get("classification_binding")
+    if (
+        not isinstance(protocol_classification, Mapping)
+        or protocol_classification.get("sha256") != classification_digest
+    ):
+        _fail("qualification protocol Gate v9 binding differs from exact bytes")
+    protocol_binding = protocol.get("candidate_binding")
+    if (
+        not isinstance(protocol_binding, Mapping)
+        or protocol_binding.get("package_version") != OLD_VERSION
+        or protocol_binding.get("lock_sha256") != _sha256(lock_raw)
+    ):
+        _fail("qualification protocol construction binding is not exact 0.12")
+
+
 def _build_updates(
     repository: Path,
     original: Mapping[str, bytes],
-    external_hashes: Mapping[str, str],
 ) -> dict[str, bytes]:
     updates: dict[str, bytes] = {}
     updates["pyproject.toml"] = _expect_regex(
@@ -472,15 +577,15 @@ def _build_updates(
         original[ACTIVE_RELATIVE], label="active qualification construction template"
     )
     _check_active_template(active, original["uv.lock"])
+    _check_contracts(repository, active, original["uv.lock"])
     active["status"] = CONSTRUCTION_STATUS
     active["candidate_version"] = CANDIDATE_VERSION
     binding = active["candidate_binding"]
     binding["package_version"] = CANDIDATE_VERSION
     binding["lock_sha256"] = _sha256(updates["uv.lock"])
-    active["external_inputs"] = dict(external_hashes)
     active["release_ready"] = False
     active["claim_eligible"] = False
-    active["machine_qualification_claim_eligible"] = False
+    active["kernel_release_claim_eligible"] = False
     active["competitive_claim_eligible"] = False
     active["blocker"] = "candidate_artifact_not_built"
     updates[ACTIVE_RELATIVE] = (
@@ -553,8 +658,7 @@ def _run_lock_check(repository: Path) -> None:
 def prepare_candidate(
     *,
     integration_commit: str,
-    external_inputs: Mapping[str, Any],
-    expected_hashes: Mapping[str, str] | None = None,
+    frozen_main_commit: str,
     repository: Path = REPOSITORY,
     apply: bool = False,
     run_lock_check: bool = True,
@@ -565,26 +669,32 @@ def prepare_candidate(
         repository = Path(repository).expanduser().resolve(strict=True)
     except OSError as error:
         raise CandidatePrepError("repository is unavailable") from error
-    head, tree, branch = _assert_git_identity(repository, integration_commit, apply=apply)
+    head, tree, branch, frozen_main = _assert_git_identity(
+        repository,
+        integration_commit,
+        frozen_main_commit,
+        apply=apply,
+    )
     original: dict[str, bytes] = {}
     for relative in CURRENT_SURFACE_FILES:
         _resolved, original[relative] = _regular_repo_file(repository, relative)
-    external_hashes = _normalise_external_inputs(repository, external_inputs, expected_hashes)
-    updates = _build_updates(repository, original, external_hashes)
+    updates = _build_updates(repository, original)
     result: dict[str, Any] = {
         "schema_version": "deeplaw.v013-candidate-prep/v1",
         "mode": "apply" if apply else "dry-run",
-        "base": {"commit": head, "tree": tree, "branch": branch or None},
+        "base": {
+            "commit": head,
+            "integration_commit": head,
+            "tree": tree,
+            "branch": branch or None,
+            "frozen_main_commit": frozen_main,
+        },
         "candidate_identity": {
             "package_version": CANDIDATE_VERSION,
             "profile": PROFILE,
             "gate_classification": GATE_CLASSIFICATION,
             "status": CONSTRUCTION_STATUS,
         },
-        "external_inputs": [
-            {"name": name, "sha256": external_hashes[name], "verified": True}
-            for name in EXTERNAL_INPUT_NAMES
-        ],
         "allowed_current_surfaces": list(CURRENT_SURFACE_FILES),
         "planned_targets": sorted(updates),
         "write_performed": False,
@@ -598,7 +708,11 @@ def prepare_candidate(
                 _run_lock_check(repository)
         except Exception:
             # Restore the exact preflight bytes if post-write validation fails.
-            _atomic_apply(repository, original, updates)
+            _atomic_apply(
+                repository,
+                {relative: original[relative] for relative in updates},
+                updates,
+            )
             raise
         result["write_performed"] = True
     return result
@@ -607,33 +721,11 @@ def prepare_candidate(
 prepare_v013_candidate = prepare_candidate
 
 
-def _assignment(value: str, *, label: str) -> tuple[str, str]:
-    name, separator, selected = value.partition("=")
-    if not separator or not name or not selected:
-        _fail(f"{label} must be NAME=VALUE")
-    if name not in EXTERNAL_INPUT_NAMES:
-        _fail(f"{label} uses an unknown v2 external input name")
-    return name, selected
-
-
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path, default=REPOSITORY)
     parser.add_argument("--integration-commit", required=True)
-    parser.add_argument(
-        "--external-input",
-        action="append",
-        required=True,
-        metavar="NAME=PATH",
-        help="owner-only external input file; repeat exactly once per v2 input",
-    )
-    parser.add_argument(
-        "--external-sha256",
-        action="append",
-        required=True,
-        metavar="NAME=SHA256",
-        help="owner-provided SHA-256 for each external input",
-    )
+    parser.add_argument("--frozen-main-commit", required=True)
     parser.add_argument(
         "--apply",
         action="store_true",
@@ -645,23 +737,10 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        paths: dict[str, str] = {}
-        for item in args.external_input:
-            name, value = _assignment(item, label="--external-input")
-            if name in paths:
-                _fail("duplicate --external-input name")
-            paths[name] = value
-        hashes: dict[str, str] = {}
-        for item in args.external_sha256:
-            name, value = _assignment(item, label="--external-sha256")
-            if name in hashes:
-                _fail("duplicate --external-sha256 name")
-            hashes[name] = value
         result = prepare_candidate(
             repository=args.repository,
             integration_commit=args.integration_commit,
-            external_inputs=paths,
-            expected_hashes=hashes,
+            frozen_main_commit=args.frozen_main_commit,
             apply=args.apply,
         )
     except (CandidatePrepError, OSError, ValueError) as error:
@@ -676,8 +755,8 @@ __all__ = [
     "CANDIDATE_VERSION",
     "CONSTRUCTION_STATUS",
     "CURRENT_SURFACE_FILES",
-    "EXTERNAL_INPUT_NAMES",
     "GATE_CLASSIFICATION",
+    "INTEGRATED_MAIN_REF",
     "CandidatePrepError",
     "PreparationError",
     "main",

@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-host-task-handoff.v1.schema.json",
+  "title": "DeepLaw v0.13 Host task external collector handoff v1",
+  "description": "A path-free, pre-execution input summary for the owner-controlled external collector. This artifact is never Host evidence and contains no task payload or process output.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_kind",
+    "schema_version",
+    "status",
+    "executed",
+    "claim_eligible",
+    "release_ready",
+    "task_catalog_descriptor",
+    "slots",
+    "record_sha256"
+  ],
+  "properties": {
+    "artifact_kind": {"const": "host_task_external_collector_handoff"},
+    "schema_version": {"const": "deeplaw.v013-host-task-handoff/v1"},
+    "status": {"const": "not_executed"},
+    "executed": {"const": false},
+    "claim_eligible": {"const": false},
+    "release_ready": {"const": false},
+    "task_catalog_descriptor": {"$ref": "#/$defs/descriptor"},
+    "slots": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {"$ref": "#/$defs/slot"}
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "host": {
+      "enum": ["codex", "opencode"]
+    },
+    "taskCase": {
+      "enum": ["continuity", "living_wiki", "professional_evidence"]
+    },
+    "descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "byte_size", "sha256"],
+      "properties": {
+        "role": {
+          "enum": [
+            "task_domain_seed",
+            "host_task_catalog",
+            "codex_app_server_native_hook",
+            "opencode_exact_project_plugin_native_hook"
+          ]
+        },
+        "byte_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "task_case",
+        "driver_kind",
+        "status",
+        "executed",
+        "claim_eligible",
+        "release_ready",
+        "seed_descriptor",
+        "driver_descriptor",
+        "host_identity_sha256",
+        "host_identity_source_sha256",
+        "host_identity_source",
+        "typed_source_slots",
+        "control_receipt_slots"
+      ],
+      "properties": {
+        "host": {"$ref": "#/$defs/host"},
+        "task_case": {"$ref": "#/$defs/taskCase"},
+        "driver_kind": {"const": "native_host_task_v3"},
+        "status": {"const": "not_executed"},
+        "executed": {"const": false},
+        "claim_eligible": {"const": false},
+        "release_ready": {"const": false},
+        "seed_descriptor": {"$ref": "#/$defs/descriptor"},
+        "driver_descriptor": {"$ref": "#/$defs/descriptor"},
+        "host_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "host_identity_source_sha256": {"$ref": "#/$defs/sha256"},
+        "host_identity_source": {"const": "owner_external_frozen_input"},
+        "typed_source_slots": {
+          "const": [
+            "event_source",
+            "lifecycle_source",
+            "usage_source",
+            "expected_source",
+            "continuity_source",
+            "isolation_source"
+          ]
+        },
+        "control_receipt_slots": {
+          "const": ["host_preflight_receipt", "host_process_receipt"]
+        }
+      }
+    }
+  }
+}

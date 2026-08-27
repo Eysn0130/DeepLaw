@@ -52,18 +52,29 @@ class EvidenceValidationError(ValueError):
     """Qualification evidence was incomplete, inconsistent, or unsafe."""
 
 
-def isolation_receipt(*, host: str) -> dict[str, Any]:
-    """Return a path-free receipt for one closed temporary Host profile."""
+def isolation_receipt(*, host: str, keyring_bridge: bool = False) -> dict[str, Any]:
+    """Return a path-free receipt for one closed temporary Host profile.
+
+    Codex may use the current user's system ``HOME`` solely so its external
+    credential broker can reach the OS keyring.  All Codex/XDG/TMP state stays
+    under the explicit qualification profile; the bridge is therefore an
+    explicit, separately classified isolation variant rather than an ambient
+    fallback.
+    """
 
     if host not in {"codex", "opencode"}:
         raise EvidenceValidationError("Host isolation receipt has an unsupported host")
+    if keyring_bridge and host != "codex":
+        raise EvidenceValidationError("Keyring bridge is supported only for Codex")
     return {
-        "profile_kind": "temporary_closed",
-        "home_isolated": True,
+        "profile_kind": (
+            "temporary_closed_with_keyring_bridge" if keyring_bridge else "temporary_closed"
+        ),
+        "home_isolated": not keyring_bridge,
         "codex_home_isolated": host == "codex",
         "xdg_config_home_isolated": True,
         "xdg_data_home_isolated": True,
-        "ambient_host_state_inherited": False,
+        "ambient_host_state_inherited": keyring_bridge,
         "ambient_plugins_inherited": False,
         "ambient_apps_inherited": False,
         "ambient_hooks_inherited": False,

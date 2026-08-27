@@ -115,7 +115,15 @@ def test_diagnostic_pre_host_path_does_not_read_qualification_cases(
             "_host_environment",
             lambda *args, **kwargs: (_ for _ in ()).throw(ReachedHostStart()),
         )
-        with pytest.raises(ReachedHostStart):
+        monkeypatch.setattr(
+            QualificationOrchestrator,
+            "prepare_candidate",
+            lambda self: pytest.fail("diagnostic mode reached candidate preparation"),
+        )
+        with pytest.raises(
+            codex_runner.QualificationFailure,
+            match="independent owner-bound Host session identity",
+        ):
             codex_runner.execute(
                 candidate_wheel=tmp_path / "candidate.whl",
                 deeplaw_executable=tmp_path / "deeplaw",
@@ -129,13 +137,21 @@ def test_diagnostic_pre_host_path_does_not_read_qualification_cases(
     else:
         root = tmp_path / "opencode-root"
         root.mkdir()
+        monkeypatch.setattr(
+            QualificationOrchestrator,
+            "prepare_candidate",
+            lambda self: pytest.fail("diagnostic mode reached candidate preparation"),
+        )
         monkeypatch.setattr(opencode_runner, "_validate_binary", lambda binary: "a" * 64)
         monkeypatch.setattr(
             opencode_runner,
             "_validate_owner_broker_launcher",
             lambda *args, **kwargs: (_ for _ in ()).throw(ReachedHostStart()),
         )
-        with pytest.raises(ReachedHostStart):
+        with pytest.raises(
+            opencode_runner.QualificationError,
+            match=r"fork-route and child plugin-event correlation.*not_executed",
+        ):
             opencode_runner._execute_qualification_body(
                 candidate_wheel=tmp_path / "candidate.whl",
                 deeplaw_executable=tmp_path / "deeplaw",
@@ -315,7 +331,10 @@ def test_diagnostic_reaches_candidate_preparation_without_gold(
         launcher = tmp_path / "owner-broker"
         launcher.write_bytes(b"owner broker fixture")
         launcher.chmod(0o700)
-        with pytest.raises(ReachedCandidatePreparation):
+        with pytest.raises(
+            codex_runner.QualificationFailure,
+            match="independent owner-bound Host session identity",
+        ):
             codex_runner.execute(
                 candidate_wheel=tmp_path / "candidate.whl",
                 deeplaw_executable=tmp_path / "deeplaw",
@@ -329,7 +348,10 @@ def test_diagnostic_reaches_candidate_preparation_without_gold(
     else:
         root = tmp_path / "opencode-root"
         root.mkdir()
-        with pytest.raises(ReachedCandidatePreparation):
+        with pytest.raises(
+            opencode_runner.QualificationError,
+            match=r"fork-route and child plugin-event correlation.*not_executed",
+        ):
             opencode_runner._execute_qualification_body(
                 candidate_wheel=tmp_path / "candidate.whl",
                 deeplaw_executable=tmp_path / "deeplaw",
@@ -475,7 +497,7 @@ def _failed_diagnostic_report(tmp_path: Path) -> dict[str, object]:
         },
         host_attestation={
             **codex_runner._placeholder_attestation(),
-            "version": codex_runner.CODEX_VERSION,
+            "version": codex_runner.HISTORICAL_CODEX_VERSION_FIXTURE,
         },
         tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
             [knowledge_tool_definition(autonomous=True)]

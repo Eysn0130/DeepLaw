@@ -20,10 +20,14 @@ from .util import canonical_json, sha256_bytes, strict_json_loads
 
 NATIVE_HOST_EVENT_SCHEMA_VERSION = "deeplaw.native-host-event/v2"
 NATIVE_HOST_RECEIPT_SCHEMA_VERSION = "deeplaw.native-host-lifecycle-receipt/v2"
+NATIVE_HOST_EVENT_V3_SCHEMA_VERSION = "deeplaw.native-host-event/v3"
+NATIVE_HOST_RECEIPT_V3_SCHEMA_VERSION = "deeplaw.native-host-lifecycle-receipt/v3"
 MAX_EVENT_BYTES = 64 * 1024
 
 _EVENT_SCHEMA_NAME = "native-host-event.v2.schema.json"
 _RECEIPT_SCHEMA_NAME = "native-host-lifecycle-receipt.v2.schema.json"
+_EVENT_V3_SCHEMA_NAME = "native-host-event.v3.schema.json"
+_RECEIPT_V3_SCHEMA_NAME = "native-host-lifecycle-receipt.v3.schema.json"
 _CODEX_EVENTS = frozenset(
     {"SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "SessionEnd"}
 )
@@ -102,8 +106,16 @@ def _reject_forbidden_keys(value: Any) -> None:
             lowered = key.casefold()
             # Codex's fixed request identity has a scalar ``reasoning`` mode.
             # Permit that one closed value while rejecting reasoning content.
+            fixed_policy_keys = {
+                "auth_status_command",
+                "auth_material_access",
+                "reasoning_effort",
+                "runtime",
+                "dotenv_policy",
+                "secret_visibility",
+            }
             fixed_reasoning_mode = key == "reasoning" and item == "max"
-            if not fixed_reasoning_mode and any(
+            if key not in fixed_policy_keys and not fixed_reasoning_mode and any(
                 part in lowered for part in _FORBIDDEN_KEY_PARTS
             ):
                 raise NativeHostObservationError("Native Host event contains a forbidden field")
@@ -125,11 +137,23 @@ def _non_placeholder_digest(value: str, *, field: str) -> None:
         raise NativeHostObservationError(f"{field} must identify an observed artifact")
 
 
-def _validate_event_value(value: Any) -> dict[str, Any]:
+def _non_placeholder_git(value: str, *, field: str) -> None:
+    if value == "0" * 40:
+        raise NativeHostObservationError(f"{field} must identify an observed source")
+
+
+def _validate_event_value(value: Any, *, schema_version: str | None = None) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise NativeHostObservationError("Native Host event must be an object")
     _reject_forbidden_keys(value)
-    _validate_schema(value, _EVENT_SCHEMA_NAME)
+    selected_version = value.get("schema_version") if schema_version is None else schema_version
+    if selected_version == NATIVE_HOST_EVENT_SCHEMA_VERSION:
+        schema_name = _EVENT_SCHEMA_NAME
+    elif selected_version == NATIVE_HOST_EVENT_V3_SCHEMA_VERSION:
+        schema_name = _EVENT_V3_SCHEMA_NAME
+    else:
+        raise NativeHostObservationError("Native Host event schema version is unsupported")
+    _validate_schema(value, schema_name)
     host = value["host"]
     event_type = value["event_type"]
     if host == "codex" and event_type not in _CODEX_EVENTS:
@@ -142,10 +166,26 @@ def _validate_event_value(value: Any) -> dict[str, Any]:
         raise NativeHostObservationError("fork parent identity is only valid on a fork event")
     if parent is not None:
         _non_placeholder_digest(parent, field="parent_session_sha256")
+    if host == "codex":
+        identity = value["host_identity"]
+        _non_placeholder_digest(identity["binary_sha256"], field="binary_sha256")
     if host == "opencode":
         identity = value["host_identity"]
         _non_placeholder_digest(identity["executable_sha256"], field="executable_sha256")
         _non_placeholder_digest(identity["package_sha256"], field="package_sha256")
+        if selected_version == NATIVE_HOST_EVENT_V3_SCHEMA_VERSION:
+            _non_placeholder_git(identity["source_commit"], field="source_commit")
+    if selected_version == NATIVE_HOST_EVENT_V3_SCHEMA_VERSION:
+        execution = value["execution_identity"]
+        if host == "codex" and execution["selector_source_symlink"] is not False:
+            raise NativeHostObservationError("Codex execution selector must not be a symlink")
+        if (
+            execution["execution_target_regular"] is not True
+            or execution["execution_target_single_link"] is not True
+        ):
+            raise NativeHostObservationError(
+                "Native Host execution target is not regular and single-link"
+            )
     route = value.get("route")
     if route is not None and route["status"] not in _ROUTE_STATUSES:
         raise NativeHostObservationError("Native Host route status is invalid")
@@ -266,6 +306,7 @@ def derive_native_host_receipt(
     """
 
     normalized = _validate_event_value(dict(event))
+    current_v3 = normalized["schema_version"] == NATIVE_HOST_EVENT_V3_SCHEMA_VERSION
     if raw_observation is None:
         raw = canonical_json(normalized).encode("utf-8")
     elif isinstance(raw_observation, (bytes, bytearray)):
@@ -276,7 +317,11 @@ def derive_native_host_receipt(
         raise NativeHostObservationError("raw Native Host observation exceeds its byte bound")
     route_binding, gap_code = _route_receipt(normalized.get("route"))
     receipt: dict[str, Any] = {
-        "schema_version": NATIVE_HOST_RECEIPT_SCHEMA_VERSION,
+        "schema_version": (
+            NATIVE_HOST_RECEIPT_V3_SCHEMA_VERSION
+            if current_v3
+            else NATIVE_HOST_RECEIPT_SCHEMA_VERSION
+        ),
         "provenance_level": normalized["provenance_level"],
         "host": normalized["host"],
         "host_identity": dict(normalized["host_identity"]),
@@ -300,10 +345,15 @@ def derive_native_host_receipt(
         "claim_eligible": False,
         "write_performed": False,
     }
+    if current_v3:
+        receipt["execution_identity"] = dict(normalized["execution_identity"])
     receipt["receipt_sha256"] = sha256_bytes(
         canonical_json(receipt).encode("utf-8")
     )
-    _validate_schema(receipt, _RECEIPT_SCHEMA_NAME)
+    _validate_schema(
+        receipt,
+        _RECEIPT_V3_SCHEMA_NAME if current_v3 else _RECEIPT_SCHEMA_NAME,
+    )
     return receipt
 
 
@@ -320,7 +370,9 @@ def observe_native_host_event(
 __all__ = [
     "MAX_EVENT_BYTES",
     "NATIVE_HOST_EVENT_SCHEMA_VERSION",
+    "NATIVE_HOST_EVENT_V3_SCHEMA_VERSION",
     "NATIVE_HOST_RECEIPT_SCHEMA_VERSION",
+    "NATIVE_HOST_RECEIPT_V3_SCHEMA_VERSION",
     "NativeHostObservationError",
     "derive_native_host_receipt",
     "load_native_host_event",

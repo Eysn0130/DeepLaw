@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/kernel-qualification-bundle-manifest.v1.schema.json",
+  "title": "DeepLaw Kernel qualification bundle manifest v1",
+  "description": "Closed inventory of exact-candidate Gate v9 evidence. It contains no comparative reference, panel, scorer A/B, arbiter, transcript, prompt, reasoning, authentication, or Secret surface.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "reference_provenance",
+    "human_authenticity",
+    "candidate_binding",
+    "run_ids",
+    "bindings",
+    "corpora",
+    "files",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "deeplaw.kernel-qualification-bundle-manifest/v1"},
+    "profile": {"const": "kernel_release_core"},
+    "reference_provenance": {
+      "enum": ["deterministic_expected_evidence", "not_applicable"]
+    },
+    "human_authenticity": {"const": "not_claimed"},
+    "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+    "run_ids": {"$ref": "#/$defs/runIds"},
+    "bindings": {"$ref": "#/$defs/bindings"},
+    "corpora": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/corpus"}
+    },
+    "files": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 1024,
+      "items": {"$ref": "#/$defs/file"}
+    },
+    "record_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "lock_sha256",
+        "wheel_sha256",
+        "sdist_sha256",
+        "version"
+      ],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"},
+        "version": {"const": "0.13.0"}
+      }
+    },
+    "runIds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_run_id", "evidence_run_id", "qualification_run_id"],
+      "properties": {
+        "candidate_run_id": {"type": "integer", "minimum": 1},
+        "evidence_run_id": {"type": "integer", "minimum": 1},
+        "qualification_run_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256", "schema_version"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/safePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "schema_version": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active_qualification", "gate_classification", "qualification_protocol"],
+      "properties": {
+        "active_qualification": {"$ref": "#/$defs/binding"},
+        "gate_classification": {"$ref": "#/$defs/binding"},
+        "qualification_protocol": {"$ref": "#/$defs/binding"}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "source", "sha256", "frozen"],
+      "properties": {
+        "role": {
+          "enum": [
+            "candidate_full",
+            "candidate_platform",
+            "host_qualification",
+            "professional_evidence",
+            "living_wiki",
+            "scale_10000",
+            "supply_chain"
+          ]
+        },
+        "source": {"enum": ["repository", "candidate_artifact", "repository_external"]},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "frozen": {"const": true}
+      }
+    },
+    "typedEvidenceKind": {
+      "enum": [
+        "candidate_full_junit",
+        "candidate_platform_receipt",
+        "host_event_sequence",
+        "exact_wheel_execution",
+        "professional_evidence_rows",
+        "wiki_journey_rows",
+        "context_capsule_selection_usage",
+        "scale_report",
+        "retained_supply_chain"
+      ]
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "byte_size",
+        "sha256",
+        "artifact_kind",
+        "evidence_kind"
+      ],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/safePath"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "artifact_kind": {
+          "enum": [
+            "typed_manifest",
+            "raw_source",
+            "host_preflight_receipt",
+            "host_process_receipt",
+            "broker_source",
+            "candidate_inventory"
+          ]
+        },
+        "evidence_kind": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/typedEvidenceKind"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"artifact_kind": {"const": "typed_manifest"}},
+            "required": ["artifact_kind"]
+          },
+          "then": {
+            "properties": {
+              "evidence_kind": {"$ref": "#/$defs/typedEvidenceKind"}
+            }
+          },
+          "else": {"properties": {"evidence_kind": {"type": "null"}}}
+        }
+      ]
+    }
+  }
+}

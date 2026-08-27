@@ -1,0 +1,271 @@
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+import os
+from pathlib import Path
+
+import pytest
+
+from benchmarks.hosts import host_preflight_receipt as preflight
+from benchmarks.hosts import host_process_receipt as receipt
+
+
+def _identity(
+    *, codex_version: str, codex_sha256: str, opencode_sha256: str
+) -> dict[str, object]:
+    return {
+        "schema_version": preflight.HOST_IDENTITY_SCHEMA_VERSION,
+        "hosts": {
+            "codex": {
+                "binary_version": codex_version,
+                "binary_sha256": codex_sha256,
+                "request_model": "gpt-5.6-luna",
+                "reasoning_effort": "max",
+                "auth_status_command": "codex login status",
+                "auth_material_access": "forbidden",
+            },
+            "opencode": {
+                "version": "1.18.16",
+                "source_commit": "a" * 40,
+                "config_selector": "deepseek/deepseek-v4-flash",
+                "expected_response_model_id": "deepseek-v4-flash",
+                "executable_sha256": opencode_sha256,
+                "package_sha256": "b" * 64,
+                "runtime": "host_bun_runtime_only",
+                "dotenv_policy": "owner_only_external_strict_parser",
+                "secret_visibility": "forbidden",
+            },
+        },
+        "source_sha256": "c" * 64,
+        "source_bytes": 128,
+    }
+
+
+def _artifacts(tmp_path: Path, host: str) -> tuple[dict[str, object], Path, Path, Path]:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    version = "codex-cli 0.149.0-alpha.4.3" if host == "codex" else "1.18.16"
+    binary = tmp_path / f"{host}-binary"
+    binary.write_text(f"#!/bin/sh\nprintf '%s\\n' '{version}'\n", encoding="utf-8")
+    binary.chmod(0o700)
+    binary_sha256 = hashlib.sha256(binary.read_bytes()).hexdigest()
+    broker = tmp_path / f"{host}-broker"
+    broker.write_bytes(b"#!/bin/sh\nexit 0\n")
+    broker.chmod(0o700)
+    identity = _identity(
+        codex_version="codex-cli 0.149.0-alpha.4.3",
+        codex_sha256=binary_sha256 if host == "codex" else "d" * 64,
+        opencode_sha256=binary_sha256 if host == "opencode" else "e" * 64,
+    )
+    return identity, repository, binary, broker
+
+
+def _build(
+    tmp_path: Path, host: str = "opencode", *, selector: bool = False
+) -> tuple[dict[str, object], dict[str, object]]:
+    identity, repository, binary, broker = _artifacts(tmp_path, host)
+    selected_binary = binary
+    if selector:
+        selected_binary = tmp_path / f"{host}-selector"
+        selected_binary.symlink_to(binary)
+    value = receipt.build_process_receipt(
+        host=host,
+        task_case="continuity",
+        run_id=f"run-{host}-001",
+        identity=identity,
+        repository=repository,
+        host_binary=selected_binary,
+        broker_path=broker,
+        supervisor={"observed": True, "exit_code": 0},
+        isolation={
+            "runner_received_secret": False,
+            "mcp_received_secret": False,
+            "ambient_auth_forwarded_to_mcp": False,
+            "raw_output_retained": False,
+        },
+        execution_identity={
+            "selector_source_symlink": selector,
+            "execution_target_regular": True,
+            "execution_target_single_link": True,
+        },
+        expected_broker_sha256=hashlib.sha256(broker.read_bytes()).hexdigest(),
+    )
+    return value, identity
+
+
+@pytest.mark.parametrize(
+    ("host", "selector"),
+    (("codex", False), ("opencode", False), ("opencode", True)),
+)
+def test_valid_codex_and_opencode_receipts_are_path_free_and_identity_bound(
+    tmp_path: Path, host: str, selector: bool
+) -> None:
+    value, identity = _build(tmp_path, host, selector=selector)
+    assert receipt.validate_process_receipt(
+        value,
+        identity=identity,
+        expected_host=host,
+        expected_task_case="continuity",
+        expected_run_id=f"run-{host}-001",
+    ) == value
+    assert value["record_sha256"] == receipt.record_sha256(value)
+    serialized = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    assert str(tmp_path) not in serialized
+    for forbidden in ("path", "command", "env", "stdout", "stderr", "prompt", "transcript"):
+        assert forbidden not in serialized.casefold()
+
+
+@pytest.mark.parametrize(
+    "supervisor",
+    (
+        {"observed": False, "exit_code": 0},
+        {"observed": True, "exit_code": 1},
+        {"observed": True, "exit_code": 0, "extra": True},
+    ),
+)
+def test_supervisor_exit_and_unknown_fields_fail_closed(
+    tmp_path: Path, supervisor: dict[str, object]
+) -> None:
+    identity, repository, binary, broker = _artifacts(tmp_path, "opencode")
+    with pytest.raises(receipt.HostProcessReceiptError):
+        receipt.build_receipt(
+            host="opencode",
+            task_case="continuity",
+            run_id="run-opencode-001",
+            identity=identity,
+            repository=repository,
+            host_binary=binary,
+            broker_path=broker,
+            supervisor=supervisor,
+            isolation={
+                "runner_received_secret": False,
+                "mcp_received_secret": False,
+                "ambient_auth_forwarded_to_mcp": False,
+                "raw_output_retained": False,
+            },
+            expected_broker_sha256=hashlib.sha256(broker.read_bytes()).hexdigest(),
+        )
+
+
+def test_isolation_and_topology_fail_closed(tmp_path: Path) -> None:
+    identity, repository, binary, broker = _artifacts(tmp_path, "codex")
+    isolation = {
+        "runner_received_secret": False,
+        "mcp_received_secret": False,
+        "ambient_auth_forwarded_to_mcp": False,
+        "raw_output_retained": False,
+    }
+    isolation["runner_received_secret"] = True
+    with pytest.raises(receipt.HostProcessReceiptError):
+        receipt.build_receipt(
+            host="codex",
+            task_case="continuity",
+            run_id="run-codex-001",
+            identity=identity,
+            repository=repository,
+            host_binary=binary,
+            broker_path=broker,
+            supervisor={"observed": True, "exit_code": 0},
+            isolation=isolation,
+            expected_broker_sha256=hashlib.sha256(broker.read_bytes()).hexdigest(),
+        )
+
+    with pytest.raises(receipt.HostProcessReceiptError):
+        receipt.build_receipt(
+            host="codex",
+            task_case="continuity",
+            run_id="run-codex-001",
+            identity=identity,
+            repository=repository,
+            host_binary=binary,
+            broker_path=broker,
+            supervisor={"observed": True, "exit_code": 0},
+            isolation={key: False for key in isolation},
+            selector_source_symlink=True,
+            expected_broker_sha256=hashlib.sha256(broker.read_bytes()).hexdigest(),
+        )
+
+
+@pytest.mark.parametrize("kind", ("symlink", "hardlink", "non_owner_only", "repo_inside"))
+def test_broker_identity_boundaries_fail_closed(tmp_path: Path, kind: str) -> None:
+    identity, repository, binary, broker = _artifacts(tmp_path, "opencode")
+    selected = broker
+    if kind == "symlink":
+        selected = tmp_path / "broker-link"
+        selected.symlink_to(broker)
+    elif kind == "hardlink":
+        selected = tmp_path / "broker-hardlink"
+        os.link(broker, selected)
+    elif kind == "non_owner_only":
+        broker.chmod(0o750)
+    elif kind == "repo_inside":
+        selected = repository / "broker"
+        selected.write_bytes(broker.read_bytes())
+        selected.chmod(0o700)
+    with pytest.raises(receipt.HostProcessReceiptError):
+        receipt.build_receipt(
+            host="opencode",
+            task_case="continuity",
+            run_id="run-opencode-001",
+            identity=identity,
+            repository=repository,
+            host_binary=binary,
+            broker_path=selected,
+            supervisor={"observed": True, "exit_code": 0},
+            isolation={
+                "runner_received_secret": False,
+                "mcp_received_secret": False,
+                "ambient_auth_forwarded_to_mcp": False,
+                "raw_output_retained": False,
+            },
+            expected_broker_sha256=hashlib.sha256(broker.read_bytes()).hexdigest(),
+        )
+
+
+def test_wrong_expected_broker_digest_fails_closed(tmp_path: Path) -> None:
+    identity, repository, binary, broker = _artifacts(tmp_path, "opencode")
+    with pytest.raises(receipt.HostProcessReceiptError):
+        receipt.build_receipt(
+            host="opencode",
+            task_case="continuity",
+            run_id="run-opencode-001",
+            identity=identity,
+            repository=repository,
+            host_binary=binary,
+            broker_path=broker,
+            supervisor={"observed": True, "exit_code": 0},
+            isolation={
+                "runner_received_secret": False,
+                "mcp_received_secret": False,
+                "ambient_auth_forwarded_to_mcp": False,
+                "raw_output_retained": False,
+            },
+            expected_broker_sha256="f" * 64,
+        )
+
+
+def test_validator_rejects_identity_drift_record_mismatch_and_unknown_fields(
+    tmp_path: Path,
+) -> None:
+    value, identity = _build(tmp_path)
+    drifted_identity = copy.deepcopy(identity)
+    drifted_identity["hosts"]["opencode"]["executable_sha256"] = "f" * 64
+    with pytest.raises(receipt.HostProcessReceiptError):
+        receipt.validate_receipt(value, identity=drifted_identity)
+
+    changed_run = {**value, "run_id": "run-opencode-002"}
+    with pytest.raises(receipt.HostProcessReceiptError):
+        receipt.validate_receipt(changed_run)
+
+    unknown = {**value, "unexpected": True}
+    with pytest.raises(receipt.HostProcessReceiptError):
+        receipt.validate_receipt(unknown)
+
+
+def test_process_receipt_producer_has_no_dotenv_or_raw_file_surface() -> None:
+    source = Path(receipt.__file__).read_text(encoding="utf-8").casefold()
+    assert ".env" not in source
+    assert "dotenv" not in source
+    assert "read_bytes" not in source

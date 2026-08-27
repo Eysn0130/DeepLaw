@@ -50,29 +50,65 @@ def test_execute_and_cli_require_an_explicit_profile_root(tmp_path: Path) -> Non
 def test_candidate_runner_rejects_human_gold_before_candidate_or_codex_start(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    called = False
+    preflight_called = False
+    candidate_called = False
+
+    def run_preflight(*args: object, **kwargs: object) -> object:
+        nonlocal preflight_called
+        preflight_called = True
+        raise AssertionError("owner-external preflight must not start before Human Gold rejection")
 
     def prepare_candidate(*args: object, **kwargs: object) -> object:
-        nonlocal called
-        called = True
+        nonlocal candidate_called
+        candidate_called = True
         raise AssertionError("candidate preparation must not receive Human Gold")
 
+    monkeypatch.setattr(
+        qualification,
+        "run_codex_owner_external_zero_model_preflight",
+        run_preflight,
+    )
     monkeypatch.setattr(
         qualification.QualificationOrchestrator,
         "prepare_candidate",
         prepare_candidate,
     )
+    profile = _profile(tmp_path)
     with pytest.raises(qualification.QualificationFailure, match="must not receive Human Gold"):
         qualification.execute(
             candidate_wheel=tmp_path / "candidate.whl",
             deeplaw_executable=tmp_path / "deeplaw",
             output_dir=tmp_path / "output",
-            profile_root=_profile(tmp_path),
+            profile_root=profile,
             human_gold_path=tmp_path / "missing-human-gold.json",
             codex_binary=tmp_path / "codex",
             codex_launcher=tmp_path / "codex-owner-broker",
+            host_identity_input=tmp_path / "host-identity.json",
+            expected_broker_sha256="a" * 64,
+            candidate_binding_input=tmp_path / "candidate-binding.json",
+            run_id="pass16-human-gold-ordering",
+            evidence_run_id=16,
+            qualification_run_id=16,
+            keyring_home=tmp_path / "keyring-home",
         )
-    assert called is False
+    assert preflight_called is False
+    assert candidate_called is False
+
+    with pytest.raises(
+        qualification.QualificationFailure,
+        match=r"control input is unavailable.*not_executed",
+    ):
+        qualification.execute(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "missing-control-output",
+            profile_root=profile,
+            human_gold_path=None,
+            codex_binary=tmp_path / "codex",
+            codex_launcher=tmp_path / "codex-owner-broker",
+        )
+    assert preflight_called is False
+    assert candidate_called is False
 
 
 @pytest.mark.parametrize("ambient_name", ["HOME", "USERPROFILE", "CODEX_HOME"])
@@ -163,8 +199,11 @@ class _VersionProcess:
 
 
 def test_exact_codex_version_is_accepted() -> None:
-    process = _VersionProcess(qualification.CODEX_VERSION + "\n")
-    assert qualification._validate_codex_version(process) == qualification.CODEX_VERSION
+    process = _VersionProcess(qualification.HISTORICAL_CODEX_VERSION_FIXTURE + "\n")
+    assert (
+        qualification._validate_codex_version(process)
+        == qualification.HISTORICAL_CODEX_VERSION_FIXTURE
+    )
 
 
 @pytest.mark.parametrize(

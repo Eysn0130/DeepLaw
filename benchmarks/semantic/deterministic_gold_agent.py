@@ -565,11 +565,12 @@ def compile_source(
             raise RuntimeError("retention-b requires the completed retention-a run")
         publication_source_ids.append(dependency["source_revision_id"])
         publication_run_ids.append(dependency["compilation_run_id"])
-        prior_source_refs = _current_source_refs(
-            knowledge_os,
-            semantic_key=OBJECT_SPECS["retention-a"][0]["semantic_key"],
-            title=OBJECT_SPECS["retention-a"][0]["title"],
-        )
+        with KnowledgeOS.open(vault) as prior_knowledge_os:
+            prior_source_refs = _current_source_refs(
+                prior_knowledge_os,
+                semantic_key=OBJECT_SPECS["retention-a"][0]["semantic_key"],
+                title=OBJECT_SPECS["retention-a"][0]["title"],
+            )
     actions = []
     for spec in specs:
         refs = all_current_refs

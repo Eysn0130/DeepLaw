@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       evidence_run_id:
-        description: Successful External Qualification Evidence run for the same candidate.
+        description: Successful Kernel Qualification Evidence run for the same candidate.
         required: true
         type: string
       qualification_run_id:
@@ -30,10 +30,11 @@ permissions:
 
 jobs:
   resolve:
-    name: Resolve exact tag, Candidate Full, external evidence, and machine qualification
+    name: Resolve exact tag, Candidate Full, Kernel evidence, and qualification
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.release.outputs.tag }}
+      tag_object_sha: ${{ steps.release.outputs.tag_object_sha }}
       commit: ${{ steps.release.outputs.commit }}
       tree: ${{ steps.release.outputs.tree }}
       version: ${{ steps.release.outputs.version }}
@@ -64,8 +65,16 @@ jobs:
           test "${OWNER_RELEASE_CONFIRMATION}" = "publish-v0.13.0"
           test "${TARGET_TAG}" = "v0.13.0"
           test "${GITHUB_REF}" = "refs/tags/${TARGET_TAG}"
-          commit=$(git rev-parse HEAD)
-          test "${commit}" = "$(git rev-list -n 1 "${TARGET_TAG}")"
+          test "$(git cat-file -t "${TARGET_TAG}")" = tag
+          tag_object_sha=$(git rev-parse "${TARGET_TAG}")
+          commit=$(git rev-parse "${TARGET_TAG}^{commit}")
+          test "${commit}" = "$(git rev-parse HEAD)"
+          remote_tag_type=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TARGET_TAG}" --jq .object.type)
+          remote_tag_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TARGET_TAG}" --jq .object.sha)
+          test "${remote_tag_type}" = tag
+          test "${remote_tag_sha}" = "${tag_object_sha}"
           version=$(python - <<'PY'
           import pathlib
           import tomllib
@@ -89,7 +98,6 @@ jobs:
             [[ "${run_id}" =~ ^[0-9]+$ ]]
             test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .status)" = completed
             test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .conclusion)" = success
-            test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .head_sha)" = "${commit}"
             test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .name)" = "${expected_name}"
             test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .path)" = "${expected_path}"
           }
@@ -99,13 +107,18 @@ jobs:
             ".github/workflows/candidate-full.yml"
           verify_run \
             "${evidence_run_id}" \
-            "External Qualification Evidence" \
-            ".github/workflows/external-qualification-evidence.yml"
+            "Kernel Qualification Evidence" \
+            ".github/workflows/kernel-qualification-evidence.yml"
           verify_run \
             "${qualification_run_id}" \
             "Commercial Qualification" \
             ".github/workflows/commercial-qualification.yml"
+          candidate_head="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run_id}" --jq .head_sha)"
+          test "${candidate_head}" = "${commit}"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${evidence_run_id}" --jq .head_sha)" = "${candidate_head}"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qualification_run_id}" --jq .head_sha)" = "${candidate_head}"
           echo "tag=${TARGET_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "tag_object_sha=${tag_object_sha}" >> "${GITHUB_OUTPUT}"
           echo "commit=${commit}" >> "${GITHUB_OUTPUT}"
           echo "tree=${tree}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
@@ -138,21 +151,13 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/verified-dist
 
-      - name: Download Candidate Full raw evidence
+      - name: Download sanitized Kernel qualification evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: candidate-full-raw-evidence
-          run-id: ${{ needs.resolve.outputs.candidate_run_id }}
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/candidate-full-raw-evidence
-
-      - name: Download machine-only external qualification evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: v013-qualification-evidence
+          name: kernel-qualification-evidence
           run-id: ${{ needs.resolve.outputs.evidence_run_id }}
           github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/external-source
+          path: ${{ runner.temp }}/kernel-evidence-staging
 
       - name: Download exact qualification assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -162,10 +167,11 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/release-assets
 
-      - name: Verify one artifact source and the embedded external bundle
+      - name: Verify one artifact source and the exact embedded Kernel bundle
         shell: bash
         run: |
           set -euo pipefail
+          uv lock --check
           uv sync --frozen --extra dev
           uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
             --repository . \
@@ -180,102 +186,55 @@ jobs:
               consumer_dist=Path("${{ runner.temp }}/release-assets"),
           )
           PY
-          EXTERNAL_SOURCE="${RUNNER_TEMP}/external-source" \
-          EMBEDDED_EXTERNAL="${RUNNER_TEMP}/release-assets/external-evidence" \
+          STAGING_SOURCE="${RUNNER_TEMP}/kernel-evidence-staging" \
+          EMBEDDED_BUNDLE="${RUNNER_TEMP}/release-assets/evidence/kernel-bundle" \
           python - <<'PY'
           import hashlib
           import os
           from pathlib import Path
 
-          def inventory(root: Path):
+          def inventory(root: Path, *, exclude_manifest: bool):
               root = root.resolve(strict=True)
               result = {}
               for path in sorted(root.rglob("*")):
                   if path.is_symlink():
-                      raise SystemExit("external qualification evidence contains a symlink")
+                      raise SystemExit("Kernel qualification evidence contains a symlink")
                   if path.is_file():
                       relative = path.relative_to(root).as_posix()
+                      if exclude_manifest and relative == "bundle-manifest.json":
+                          continue
                       raw = path.read_bytes()
                       result[relative] = (hashlib.sha256(raw).hexdigest(), len(raw))
               if not result:
-                  raise SystemExit("external qualification evidence is empty")
+                  raise SystemExit("Kernel qualification evidence is empty")
               return result
 
-          source = inventory(Path(os.environ["EXTERNAL_SOURCE"]))
-          embedded = inventory(Path(os.environ["EMBEDDED_EXTERNAL"]))
+          source = inventory(Path(os.environ["STAGING_SOURCE"]), exclude_manifest=False)
+          embedded = inventory(Path(os.environ["EMBEDDED_BUNDLE"]), exclude_manifest=True)
           if source != embedded:
-              raise SystemExit("commercial assets do not embed the exact external bundle")
+              raise SystemExit("commercial assets do not embed the exact Kernel evidence")
           PY
-          uv run --frozen python -m benchmarks.release.external_qualification_bundle_v4 \
-            --root "${RUNNER_TEMP}/external-source" \
-            --active-qualification \
-              "${RUNNER_TEMP}/verified-dist/frozen-active-qualification.json" \
+          uv run --frozen python -m benchmarks.release.kernel_qualification_bundle_v1 validate \
+            --root "${RUNNER_TEMP}/release-assets/evidence/kernel-bundle" \
             --candidate-run-id "${{ needs.resolve.outputs.candidate_run_id }}" \
-            --evidence-run-id "${{ needs.resolve.outputs.evidence_run_id }}"
-
-      - name: Discover closed transitive provenance paths
-        id: provenance-paths
-        env:
-          ASSETS_ROOT: ${{ runner.temp }}/release-assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path, PurePosixPath
-
-          root = Path(os.environ["ASSETS_ROOT"])
-          release = json.loads(
-              (root / "commercial-release-manifest.json").read_text(encoding="utf-8")
-          )
-          bundle = json.loads(
-              (root / "external-evidence/bundle-manifest.json").read_text(
-                  encoding="utf-8"
-              )
-          )
-          values = {
-              "pre_publish": release["pre_publish_artifact_gate"]["path"],
-          }
-          bindings = [
-              item["relative_path"]
-              for item in bundle["files"]
-              if item["evidence_kind"] == "post_build_machine_reference_binding"
-          ]
-          if len(bindings) != 1:
-              raise SystemExit(
-                  "external bundle must contain one Candidate machine reference binding"
-              )
-          values["candidate_machine_reference"] = f"external-evidence/{bindings[0]}"
-          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as stream:
-              for label, relative in values.items():
-                  path = PurePosixPath(relative)
-                  if path.is_absolute() or ".." in path.parts or "." in path.parts:
-                      raise SystemExit(f"unsafe provenance path: {label}")
-                  selected = root / path
-                  if selected.is_symlink() or not selected.is_file():
-                      raise SystemExit(f"provenance path is not a regular file: {label}")
-                  stream.write(f"{label}={path.as_posix()}\n")
-          PY
+            --evidence-run-id "${{ needs.resolve.outputs.evidence_run_id }}" \
+            --qualification-run-id "${{ needs.resolve.outputs.qualification_run_id }}"
 
       - name: Reopen all transitive commercial evidence
         shell: bash
         run: |
           set -euo pipefail
-          uv run --frozen python -m benchmarks.release.release_provenance_v8 \
+          uv run --frozen python -m benchmarks.release.release_provenance_v9 \
+            --write \
             --release-manifest \
               "${RUNNER_TEMP}/release-assets/commercial-release-manifest.json" \
-            --classification benchmarks/release/v013-gate-classification-v8.json \
-            --pre-publish-receipt \
-              "${RUNNER_TEMP}/release-assets/${{ steps.provenance-paths.outputs.pre_publish }}" \
-            --candidate-machine-reference-binding \
-              "${RUNNER_TEMP}/release-assets/${{ steps.provenance-paths.outputs.candidate_machine_reference }}" \
-            --external-bundle-manifest \
-              "${RUNNER_TEMP}/release-assets/external-evidence/bundle-manifest.json" \
-            --active-qualification \
-              "${RUNNER_TEMP}/release-assets/evidence/active-qualification.json" \
             --assets-root "${RUNNER_TEMP}/release-assets" \
-            --candidate-raw-root "${RUNNER_TEMP}/candidate-full-raw-evidence" \
+            --bundle-root "${RUNNER_TEMP}/release-assets/evidence/kernel-bundle" \
+            --report "${RUNNER_TEMP}/release-assets/evidence/commercial-evidence-report.json" \
+            --pre-publish-receipt \
+              "${RUNNER_TEMP}/release-assets/pre-publish-artifact-gate.json" \
+            --release-commit "${{ needs.resolve.outputs.commit }}" \
+            --release-tree "${{ needs.resolve.outputs.tree }}" \
             --candidate-run-id "${{ needs.resolve.outputs.candidate_run_id }}" \
             --evidence-run-id "${{ needs.resolve.outputs.evidence_run_id }}" \
             --qualification-run-id "${{ needs.resolve.outputs.qualification_run_id }}"
@@ -283,6 +242,15 @@ jobs:
           test -f "${RUNNER_TEMP}/release-assets/openvex.json"
           test -f "${RUNNER_TEMP}/release-assets/installed-licenses.json"
           test -f "${RUNNER_TEMP}/release-assets/reproducible-build.json"
+
+      - name: Retain the release-bound commercial evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-bound-commercial-assets
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: false
+          path: ${{ runner.temp }}/release-assets/
 
   fresh-install:
     name: Fresh install ${{ matrix.os }} Python ${{ matrix.python-version }}
@@ -380,6 +348,8 @@ jobs:
       attestations: write
       contents: write
       id-token: write
+    outputs:
+      commercial_manifest_sha256: ${{ steps.publish_manifest.outputs.commercial_manifest_sha256 }}
     steps:
       - name: Download the same verified artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -392,12 +362,11 @@ jobs:
       - name: Download exact commercial evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: commercial-release-assets
-          run-id: ${{ needs.resolve.outputs.qualification_run_id }}
-          github-token: ${{ github.token }}
+          name: release-bound-commercial-assets
           path: ${{ runner.temp }}/commercial
 
       - name: Copy closed public evidence and write checksums
+        id: publish_manifest
         shell: bash
         run: |
           set -euo pipefail
@@ -406,6 +375,10 @@ jobs:
           cp "${RUNNER_TEMP}/commercial/openvex.json" "${RUNNER_TEMP}/publish/"
           cp "${RUNNER_TEMP}/commercial/installed-licenses.json" "${RUNNER_TEMP}/publish/"
           cp "${RUNNER_TEMP}/commercial/reproducible-build.json" "${RUNNER_TEMP}/publish/"
+          commercial_manifest_sha256=$(sha256sum \
+            "${RUNNER_TEMP}/publish/commercial-release-manifest.json" | cut -d ' ' -f 1)
+          [[ "${commercial_manifest_sha256}" =~ ^[0-9a-f]{64}$ ]]
+          echo "commercial_manifest_sha256=${commercial_manifest_sha256}" >> "${GITHUB_OUTPUT}"
           cd "${RUNNER_TEMP}/publish"
           sha256sum -- * > SHA256SUMS
 
@@ -435,9 +408,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_TAG_OBJECT_SHA: ${{ needs.resolve.outputs.tag_object_sha }}
+          RELEASE_TITLE: DeepLaw 0.13.0 Beta — machine-evaluated technical release
+          RELEASE_NOTES: Machine-evaluated Beta release; no Human Gold, human review, legal expert review, or legal authority attestation is claimed.
         shell: bash
         run: |
           set -euo pipefail
+          remote_tag_type=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.type)
+          remote_tag_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
+          test "${remote_tag_type}" = tag
+          test "${remote_tag_sha}" = "${RELEASE_TAG_OBJECT_SHA}"
           allowed_assets=$(mktemp)
           find "${RUNNER_TEMP}/publish" -maxdepth 1 -type f -print0 \
             | while IFS= read -r -d '' artifact; do basename "${artifact}"; done \
@@ -459,10 +441,11 @@ jobs:
             fi
           fi
           if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            gh release create "${RELEASE_TAG}" --verify-tag --draft --prerelease --generate-notes
-          else
-            test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
+            gh release create "${RELEASE_TAG}" --verify-tag --draft --prerelease --title "${RELEASE_TITLE}" --notes "${RELEASE_NOTES}"
           fi
+          test "$(gh release view "${RELEASE_TAG}" --json name --jq .name)" = "${RELEASE_TITLE}"
+          test "$(gh release view "${RELEASE_TAG}" --json body --jq .body)" = "${RELEASE_NOTES}"
+          test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
           release_id=$(gh api \
             "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)
           while IFS= read -r -d '' artifact; do
@@ -505,14 +488,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_TAG_OBJECT_SHA: ${{ needs.resolve.outputs.tag_object_sha }}
+          RELEASE_TITLE: DeepLaw 0.13.0 Beta — machine-evaluated technical release
+          RELEASE_NOTES: Machine-evaluated Beta release; no Human Gold, human review, legal expert review, or legal authority attestation is claimed.
         shell: bash
         run: |
           set -euo pipefail
+          remote_tag_type=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.type)
+          remote_tag_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
+          test "${remote_tag_type}" = tag
+          test "${remote_tag_sha}" = "${RELEASE_TAG_OBJECT_SHA}"
+          test "$(gh release view "${RELEASE_TAG}" --json name --jq .name)" = "${RELEASE_TITLE}"
+          test "$(gh release view "${RELEASE_TAG}" --json body --jq .body)" = "${RELEASE_NOTES}"
+          test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
           if [[ "$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft)" = true ]]; then
             gh release edit "${RELEASE_TAG}" --draft=false
-          else
-            test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
           fi
+          test "$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft)" = false
+          test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true
 
   public-redownload:
     name: Verify public redownload and signature bundles
@@ -542,6 +537,7 @@ jobs:
       - name: Publicly redownload immutable release without credentials
         env:
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          EXPECTED_COMMERCIAL_MANIFEST_SHA256: ${{ needs.publish.outputs.commercial_manifest_sha256 }}
         shell: bash
         run: |
           set -euo pipefail
@@ -556,6 +552,7 @@ jobs:
               --output "${name}" "${base}/${name}"
           done < SHA256SUMS
           sha256sum --check SHA256SUMS
+          test "$(sha256sum commercial-release-manifest.json | cut -d ' ' -f 1)" = "${EXPECTED_COMMERCIAL_MANIFEST_SHA256}"
           for artifact in *.whl *.tar.gz; do
             curl --fail --location --silent --show-error \
               --output "${artifact}.sigstore.json" \
@@ -601,6 +598,8 @@ jobs:
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
           RELEASE_TREE: ${{ needs.resolve.outputs.tree }}
+          EXPECTED_COMMERCIAL_MANIFEST_SHA256: ${{ needs.publish.outputs.commercial_manifest_sha256 }}
+          PUBLIC_DOWNLOAD_DIR: ${{ runner.temp }}/downloads
         shell: bash
         run: |
           set -euo pipefail
@@ -617,8 +616,45 @@ jobs:
 
           from jsonschema import Draft202012Validator, FormatChecker
 
+          requested_download_dir = Path(os.environ["PUBLIC_DOWNLOAD_DIR"])
+          if requested_download_dir.is_symlink() or not requested_download_dir.is_dir():
+              raise SystemExit("public download directory is unavailable")
+          download_dir = requested_download_dir.resolve(strict=True)
+          os.chdir(download_dir)
+
           def sha(path: Path) -> str:
               return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          def reject_pairs(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise SystemExit("strict JSON contains a duplicate key")
+                  result[key] = value
+              return result
+
+          def reject_constant(value):
+              raise SystemExit(f"strict JSON contains a non-finite constant: {value}")
+
+          def strict_json(path: Path):
+              return json.loads(
+                  path.read_bytes().decode("utf-8", errors="strict"),
+                  object_pairs_hook=reject_pairs,
+                  parse_constant=reject_constant,
+              )
+
+          def canonical_json(value) -> bytes:
+              return json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  allow_nan=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+              ).encode("utf-8")
+
+          def record_sha256(value) -> str:
+              body = {key: item for key, item in value.items() if key != "record_sha256"}
+              return hashlib.sha256(canonical_json(body)).hexdigest()
 
           def require_regular(path: Path) -> None:
               try:
@@ -651,22 +687,67 @@ jobs:
               if listed.name != columns[1].removeprefix("*"):
                   raise SystemExit("SHA256SUMS contains an unsafe asset name")
               require_regular(listed)
-          manifest = json.loads(commercial_manifest.read_text(encoding="utf-8"))
-          release = manifest.get("release")
+          manifest = strict_json(commercial_manifest)
+          if not isinstance(manifest, dict):
+              raise SystemExit("public commercial manifest must be an object")
+          if sha(commercial_manifest) != os.environ["EXPECTED_COMMERCIAL_MANIFEST_SHA256"]:
+              raise SystemExit("public commercial manifest hash differs from pre-publish output")
+          manifest_schema_path = Path(os.environ["GITHUB_WORKSPACE"]) / "contracts" / (
+              "commercial-release-manifest.v9.schema.json"
+          )
+          manifest_schema = strict_json(manifest_schema_path)
+          if not isinstance(manifest_schema, dict):
+              raise SystemExit("commercial manifest schema must be an object")
+          Draft202012Validator.check_schema(manifest_schema)
+          manifest_errors = sorted(
+              Draft202012Validator(
+                  manifest_schema,
+                  format_checker=FormatChecker(),
+              ).iter_errors(manifest),
+              key=lambda error: list(error.path),
+          )
+          if manifest_errors:
+              raise SystemExit(
+                  f"commercial manifest schema violation: {manifest_errors[0].message}"
+              )
+          if manifest["record_sha256"] != record_sha256(manifest):
+              raise SystemExit("public commercial manifest record digest differs")
+          release = manifest["release"]
           expected_release = {
+              "repository": "Eysn0130/DeepLaw",
+              "version": "0.13.0",
               "tag": os.environ["RELEASE_TAG"],
               "commit": os.environ["RELEASE_COMMIT"],
               "tree": os.environ["RELEASE_TREE"],
           }
-          if not isinstance(release, dict) or any(
-              release.get(key) != value for key, value in expected_release.items()
-          ):
+          if not isinstance(release, dict) or release != expected_release:
               raise SystemExit("public commercial manifest is not bound to the immutable release")
+          if manifest["release_ready"] is not True:
+              raise SystemExit("public commercial manifest is not release-ready")
+          if manifest["kernel_release_claim_eligible"] is not True:
+              raise SystemExit("public commercial manifest is not Kernel-eligible")
+          if manifest["human_attested_claim_eligible"] is not False:
+              raise SystemExit("public commercial manifest claims human attestation")
+          if manifest["competitive_claim_eligible"] is not False:
+              raise SystemExit("public commercial manifest claims competitive evidence")
           wheel_sha = sha(wheels[0])
           sdist_sha = sha(sdists[0])
+          artifact_binding = manifest["artifact_binding"]
+          if not isinstance(artifact_binding, dict):
+              raise SystemExit("public commercial manifest artifact binding is invalid")
+          for kind, path in (("wheel", wheels[0]), ("sdist", sdists[0])):
+              artifact = artifact_binding.get(kind)
+              if not isinstance(artifact, dict):
+                  raise SystemExit(f"public commercial manifest {kind} binding is invalid")
+              if Path(artifact["path"]).name != path.name or artifact["sha256"] != sha(path):
+                  raise SystemExit(
+                      f"public commercial manifest {kind} differs from anonymous download"
+                  )
           binding = {"wheel_sha256": wheel_sha, "sdist_sha256": sdist_sha}
           release_binding = {
-              **expected_release,
+              "tag": expected_release["tag"],
+              "commit": expected_release["commit"],
+              "tree": expected_release["tree"],
               "commercial_manifest_sha256": sha(commercial_manifest),
               "sha256s_sha256": sha(checksums),
           }
@@ -709,7 +790,8 @@ jobs:
           schema_path = Path(os.environ["GITHUB_WORKSPACE"]) / "contracts" / (
               "post-public-verification.v2.schema.json"
           )
-          schema = json.loads(schema_path.read_text(encoding="utf-8"))
+          schema = strict_json(schema_path)
+          Draft202012Validator.check_schema(schema)
           errors = sorted(
               Draft202012Validator(
                   schema,
@@ -740,13 +822,22 @@ jobs:
           retention-days: 90
           path: ${{ runner.temp }}/downloads/post-public-verification.json
 
-      - name: Attach post-public receipt and clear prerelease state
+      - name: Attach post-public receipt and retain Beta prerelease state
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_TAG_OBJECT_SHA: ${{ needs.resolve.outputs.tag_object_sha }}
+          RELEASE_TITLE: DeepLaw 0.13.0 Beta — machine-evaluated technical release
+          RELEASE_NOTES: Machine-evaluated Beta release; no Human Gold, human review, legal expert review, or legal authority attestation is claimed.
         shell: bash
         run: |
           set -euo pipefail
+          remote_tag_type=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.type)
+          remote_tag_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha)
+          test "${remote_tag_type}" = tag
+          test "${remote_tag_sha}" = "${RELEASE_TAG_OBJECT_SHA}"
           receipt="${RUNNER_TEMP}/downloads/post-public-verification.json"
           release_id=$(gh api \
             "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)
@@ -766,4 +857,7 @@ jobs:
           else
             gh release upload "${RELEASE_TAG}" "${receipt}"
           fi
-          gh release edit "${RELEASE_TAG}" --prerelease=false
+          test "$(gh release view "${RELEASE_TAG}" --json name --jq .name)" = "${RELEASE_TITLE}"
+          test "$(gh release view "${RELEASE_TAG}" --json body --jq .body)" = "${RELEASE_NOTES}"
+          test "$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft)" = false
+          test "$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)" = true

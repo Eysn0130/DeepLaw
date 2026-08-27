@@ -1,0 +1,134 @@
+{
+  "artifact_kind": "task_case_catalog",
+  "schema_version": "deeplaw.v013-host-task-cases/v1",
+  "status": "qualification_input_frozen",
+  "hosts": ["codex", "opencode"],
+  "task_cases": [
+    {
+      "task_case": "continuity",
+      "required_duties": [
+        "first_correct_action",
+        "decision_preservation",
+        "wrong_state_rejection",
+        "bounded_read_only_context",
+        "authority_boundary",
+        "failure_honesty",
+        "compaction_preservation",
+        "forget_semantics"
+      ],
+      "required_wrong_states": [
+        "stale",
+        "wrong_task_line",
+        "wrong_worktree",
+        "forgotten"
+      ],
+      "required_operations": [
+        "start",
+        "message",
+        "resume",
+        "fork",
+        "compaction_pre",
+        "compaction",
+        "compaction_post",
+        "end"
+      ],
+      "scenarios": ["cold_start", "resume_fork", "compaction_forget"],
+      "seed_driver": {
+        "role": "task_domain_seed",
+        "driver_kind": "native_host_task_v3",
+        "seams": [
+          "task_continuity.start_task",
+          "task_continuity.checkpoint_task",
+          "task_continuity.bind_host_session",
+          "task_continuity.resume_task",
+          "task_continuity.forget_task"
+        ]
+      }
+    },
+    {
+      "task_case": "living_wiki",
+      "required_duties": [
+        "alias_same_name_identity",
+        "rename_move",
+        "external_edit_reconcile",
+        "backlink_outlink",
+        "source_successor",
+        "wrong_merge_rejection",
+        "user_file_protection",
+        "full_incremental_noop_equivalence",
+        "wiki_exact_source_drill_down"
+      ],
+      "required_wrong_states": ["wrong_merge", "stale_revision", "hidden_mutation"],
+      "required_operations": ["wiki_read", "source_read", "query_context"],
+      "seed_driver": {
+        "role": "task_domain_seed",
+        "driver_kind": "native_host_task_v3",
+        "seams": [
+          "KnowledgeOS.compilations.begin",
+          "KnowledgeOS.compilations.next_packet",
+          "KnowledgeOS.compilations.stage",
+          "KnowledgeOS.compilations.validate",
+          "KnowledgeOS.compilations.commit",
+          "SourceReadService.execute",
+          "WikiReadService.execute",
+          "KnowledgeOS.context.compile"
+        ]
+      }
+    },
+    {
+      "task_case": "professional_evidence",
+      "required_duties": [
+        "original_bytes",
+        "original_hash",
+        "document",
+        "version",
+        "fragment",
+        "locator",
+        "wrong_version_rejection",
+        "effective_date",
+        "exception",
+        "proviso",
+        "cross_reference",
+        "false_authority",
+        "ocr_critical_token_gap",
+        "wiki_exact_source_drill_down"
+      ],
+      "required_wrong_states": ["wrong_version", "false_authority", "ocr_critical_token"],
+      "required_operations": ["source_read", "fragment_read", "wiki_read", "query_context"],
+      "seed_driver": {
+        "role": "task_domain_seed",
+        "driver_kind": "native_host_task_v3",
+        "seams": [
+          "KnowledgeOS.compilations.begin",
+          "KnowledgeOS.compilations.next_packet",
+          "KnowledgeOS.compilations.stage",
+          "KnowledgeOS.compilations.validate",
+          "KnowledgeOS.compilations.commit",
+          "SourceReadService.execute",
+          "WikiReadService.execute",
+          "KnowledgeOS.context.compile"
+        ]
+      }
+    }
+  ],
+  "host_constraints": {
+    "codex": {
+      "tool_version": null,
+      "binary_sha256": null,
+      "model_id": "gpt-5.6-luna",
+      "expected_response_model_id": "gpt-5.6-luna",
+      "reasoning_effort": "max",
+      "argv_prefix": ["codex", "app-server", "--stdio"]
+    },
+    "opencode": {
+      "tool_version": null,
+      "binary_sha256": null,
+      "source_commit": null,
+      "config_selector": "deepseek/deepseek-v4-flash",
+      "model_id": "deepseek-v4-flash",
+      "expected_response_model_id": "deepseek-v4-flash",
+      "reasoning_effort": null,
+      "argv_prefix": ["opencode", "run", "--format", "json"]
+    }
+  }
+}
