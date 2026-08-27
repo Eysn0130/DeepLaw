@@ -2927,6 +2927,41 @@ def _validate_stable_path_fd_binding(
         _control_fail(error_message)
 
 
+def _windows_acl_hardening_verified(report: object) -> bool:
+    if not isinstance(report, Mapping):
+        return False
+    verification = report.get("verification")
+    return bool(
+        report.get("platform") == "nt"
+        and report.get("applied") is True
+        and isinstance(verification, Mapping)
+        and verification.get("permissions_verified") is True
+    )
+
+
+def _harden_windows_broker_path(
+    path: Path,
+    *,
+    directory: bool,
+    error_message: str,
+) -> None:
+    try:
+        from deeplaw.windows_acl import (
+            harden_windows_private_file,
+            harden_windows_vault,
+        )
+
+        report = (
+            harden_windows_vault(path)
+            if directory
+            else harden_windows_private_file(path)
+        )
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise QualificationError(error_message) from exc
+    if not _windows_acl_hardening_verified(report):
+        _control_fail(error_message)
+
+
 @contextmanager
 def _stage_exact_broker_executable(
     path: Path,
@@ -3004,10 +3039,17 @@ def _stage_exact_broker_executable(
     with tempfile.TemporaryDirectory(prefix="deeplaw-opencode-broker-") as raw_root:
         root = Path(raw_root).resolve(strict=True)
         details = root.lstat()
-        if (
-            not stat.S_ISDIR(details.st_mode)
-            or stat.S_IMODE(details.st_mode) & 0o077
-            or (os.name != "nt" and details.st_uid != os.geteuid())
+        if not stat.S_ISDIR(details.st_mode):
+            _control_fail("OpenCode broker staging directory is unsafe")
+        if os.name == "nt":
+            _harden_windows_broker_path(
+                root,
+                directory=True,
+                error_message="OpenCode broker staging directory is unsafe",
+            )
+        elif (
+            stat.S_IMODE(details.st_mode) & 0o077
+            or details.st_uid != os.geteuid()
         ):
             _control_fail("OpenCode broker staging directory is unsafe")
         staged = root / "broker-executable"
@@ -3019,17 +3061,26 @@ def _stage_exact_broker_executable(
             offset = 0
             while offset < len(raw):
                 offset += os.write(descriptor, raw[offset:])
-            os.fchmod(descriptor, 0o500)
+            if os.name != "nt":
+                os.fchmod(descriptor, 0o500)
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
-        os.chmod(root, 0o500)
+        if os.name == "nt":
+            _harden_windows_broker_path(
+                staged,
+                directory=False,
+                error_message="staged OpenCode broker ACL is unsafe",
+            )
+        else:
+            os.chmod(root, 0o500)
         try:
             if hashlib.sha256(staged.read_bytes()).hexdigest() != expected_sha256:
                 _control_fail("staged OpenCode broker bytes differ")
             yield staged
         finally:
-            os.chmod(root, 0o700)
+            if os.name != "nt":
+                os.chmod(root, 0o700)
 
 
 def _validate_opencode_package(

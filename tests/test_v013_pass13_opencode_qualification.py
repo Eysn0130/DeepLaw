@@ -1019,21 +1019,50 @@ def _assert_zero_model_static_boundary_reaches_only_external_broker_popen(
         assert argv[1:] == [runner.OPENCODE_BROKER_CONTROL_ARGUMENT]
         raise BrokerControlReached
 
-    monkeypatch.setattr(runner.subprocess, "Popen", broker_popen)
-    with pytest.raises(BrokerControlReached):
-        runner.run_opencode_owner_external_zero_model_preflight(
-            candidate_binding_input=tmp_path / "frozen-active-qualification.json",
-            host_identity_input=tmp_path / "host-identity.json",
-            opencode_package=opencode_package,
-            opencode_binary=opencode_selector,
-            opencode_broker=broker,
-            expected_broker_sha256=broker_sha256,
-            task_case="continuity",
-            run_id="opencode-zero-model-preflight-202-303",
-            evidence_run_id=202,
-            qualification_run_id=303,
-            repository=_REPOSITORY,
-        )
+    arguments = {
+        "candidate_binding_input": tmp_path / "frozen-active-qualification.json",
+        "host_identity_input": tmp_path / "host-identity.json",
+        "opencode_package": opencode_package,
+        "opencode_binary": opencode_selector,
+        "opencode_broker": broker,
+        "expected_broker_sha256": broker_sha256,
+        "task_case": "continuity",
+        "run_id": "opencode-zero-model-preflight-202-303",
+        "evidence_run_id": 202,
+        "qualification_run_id": 303,
+        "repository": _REPOSITORY,
+    }
+    if os.name == "nt":
+        # Native ACL hardening uses bounded PowerShell children. Exercise that
+        # production path before intercepting only the final broker exchange.
+        def broker_exchange(
+            broker_executable: Path,
+            *,
+            payload: bytes,
+            timeout_seconds: float,
+        ) -> bytes:
+            assert payload
+            popen_calls.append(
+                (
+                    [
+                        str(broker_executable),
+                        runner.OPENCODE_BROKER_CONTROL_ARGUMENT,
+                    ],
+                    {"timeout_seconds": timeout_seconds},
+                )
+            )
+            assert broker_executable != opencode_selector
+            assert broker_executable != opencode_target
+            assert broker_executable.name == "broker-executable"
+            raise BrokerControlReached
+
+        monkeypatch.setattr(runner, "_bounded_broker_control_exchange", broker_exchange)
+        with pytest.raises(BrokerControlReached):
+            runner.run_opencode_owner_external_zero_model_preflight(**arguments)
+    else:
+        monkeypatch.setattr(runner.subprocess, "Popen", broker_popen)
+        with pytest.raises(BrokerControlReached):
+            runner.run_opencode_owner_external_zero_model_preflight(**arguments)
     assert len(popen_calls) == 1
 
 
@@ -1287,6 +1316,24 @@ def test_owner_broker_launcher_must_be_owner_only_and_process_separated(
 
 
 def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path) -> None:
+    assert runner._windows_acl_hardening_verified(
+        {
+            "platform": "nt",
+            "applied": True,
+            "verification": {"permissions_verified": True},
+        }
+    )
+    for invalid_report in (
+        None,
+        {"platform": "nt", "applied": False},
+        {
+            "platform": "nt",
+            "applied": True,
+            "verification": {"permissions_verified": False},
+        },
+    ):
+        assert not runner._windows_acl_hardening_verified(invalid_report)
+
     def metadata(**updates: int) -> SimpleNamespace:
         values = {
             "st_dev": 7,
@@ -1387,7 +1434,17 @@ def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path
         assert staged.read_bytes() == broker.read_bytes()
         broker.write_bytes(b"#!/bin/sh\nexit 91\n")
         assert hashlib.sha256(staged.read_bytes()).hexdigest() == expected
-        assert staged.stat().st_mode & 0o222 == 0
+        if os.name == "nt":
+            from deeplaw.windows_acl import native_windows_path_acl_report
+
+            assert native_windows_path_acl_report(staged.parent)[
+                "permissions_verified"
+            ]
+            assert native_windows_path_acl_report(staged)["permissions_verified"]
+        else:
+            assert stat.S_IMODE(staged.parent.stat().st_mode) == 0o500
+            assert staged.parent.stat().st_uid == os.geteuid()
+            assert stat.S_IMODE(staged.stat().st_mode) == 0o500
     assert not staged.exists()
 
 
