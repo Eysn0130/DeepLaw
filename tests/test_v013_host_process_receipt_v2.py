@@ -157,6 +157,40 @@ def _digest(label: str) -> str:
     return hashlib.sha256(label.encode("utf-8")).hexdigest()
 
 
+def _codex_observation_fields(hook_event_sha256: str) -> dict[str, Any]:
+    return {
+        "schema_version": codex_client.CODEX_BROKER_CONTROL_SCHEMA_VERSION,
+        "operation": "zero_model_preflight",
+        "status": "observed",
+        "observed_sequence": list(codex_client.CODEX_ZERO_MODEL_SEQUENCE),
+        "fresh_ephemeral_thread": True,
+        "turn_start_count": 1,
+        "model_inventory_count": 0,
+        "model_invocation_count": 0,
+        "provider_request_count": 0,
+        "sampling_count": 0,
+        "accepted_connection_count": 0,
+        "request_count": 0,
+        "provider_guard": {
+            "owner": "broker",
+            "transport": "loopback_http",
+            "provider_id": "deeplaw_zero_model_preflight",
+            "requires_openai_auth": False,
+            "supports_websockets": False,
+        },
+        "session_start_hook": {
+            "event_name": "SessionStart",
+            "status": "stopped",
+            "owner": "broker",
+            "handler_type": "command",
+            "execution_mode": "sync",
+            "response": {"continue": False},
+            "stop_boundary": "before_run_sampling_request",
+            "event_sha256": hook_event_sha256,
+        },
+    }
+
+
 def _v2_receipt(host: str, *, index: int = 1) -> dict[str, Any]:
     identity = _host_identity()
     host_item = identity["hosts"][host]
@@ -167,6 +201,16 @@ def _v2_receipt(host: str, *, index: int = 1) -> dict[str, Any]:
         "lifecycle_record_sha256": _digest(f"{host}:{index}:lifecycle-record"),
     }
     if host == "codex":
+        hook_event_sha256 = _digest(f"{host}:{index}:hook-event")
+        observation = _codex_observation_fields(hook_event_sha256)
+        native_binding["event_sequence_sha256"] = (
+            codex_client.codex_zero_model_event_sequence_sha256(
+                observation["observed_sequence"]
+            )
+        )
+        native_binding["lifecycle_record_sha256"] = (
+            codex_client.codex_zero_model_lifecycle_record_sha256(observation)
+        )
         proof = {
             "proof_kind": "codex_stdio_hook_correlation",
             "process_identity_sha256": process_identity,
@@ -177,7 +221,7 @@ def _v2_receipt(host: str, *, index: int = 1) -> dict[str, Any]:
             ),
             "initialized_connection_count": 1,
             "hook_session_sha256": _digest(f"{host}:{index}:hook-session"),
-            "hook_event_sha256": _digest(f"{host}:{index}:hook-event"),
+            "hook_event_sha256": hook_event_sha256,
             "native_event_sequence_sha256": native_binding["event_sequence_sha256"],
             "native_session_identity_sha256": native_binding[
                 "session_identity_sha256"
@@ -332,26 +376,7 @@ def _codex_control_response(
 ) -> dict[str, Any]:
     process_receipt = receipt if receipt is not None else _v2_receipt("codex")
     return {
-        "schema_version": codex_client.CODEX_BROKER_CONTROL_SCHEMA_VERSION,
-        "operation": "zero_model_preflight",
-        "status": "observed",
-        "observed_sequence": list(codex_client.CODEX_ZERO_MODEL_SEQUENCE),
-        "fresh_ephemeral_thread": True,
-        "turn_start_count": 1,
-        "model_inventory_count": 0,
-        "model_invocation_count": 0,
-        "provider_request_count": 0,
-        "sampling_count": 0,
-        "session_start_hook": {
-            "event_name": "SessionStart",
-            "status": "completed",
-            "owner": "broker",
-            "handler_type": "command",
-            "execution_mode": "sync",
-            "response": {"continue": False},
-            "stop_phase": "before_sampling",
-            "event_sha256": process_receipt["proof"]["hook_event_sha256"],
-        },
+        **_codex_observation_fields(process_receipt["proof"]["hook_event_sha256"]),
         "host_process_receipt": process_receipt,
     }
 
@@ -505,17 +530,79 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
     assert observation["schema_version"] == codex_client.CODEX_BROKER_CONTROL_SCHEMA_VERSION
     assert observation["turn_start_count"] == 1
     assert observation["sampling_count"] == 0
-    assert observation["session_start_hook"]["status"] == "completed"
+    assert observation["session_start_hook"]["status"] == "stopped"
     assert observation["session_start_hook"]["response"] == {"continue": False}
+    assert observation["session_start_hook"]["stop_boundary"] == (
+        "before_run_sampling_request"
+    )
+    assert observation["provider_guard"] == response["provider_guard"]
+    assert observation["accepted_connection_count"] == 0
+    assert observation["request_count"] == 0
     assert seen == {response["host_process_receipt"]["nonce_sha256"]}
 
+    for binding_field, proof_field, replacement, message in (
+        (
+            "event_sequence_sha256",
+            "native_event_sequence_sha256",
+            _digest("unbound-v4-native-event-sequence"),
+            "native event sequence differs",
+        ),
+        (
+            "lifecycle_record_sha256",
+            "native_lifecycle_record_sha256",
+            _digest("unbound-v4-native-lifecycle-record"),
+            "native lifecycle record differs",
+        ),
+    ):
+        changed = deepcopy(response)
+        process_receipt = changed["host_process_receipt"]
+        process_receipt["native_event_binding"][binding_field] = replacement
+        process_receipt["proof"][proof_field] = replacement
+        process_receipt["proof"]["connection_correlation_sha256"] = (
+            receipt_v2.correlation_sha256(
+                {
+                    key: process_receipt["proof"][key]
+                    for key in (
+                        "process_identity_sha256",
+                        "connection_sha256",
+                        "initialize_request_sha256",
+                        "initialized_notification_sha256",
+                        "initialized_connection_count",
+                        "hook_session_sha256",
+                        "hook_event_sha256",
+                        "native_event_sequence_sha256",
+                        "native_session_identity_sha256",
+                        "native_lifecycle_record_sha256",
+                    )
+                }
+            )
+        )
+        _rehash(process_receipt)
+        with pytest.raises(codex_client.CodexOwnerExternalBrokerError, match=message):
+            codex_client.validate_codex_zero_model_preflight_response(
+                changed,
+                request=request,
+                observed_at="2026-08-27T00:03:00Z",
+                seen_nonce_sha256s=set(),
+            )
+
     for field, replacement in (
-        ("observed_sequence", ["initialize", "initialized", "thread/start", "shutdown"]),
+        (
+            "schema_version",
+            "deeplaw.codex-owner-external-broker-control/v3",
+        ),
+        (
+            "observed_sequence",
+            ["initialize", "initialized", "thread/start", "turn/start", "SessionStart", "shutdown"],
+        ),
         ("turn_start_count", 0),
         ("model_inventory_count", 1),
         ("model_invocation_count", 1),
         ("provider_request_count", 1),
         ("sampling_count", 1),
+        ("accepted_connection_count", 1),
+        ("request_count", 1),
+        ("accepted_connection_count", False),
     ):
         changed = deepcopy(response)
         changed[field] = replacement
@@ -526,6 +613,26 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
                 observed_at="2026-08-27T00:03:00Z",
                 seen_nonce_sha256s=set(),
             )
+
+    changed = deepcopy(response)
+    changed["session_start_hook"]["status"] = "completed"
+    with pytest.raises(codex_client.CodexOwnerExternalBrokerError):
+        codex_client.validate_codex_zero_model_preflight_response(
+            changed,
+            request=request,
+            observed_at="2026-08-27T00:03:00Z",
+            seen_nonce_sha256s=set(),
+        )
+
+    changed = deepcopy(response)
+    changed["session_start_hook"]["stop_phase"] = "before_sampling"
+    with pytest.raises(codex_client.CodexOwnerExternalBrokerError):
+        codex_client.validate_codex_zero_model_preflight_response(
+            changed,
+            request=request,
+            observed_at="2026-08-27T00:03:00Z",
+            seen_nonce_sha256s=set(),
+        )
 
     changed = deepcopy(response)
     changed["session_start_hook"]["response"] = {"continue": 0}
@@ -539,6 +646,59 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
             observed_at="2026-08-27T00:03:00Z",
             seen_nonce_sha256s=set(),
         )
+
+    for provider_guard in (
+        None,
+        {"owner": "runner"},
+        {
+            "owner": "broker",
+            "transport": "loopback_http",
+            "provider_id": "deeplaw_zero_model_preflight",
+            "requires_openai_auth": True,
+            "supports_websockets": False,
+        },
+    ):
+        changed = deepcopy(response)
+        changed["provider_guard"] = provider_guard
+        with pytest.raises(codex_client.CodexOwnerExternalBrokerError):
+            codex_client.validate_codex_zero_model_preflight_response(
+                changed,
+                request=request,
+                observed_at="2026-08-27T00:03:00Z",
+                seen_nonce_sha256s=set(),
+            )
+
+    invalid_request = deepcopy(request)
+    invalid_request["schema_version"] = (
+        "deeplaw.codex-owner-external-broker-control/v3"
+    )
+    with pytest.raises(codex_client.CodexOwnerExternalBrokerError):
+        codex_client.validate_codex_zero_model_preflight_response(
+            response,
+            request=invalid_request,
+            observed_at="2026-08-27T00:03:00Z",
+            seen_nonce_sha256s=set(),
+        )
+
+    for provider_guard in (
+        None,
+        {
+            "owner": "broker",
+            "transport": "loopback_http",
+            "provider_id": "other",
+            "requires_openai_auth": False,
+            "supports_websockets": False,
+        },
+    ):
+        invalid_request = deepcopy(request)
+        invalid_request["provider_guard"] = provider_guard
+        with pytest.raises(codex_client.CodexOwnerExternalBrokerError):
+            codex_client.validate_codex_zero_model_preflight_response(
+                response,
+                request=invalid_request,
+                observed_at="2026-08-27T00:03:00Z",
+                seen_nonce_sha256s=set(),
+            )
 
     changed = deepcopy(response)
     changed["session_start_hook"]["event_sha256"] = _digest("other-hook-event")

@@ -227,7 +227,7 @@ def _fake_server(
                                 "scope": "session",
                                 "source": "plugin",
                                 "startedAt": 1,
-                                "status": "completed",
+                                "status": "stopped",
                                 "displayOrder": 1,
                                 "entries": [],
                             },
@@ -468,13 +468,14 @@ def _assert_zero_model_production_contract_stops_before_sampling(
         and event.get("hook_event_name") == "SessionStart"
     ]
     assert len(session_start) == 1
-    assert session_start[0]["hook_status"] == "completed"
+    assert result["status"] == "completed"
+    assert session_start[0]["hook_status"] == "stopped"
     assert session_start[0]["hook_handler_type"] == "command"
     assert result.final_text == ""
     assert not any("tokenUsage" in event.get("method", "") for event in result.events)
 
     assert CODEX_BROKER_CONTROL_SCHEMA_VERSION == (
-        "deeplaw.codex-owner-external-broker-control/v3"
+        "deeplaw.codex-owner-external-broker-control/v4"
     )
     assert request["allowed_sequence"] == [
         "initialize",
@@ -482,7 +483,7 @@ def _assert_zero_model_production_contract_stops_before_sampling(
         "thread/start",
         "turn/start",
         "SessionStart",
-        "shutdown",
+        "stdin/close",
     ]
     assert request["zero_model_constraints"] == {
         "fresh_ephemeral_thread": True,
@@ -493,11 +494,20 @@ def _assert_zero_model_production_contract_stops_before_sampling(
             "handler_type": "command",
             "execution_mode": "sync",
             "response": {"continue": False},
+            "run_status": "stopped",
+            "stop_boundary": "before_run_sampling_request",
         },
         "model_inventory_count": 0,
         "model_invocation_count": 0,
         "provider_request_count": 0,
         "sampling_count": 0,
+    }
+    assert request["provider_guard"] == {
+        "owner": "broker",
+        "transport": "loopback_http",
+        "provider_id": "deeplaw_zero_model_preflight",
+        "requires_openai_auth": False,
+        "supports_websockets": False,
     }
 
 

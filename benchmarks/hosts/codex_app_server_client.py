@@ -118,6 +118,57 @@ def _broker_timestamp(value: Any, *, label: str) -> datetime:
         ) from error
 
 
+def _validate_provider_guard(value: Any) -> dict[str, Any]:
+    """Validate the closed, non-authenticated loopback provider guard."""
+
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != set(_PROVIDER_GUARD)
+        or value.get("owner") != "broker"
+        or value.get("transport") != "loopback_http"
+        or value.get("provider_id") != "deeplaw_zero_model_preflight"
+        or value.get("requires_openai_auth") is not False
+        or value.get("supports_websockets") is not False
+    ):
+        _broker_fail("Codex broker provider guard is invalid")
+    return {key: value[key] for key in _PROVIDER_GUARD}
+
+
+def codex_zero_model_event_sequence_sha256(
+    observed_sequence: Sequence[str],
+) -> str:
+    """Bind the public zero-model event sequence to the native receipt."""
+
+    projection = {
+        "schema_version": CODEX_ZERO_MODEL_EVENT_SEQUENCE_SCHEMA_VERSION,
+        "events": list(observed_sequence),
+    }
+    return _sha256_bytes(_canonical_bytes(projection))
+
+
+def codex_zero_model_lifecycle_record_sha256(value: Mapping[str, Any]) -> str:
+    """Bind the closed v4 lifecycle observation to the native receipt."""
+
+    projection = {
+        "schema_version": CODEX_ZERO_MODEL_LIFECYCLE_SCHEMA_VERSION,
+        "control_schema_version": value["schema_version"],
+        "operation": value["operation"],
+        "status": value["status"],
+        "observed_sequence": list(value["observed_sequence"]),
+        "fresh_ephemeral_thread": value["fresh_ephemeral_thread"],
+        "turn_start_count": value["turn_start_count"],
+        "model_inventory_count": value["model_inventory_count"],
+        "model_invocation_count": value["model_invocation_count"],
+        "provider_request_count": value["provider_request_count"],
+        "sampling_count": value["sampling_count"],
+        "accepted_connection_count": value["accepted_connection_count"],
+        "request_count": value["request_count"],
+        "provider_guard": dict(value["provider_guard"]),
+        "session_start_hook": dict(value["session_start_hook"]),
+    }
+    return _sha256_bytes(_canonical_bytes(projection))
+
+
 def _strict_control_json(raw: bytes) -> dict[str, Any]:
     if not isinstance(raw, bytes) or not raw or len(raw) > _MAX_BROKER_CONTROL_BYTES:
         _broker_fail("Codex broker control response size is invalid")
@@ -310,11 +361,14 @@ def _validate_codex_zero_model_preflight_request(
         or hook.get("owner") != "broker"
         or hook.get("handler_type") != "command"
         or hook.get("execution_mode") != "sync"
+        or hook.get("run_status") != "stopped"
+        or hook.get("stop_boundary") != "before_run_sampling_request"
         or not isinstance(hook_response, Mapping)
         or set(hook_response) != {"continue"}
         or hook_response.get("continue") is not False
     ):
         _broker_fail("Codex broker zero-model constraints differ")
+    _validate_provider_guard(value.get("provider_guard"))
     if (
         value.get("schema_version") != CODEX_BROKER_CONTROL_SCHEMA_VERSION
         or value.get("operation") != "zero_model_preflight"
@@ -423,7 +477,10 @@ def build_codex_zero_model_preflight_request(
             "expires_at": expires_at,
         },
         "allowed_sequence": list(CODEX_ZERO_MODEL_SEQUENCE),
-        "zero_model_constraints": dict(_ZERO_MODEL_CONSTRAINTS),
+        "provider_guard": dict(_PROVIDER_GUARD),
+        "zero_model_constraints": json.loads(
+            json.dumps(_ZERO_MODEL_CONSTRAINTS, sort_keys=True, separators=(",", ":"))
+        ),
     }
     return _validate_codex_zero_model_preflight_request(value)
 
@@ -448,12 +505,15 @@ def validate_codex_zero_model_preflight_response(
         or value.get("fresh_ephemeral_thread") is not True
     ):
         _broker_fail("Codex broker did not observe the exact zero-model sequence")
+    _validate_provider_guard(value.get("provider_guard"))
     expected_counts = {
         "turn_start_count": 1,
         "model_inventory_count": 0,
         "model_invocation_count": 0,
         "provider_request_count": 0,
         "sampling_count": 0,
+        "accepted_connection_count": 0,
+        "request_count": 0,
     }
     if any(
         type(value.get(field)) is not int or value[field] != expected
@@ -469,18 +529,18 @@ def validate_codex_zero_model_preflight_response(
         "handler_type",
         "execution_mode",
         "response",
-        "stop_phase",
+        "stop_boundary",
         "event_sha256",
     }:
         _broker_fail("Codex broker SessionStart hook observation is incomplete")
     hook_response = hook.get("response")
     if (
         hook.get("event_name") != "SessionStart"
-        or hook.get("status") != "completed"
+        or hook.get("status") != "stopped"
         or hook.get("owner") != "broker"
         or hook.get("handler_type") != "command"
         or hook.get("execution_mode") != "sync"
-        or hook.get("stop_phase") != "before_sampling"
+        or hook.get("stop_boundary") != "before_run_sampling_request"
         or not isinstance(hook_response, Mapping)
         or set(hook_response) != {"continue"}
         or hook_response.get("continue") is not False
@@ -540,8 +600,17 @@ def validate_codex_zero_model_preflight_response(
         _broker_fail("Codex Hook session and native session identities were aliased")
     if hook_event_sha256 != proof["hook_event_sha256"]:
         _broker_fail("Codex SessionStart hook observation differs from the process receipt")
+    expected_event_sequence_sha256 = codex_zero_model_event_sequence_sha256(
+        value["observed_sequence"]
+    )
+    if native["event_sequence_sha256"] != expected_event_sequence_sha256:
+        _broker_fail("Codex native event sequence differs from the v4 observation")
+    expected_lifecycle_record_sha256 = codex_zero_model_lifecycle_record_sha256(value)
+    if native["lifecycle_record_sha256"] != expected_lifecycle_record_sha256:
+        _broker_fail("Codex native lifecycle record differs from the v4 observation")
     return {
         "schema_version": CODEX_BROKER_CONTROL_SCHEMA_VERSION,
+        "provider_guard": dict(_PROVIDER_GUARD),
         "host_process_receipt": admitted,
         "observed_sequence": list(CODEX_ZERO_MODEL_SEQUENCE),
         "fresh_ephemeral_thread": True,
@@ -613,17 +682,30 @@ _CONTINUITY_CONTEXT_PREFIX = (
 )
 
 CODEX_BROKER_CONTROL_SCHEMA_VERSION = (
-    "deeplaw.codex-owner-external-broker-control/v3"
+    "deeplaw.codex-owner-external-broker-control/v4"
 )
-CODEX_BROKER_CONTROL_ARGUMENT = "deeplaw-codex-zero-model-preflight-v3"
+CODEX_BROKER_CONTROL_ARGUMENT = "deeplaw-codex-zero-model-preflight-v4"
+CODEX_ZERO_MODEL_EVENT_SEQUENCE_SCHEMA_VERSION = (
+    "deeplaw.codex-zero-model-native-event-sequence/v1"
+)
+CODEX_ZERO_MODEL_LIFECYCLE_SCHEMA_VERSION = (
+    "deeplaw.codex-zero-model-native-lifecycle/v1"
+)
 CODEX_ZERO_MODEL_SEQUENCE = (
     "initialize",
     "initialized",
     "thread/start",
     "turn/start",
     "SessionStart",
-    "shutdown",
+    "stdin/close",
 )
+_PROVIDER_GUARD = {
+    "owner": "broker",
+    "transport": "loopback_http",
+    "provider_id": "deeplaw_zero_model_preflight",
+    "requires_openai_auth": False,
+    "supports_websockets": False,
+}
 _ZERO_MODEL_CONSTRAINTS = {
     "fresh_ephemeral_thread": True,
     "turn_start_count": 1,
@@ -633,6 +715,8 @@ _ZERO_MODEL_CONSTRAINTS = {
         "handler_type": "command",
         "execution_mode": "sync",
         "response": {"continue": False},
+        "run_status": "stopped",
+        "stop_boundary": "before_run_sampling_request",
     },
     "model_inventory_count": 0,
     "model_invocation_count": 0,
@@ -653,6 +737,7 @@ _CONTROL_REQUEST_KEYS = {
     "host_identity_source_sha256",
     "challenge",
     "allowed_sequence",
+    "provider_guard",
     "zero_model_constraints",
 }
 _CONTROL_RESPONSE_KEYS = {
@@ -666,6 +751,9 @@ _CONTROL_RESPONSE_KEYS = {
     "model_invocation_count",
     "provider_request_count",
     "sampling_count",
+    "accepted_connection_count",
+    "request_count",
+    "provider_guard",
     "session_start_hook",
     "host_process_receipt",
 }

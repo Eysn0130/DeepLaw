@@ -654,11 +654,18 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
     assert "--codex-zero-model-preflight" in workflow
     assert "--candidate-binding-input" in workflow
     assert "--expected-codex-broker-sha256" in workflow
-    assert 'codex_preflight="${RUNNER_TEMP}/codex-zero-model-preflight-v3.json"' in workflow
+    assert 'codex_preflight="${RUNNER_TEMP}/codex-zero-model-preflight-v4.json"' in workflow
+    assert '"stdin/close"' in workflow
+    assert '"deeplaw.codex-owner-external-broker-control/v4"' in workflow
+    assert 'provider_guard.get("provider_id")' in workflow
     assert '"turn_start_count": 1' in workflow
     assert '"provider_request_count": 0' in workflow
     assert '"model_invocation_count": 0' in workflow
     assert '"sampling_count": 0' in workflow
+    assert '"accepted_connection_count": 0' in workflow
+    assert '"request_count": 0' in workflow
+    assert 'hook.get("status") != "stopped"' in workflow
+    assert 'hook.get("stop_boundary") != "before_run_sampling_request"' in workflow
     assert 'type(result.get(field)) is not int' in workflow
     assert 'hook_response.get("continue") is not False' in workflow
     assert 'result.get("formal_admission") is not False' in workflow
@@ -1070,12 +1077,12 @@ def _assert_codex_zero_model_runner_serializes_stop_before_sampling(
     )
     session_start_hook = {
         "event_name": "SessionStart",
-        "status": "completed",
+        "status": "stopped",
         "owner": "broker",
         "handler_type": "command",
         "execution_mode": "sync",
         "response": {"continue": False},
-        "stop_phase": "before_sampling",
+        "stop_boundary": "before_run_sampling_request",
         "event_sha256": "7" * 64,
     }
 
@@ -1094,15 +1101,24 @@ def _assert_codex_zero_model_runner_serializes_stop_before_sampling(
             "thread/start",
             "turn/start",
             "SessionStart",
-            "shutdown",
+            "stdin/close",
         ]
         return {
-            "schema_version": "deeplaw.codex-owner-external-broker-control/v3",
+            "schema_version": "deeplaw.codex-owner-external-broker-control/v4",
             "host_process_receipt": {"record_sha256": "8" * 64},
             "observed_sequence": request["allowed_sequence"],
             "fresh_ephemeral_thread": True,
             "turn_start_count": 1,
             "session_start_hook": session_start_hook,
+            "provider_guard": {
+                "owner": "broker",
+                "transport": "loopback_http",
+                "provider_id": "deeplaw_zero_model_preflight",
+                "requires_openai_auth": False,
+                "supports_websockets": False,
+            },
+            "accepted_connection_count": 0,
+            "request_count": 0,
             "model_inventory_count": 0,
             "model_invocation_count": 0,
             "provider_request_count": 0,
@@ -1130,9 +1146,18 @@ def _assert_codex_zero_model_runner_serializes_stop_before_sampling(
     assert serialized["formal_admission"] is False
     assert serialized["evidence_class"] == "zero_model_preflight_only"
     assert serialized["control_schema_version"] == (
-        "deeplaw.codex-owner-external-broker-control/v3"
+        "deeplaw.codex-owner-external-broker-control/v4"
     )
     assert serialized["turn_start_count"] == 1
+    assert serialized["provider_guard"] == {
+        "owner": "broker",
+        "transport": "loopback_http",
+        "provider_id": "deeplaw_zero_model_preflight",
+        "requires_openai_auth": False,
+        "supports_websockets": False,
+    }
+    assert serialized["accepted_connection_count"] == 0
+    assert serialized["request_count"] == 0
     assert serialized["provider_request_count"] == 0
     assert serialized["model_invocation_count"] == 0
     assert serialized["sampling_count"] == 0

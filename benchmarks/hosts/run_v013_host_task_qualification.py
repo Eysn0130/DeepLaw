@@ -837,7 +837,7 @@ def run_codex_owner_external_zero_model_preflight(
     """Run one transient broker-owned Codex zero-model capability preflight.
 
     The returned summary is not a Host task receipt and is never formal
-    admission.  Only the broker subprocess can supply the transient v3 object
+    admission.  Only the broker subprocess can supply the transient v4 object
     that this function structurally validates in memory.
     """
 
@@ -912,6 +912,9 @@ def run_codex_owner_external_zero_model_preflight(
         "fresh_ephemeral_thread": observation["fresh_ephemeral_thread"],
         "turn_start_count": observation["turn_start_count"],
         "session_start_hook": observation["session_start_hook"],
+        "provider_guard": observation["provider_guard"],
+        "accepted_connection_count": observation["accepted_connection_count"],
+        "request_count": observation["request_count"],
         "model_inventory_count": observation["model_inventory_count"],
         "model_invocation_count": observation["model_invocation_count"],
         "provider_request_count": observation["provider_request_count"],

@@ -216,32 +216,63 @@ PID, stdout/stderr, raw identity, Provider body, prompt, transcript, hidden reas
 authentication material, or Secret. A development diagnostic, runner-side observation, v1 record,
 or untyped process record is not current qualification evidence.
 
-The Codex runner now has one public, path-free, breaking-v3
-`deeplaw.codex-owner-external-broker-control/v3` challenge/response IPC seam, invoked with the
-exact argument `deeplaw-codex-zero-model-preflight-v3`; v2 is rejected for the current preflight.
-The public seam is pinned to OpenAI Codex upstream commit
-`e8f485bdf82a4cb9283e3e5305011b7b9d360b38`: thread construction queues pending `SessionStart`
-(`codex-rs/core/src/session/session.rs:1534-1558`), `run_turn` dispatches that pending event and,
+The Codex runner now has one public, path-free, breaking-v4
+`deeplaw.codex-owner-external-broker-control/v4` challenge/response IPC seam, invoked with the
+exact argument `deeplaw-codex-zero-model-preflight-v4`; v3 and earlier are rejected for the
+current preflight.
+The public seam is pinned to OpenAI Codex upstream commit dated 2026-08-23,
+`e8f485bdf82a4cb9283e3e5305011b7b9d360b38`: thread construction schedules startup prewarm and
+then queues pending `SessionStart` (`codex-rs/core/src/session/session.rs:1531-1558`), `run_turn`
+dispatches that pending event and,
 when the hook stops, returns before the later sampling path
 (`codex-rs/core/src/session/turn.rs:262-264`, with sampling at `357-394`), and the hook runtime/event contract honors `continue:false`
-(`codex-rs/core/src/hook_runtime.rs:111-164`; `codex-rs/hooks/src/events/session_start.rs:216-284`).
+with public Hook status `stopped` (`codex-rs/core/src/hook_runtime.rs:111-164`;
+`codex-rs/hooks/src/events/session_start.rs:216-284`). A stopped hook does not make the Turn fail:
+the App Server emits `TurnStatus::Completed` when there is no turn error
+(`codex-rs/app-server/src/bespoke_event_handling.rs:1488-1500`).
+The same pinned lifecycle schedules startup prewarm at `thread/start` before the pending
+`SessionStart` hook: the prewarm path can perform WebSocket or auth work, including when WebSockets
+are disabled (`codex-rs/core/src/session_startup_prewarm.rs:184-231,250-324`). A stopped hook
+therefore does not, by itself, prove that a Provider saw zero connections or requests.
 The exact production sequence is therefore one fresh ephemeral thread with exactly one public
-`turn/start`: `initialize -> initialized -> thread/start -> turn/start -> SessionStart -> shutdown`.
-The broker owns the synchronous `SessionStart` command hook, which immediately returns the JSON
-`{"continue":false}`. The broker must observe a completed hook with `stop_phase=before_sampling`
-and the serialized sanitized CLI result must show `evidence_class=zero_model_preflight_only`,
-`formal_admission=false`, `turn_start_count=1`, `model_inventory_count=0`,
-`model_invocation_count=0`, `provider_request_count=0`, and `sampling_count=0`. Thread creation
-alone, a diagnostic sidecar, login state, or a fixture is not formal Host task evidence; the
-`thread_id_sha256` field is never renamed to `session_sha256`.
+`turn/start`: `initialize -> initialized -> thread/start -> turn/start -> SessionStart -> stdin/close`.
+There is no public `shutdown` RPC; `stdin/close` is the broker's public close path: stdio EOF closes
+the connection (`codex-rs/app-server-transport/src/transport/stdio.rs:24-80`). The broker owns the
+synchronous `SessionStart` command hook, which immediately returns the
+JSON `{"continue":false}`. Its public Hook run status must be `stopped`, and the proof boundary is
+`stop_boundary=before_run_sampling_request`.
+
+The v4 request and response must carry the exact broker-owned provider guard
+`{owner:"broker", transport:"loopback_http", provider_id:"deeplaw_zero_model_preflight", requires_openai_auth:false, supports_websockets:false}`.
+The isolated custom provider binds the resolved model provider to a broker-owned loopback counter;
+it neither reads nor forwards ambient OpenAI authentication. The broker may report
+`provider_request_count=0` only when it directly observes `accepted_connection_count=0` and
+`request_count=0` at that guard, in addition to `model_inventory_count=0`,
+`model_invocation_count=0`, and `sampling_count=0`. The serialized sanitized CLI result must show
+`evidence_class=zero_model_preflight_only`, `formal_admission=false`, and `turn_start_count=1`.
+Thread creation alone, a diagnostic sidecar, login state, or a fixture is not formal Host task
+evidence; the `thread_id_sha256` field is never renamed to `session_sha256`.
+
+The v2 receipt shape remains unchanged, but its existing native digests must bind the v4
+observation rather than arbitrary broker labels. `native_event_binding.event_sequence_sha256` is
+the SHA-256 of canonical UTF-8 JSON (sorted keys, compact separators, no NaN) over
+`{schema_version:"deeplaw.codex-zero-model-native-event-sequence/v1", events:[the exact six
+observed methods]}`. `native_event_binding.lifecycle_record_sha256` uses the same encoding over a
+closed object with `schema_version="deeplaw.codex-zero-model-native-lifecycle/v1"` plus the v4
+`control_schema_version`, `operation`, `status`, `observed_sequence`,
+`fresh_ephemeral_thread`, all seven activity counters, `provider_guard`, and
+`session_start_hook`. The consumer recomputes both digests from the response and compares them with
+the receipt. The receipt's existing same-process/same-connection correlation then binds those
+digests to the exact Host process and stdio connection. Rehashing a receipt around an unrelated
+native digest must still fail closed.
 
 Before candidate preparation it reopens the frozen candidate commit/tree/lock/wheel/sdist bytes,
 the owner-only repository-external exact broker source, Codex binary, and Host identity. It creates
 a fresh 60-second nonce challenge bound to the task and evidence/qualification run IDs. The exact
-broker subprocess must directly return one transient v3 object showing the sequence and
+broker subprocess must directly return one transient v4 object showing the sequence and
 observations above, exactly one initialized stdio connection, the same exact Host process and
 connection, and a real Hook session identity distinct from the native session digest. Any extra
-turn, model inventory or invocation, Provider request, sampling, stderr, duplicate JSON key,
+turn, model inventory or invocation, Provider connection/request, sampling, stderr, duplicate JSON key,
 missing/expired/replayed nonce, or cross-bound value fails closed. Combined broker stdout/stderr is
 capped at 256 KiB while the process is running; overflow immediately terminates the isolated
 broker process group, clears both buffers, and returns only a typed failure. The exact owner-only
