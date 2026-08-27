@@ -7300,6 +7300,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_codex_diagnostic_fails_before_candidate_or_host_calls"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_codex_diagnostic_fails_before_candidate_or_host_calls"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
             "name": "test_compact_timeout_fails_closed"
           },
           "node_id": "tests/test_v013_codex_app_server_client.py::test_compact_timeout_fails_closed"
@@ -8791,9 +8798,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_native_event_adapter",
-            "name": "test_codex_actual_projector_thread_identity_must_match_caller_session"
+            "name": "test_codex_actual_projector_host_session_identity_must_match_caller"
           },
-          "node_id": "tests/test_v013_native_event_adapter.py::test_codex_actual_projector_thread_identity_must_match_caller_session"
+          "node_id": "tests/test_v013_native_event_adapter.py::test_codex_actual_projector_host_session_identity_must_match_caller"
         },
         {
           "junit": {
@@ -8847,6 +8854,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_codex_hook_without_host_session_identity_fails_closed"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_codex_hook_without_host_session_identity_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
             "name": "test_codex_mismatched_hook_event_is_rejected"
           },
           "node_id": "tests/test_v013_native_event_adapter.py::test_codex_mismatched_hook_event_is_rejected"
@@ -8878,6 +8892,13 @@
             "name": "test_codex_rejects_legacy_receipts_caller_authored_status_and_unknown_fields[<lambda>3]"
           },
           "node_id": "tests/test_v013_native_event_adapter.py::test_codex_rejects_legacy_receipts_caller_authored_status_and_unknown_fields[<lambda>3]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_codex_thread_and_host_session_identities_are_independent"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_codex_thread_and_host_session_identities_are_independent"
         },
         {
           "junit": {
@@ -16853,9 +16874,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2386,
+      "count": 2389,
       "selection": "not qualification and not windows_native",
-      "sha256": "fa941f671cdece48b675d3122df7a34ed3e081ff97b71588ab295578414a31c1"
+      "sha256": "03cfc12035e26c0ca807aa78dcd4b6079f000a88c3d0e25ff58fe4cb84f8e3d7"
     },
     "windows": {
       "additional_cases": [
@@ -16888,13 +16909,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2390,
+      "count": 2393,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "36e151ea865a92be1ed5e9505e2456bb5f118ce238c9828cac3fa137726db193"
+      "sha256": "a1b479673a2cbc2762796e99c4f491b4d4c0339c564087b09fe40952a378af87"
     }
   },
-  "manifest_sha256": "c5d621b4176760324db9935b4a262bf9cec3f4cd2ba5a82b1a07053deaf9b0a8",
+  "manifest_sha256": "14a5fd35436080909926d7c9348341d541fa223e66aeebc3eea94e22a715d833",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
