@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import subprocess
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -653,6 +654,14 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
     assert "--codex-zero-model-preflight" in workflow
     assert "--candidate-binding-input" in workflow
     assert "--expected-codex-broker-sha256" in workflow
+    assert 'codex_preflight="${RUNNER_TEMP}/codex-zero-model-preflight-v3.json"' in workflow
+    assert '"turn_start_count": 1' in workflow
+    assert '"provider_request_count": 0' in workflow
+    assert '"model_invocation_count": 0' in workflow
+    assert '"sampling_count": 0' in workflow
+    assert 'type(result.get(field)) is not int' in workflow
+    assert 'hook_response.get("continue") is not False' in workflow
+    assert 'result.get("formal_admission") is not False' in workflow
     repository = tmp_path / "repository"
     repository.mkdir()
     lock_raw = b"exact construction lock\n"
@@ -864,6 +873,11 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
         assert completed.stdout == b"verified-original\n"
         assert b"replaced-path" not in completed.stdout
 
+    _assert_codex_zero_model_runner_serializes_stop_before_sampling(
+        monkeypatch,
+        tmp_path,
+    )
+
 
 def test_v013_host_task_catalog_rejects_binary_drift(tmp_path: Path) -> None:
     catalog = load_task_cases()
@@ -1013,3 +1027,113 @@ def test_v013_host_task_matrix_requires_exact_six() -> None:
     assert validate_host_task_matrix(rows)["result_count"] == 6
     with pytest.raises(HostTaskQualificationError):
         validate_host_task_matrix(rows[:-1])
+
+
+def _assert_codex_zero_model_runner_serializes_stop_before_sampling(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    candidate = {
+        "commit": COMMIT,
+        "tree": TREE,
+        "lock_sha256": LOCK,
+        "wheel_sha256": WHEEL,
+        "sdist_sha256": SDIST,
+    }
+    monkeypatch.setattr(
+        host_task_runner,
+        "load_exact_candidate_binding",
+        lambda *_args, **_kwargs: candidate,
+    )
+    monkeypatch.setattr(
+        host_task_runner,
+        "_load_external_identity",
+        lambda *_args, **_kwargs: {
+            "source_sha256": "4" * 64,
+            "hosts": {"codex": {"host": "codex"}},
+        },
+    )
+    monkeypatch.setattr(
+        host_task_runner,
+        "_validate_codex_binary_static",
+        lambda *_args, **_kwargs: {"version": "codex-canary", "sha256": "5" * 64},
+    )
+    monkeypatch.setattr(
+        host_task_runner,
+        "host_identity_sha256",
+        lambda _value: "6" * 64,
+    )
+    monkeypatch.setattr(
+        host_task_runner,
+        "_stage_exact_broker_executable",
+        lambda *_args, **_kwargs: nullcontext(tmp_path / "staged-broker"),
+    )
+    session_start_hook = {
+        "event_name": "SessionStart",
+        "status": "completed",
+        "owner": "broker",
+        "handler_type": "command",
+        "execution_mode": "sync",
+        "response": {"continue": False},
+        "stop_phase": "before_sampling",
+        "event_sha256": "7" * 64,
+    }
+
+    def observed_preflight(
+        _broker: Path,
+        *,
+        request: dict[str, Any],
+        timeout_seconds: float = 60.0,
+        seen_nonce_sha256s: set[str],
+    ) -> dict[str, Any]:
+        assert timeout_seconds == 60.0
+        assert seen_nonce_sha256s == set()
+        assert request["allowed_sequence"] == [
+            "initialize",
+            "initialized",
+            "thread/start",
+            "turn/start",
+            "SessionStart",
+            "shutdown",
+        ]
+        return {
+            "schema_version": "deeplaw.codex-owner-external-broker-control/v3",
+            "host_process_receipt": {"record_sha256": "8" * 64},
+            "observed_sequence": request["allowed_sequence"],
+            "fresh_ephemeral_thread": True,
+            "turn_start_count": 1,
+            "session_start_hook": session_start_hook,
+            "model_inventory_count": 0,
+            "model_invocation_count": 0,
+            "provider_request_count": 0,
+            "sampling_count": 0,
+        }
+
+    monkeypatch.setattr(
+        host_task_runner,
+        "consume_codex_zero_model_preflight",
+        observed_preflight,
+    )
+    result = host_task_runner.run_codex_owner_external_zero_model_preflight(
+        candidate_binding_input=tmp_path / "candidate.json",
+        host_identity_input=tmp_path / "host-identity.json",
+        codex_binary=tmp_path / "codex",
+        codex_broker=tmp_path / "broker",
+        expected_broker_sha256="1" * 64,
+        task_case="continuity",
+        run_id="codex-zero-model-canary",
+        evidence_run_id=1,
+        qualification_run_id=1,
+        repository=tmp_path / "repository",
+    )
+    serialized = json.loads(json.dumps(result, sort_keys=True))
+    assert serialized["formal_admission"] is False
+    assert serialized["evidence_class"] == "zero_model_preflight_only"
+    assert serialized["control_schema_version"] == (
+        "deeplaw.codex-owner-external-broker-control/v3"
+    )
+    assert serialized["turn_start_count"] == 1
+    assert serialized["provider_request_count"] == 0
+    assert serialized["model_invocation_count"] == 0
+    assert serialized["sampling_count"] == 0
+    assert serialized["session_start_hook"] == session_start_hook

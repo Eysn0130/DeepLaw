@@ -327,17 +327,32 @@ def _codex_control_request() -> dict[str, Any]:
     )
 
 
-def _codex_control_response() -> dict[str, Any]:
+def _codex_control_response(
+    receipt: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    process_receipt = receipt if receipt is not None else _v2_receipt("codex")
     return {
         "schema_version": codex_client.CODEX_BROKER_CONTROL_SCHEMA_VERSION,
         "operation": "zero_model_preflight",
         "status": "observed",
         "observed_sequence": list(codex_client.CODEX_ZERO_MODEL_SEQUENCE),
-        "turn_start_count": 0,
+        "fresh_ephemeral_thread": True,
+        "turn_start_count": 1,
         "model_inventory_count": 0,
         "model_invocation_count": 0,
         "provider_request_count": 0,
-        "host_process_receipt": _v2_receipt("codex"),
+        "sampling_count": 0,
+        "session_start_hook": {
+            "event_name": "SessionStart",
+            "status": "completed",
+            "owner": "broker",
+            "handler_type": "command",
+            "execution_mode": "sync",
+            "response": {"continue": False},
+            "stop_phase": "before_sampling",
+            "event_sha256": process_receipt["proof"]["hook_event_sha256"],
+        },
+        "host_process_receipt": process_receipt,
     }
 
 
@@ -480,21 +495,27 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
     request = _codex_control_request()
     response = _codex_control_response()
     seen: set[str] = set()
-    admitted = codex_client.validate_codex_zero_model_preflight_response(
+    observation = codex_client.validate_codex_zero_model_preflight_response(
         response,
         request=request,
         observed_at="2026-08-27T00:03:00Z",
         seen_nonce_sha256s=seen,
     )
-    assert admitted == response["host_process_receipt"]
+    assert observation["host_process_receipt"] == response["host_process_receipt"]
+    assert observation["schema_version"] == codex_client.CODEX_BROKER_CONTROL_SCHEMA_VERSION
+    assert observation["turn_start_count"] == 1
+    assert observation["sampling_count"] == 0
+    assert observation["session_start_hook"]["status"] == "completed"
+    assert observation["session_start_hook"]["response"] == {"continue": False}
     assert seen == {response["host_process_receipt"]["nonce_sha256"]}
 
     for field, replacement in (
         ("observed_sequence", ["initialize", "initialized", "thread/start", "shutdown"]),
-        ("turn_start_count", 1),
+        ("turn_start_count", 0),
         ("model_inventory_count", 1),
         ("model_invocation_count", 1),
         ("provider_request_count", 1),
+        ("sampling_count", 1),
     ):
         changed = deepcopy(response)
         changed[field] = replacement
@@ -505,6 +526,50 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
                 observed_at="2026-08-27T00:03:00Z",
                 seen_nonce_sha256s=set(),
             )
+
+    changed = deepcopy(response)
+    changed["session_start_hook"]["response"] = {"continue": 0}
+    with pytest.raises(
+        codex_client.CodexOwnerExternalBrokerError,
+        match="stopping SessionStart hook",
+    ):
+        codex_client.validate_codex_zero_model_preflight_response(
+            changed,
+            request=request,
+            observed_at="2026-08-27T00:03:00Z",
+            seen_nonce_sha256s=set(),
+        )
+
+    changed = deepcopy(response)
+    changed["session_start_hook"]["event_sha256"] = _digest("other-hook-event")
+    with pytest.raises(
+        codex_client.CodexOwnerExternalBrokerError,
+        match="differs from the process receipt",
+    ):
+        codex_client.validate_codex_zero_model_preflight_response(
+            changed,
+            request=request,
+            observed_at="2026-08-27T00:03:00Z",
+            seen_nonce_sha256s=set(),
+        )
+
+    invalid_request = {
+        **request,
+        "zero_model_constraints": {
+            **request["zero_model_constraints"],
+            "turn_start_count": True,
+        },
+    }
+    with pytest.raises(
+        codex_client.CodexOwnerExternalBrokerError,
+        match="zero-model constraints differ",
+    ):
+        codex_client.validate_codex_zero_model_preflight_response(
+            response,
+            request=invalid_request,
+            observed_at="2026-08-27T00:03:00Z",
+            seen_nonce_sha256s=set(),
+        )
     request = _codex_control_request()
     response = _codex_control_response()
     for observed_at, mutation in (
@@ -589,8 +654,7 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
         issued_at=receipt["issued_at"],
         expires_at=receipt["expires_at"],
     )
-    response = _codex_control_response()
-    response["host_process_receipt"] = receipt
+    response = _codex_control_response(receipt)
     launcher = tmp_path / "owner-external-broker"
     response_raw = json.dumps(response, separators=(",", ":")).encode("utf-8")
     _write_executable_script(
@@ -606,12 +670,12 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
             """
         ),
     )
-    admitted = codex_client.consume_codex_zero_model_preflight(
+    observation = codex_client.consume_codex_zero_model_preflight(
         launcher,
         request=request,
         seen_nonce_sha256s=set(),
     )
-    assert admitted == receipt
+    assert observation["host_process_receipt"] == receipt
 
     duplicate = json.dumps(response, separators=(",", ":"))[:-1]
     duplicate += ',"status":"observed"}'

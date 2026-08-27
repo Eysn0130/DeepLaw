@@ -10,12 +10,14 @@ import pytest
 
 from benchmarks.hosts import run_pass13_codex_continuity_qualification as qualification
 from benchmarks.hosts.codex_app_server_client import (
+    CODEX_BROKER_CONTROL_SCHEMA_VERSION,
     UNREPORTED,
     CodexAppServerClient,
     CodexAppServerOutputLimitError,
     CodexAppServerProtocolError,
     CodexAppServerRequestError,
     CodexAppServerTimeoutError,
+    build_codex_zero_model_preflight_request,
 )
 
 
@@ -95,6 +97,8 @@ def _fake_server(
                     assert "dynamicTools" in message["params"]
                 if MODE == "request-error-cleanup":
                     assert message["params"]["ephemeral"] is False
+                if MODE == "session-start-stop":
+                    assert message["params"] == {"ephemeral": True}
                 send({
                     "id": request_id,
                     "result": {"thread": {
@@ -202,6 +206,41 @@ def _fake_server(
                 })
             elif method == "turn/start":
                 send({"id": request_id, "result": {"turn": {"id": "turn-1"}}})
+                if MODE == "session-start-stop":
+                    assert message["params"] == {
+                        "threadId": "thread-1",
+                        "input": [{
+                            "type": "text",
+                            "text": "session-start-zero-model-canary",
+                        }],
+                    }
+                    send({
+                        "method": "hook/completed",
+                        "params": {
+                            "threadId": "thread-1",
+                            "turnId": "turn-1",
+                            "run": {
+                                "id": "session-start-hook-1",
+                                "eventName": "SessionStart",
+                                "executionMode": "sync",
+                                "handlerType": "command",
+                                "scope": "session",
+                                "source": "plugin",
+                                "startedAt": 1,
+                                "status": "completed",
+                                "displayOrder": 1,
+                                "entries": [],
+                            },
+                        },
+                    })
+                    send({
+                        "method": "turn/completed",
+                        "params": {
+                            "threadId": "thread-1",
+                            "turn": {"id": "turn-1", "status": "completed", "items": []},
+                        },
+                    })
+                    continue
                 if MODE == "unknown-request":
                     send({"id": "srv-1", "method": "server/unknown", "params": {}})
                     continue
@@ -388,6 +427,80 @@ def _client(
     )
 
 
+def _assert_zero_model_production_contract_stops_before_sampling(
+    tmp_path: Path,
+) -> None:
+    request = build_codex_zero_model_preflight_request(
+        task_case="continuity",
+        run_id="codex-zero-model-canary",
+        candidate_binding={
+            "commit": "a" * 40,
+            "tree": "b" * 40,
+            "lock_sha256": "c" * 64,
+            "wheel_sha256": "d" * 64,
+            "sdist_sha256": "e" * 64,
+        },
+        run_binding={"evidence_run_id": 1, "qualification_run_id": 1},
+        host_binary={"version": "codex-canary", "sha256": "f" * 64},
+        broker_source_sha256="1" * 64,
+        host_identity_sha256="2" * 64,
+        host_identity_source_sha256="3" * 64,
+        nonce_sha256="4" * 64,
+        issued_at="2026-08-27T00:00:00Z",
+        expires_at="2026-08-27T00:01:00Z",
+    )
+
+    result = None
+    client = _client(tmp_path, mode="session-start-stop", stderr=b"")
+    with client:
+        client.initialize()
+        thread = client.thread_start(params={"ephemeral": True})
+        if "turn/start" in request["allowed_sequence"]:
+            result = client.turn_start(
+                thread["thread"]["id"],
+                [{"type": "text", "text": "session-start-zero-model-canary"}],
+            )
+    assert result is not None
+    session_start = [
+        event
+        for event in result.events
+        if event.get("method") == "hook/completed"
+        and event.get("hook_event_name") == "SessionStart"
+    ]
+    assert len(session_start) == 1
+    assert session_start[0]["hook_status"] == "completed"
+    assert session_start[0]["hook_handler_type"] == "command"
+    assert result.final_text == ""
+    assert not any("tokenUsage" in event.get("method", "") for event in result.events)
+
+    assert CODEX_BROKER_CONTROL_SCHEMA_VERSION == (
+        "deeplaw.codex-owner-external-broker-control/v3"
+    )
+    assert request["allowed_sequence"] == [
+        "initialize",
+        "initialized",
+        "thread/start",
+        "turn/start",
+        "SessionStart",
+        "shutdown",
+    ]
+    assert request["zero_model_constraints"] == {
+        "fresh_ephemeral_thread": True,
+        "turn_start_count": 1,
+        "session_start_hook": {
+            "event_name": "SessionStart",
+            "owner": "broker",
+            "handler_type": "command",
+            "execution_mode": "sync",
+            "response": {"continue": False},
+        },
+        "model_inventory_count": 0,
+        "model_invocation_count": 0,
+        "provider_request_count": 0,
+        "sampling_count": 0,
+    }
+
+
 def test_codex_diagnostic_fails_before_candidate_or_host_calls(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -483,7 +596,10 @@ def test_full_lifecycle_dynamic_tool_usage_and_minimal_projection(tmp_path: Path
     assert client.process_id is None
 
 
-def test_completed_hook_projects_exact_continuity_delivery_without_text(tmp_path: Path) -> None:
+def test_completed_hook_projects_exact_continuity_delivery_without_text(
+    tmp_path: Path,
+) -> None:
+    _assert_zero_model_production_contract_stops_before_sampling(tmp_path)
     client = _client(tmp_path, mode="hook")
     with client:
         client.initialize()

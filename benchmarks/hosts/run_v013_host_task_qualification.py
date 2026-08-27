@@ -26,7 +26,6 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 from benchmarks.hosts.codex_app_server_client import (
-    CODEX_ZERO_MODEL_SEQUENCE,
     CodexOwnerExternalBrokerError,
     build_codex_zero_model_preflight_request,
     consume_codex_zero_model_preflight,
@@ -838,7 +837,7 @@ def run_codex_owner_external_zero_model_preflight(
     """Run one transient broker-owned Codex zero-model capability preflight.
 
     The returned summary is not a Host task receipt and is never formal
-    admission.  Only the broker subprocess can supply the transient v2 object
+    admission.  Only the broker subprocess can supply the transient v3 object
     that this function structurally validates in memory.
     """
 
@@ -892,7 +891,7 @@ def run_codex_owner_external_zero_model_preflight(
             host_binary=Path(codex_binary),
             expected_sha256=expected_broker_sha256,
         ) as broker_executable:
-            admitted = consume_codex_zero_model_preflight(
+            observation = consume_codex_zero_model_preflight(
                 broker_executable,
                 request=request,
                 seen_nonce_sha256s=(
@@ -908,11 +907,17 @@ def run_codex_owner_external_zero_model_preflight(
         "evidence_class": "zero_model_preflight_only",
         "formal_admission": False,
         "host": "codex",
-        "observed_sequence": list(CODEX_ZERO_MODEL_SEQUENCE),
-        "model_invocation_count": 0,
-        "provider_request_count": 0,
+        "control_schema_version": observation["schema_version"],
+        "observed_sequence": observation["observed_sequence"],
+        "fresh_ephemeral_thread": observation["fresh_ephemeral_thread"],
+        "turn_start_count": observation["turn_start_count"],
+        "session_start_hook": observation["session_start_hook"],
+        "model_inventory_count": observation["model_inventory_count"],
+        "model_invocation_count": observation["model_invocation_count"],
+        "provider_request_count": observation["provider_request_count"],
+        "sampling_count": observation["sampling_count"],
         "broker_source_sha256": expected_broker_sha256,
-        "receipt_record_sha256": admitted["record_sha256"],
+        "receipt_record_sha256": observation["host_process_receipt"]["record_sha256"],
     }
 
 

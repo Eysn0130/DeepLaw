@@ -261,6 +261,8 @@ jobs:
           [[ "${CANDIDATE_RUN_ID}" =~ ^[0-9]+$ ]]
           [[ "${EVIDENCE_RUN_ID}" =~ ^[0-9]+$ ]]
           [[ "${DEEPLAW_CODEX_CREDENTIAL_BROKER_SHA256}" =~ ^[0-9a-f]{64}$ ]]
+          codex_preflight="${RUNNER_TEMP}/codex-zero-model-preflight-v3.json"
+          test ! -e "${codex_preflight}"
           uv run --frozen python -m benchmarks.hosts.run_v013_host_task_qualification \
             --codex-zero-model-preflight \
             --candidate-binding-input "${RUNNER_TEMP}/candidate-inputs/verified-dist/frozen-active-qualification.json" \
@@ -272,7 +274,68 @@ jobs:
             --run-id "codex-zero-model-preflight-${CANDIDATE_RUN_ID}-${EVIDENCE_RUN_ID}" \
             --evidence-run-id "${EVIDENCE_RUN_ID}" \
             --qualification-run-id "${EVIDENCE_RUN_ID}" \
-            > /dev/null
+            > "${codex_preflight}"
+          uv run --frozen python - "${codex_preflight}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          try:
+              result = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          except (OSError, UnicodeError, json.JSONDecodeError) as error:
+              raise SystemExit("Codex zero-model preflight output is not strict JSON") from error
+          if not isinstance(result, dict):
+              raise SystemExit("Codex zero-model preflight output is not an object")
+
+          sequence = [
+              "initialize",
+              "initialized",
+              "thread/start",
+              "turn/start",
+              "SessionStart",
+              "shutdown",
+          ]
+          if (
+              result.get("status") != "passed"
+              or result.get("evidence_class") != "zero_model_preflight_only"
+              or result.get("formal_admission") is not False
+              or result.get("control_schema_version")
+              != "deeplaw.codex-owner-external-broker-control/v3"
+              or result.get("observed_sequence") != sequence
+              or result.get("fresh_ephemeral_thread") is not True
+          ):
+              raise SystemExit("Codex zero-model preflight sequence or admission is invalid")
+
+          expected_counts = {
+              "turn_start_count": 1,
+              "model_inventory_count": 0,
+              "model_invocation_count": 0,
+              "provider_request_count": 0,
+              "sampling_count": 0,
+          }
+          if any(
+              type(result.get(field)) is not int or result[field] != expected
+              for field, expected in expected_counts.items()
+          ):
+              raise SystemExit("Codex zero-model preflight activity counts are invalid")
+
+          hook = result.get("session_start_hook")
+          hook_response = hook.get("response") if isinstance(hook, dict) else None
+          if (
+              not isinstance(hook, dict)
+              or hook.get("event_name") != "SessionStart"
+              or hook.get("status") != "completed"
+              or hook.get("owner") != "broker"
+              or hook.get("handler_type") != "command"
+              or hook.get("execution_mode") != "sync"
+              or not isinstance(hook_response, dict)
+              or set(hook_response) != {"continue"}
+              or hook_response.get("continue") is not False
+              or hook.get("stop_phase") != "before_sampling"
+          ):
+              raise SystemExit("Codex zero-model preflight SessionStart stop is invalid")
+          PY
+          # This runner-local summary is intentionally outside every later upload path.
 
       - name: Run OpenCode owner-external zero-model preflight
         env:

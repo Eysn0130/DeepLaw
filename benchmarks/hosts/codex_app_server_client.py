@@ -285,6 +285,36 @@ def _validate_codex_zero_model_preflight_request(
 ) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != _CONTROL_REQUEST_KEYS:
         _broker_fail("Codex broker control request is not closed")
+    constraints = value.get("zero_model_constraints")
+    hook = constraints.get("session_start_hook") if isinstance(constraints, Mapping) else None
+    hook_response = hook.get("response") if isinstance(hook, Mapping) else None
+    zero_count_fields = (
+        "model_inventory_count",
+        "model_invocation_count",
+        "provider_request_count",
+        "sampling_count",
+    )
+    if (
+        not isinstance(constraints, Mapping)
+        or set(constraints) != set(_ZERO_MODEL_CONSTRAINTS)
+        or constraints.get("fresh_ephemeral_thread") is not True
+        or type(constraints.get("turn_start_count")) is not int
+        or constraints["turn_start_count"] != 1
+        or any(
+            type(constraints.get(field)) is not int or constraints[field] != 0
+            for field in zero_count_fields
+        )
+        or not isinstance(hook, Mapping)
+        or set(hook) != set(_ZERO_MODEL_CONSTRAINTS["session_start_hook"])
+        or hook.get("event_name") != "SessionStart"
+        or hook.get("owner") != "broker"
+        or hook.get("handler_type") != "command"
+        or hook.get("execution_mode") != "sync"
+        or not isinstance(hook_response, Mapping)
+        or set(hook_response) != {"continue"}
+        or hook_response.get("continue") is not False
+    ):
+        _broker_fail("Codex broker zero-model constraints differ")
     if (
         value.get("schema_version") != CODEX_BROKER_CONTROL_SCHEMA_VERSION
         or value.get("operation") != "zero_model_preflight"
@@ -293,7 +323,6 @@ def _validate_codex_zero_model_preflight_request(
         or not isinstance(value.get("run_id"), str)
         or _CONTROL_IDENTIFIER.fullmatch(str(value.get("run_id"))) is None
         or value.get("allowed_sequence") != list(CODEX_ZERO_MODEL_SEQUENCE)
-        or value.get("zero_model_constraints") != _ZERO_MODEL_CONSTRAINTS
     ):
         _broker_fail("Codex broker control request contract differs")
 
@@ -416,16 +445,50 @@ def validate_codex_zero_model_preflight_response(
         or value.get("operation") != "zero_model_preflight"
         or value.get("status") != "observed"
         or value.get("observed_sequence") != list(CODEX_ZERO_MODEL_SEQUENCE)
+        or value.get("fresh_ephemeral_thread") is not True
     ):
         _broker_fail("Codex broker did not observe the exact zero-model sequence")
-    for field in (
-        "turn_start_count",
-        "model_inventory_count",
-        "model_invocation_count",
-        "provider_request_count",
+    expected_counts = {
+        "turn_start_count": 1,
+        "model_inventory_count": 0,
+        "model_invocation_count": 0,
+        "provider_request_count": 0,
+        "sampling_count": 0,
+    }
+    if any(
+        type(value.get(field)) is not int or value[field] != expected
+        for field, expected in expected_counts.items()
     ):
-        if type(value.get(field)) is not int or value[field] != 0:
-            _broker_fail("Codex broker observed forbidden model or Provider activity")
+        _broker_fail("Codex broker zero-model activity counts differ")
+
+    hook = value.get("session_start_hook")
+    if not isinstance(hook, Mapping) or set(hook) != {
+        "event_name",
+        "status",
+        "owner",
+        "handler_type",
+        "execution_mode",
+        "response",
+        "stop_phase",
+        "event_sha256",
+    }:
+        _broker_fail("Codex broker SessionStart hook observation is incomplete")
+    hook_response = hook.get("response")
+    if (
+        hook.get("event_name") != "SessionStart"
+        or hook.get("status") != "completed"
+        or hook.get("owner") != "broker"
+        or hook.get("handler_type") != "command"
+        or hook.get("execution_mode") != "sync"
+        or hook.get("stop_phase") != "before_sampling"
+        or not isinstance(hook_response, Mapping)
+        or set(hook_response) != {"continue"}
+        or hook_response.get("continue") is not False
+    ):
+        _broker_fail("Codex broker did not observe the stopping SessionStart hook")
+    hook_event_sha256 = _broker_sha256(
+        hook.get("event_sha256"), label="SessionStart hook event"
+    )
 
     receipt = value.get("host_process_receipt")
     try:
@@ -475,7 +538,18 @@ def validate_codex_zero_model_preflight_response(
     native = admitted["native_event_binding"]
     if proof["hook_session_sha256"] == native["session_identity_sha256"]:
         _broker_fail("Codex Hook session and native session identities were aliased")
-    return admitted
+    if hook_event_sha256 != proof["hook_event_sha256"]:
+        _broker_fail("Codex SessionStart hook observation differs from the process receipt")
+    return {
+        "schema_version": CODEX_BROKER_CONTROL_SCHEMA_VERSION,
+        "host_process_receipt": admitted,
+        "observed_sequence": list(CODEX_ZERO_MODEL_SEQUENCE),
+        "fresh_ephemeral_thread": True,
+        **expected_counts,
+        "session_start_hook": json.loads(
+            json.dumps(hook, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        ),
+    }
 
 
 def consume_codex_zero_model_preflight(
@@ -539,21 +613,31 @@ _CONTINUITY_CONTEXT_PREFIX = (
 )
 
 CODEX_BROKER_CONTROL_SCHEMA_VERSION = (
-    "deeplaw.codex-owner-external-broker-control/v2"
+    "deeplaw.codex-owner-external-broker-control/v3"
 )
-CODEX_BROKER_CONTROL_ARGUMENT = "deeplaw-codex-zero-model-preflight-v2"
+CODEX_BROKER_CONTROL_ARGUMENT = "deeplaw-codex-zero-model-preflight-v3"
 CODEX_ZERO_MODEL_SEQUENCE = (
     "initialize",
     "initialized",
     "thread/start",
+    "turn/start",
     "SessionStart",
     "shutdown",
 )
 _ZERO_MODEL_CONSTRAINTS = {
-    "turn_start_allowed": False,
-    "model_inventory_allowed": False,
-    "model_invocation_allowed": False,
-    "provider_request_allowed": False,
+    "fresh_ephemeral_thread": True,
+    "turn_start_count": 1,
+    "session_start_hook": {
+        "event_name": "SessionStart",
+        "owner": "broker",
+        "handler_type": "command",
+        "execution_mode": "sync",
+        "response": {"continue": False},
+    },
+    "model_inventory_count": 0,
+    "model_invocation_count": 0,
+    "provider_request_count": 0,
+    "sampling_count": 0,
 }
 _CONTROL_REQUEST_KEYS = {
     "schema_version",
@@ -576,10 +660,13 @@ _CONTROL_RESPONSE_KEYS = {
     "operation",
     "status",
     "observed_sequence",
+    "fresh_ephemeral_thread",
     "turn_start_count",
     "model_inventory_count",
     "model_invocation_count",
     "provider_request_count",
+    "sampling_count",
+    "session_start_hook",
     "host_process_receipt",
 }
 _CONTROL_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$")
