@@ -1038,6 +1038,7 @@ def _assert_zero_model_static_boundary_reaches_only_external_broker_popen(
 
 
 def _assert_zero_model_static_package_binding_rejects_unpinned_release(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     package = tmp_path / "opencode-package"
@@ -1051,6 +1052,14 @@ def _assert_zero_model_static_package_binding_rejects_unpinned_release(
             }
         }
     }
+    binding_messages: list[str] = []
+    stable_binding = runner._validate_stable_path_fd_binding
+
+    def observed_binding(**kwargs: object) -> None:
+        binding_messages.append(str(kwargs["error_message"]))
+        stable_binding(**kwargs)
+
+    monkeypatch.setattr(runner, "_validate_stable_path_fd_binding", observed_binding)
     assert runner._validate_opencode_package(
         package,
         identity=identity,
@@ -1060,6 +1069,7 @@ def _assert_zero_model_static_package_binding_rejects_unpinned_release(
         "source_commit": runner.OPENCODE_SOURCE_COMMIT,
         "package_sha256": package_sha256,
     }
+    assert binding_messages == ["OpenCode package source changed while it was read"]
 
     identity["hosts"]["opencode"]["source_commit"] = "a" * 40
     with pytest.raises(runner.QualificationError, match="pinned release"):
@@ -1302,12 +1312,13 @@ def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path
         st_ctime=201,
         st_ctime_ns=201,
     )
-    runner._validate_stable_broker_path_fd_binding(
+    runner._validate_stable_path_fd_binding(
         path_before=path_snapshot,
         path_after=path_snapshot,
         fd_before=windows_fd_snapshot,
         fd_after=windows_fd_snapshot,
         observed_bytes=19,
+        error_message="OpenCode owner-external broker source changed while it was read",
     )
     for changed in (
         {
@@ -1348,12 +1359,15 @@ def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path
         },
     ):
         with pytest.raises(runner.QualificationError, match="changed while it was read"):
-            runner._validate_stable_broker_path_fd_binding(
+            runner._validate_stable_path_fd_binding(
                 path_before=path_snapshot,
                 path_after=changed["path_after"],
                 fd_before=changed.get("fd_before", windows_fd_snapshot),
                 fd_after=changed["fd_after"],
                 observed_bytes=19,
+                error_message=(
+                    "OpenCode owner-external broker source changed while it was read"
+                ),
             )
 
     host = tmp_path / "opencode"
@@ -1540,9 +1554,11 @@ def _assert_owner_external_regression_bundle(
             scoped,
             case_root("broker-boundary"),
         )
-    _assert_zero_model_static_package_binding_rejects_unpinned_release(
-        case_root("package-binding")
-    )
+    with monkeypatch.context() as scoped:
+        _assert_zero_model_static_package_binding_rejects_unpinned_release(
+            scoped,
+            case_root("package-binding"),
+        )
     with monkeypatch.context() as scoped:
         _assert_zero_model_cli_requires_no_dotenv_or_formal_output(
             scoped,

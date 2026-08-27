@@ -2879,7 +2879,7 @@ def consume_opencode_zero_model_preflight(
     )
 
 
-def _broker_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
+def _stable_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
     return (
         details.st_dev,
         details.st_ino,
@@ -2892,21 +2892,22 @@ def _broker_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
     )
 
 
-def _validate_stable_broker_path_fd_binding(
+def _validate_stable_path_fd_binding(
     *,
     path_before: os.stat_result,
     path_after: os.stat_result,
     fd_before: os.stat_result,
     fd_after: os.stat_result,
     observed_bytes: int,
+    error_message: str,
 ) -> None:
-    """Bind stable pathname and FD observations without cross-interface metadata drift."""
+    """Bind stable pathname and FD observations across platform stat interfaces."""
 
     if (
-        _broker_stat_signature(path_before) != _broker_stat_signature(path_after)
-        or _broker_stat_signature(fd_before) != _broker_stat_signature(fd_after)
+        _stable_stat_signature(path_before) != _stable_stat_signature(path_after)
+        or _stable_stat_signature(fd_before) != _stable_stat_signature(fd_after)
     ):
-        _control_fail("OpenCode owner-external broker source changed while it was read")
+        _control_fail(error_message)
 
     # Windows may normalize mode, uid, and timestamps differently for lstat()
     # and fstat(). Cross-bind only file type, size, and the stable volume/file
@@ -2923,7 +2924,7 @@ def _validate_stable_broker_path_fd_binding(
         or path_before.st_size != fd_before.st_size
         or observed_bytes != fd_before.st_size
     ):
-        _control_fail("OpenCode owner-external broker source changed while it was read")
+        _control_fail(error_message)
 
 
 @contextmanager
@@ -2989,12 +2990,13 @@ def _stage_exact_broker_executable(
         raise QualificationError(
             "OpenCode owner-external broker source changed while it was read"
         ) from exc
-    _validate_stable_broker_path_fd_binding(
+    _validate_stable_path_fd_binding(
         path_before=before,
         path_after=after,
         fd_before=fd_before,
         fd_after=fd_after,
         observed_bytes=len(raw),
+        error_message="OpenCode owner-external broker source changed while it was read",
     )
     if hashlib.sha256(raw).hexdigest() != expected_sha256:
         _control_fail("OpenCode owner-external broker source changed while it was read")
@@ -3104,21 +3106,14 @@ def _validate_opencode_package(
             "OpenCode package source changed while it was read"
         ) from exc
 
-    signatures = {
-        (
-            details.st_dev,
-            details.st_ino,
-            details.st_size,
-            details.st_mode,
-            details.st_uid,
-            details.st_nlink,
-            getattr(details, "st_mtime_ns", details.st_mtime),
-            getattr(details, "st_ctime_ns", details.st_ctime),
-        )
-        for details in (before, fd_before, fd_after, after)
-    }
-    if len(signatures) != 1 or observed_bytes != before.st_size:
-        _control_fail("OpenCode package source changed while it was read")
+    _validate_stable_path_fd_binding(
+        path_before=before,
+        path_after=after,
+        fd_before=fd_before,
+        fd_after=fd_after,
+        observed_bytes=observed_bytes,
+        error_message="OpenCode package source changed while it was read",
+    )
     observed_sha256 = digest.hexdigest()
     if observed_sha256 != expected_sha256:
         _control_fail("OpenCode package bytes differ from the frozen Host identity")
