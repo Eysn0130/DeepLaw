@@ -115,7 +115,15 @@ def test_diagnostic_pre_host_path_does_not_read_qualification_cases(
             "_host_environment",
             lambda *args, **kwargs: (_ for _ in ()).throw(ReachedHostStart()),
         )
-        with pytest.raises(ReachedHostStart):
+        monkeypatch.setattr(
+            QualificationOrchestrator,
+            "prepare_candidate",
+            lambda self: pytest.fail("diagnostic mode reached candidate preparation"),
+        )
+        with pytest.raises(
+            codex_runner.QualificationFailure,
+            match="independent owner-bound Host session identity",
+        ):
             codex_runner.execute(
                 candidate_wheel=tmp_path / "candidate.whl",
                 deeplaw_executable=tmp_path / "deeplaw",
@@ -315,7 +323,10 @@ def test_diagnostic_reaches_candidate_preparation_without_gold(
         launcher = tmp_path / "owner-broker"
         launcher.write_bytes(b"owner broker fixture")
         launcher.chmod(0o700)
-        with pytest.raises(ReachedCandidatePreparation):
+        with pytest.raises(
+            codex_runner.QualificationFailure,
+            match="independent owner-bound Host session identity",
+        ):
             codex_runner.execute(
                 candidate_wheel=tmp_path / "candidate.whl",
                 deeplaw_executable=tmp_path / "deeplaw",

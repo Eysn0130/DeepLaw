@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from benchmarks.hosts import run_pass13_codex_continuity_qualification as qualification
 from benchmarks.hosts.codex_app_server_client import (
     UNREPORTED,
     CodexAppServerClient,
@@ -387,6 +388,58 @@ def _client(
     )
 
 
+def test_codex_diagnostic_fails_before_candidate_or_host_calls(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def unreachable(label: str):
+        def sentinel(*args: object, **kwargs: object) -> object:
+            pytest.fail(f"diagnostic mode reached {label} seam")
+
+        return sentinel
+
+    monkeypatch.setattr(
+        qualification.QualificationOrchestrator,
+        "prepare_candidate",
+        unreachable("candidate preparation"),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_host_environment",
+        unreachable("Host"),
+    )
+    monkeypatch.setattr(
+        qualification,
+        "_validate_owner_broker_launcher",
+        unreachable("broker"),
+    )
+    receipt_errors: list[BaseException] = []
+
+    def record_receipt(**kwargs: Any) -> None:
+        receipt_errors.append(kwargs["error"])
+
+    monkeypatch.setattr(
+        qualification,
+        "_retain_codex_failed_preflight",
+        record_receipt,
+    )
+    with pytest.raises(
+        qualification.QualificationFailure,
+        match="independent owner-bound Host session identity",
+    ) as raised:
+        qualification.execute(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "output",
+            profile_root=tmp_path / "profile",
+            human_gold_path=None,
+            codex_binary=tmp_path / "codex",
+            codex_launcher=tmp_path / "owner-broker",
+            mode="diagnostic",
+        )
+    assert receipt_errors == [raised.value]
+
+
 def test_full_lifecycle_dynamic_tool_usage_and_minimal_projection(tmp_path: Path) -> None:
     def handler(name: str, arguments: Any) -> dict[str, Any]:
         assert name == "lookup"
@@ -449,6 +502,7 @@ def test_completed_hook_projects_exact_continuity_delivery_without_text(tmp_path
     assert delivery["continuity_status"] == "admitted"
     assert delivery["continuity_statement_count"] == 0
     assert delivery["continuity_gap_codes"] == []
+    assert "session_id_sha256" not in delivery
     rendered = repr(result.events)
     assert "DeepLaw read-only continuity capsule" not in rendered
     assert "/tmp/plugin/hook.py" not in rendered

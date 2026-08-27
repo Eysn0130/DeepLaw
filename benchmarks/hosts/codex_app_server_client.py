@@ -1569,6 +1569,9 @@ class CodexAppServerClient:
         thread_id = _thread_or_turn_id(params, "threadId", "thread_id")
         turn_id = _thread_or_turn_id(params, "turnId", "turn_id")
         if thread_id is not None:
+            # This is the App Server thread identity only.  The current
+            # public notification does not expose the Host session identity;
+            # never rename or reuse this digest as ``session_sha256``.
             event["thread_id_sha256"] = _sha256_text(thread_id)
         if turn_id is not None:
             event["turn_id_sha256"] = _sha256_text(turn_id)

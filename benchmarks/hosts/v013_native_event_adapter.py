@@ -75,6 +75,7 @@ _CODEX_HOOK_FIELDS = frozenset(
         "hook_id_sha256",
         "hook_source_path_sha256",
         "thread_id_sha256",
+        "session_id_sha256",
         "turn_id_sha256",
         "continuity_context_sha256",
         "continuity_context_bytes",
@@ -284,7 +285,7 @@ def _session(value: Any, *, label: str = "session") -> str:
 
 def _validate_codex_hook(
     observation: Mapping[str, Any] | bytes | bytearray | str,
-) -> tuple[str, list[str], str]:
+) -> tuple[str, list[str], str, str]:
     selected = _observation_mapping(observation, label="Codex hook observation")
     _closed_fields(selected, _CODEX_HOOK_FIELDS, label="Codex hook observation")
     if selected.get("method") != "hook/completed":
@@ -302,6 +303,9 @@ def _validate_codex_hook(
 
     thread_id_sha256 = _digest(
         selected.get("thread_id_sha256"), label="Codex thread"
+    )
+    session_id_sha256 = _digest(
+        selected.get("session_id_sha256"), label="Codex Host session"
     )
     if canonical_name in {"UserPromptSubmit", "PreCompact", "PostCompact"} and (
         "turn_id_sha256" not in selected
@@ -349,7 +353,7 @@ def _validate_codex_hook(
                 )
             ):
                 _fail("Codex continuity gap code is invalid")
-    return canonical_name, ["hook/completed"], thread_id_sha256
+    return canonical_name, ["hook/completed"], thread_id_sha256, session_id_sha256
 
 
 def _validate_opencode_observation(
@@ -550,9 +554,14 @@ def adapt_codex_hook_observation(
 ) -> dict[str, Any]:
     """Adapt one actual Codex ``hook/completed`` projection."""
 
-    event_type, methods, actual_thread_id_sha256 = _validate_codex_hook(observation)
-    if _session(session_sha256) != actual_thread_id_sha256:
-        _fail("Codex caller session identity differs from the observed thread")
+    (
+        event_type,
+        methods,
+        _actual_thread_id_sha256,
+        actual_session_id_sha256,
+    ) = _validate_codex_hook(observation)
+    if _session(session_sha256) != actual_session_id_sha256:
+        _fail("Codex caller session identity differs from the observed Host session")
     event = _build_event(
         host="codex",
         host_identity=host_identity,

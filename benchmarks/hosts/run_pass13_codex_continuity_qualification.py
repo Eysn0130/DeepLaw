@@ -3227,7 +3227,7 @@ def _execute_codex(
     keyring_home: Path | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
-    """Execute current qualification or one claim-ineligible diagnostic.
+    """Execute the current qualification mode; diagnostic requests fail closed.
 
     This function intentionally performs no authentication-file access.  Every
     login, MCP, and App Server call is routed through the explicitly supplied
@@ -3235,15 +3235,25 @@ def _execute_codex(
     CODEX_HOME nor any authentication path/value.  When supplied, the
     keyring bridge permits only the current user's system ``HOME`` for the
     Codex Host process; all other profile roots remain explicit and closed.
+
+    ``qualification`` is the executable mode.  ``diagnostic`` is intentionally
+    unavailable until the public Hook supplies an independent owner-bound Host
+    session identity, and therefore fails closed before candidate preparation or
+    any Host execution.
     """
 
+    if mode not in {"qualification", "diagnostic"}:
+        raise QualificationFailure("Codex execution mode is invalid")
+    if mode == "diagnostic":
+        raise QualificationFailure(
+            "Codex public Hook lacks an independent owner-bound Host session identity; "
+            "diagnostic execution is unavailable"
+        )
     repository = _repository()
     profile_root = _validate_profile_root(profile_root, repository=repository)
     validated_keyring_home = (
         _validate_keyring_home(keyring_home) if keyring_home is not None else None
     )
-    if mode not in {"qualification", "diagnostic"}:
-        raise QualificationFailure("Codex execution mode is invalid")
     if human_gold_path is not None:
         raise QualificationFailure(
             "Codex candidate runner must not receive Human Gold or reference labels"

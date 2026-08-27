@@ -61,7 +61,10 @@ EXACT_ROUTE = {
 
 
 def _codex_hook(
-    event_name: str = "userPromptSubmit", *, turn: bool = True
+    event_name: str = "userPromptSubmit",
+    *,
+    turn: bool = True,
+    session_id_sha256: str = "9" * 64,
 ) -> dict[str, object]:
     value: dict[str, object] = {
         "method": "hook/completed",
@@ -71,6 +74,7 @@ def _codex_hook(
         "hook_handler_type": "command",
         "hook_id_sha256": "6" * 64,
         "thread_id_sha256": "9" * 64,
+        "session_id_sha256": session_id_sha256,
         "turn_id_sha256": "a" * 64,
         "continuity_context_sha256": "7" * 64,
         "continuity_context_bytes": 42,
@@ -221,8 +225,8 @@ def test_codex_turn_hooks_require_turn_digest(event_name: str) -> None:
         )
 
 
-def test_codex_actual_projector_thread_identity_must_match_caller_session() -> None:
-    with pytest.raises(NativeEventAdapterError, match="observed thread"):
+def test_codex_actual_projector_host_session_identity_must_match_caller() -> None:
+    with pytest.raises(NativeEventAdapterError, match="observed Host session"):
         adapt_codex_hook_observation(
             _codex_hook(),
             host_identity=CODEX_IDENTITY,
@@ -230,6 +234,32 @@ def test_codex_actual_projector_thread_identity_must_match_caller_session() -> N
             route=EXACT_ROUTE,
             event_sequence=0,
             session_sha256="b" * 64,
+        )
+
+
+def test_codex_thread_and_host_session_identities_are_independent() -> None:
+    result = adapt_codex_hook_observation(
+        _codex_hook(session_id_sha256="b" * 64),
+        host_identity=CODEX_IDENTITY,
+        execution_identity=CODEX_EXECUTION,
+        route=EXACT_ROUTE,
+        event_sequence=0,
+        session_sha256="b" * 64,
+    )
+    assert result["event"]["session_sha256"] == "b" * 64
+
+
+def test_codex_hook_without_host_session_identity_fails_closed() -> None:
+    observation = _codex_hook()
+    del observation["session_id_sha256"]
+    with pytest.raises(NativeEventAdapterError, match="Codex Host session"):
+        adapt_codex_hook_observation(
+            observation,
+            host_identity=CODEX_IDENTITY,
+            execution_identity=CODEX_EXECUTION,
+            route=EXACT_ROUTE,
+            event_sequence=0,
+            session_sha256="9" * 64,
         )
 
 
