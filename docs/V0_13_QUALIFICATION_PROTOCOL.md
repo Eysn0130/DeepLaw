@@ -242,6 +242,28 @@ synchronous `SessionStart` command hook, which immediately returns the
 JSON `{"continue":false}`. Its public Hook run status must be `stopped`, and the proof boundary is
 `stop_boundary=before_run_sampling_request`.
 
+The six-step sequence is the closed broker lifecycle projection, not a claim that app-server emits
+no other local lifecycle notifications. At this pinned revision every server notification uses the
+public `{method,params,emittedAtMs}` envelope
+(`codex-rs/app-server-protocol/src/protocol/common.rs:1921-1936`;
+`codex-rs/app-server/src/outgoing_message.rs:729-738`). Immediately after `initialized`, app-server
+also sends `remoteControl/status/changed` to that connection
+(`codex-rs/app-server/src/lib.rs:1075-1090`). The broker must start app-server with the pinned
+one-shot `CODEX_INTERNAL_APP_SERVER_REMOTE_CONTROL_DISABLED=1` marker, which selects
+`DisabledEphemeral` before worker threads start (`codex-rs/app-server/src/main.rs:60-100`;
+`codex-rs/app-server-transport/src/transport/remote_control/mod.rs:87-96`), and must observe exactly
+one closed status object with `status=disabled` and `environmentId=null`. `connecting`, `connected`,
+`errored`, a duplicate, or a missing disabled notification fails closed. The marker is consumed and
+removed by app-server; it is not forwarded to a Provider or Hook.
+
+Pinned `thread/start` sends its response before the unique `thread/started` notification
+(`codex-rs/app-server/src/request_processors/thread_processor.rs:1502-1539`), so the broker must
+bind both objects before sending `turn/start` without assuming the reverse wire order. The public
+Hook run enum serializes its native event name as lower-camel `sessionStart`; the broker validates
+that native spelling and projects only the established v4 contract spelling `SessionStart`.
+Warnings, thread status changes, Turn events, and Hook events remain closed by method, field shape,
+identity correlation, count, and lifecycle position; they do not expand the six-step v4 response.
+
 The v4 request and response must carry the exact broker-owned provider guard
 `{owner:"broker", transport:"loopback_http", provider_id:"deeplaw_zero_model_preflight", requires_openai_auth:false, supports_websockets:false}`.
 The isolated custom provider binds the resolved model provider to a broker-owned loopback counter;
@@ -299,6 +321,13 @@ formal receipt slot. The sanitized CLI summary is preflight-only and cannot be r
 receipt. The Kernel workflow uses its current evidence run ID as the transient preflight
 qualification-run challenge because no future Commercial run may be predicted; that ephemeral
 binding can never be reused as a formal receipt.
+
+If the external broker source is interpreter-backed, the construction kit must also pin and
+reopen the exact interpreter bytes, version, ownership, writability, link topology, and executable
+identity before parsing the control request. An ambient `python3` selected only by `PATH` is not an
+exact execution binding. The current POSIX construction kit records this interpreter dependency in
+its control-only installation receipt; Windows interpreter/ACL execution remains literal
+`not_executed` and unsupported fail-closed for that kit.
 
 The OpenCode runner now has the parallel path-free
 `deeplaw.opencode-owner-external-broker-control/v2` consumer. Its exact owner-only external broker,
