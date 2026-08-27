@@ -685,6 +685,7 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
         "status": "frozen_exact_candidate_machine_evaluation_pending",
         "candidate_version": "0.13.0",
         "construction_package_version": "0.12.0",
+        "release_target": "0.13.0",
         "candidate_binding": {
             "source_commit": COMMIT,
             "source_tree": TREE,
@@ -886,6 +887,180 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
     )
 
 
+def test_v013_construction_kit_manifest_is_closed_and_exactly_bound(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository = Path(__file__).resolve().parents[1]
+    lock_sha256 = _sha((repository / "uv.lock").read_bytes())
+    protocol_sha256 = _sha(
+        (repository / "benchmarks/v013/qualification-protocol-v3.json").read_bytes()
+    )
+    active_schema_sha256 = _sha(
+        (repository / "contracts/v013-active-qualification.v3.schema.json").read_bytes()
+    )
+    monkeypatch.setattr(
+        host_task_runner,
+        "repository_binding",
+        lambda _repository: {
+            "commit": COMMIT,
+            "tree": TREE,
+            "worktree_clean": True,
+            "package_version": "0.12.0",
+        },
+    )
+    external_root = tmp_path / "construction-kit"
+    external_root.mkdir()
+    wheel_name = "deeplaw-0.12.0-py3-none-any.whl"
+    sdist_name = "deeplaw-0.12.0.tar.gz"
+    wheel_raw = b"construction wheel bytes"
+    sdist_raw = b"construction sdist bytes"
+    (external_root / wheel_name).write_bytes(wheel_raw)
+    (external_root / sdist_name).write_bytes(sdist_raw)
+    manifest = {
+        "schema_version": "deeplaw.v013-external-kit-manifest/v2",
+        "evidence_class": "control_manifest_only",
+        "status": "construction_zero_model_preflight_ready",
+        "formal_admission": False,
+        "construction": {
+            "commit": COMMIT,
+            "tree": TREE,
+            "package_version": "0.12.0",
+            "release_target": "0.13.0",
+            "uv_lock_sha256": lock_sha256,
+        },
+        "artifacts": {
+            "wheel": {
+                "filename": wheel_name,
+                "sha256": _sha(wheel_raw),
+            },
+            "sdist": {
+                "filename": sdist_name,
+                "sha256": _sha(sdist_raw),
+            },
+        },
+        "protocol_binding": {
+            "qualification_protocol_sha256": protocol_sha256,
+            "active_qualification_schema_sha256": active_schema_sha256,
+            "codex_control_schema_version": (
+                "deeplaw.codex-owner-external-broker-control/v4"
+            ),
+        },
+        "qualification_state": {
+            "formal_n6": "not_executed",
+            "human_gold": "not_executed",
+            "release_ready": False,
+        },
+        "manifest_sha256_scope": (
+            "utf8_json_sort_keys_compact_without_manifest_sha256_no_trailing_newline"
+        ),
+    }
+    manifest["manifest_sha256"] = _sha(
+        _canonical(manifest)
+    )
+    selected = external_root / "construction-kit-manifest.json"
+
+    def write(value: dict[str, Any]) -> None:
+        selected.write_bytes(_canonical(value))
+
+    write(manifest)
+    schema = json.loads(
+        (repository / "contracts/v013-external-kit-manifest.v2.schema.json").read_text()
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(manifest)
+    expected = {
+        "commit": COMMIT,
+        "tree": TREE,
+        "lock_sha256": lock_sha256,
+        "wheel_sha256": _sha(wheel_raw),
+        "sdist_sha256": _sha(sdist_raw),
+    }
+    assert host_task_runner.load_construction_candidate_binding(
+        selected,
+        repository=repository,
+    ) == expected
+    assert host_task_runner.load_zero_model_candidate_binding(
+        selected,
+        candidate_wheel=external_root / wheel_name,
+        repository=repository,
+    ) == expected
+    with pytest.raises(HostTaskQualificationError, match="not frozen active v3"):
+        host_task_runner.load_exact_candidate_binding(
+            selected,
+            repository=repository,
+        )
+
+    def clone() -> dict[str, Any]:
+        return json.loads(json.dumps(manifest))
+
+    def assert_rejected(candidate: dict[str, Any], message: str) -> None:
+        candidate["manifest_sha256"] = _sha(
+            _canonical(
+                {
+                    key: item
+                    for key, item in candidate.items()
+                    if key != "manifest_sha256"
+                }
+            )
+        )
+        write(candidate)
+        with pytest.raises(HostTaskQualificationError, match=message):
+            host_task_runner.load_zero_model_candidate_binding(
+                selected,
+                repository=repository,
+            )
+
+    candidate = clone()
+    candidate["manifest_sha256"] = "f" * 64
+    write(candidate)
+    with pytest.raises(HostTaskQualificationError, match="self-hash differs"):
+        host_task_runner.load_zero_model_candidate_binding(
+            selected,
+            repository=repository,
+        )
+
+    candidate = clone()
+    candidate["status"] = "construction_zero_model_preflight_blocked"
+    assert_rejected(candidate, "status is invalid")
+
+    candidate = clone()
+    candidate["formal_admission"] = True
+    assert_rejected(candidate, "status is invalid")
+
+    candidate = clone()
+    candidate["protocol_binding"]["qualification_protocol_sha256"] = "f" * 64
+    assert_rejected(candidate, "current binding differs")
+
+    candidate = clone()
+    candidate["artifacts"]["wheel"]["sha256"] = "f" * 64
+    assert_rejected(candidate, "artifact bytes differ")
+
+    candidate = clone()
+    candidate["artifacts"]["wheel"]["filename"] = "deeplaw-0.13.0-py3-none-any.whl"
+    assert_rejected(candidate, "filename version differs")
+
+    candidate = clone()
+    candidate["construction"]["package_version"] = "0.13.0"
+    assert_rejected(candidate, "package or release target differs")
+
+    candidate = clone()
+    candidate["qualification_state"]["formal_n6"] = "passed"
+    assert_rejected(candidate, "qualification state is invalid")
+
+    candidate = clone()
+    candidate["extra"] = True
+    assert_rejected(candidate, "not closed v2")
+
+    candidate = clone()
+    candidate["artifacts"]["wheel"]["extra"] = True
+    assert_rejected(candidate, "artifact binding is not closed")
+
+    candidate = clone()
+    candidate["manifest_sha256_scope"] = "with_newline"
+    assert_rejected(candidate, "status is invalid")
+
+
 def test_v013_host_task_catalog_rejects_binary_drift(tmp_path: Path) -> None:
     catalog = load_task_cases()
     catalog["host_constraints"]["opencode"]["binary_sha256"] = "moving"
@@ -1049,7 +1224,7 @@ def _assert_codex_zero_model_runner_serializes_stop_before_sampling(
     }
     monkeypatch.setattr(
         host_task_runner,
-        "load_exact_candidate_binding",
+        "load_zero_model_candidate_binding",
         lambda *_args, **_kwargs: candidate,
     )
     monkeypatch.setattr(

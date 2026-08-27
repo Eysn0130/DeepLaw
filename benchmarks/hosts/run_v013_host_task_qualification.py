@@ -149,6 +149,17 @@ _VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT = re.compile(r"^[0-9a-f]{40}$")
 _ACTIVE_CANDIDATE_SCHEMA = "deeplaw.v013-active-qualification/v3"
+_CONSTRUCTION_KIT_SCHEMA = "deeplaw.v013-external-kit-manifest/v2"
+_CONSTRUCTION_KIT_MANIFEST_SHA256_SCOPE = (
+    "utf8_json_sort_keys_compact_without_manifest_sha256_no_trailing_newline"
+)
+_CONSTRUCTION_KIT_MANIFEST_MAX_BYTES = 1024 * 1024
+_QUALIFICATION_PROTOCOL_RELATIVE_PATH = Path(
+    "benchmarks/v013/qualification-protocol-v3.json"
+)
+_ACTIVE_QUALIFICATION_SCHEMA_RELATIVE_PATH = Path(
+    "contracts/v013-active-qualification.v3.schema.json"
+)
 _CANDIDATE_MANIFEST_MAX_BYTES = 1024 * 1024
 _BROKER_SOURCE_MAX_BYTES = 256 * 1024
 _STABLE_STAT_FIELDS = (
@@ -230,6 +241,16 @@ def _handoff_schema() -> dict[str, Any]:
 
 def _canonical(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _canonical_bytes(value: Any) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
 
 
 def _sha256(value: bytes) -> str:
@@ -708,6 +729,7 @@ def load_exact_candidate_binding(
         != "frozen_exact_candidate_machine_evaluation_pending"
         or value.get("candidate_version") != "0.13.0"
         or value.get("construction_package_version") != "0.12.0"
+        or value.get("release_target") != "0.13.0"
         or not isinstance(value.get("candidate_binding"), Mapping)
     ):
         raise HostTaskQualificationError("candidate binding input is not frozen active v3")
@@ -742,6 +764,12 @@ def load_exact_candidate_binding(
         for name in (wheel_name, sdist_name)
     ):
         raise HostTaskQualificationError("candidate artifact filename is invalid")
+    if (
+        not wheel_name.startswith("deeplaw-0.13.0-")
+        or not wheel_name.endswith(".whl")
+        or sdist_name != "deeplaw-0.13.0.tar.gz"
+    ):
+        raise HostTaskQualificationError("candidate artifact filename version differs")
 
     expected_wheel = selected.parent / str(wheel_name)
     selected_wheel = expected_wheel if candidate_wheel is None else Path(candidate_wheel)
@@ -790,6 +818,292 @@ def load_exact_candidate_binding(
         "wheel_sha256",
         "sdist_sha256",
     )}
+
+
+def _construction_sha256(value: Any, *, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or _SHA256.fullmatch(value) is None
+        or value == "0" * 64
+    ):
+        raise HostTaskQualificationError(
+            f"construction kit {label} must be a nonzero lowercase SHA-256 digest"
+        )
+    return value
+
+
+def _construction_git(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or _GIT.fullmatch(value) is None or value == "0" * 40:
+        raise HostTaskQualificationError(
+            f"construction kit {label} must be a nonzero Git commit digest"
+        )
+    return value
+
+
+def load_construction_candidate_binding(
+    path: Path | str,
+    *,
+    candidate_wheel: Path | str | None = None,
+    repository: Path = REPOSITORY,
+) -> dict[str, Any]:
+    """Load the external construction-only v2 manifest for zero-model preflight."""
+
+    selected = Path(path)
+    try:
+        _, raw = _read_stable_regular_file(
+            selected,
+            label="construction kit manifest",
+            repository=repository,
+            require_external=True,
+            retain_bytes=True,
+            maximum_bytes=_CONSTRUCTION_KIT_MANIFEST_MAX_BYTES,
+        )
+        if raw is None:
+            raise HostTaskQualificationError("construction kit manifest is unavailable")
+        value = strict_json_loads(raw)
+    except HostTaskQualificationError:
+        raise
+    except (UnicodeError, ValueError) as exc:
+        raise HostTaskQualificationError("construction kit manifest is unavailable") from exc
+
+    top_fields = {
+        "schema_version",
+        "evidence_class",
+        "status",
+        "formal_admission",
+        "construction",
+        "artifacts",
+        "protocol_binding",
+        "qualification_state",
+        "manifest_sha256_scope",
+        "manifest_sha256",
+    }
+    if not isinstance(value, Mapping) or set(value) != top_fields:
+        raise HostTaskQualificationError("construction kit manifest is not closed v2")
+    try:
+        canonical_raw = _canonical_bytes(value)
+    except (TypeError, ValueError, UnicodeError) as exc:
+        raise HostTaskQualificationError("construction kit manifest is not canonical JSON") from exc
+    if raw != canonical_raw:
+        raise HostTaskQualificationError("construction kit manifest bytes are not canonical")
+    if (
+        value.get("schema_version") != _CONSTRUCTION_KIT_SCHEMA
+        or value.get("evidence_class") != "control_manifest_only"
+        or value.get("status") != "construction_zero_model_preflight_ready"
+        or value.get("formal_admission") is not False
+        or value.get("manifest_sha256_scope")
+        != _CONSTRUCTION_KIT_MANIFEST_SHA256_SCOPE
+    ):
+        raise HostTaskQualificationError("construction kit manifest status is invalid")
+    manifest_sha256 = _construction_sha256(
+        value.get("manifest_sha256"),
+        label="manifest_sha256",
+    )
+    without_manifest_sha256 = {
+        key: item for key, item in value.items() if key != "manifest_sha256"
+    }
+    if _sha256(_canonical_bytes(without_manifest_sha256)) != manifest_sha256:
+        raise HostTaskQualificationError("construction kit manifest self-hash differs")
+
+    construction = value.get("construction")
+    if not isinstance(construction, Mapping) or set(construction) != {
+        "commit",
+        "tree",
+        "package_version",
+        "release_target",
+        "uv_lock_sha256",
+    }:
+        raise HostTaskQualificationError("construction kit binding is not closed")
+    construction_commit = _construction_git(
+        construction.get("commit"),
+        label="commit",
+    )
+    construction_tree = _construction_git(
+        construction.get("tree"),
+        label="tree",
+    )
+    construction_lock = _construction_sha256(
+        construction.get("uv_lock_sha256"),
+        label="uv_lock_sha256",
+    )
+    if (
+        construction.get("package_version") != "0.12.0"
+        or construction.get("release_target") != "0.13.0"
+    ):
+        raise HostTaskQualificationError("construction kit package or release target differs")
+
+    artifacts = value.get("artifacts")
+    if not isinstance(artifacts, Mapping) or set(artifacts) != {"wheel", "sdist"}:
+        raise HostTaskQualificationError("construction kit artifacts are not closed")
+    wheel = artifacts.get("wheel")
+    sdist = artifacts.get("sdist")
+    if (
+        not isinstance(wheel, Mapping)
+        or set(wheel) != {"filename", "sha256"}
+        or not isinstance(sdist, Mapping)
+        or set(sdist) != {"filename", "sha256"}
+    ):
+        raise HostTaskQualificationError("construction kit artifact binding is not closed")
+    wheel_name = wheel.get("filename")
+    sdist_name = sdist.get("filename")
+    if any(
+        not isinstance(name, str)
+        or not name
+        or Path(name).name != name
+        or "/" in name
+        or "\\" in name
+        for name in (wheel_name, sdist_name)
+    ):
+        raise HostTaskQualificationError("construction kit artifact filename is invalid")
+    if (
+        not wheel_name.startswith("deeplaw-0.12.0-")
+        or not wheel_name.endswith(".whl")
+        or sdist_name != "deeplaw-0.12.0.tar.gz"
+    ):
+        raise HostTaskQualificationError("construction kit artifact filename version differs")
+    wheel_sha = _construction_sha256(wheel.get("sha256"), label="wheel.sha256")
+    sdist_sha = _construction_sha256(sdist.get("sha256"), label="sdist.sha256")
+
+    protocol_binding = value.get("protocol_binding")
+    if not isinstance(protocol_binding, Mapping) or set(protocol_binding) != {
+        "qualification_protocol_sha256",
+        "active_qualification_schema_sha256",
+        "codex_control_schema_version",
+    }:
+        raise HostTaskQualificationError("construction kit protocol binding is not closed")
+    protocol_sha = _construction_sha256(
+        protocol_binding.get("qualification_protocol_sha256"),
+        label="qualification_protocol_sha256",
+    )
+    active_schema_sha = _construction_sha256(
+        protocol_binding.get("active_qualification_schema_sha256"),
+        label="active_qualification_schema_sha256",
+    )
+    if protocol_binding.get("codex_control_schema_version") != (
+        "deeplaw.codex-owner-external-broker-control/v4"
+    ):
+        raise HostTaskQualificationError("construction kit Codex control schema differs")
+
+    qualification_state = value.get("qualification_state")
+    if not isinstance(qualification_state, Mapping) or set(qualification_state) != {
+        "formal_n6",
+        "human_gold",
+        "release_ready",
+    }:
+        raise HostTaskQualificationError("construction kit qualification state is not closed")
+    if (
+        qualification_state.get("formal_n6") != "not_executed"
+        or qualification_state.get("human_gold") != "not_executed"
+        or qualification_state.get("release_ready") is not False
+    ):
+        raise HostTaskQualificationError("construction kit qualification state is invalid")
+
+    try:
+        current = repository_binding(repository)
+        lock_sha256, _ = _read_stable_regular_file(
+            repository.resolve(strict=True) / "uv.lock",
+            label="construction candidate lock file",
+            repository=repository,
+            require_external=False,
+        )
+        current_protocol_sha256, _ = _read_stable_regular_file(
+            repository.resolve(strict=True) / _QUALIFICATION_PROTOCOL_RELATIVE_PATH,
+            label="qualification protocol",
+            repository=repository,
+            require_external=False,
+        )
+        current_active_schema_sha256, _ = _read_stable_regular_file(
+            repository.resolve(strict=True) / _ACTIVE_QUALIFICATION_SCHEMA_RELATIVE_PATH,
+            label="active qualification schema",
+            repository=repository,
+            require_external=False,
+        )
+        if (
+            not isinstance(current, Mapping)
+            or current.get("worktree_clean") is not True
+            or current.get("package_version") != "0.12.0"
+            or current.get("commit") != construction_commit
+            or current.get("tree") != construction_tree
+            or lock_sha256 != construction_lock
+            or current_protocol_sha256 != protocol_sha
+            or current_active_schema_sha256 != active_schema_sha
+        ):
+            raise HostTaskQualificationError("construction kit current binding differs")
+
+        expected_wheel = selected.parent / wheel_name
+        selected_wheel = expected_wheel if candidate_wheel is None else Path(candidate_wheel)
+        if (
+            not selected_wheel.is_absolute()
+            or selected_wheel.resolve(strict=True) != expected_wheel.resolve(strict=True)
+        ):
+            raise HostTaskQualificationError("construction kit wheel path differs")
+        observed_wheel_sha, _ = _read_stable_regular_file(
+            selected_wheel,
+            label="construction kit wheel",
+            repository=repository,
+            require_external=True,
+        )
+        observed_sdist_sha, _ = _read_stable_regular_file(
+            selected.parent / sdist_name,
+            label="construction kit sdist",
+            repository=repository,
+            require_external=True,
+        )
+    except HostTaskQualificationError:
+        raise
+    except (OSError, ValueError, QualificationOrchestrationError) as exc:
+        raise HostTaskQualificationError("construction kit exact-byte binding failed") from exc
+    if observed_wheel_sha != wheel_sha or observed_sdist_sha != sdist_sha:
+        raise HostTaskQualificationError("construction kit artifact bytes differ")
+    return {
+        "commit": construction_commit,
+        "tree": construction_tree,
+        "lock_sha256": construction_lock,
+        "wheel_sha256": wheel_sha,
+        "sdist_sha256": sdist_sha,
+    }
+
+
+def load_zero_model_candidate_binding(
+    path: Path | str,
+    *,
+    candidate_wheel: Path | str | None = None,
+    repository: Path = REPOSITORY,
+) -> dict[str, Any]:
+    """Accept either a formal frozen v3 candidate or construction-only v2 input."""
+
+    selected = Path(path)
+    try:
+        _, raw = _read_stable_regular_file(
+            selected,
+            label="zero-model candidate binding input",
+            repository=repository,
+            require_external=True,
+            retain_bytes=True,
+            maximum_bytes=_CANDIDATE_MANIFEST_MAX_BYTES,
+        )
+        if raw is None:
+            raise HostTaskQualificationError(
+                "zero-model candidate binding input is unavailable"
+            )
+        value = strict_json_loads(raw)
+    except HostTaskQualificationError:
+        raise
+    except (UnicodeError, ValueError) as exc:
+        raise HostTaskQualificationError(
+            "zero-model candidate binding input is unavailable"
+        ) from exc
+    if isinstance(value, Mapping) and value.get("schema_version") == _CONSTRUCTION_KIT_SCHEMA:
+        return load_construction_candidate_binding(
+            selected,
+            candidate_wheel=candidate_wheel,
+            repository=repository,
+        )
+    return load_exact_candidate_binding(
+        selected,
+        candidate_wheel=candidate_wheel,
+        repository=repository,
+    )
 
 
 def _validate_codex_binary_static(
@@ -854,7 +1168,7 @@ def run_codex_owner_external_zero_model_preflight(
         or expected_broker_sha256 == "0" * 64
     ):
         raise HostTaskQualificationError("Codex zero-model run binding is invalid")
-    candidate = load_exact_candidate_binding(
+    candidate = load_zero_model_candidate_binding(
         candidate_binding_input,
         candidate_wheel=candidate_wheel,
         repository=repository,
@@ -1192,8 +1506,10 @@ __all__ = [
     "TYPED_SOURCE_SLOTS",
     "HostTaskQualificationError",
     "build_external_collector_handoff",
+    "load_construction_candidate_binding",
     "load_exact_candidate_binding",
     "load_task_cases",
+    "load_zero_model_candidate_binding",
     "main",
     "public_context_read",
     "public_source_read",

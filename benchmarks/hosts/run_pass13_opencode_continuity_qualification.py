@@ -55,7 +55,7 @@ from benchmarks.hosts.pass13_orchestrator import (
 )
 from benchmarks.hosts.run_v013_host_task_qualification import (
     HostTaskQualificationError,
-    load_exact_candidate_binding,
+    load_zero_model_candidate_binding,
 )
 
 MODEL = "deepseek/deepseek-v4-flash"
@@ -3225,7 +3225,7 @@ def run_opencode_owner_external_zero_model_preflight(
     ):
         _control_fail("OpenCode zero-model run binding is invalid")
     try:
-        candidate = load_exact_candidate_binding(
+        candidate = load_zero_model_candidate_binding(
             candidate_binding_input,
             candidate_wheel=candidate_wheel,
             repository=selected_repository,

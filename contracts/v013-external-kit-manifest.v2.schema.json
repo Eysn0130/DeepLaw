@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-external-kit-manifest.v2.schema.json",
+  "title": "DeepLaw v0.13 construction zero-model preflight kit manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_class",
+    "status",
+    "formal_admission",
+    "construction",
+    "artifacts",
+    "protocol_binding",
+    "qualification_state",
+    "manifest_sha256_scope",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.v013-external-kit-manifest/v2"
+    },
+    "evidence_class": {
+      "const": "control_manifest_only"
+    },
+    "status": {
+      "const": "construction_zero_model_preflight_ready"
+    },
+    "formal_admission": {
+      "const": false
+    },
+    "construction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "package_version",
+        "release_target",
+        "uv_lock_sha256"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "package_version": {
+          "const": "0.12.0"
+        },
+        "release_target": {
+          "const": "0.13.0"
+        },
+        "uv_lock_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wheel", "sdist"],
+      "properties": {
+        "wheel": {
+          "$ref": "#/$defs/artifact"
+        },
+        "sdist": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["filename", "sha256"],
+          "properties": {
+            "filename": {
+              "const": "deeplaw-0.12.0.tar.gz"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        }
+      }
+    },
+    "protocol_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qualification_protocol_sha256",
+        "active_qualification_schema_sha256",
+        "codex_control_schema_version"
+      ],
+      "properties": {
+        "qualification_protocol_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "active_qualification_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "codex_control_schema_version": {
+          "const": "deeplaw.codex-owner-external-broker-control/v4"
+        }
+      }
+    },
+    "qualification_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formal_n6", "human_gold", "release_ready"],
+      "properties": {
+        "formal_n6": {
+          "const": "not_executed"
+        },
+        "human_gold": {
+          "const": "not_executed"
+        },
+        "release_ready": {
+          "const": false
+        }
+      }
+    },
+    "manifest_sha256_scope": {
+      "const": "utf8_json_sort_keys_compact_without_manifest_sha256_no_trailing_newline"
+    },
+    "manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "sha256"],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "pattern": "^deeplaw-0\\.12\\.0-[A-Za-z0-9_.+-]+\\.whl$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

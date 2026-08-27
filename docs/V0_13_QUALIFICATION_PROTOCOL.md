@@ -266,9 +266,22 @@ the receipt. The receipt's existing same-process/same-connection correlation the
 digests to the exact Host process and stdio connection. Rehashing a receipt around an unrelated
 native digest must still fail closed.
 
-Before candidate preparation it reopens the frozen candidate commit/tree/lock/wheel/sdist bytes,
-the owner-only repository-external exact broker source, Codex binary, and Host identity. It creates
-a fresh 60-second nonce challenge bound to the task and evidence/qualification run IDs. The exact
+Construction-time zero-model preflight does not require or manufacture a frozen `0.13.0`
+candidate. Before candidate preparation, its only permitted `0.12.0` artifact input is a closed,
+canonical, self-hashed, repository-external
+`deeplaw.v013-external-kit-manifest/v2` control manifest. That manifest binds the clean current
+commit/tree, `uv.lock`, exact `0.12.0` wheel and sdist bytes, this qualification protocol, the
+active v3 schema, the v4 Codex control schema, and literal `formal_n6=not_executed`,
+`human_gold=not_executed`, `release_ready=false`. Its `formal_admission` is always false. The
+construction manifest is accepted only by the Codex/OpenCode zero-model preflight loaders; the
+formal frozen-candidate loader rejects it. After candidate preparation, the existing frozen active
+v3 input remains exact `candidate_version=0.13.0`,
+`construction_package_version=0.12.0`, `release_target=0.13.0`, and binds only exact `0.13.0`
+artifacts. Neither input class can be relabelled as the other.
+
+The preflight reopens the applicable exact candidate or construction binding, the owner-only
+repository-external exact broker source, Codex binary, and Host identity. It creates a fresh
+60-second nonce challenge bound to the task and evidence/qualification run IDs. The exact
 broker subprocess must directly return one transient v4 object showing the sequence and
 observations above, exactly one initialized stdio connection, the same exact Host process and
 connection, and a real Hook session identity distinct from the native session digest. Any extra

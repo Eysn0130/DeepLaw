@@ -820,10 +820,17 @@ def _assert_zero_model_preflight_is_static_until_external_broker_control(
         "source_bytes": 512,
     }
     calls: list[str] = []
+    loaded_candidate_inputs: list[Path] = []
+
+    def load_candidate(path: Path, **kwargs: object) -> dict[str, Any]:
+        del kwargs
+        loaded_candidate_inputs.append(path)
+        return dict(_ZERO_MODEL_CANDIDATE)
+
     monkeypatch.setattr(
         runner,
-        "load_exact_candidate_binding",
-        lambda *args, **kwargs: dict(_ZERO_MODEL_CANDIDATE),
+        "load_zero_model_candidate_binding",
+        load_candidate,
     )
     monkeypatch.setattr(
         runner.host_preflight_receipt,
@@ -870,7 +877,7 @@ def _assert_zero_model_preflight_is_static_until_external_broker_control(
         ),
     )
     result = runner.run_opencode_owner_external_zero_model_preflight(
-        candidate_binding_input=tmp_path / "frozen-active-qualification.json",
+        candidate_binding_input=tmp_path / "construction-kit-manifest.json",
         host_identity_input=tmp_path / "host-identity.json",
         opencode_package=opencode_package,
         opencode_binary=opencode_selector,
@@ -883,6 +890,7 @@ def _assert_zero_model_preflight_is_static_until_external_broker_control(
         repository=_REPOSITORY,
     )
     assert calls == ["stage_exact_broker", "consume_external_broker"]
+    assert loaded_candidate_inputs == [tmp_path / "construction-kit-manifest.json"]
     assert result == {
         "status": "passed",
         "evidence_class": "zero_model_preflight_only",
@@ -991,7 +999,7 @@ def _assert_zero_model_static_boundary_reaches_only_external_broker_popen(
     }
     monkeypatch.setattr(
         runner,
-        "load_exact_candidate_binding",
+        "load_zero_model_candidate_binding",
         lambda *args, **kwargs: dict(_ZERO_MODEL_CANDIDATE),
     )
     monkeypatch.setattr(
