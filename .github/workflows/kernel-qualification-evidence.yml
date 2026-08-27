@@ -251,6 +251,29 @@ jobs:
             > /dev/null
           test -s "${host_task_handoff}"
 
+      - name: Run Codex owner-external zero-model preflight
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${EVIDENCE_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${DEEPLAW_CODEX_CREDENTIAL_BROKER_SHA256}" =~ ^[0-9a-f]{64}$ ]]
+          uv run --frozen python -m benchmarks.hosts.run_v013_host_task_qualification \
+            --codex-zero-model-preflight \
+            --candidate-binding-input "${RUNNER_TEMP}/candidate-inputs/verified-dist/frozen-active-qualification.json" \
+            --host-identity-input "${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json" \
+            --codex-binary "${DEEPLAW_CODEX_BINARY}" \
+            --codex-broker "${DEEPLAW_CODEX_CREDENTIAL_BROKER}" \
+            --expected-codex-broker-sha256 "${DEEPLAW_CODEX_CREDENTIAL_BROKER_SHA256}" \
+            --task-case continuity \
+            --run-id "codex-zero-model-preflight-${CANDIDATE_RUN_ID}-${EVIDENCE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --qualification-run-id "${EVIDENCE_RUN_ID}" \
+            > /dev/null
+
       - name: Execute Codex x3, OpenCode x3, and deterministic Kernel evidence
         env:
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}

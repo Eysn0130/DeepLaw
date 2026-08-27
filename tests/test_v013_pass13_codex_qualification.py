@@ -363,6 +363,92 @@ def test_all_modes_fail_before_candidate_or_host_without_v2_correlation(
                 mode=mode,
             )
     assert entered_candidate is False
+    order: list[str] = []
+
+    def observed_preflight(**kwargs: object) -> dict[str, object]:
+        order.append("owner_external_preflight")
+        assert kwargs["task_case"] == "continuity"
+        assert kwargs["run_id"] == "codex-continuity-101"
+        return {
+            "status": "passed",
+            "evidence_class": "zero_model_preflight_only",
+            "formal_admission": False,
+        }
+
+    def reached_candidate(_self: object) -> None:
+        order.append("candidate_preparation")
+        raise RuntimeError("candidate sentinel")
+
+    monkeypatch.setattr(
+        qualification,
+        "run_codex_owner_external_zero_model_preflight",
+        observed_preflight,
+    )
+    monkeypatch.setattr(
+        qualification.QualificationOrchestrator,
+        "prepare_candidate",
+        reached_candidate,
+    )
+    (tmp_path / "profile").mkdir()
+    with pytest.raises(RuntimeError, match="candidate sentinel"):
+        qualification._execute_codex(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "output",
+            profile_root=tmp_path / "profile",
+            human_gold_path=None,
+            codex_binary=tmp_path / "codex",
+            codex_launcher=tmp_path / "owner-broker",
+            host_identity_input=tmp_path / "host-identity.json",
+            expected_broker_sha256="a" * 64,
+            candidate_binding_input=tmp_path / "frozen-active-qualification.json",
+            run_id="codex-continuity-101",
+            evidence_run_id=101,
+            qualification_run_id=202,
+            mode="qualification",
+        )
+    assert order == ["owner_external_preflight", "candidate_preparation"]
+    entered_candidate = False
+
+    def rejected_preflight(**_kwargs: object) -> dict[str, object]:
+        raise ValueError("stale broker record")
+
+    def forbidden_prepare(_self: object) -> None:
+        nonlocal entered_candidate
+        entered_candidate = True
+        raise AssertionError("candidate preparation must remain unreachable")
+
+    monkeypatch.setattr(
+        qualification,
+        "run_codex_owner_external_zero_model_preflight",
+        rejected_preflight,
+    )
+    monkeypatch.setattr(
+        qualification.QualificationOrchestrator,
+        "prepare_candidate",
+        forbidden_prepare,
+    )
+    with pytest.raises(
+        qualification.QualificationFailure,
+        match="zero-model preflight failed closed",
+    ):
+        qualification._execute_codex(
+            candidate_wheel=tmp_path / "candidate.whl",
+            deeplaw_executable=tmp_path / "deeplaw",
+            output_dir=tmp_path / "output",
+            profile_root=tmp_path / "profile",
+            human_gold_path=None,
+            codex_binary=tmp_path / "codex",
+            codex_launcher=tmp_path / "owner-broker",
+            host_identity_input=tmp_path / "host-identity.json",
+            expected_broker_sha256="a" * 64,
+            candidate_binding_input=tmp_path / "frozen-active-qualification.json",
+            run_id="codex-continuity-101",
+            evidence_run_id=101,
+            qualification_run_id=202,
+            mode="qualification",
+        )
+    assert entered_candidate is False
 
 
 def test_returned_model_identity_does_not_promote_request_model_pin() -> None:

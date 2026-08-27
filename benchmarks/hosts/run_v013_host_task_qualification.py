@@ -1,10 +1,10 @@
 """Thin, machine-only adapter for the v0.13 Gate v9 Host task matrix.
 
-The adapter deliberately does not start Codex/OpenCode.  A real Host run is an
+The adapter does not directly start Codex/OpenCode.  A real Host run is an
 external qualification action with owner-controlled prerequisites.  This file
-provides the frozen task plan, public read seams used by an eventual runner,
-and validation of already-retained typed evidence.  It never reads ambient
-authentication, invokes a model, or opens a private database API.
+provides the frozen task plan, a direct owner-external broker IPC preflight,
+public read seams, and validation of already-retained typed evidence.  It never
+reads ambient authentication, invokes a model, or opens a private database API.
 """
 
 from __future__ import annotations
@@ -12,17 +12,35 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
-from collections.abc import Mapping
+import secrets
+import stat
+import tempfile
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.hosts.codex_app_server_client import (
+    CODEX_ZERO_MODEL_SEQUENCE,
+    CodexOwnerExternalBrokerError,
+    build_codex_zero_model_preflight_request,
+    consume_codex_zero_model_preflight,
+)
 from benchmarks.hosts.host_preflight_receipt import (
     HostIdentityValidationError,
+    host_binary_identity,
     host_identity_sha256,
+    inspect_broker_source,
     load_host_identity_input,
+)
+from benchmarks.hosts.pass13_orchestrator import (
+    QualificationOrchestrationError,
+    repository_binding,
 )
 from benchmarks.release.typed_qualification_evidence import parse_typed_evidence
 from benchmarks.release.typed_qualification_evidence_v3_host_tasks import (
@@ -131,6 +149,17 @@ CONTINUITY_LIFECYCLE = (
 _VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT = re.compile(r"^[0-9a-f]{40}$")
+_ACTIVE_CANDIDATE_SCHEMA = "deeplaw.v013-active-qualification/v3"
+_CANDIDATE_MANIFEST_MAX_BYTES = 1024 * 1024
+_BROKER_SOURCE_MAX_BYTES = 256 * 1024
+_STABLE_STAT_FIELDS = (
+    "st_dev",
+    "st_ino",
+    "st_size",
+    "st_mode",
+    "st_uid",
+    "st_nlink",
+)
 
 
 def _validate_catalog_host_constraints(value: Mapping[str, Any]) -> None:
@@ -249,9 +278,13 @@ def _validate_task_catalog(value: Mapping[str, Any]) -> dict[str, Any]:
     return json.loads(_canonical(value))
 
 
-def _load_external_identity(path: Path | str) -> dict[str, Any]:
+def _load_external_identity(
+    path: Path | str,
+    *,
+    repository: Path = REPOSITORY,
+) -> dict[str, Any]:
     try:
-        return load_host_identity_input(path, repository=REPOSITORY)
+        return load_host_identity_input(path, repository=repository)
     except (HostIdentityValidationError, OSError, ValueError) as exc:
         raise HostTaskQualificationError(
             "owner-controlled Host identity input was rejected"
@@ -456,6 +489,433 @@ def validate_external_collector_handoff(
     return value
 
 
+def _stable_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
+    """Return identity and mutation fields for one exact file observation."""
+
+    return (
+        *(getattr(details, field, None) for field in _STABLE_STAT_FIELDS),
+        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
+        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
+    )
+
+
+def _parent_chain_has_symlink(path: Path) -> bool:
+    selected = Path(path)
+    if not selected.is_absolute():
+        return True
+    current = Path(selected.anchor)
+    for part in selected.parent.parts[1:]:
+        current /= part
+        try:
+            if stat.S_ISLNK(current.lstat().st_mode):
+                return True
+        except OSError:
+            return True
+    return False
+
+
+def _read_stable_regular_file(
+    path: Path | str,
+    *,
+    label: str,
+    repository: Path,
+    require_external: bool,
+    executable: bool = False,
+    owner_only: bool = False,
+    retain_bytes: bool = False,
+    maximum_bytes: int | None = None,
+) -> tuple[str, bytes | None]:
+    """Hash one regular file through a stable FD and unchanged path identity."""
+
+    selected = Path(path)
+    if not selected.is_absolute():
+        raise HostTaskQualificationError(f"{label} must be absolute")
+    if _parent_chain_has_symlink(selected):
+        raise HostTaskQualificationError(f"{label} parent path contains a symlink")
+    try:
+        before = selected.lstat()
+        resolved = selected.resolve(strict=True)
+        repository_root = repository.resolve(strict=True)
+    except OSError as exc:
+        raise HostTaskQualificationError(f"{label} is unavailable") from exc
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise HostTaskQualificationError(f"{label} must be a regular non-symlink file")
+    if before.st_nlink != 1:
+        raise HostTaskQualificationError(f"{label} must be a single-link file")
+    if maximum_bytes is not None and not 1 <= before.st_size <= maximum_bytes:
+        raise HostTaskQualificationError(f"{label} exceeds its byte bound")
+    if executable and not os.access(selected, os.X_OK):
+        raise HostTaskQualificationError(f"{label} is not executable")
+    if owner_only and os.name != "nt" and (
+        not hasattr(os, "geteuid")
+        or before.st_uid != os.geteuid()
+        or stat.S_IMODE(before.st_mode) & 0o077
+    ):
+        raise HostTaskQualificationError(f"{label} must be owner-only")
+    inside_repository = resolved == repository_root or repository_root in resolved.parents
+    if require_external and inside_repository:
+        raise HostTaskQualificationError(f"{label} must be repository-external")
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    descriptor = -1
+    chunks: list[bytes] = []
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        descriptor = os.open(selected, flags)
+        fd_before = os.fstat(descriptor)
+        if _stable_stat_signature(fd_before) != _stable_stat_signature(before):
+            raise HostTaskQualificationError(f"{label} changed before it was read")
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if maximum_bytes is not None and total > maximum_bytes:
+                raise HostTaskQualificationError(f"{label} exceeds its byte bound")
+            digest.update(chunk)
+            if retain_bytes:
+                chunks.append(chunk)
+        fd_after = os.fstat(descriptor)
+    except HostTaskQualificationError:
+        raise
+    except OSError as exc:
+        raise HostTaskQualificationError(f"{label} is unavailable") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    try:
+        after = selected.lstat()
+    except OSError as exc:
+        raise HostTaskQualificationError(f"{label} changed while it was read") from exc
+    if (
+        _parent_chain_has_symlink(selected)
+        or _stable_stat_signature(fd_before) != _stable_stat_signature(fd_after)
+        or _stable_stat_signature(before) != _stable_stat_signature(after)
+        or total != before.st_size
+    ):
+        raise HostTaskQualificationError(f"{label} changed while it was read")
+    return digest.hexdigest(), b"".join(chunks) if retain_bytes else None
+
+
+@contextmanager
+def _stage_exact_broker_executable(
+    path: Path | str,
+    *,
+    repository: Path,
+    host_binary: Path,
+    expected_sha256: str,
+) -> Iterator[Path]:
+    """Stage verified broker bytes in one private path immune to source replacement."""
+
+    source = Path(path)
+    inspected = inspect_broker_source(
+        source,
+        repository=repository,
+        host_binary=host_binary,
+        expected_sha256=expected_sha256,
+    )
+    if (
+        inspected.get("failure_reason_code") is not None
+        or inspected.get("repository_external") is not True
+        or inspected.get("owner_only_mode") is not True
+        or inspected.get("sha256") != expected_sha256
+    ):
+        raise HostTaskQualificationError("Codex owner-external broker source was rejected")
+    observed_sha256, raw = _read_stable_regular_file(
+        source,
+        label="Codex owner-external broker source",
+        repository=repository,
+        require_external=True,
+        executable=True,
+        owner_only=True,
+        retain_bytes=True,
+        maximum_bytes=_BROKER_SOURCE_MAX_BYTES,
+    )
+    if observed_sha256 != expected_sha256 or raw is None:
+        raise HostTaskQualificationError("Codex owner-external broker source hash differs")
+
+    with tempfile.TemporaryDirectory(prefix="deeplaw-codex-broker-") as raw_directory:
+        directory = Path(raw_directory).resolve(strict=True)
+        details = directory.lstat()
+        if (
+            not stat.S_ISDIR(details.st_mode)
+            or stat.S_IMODE(details.st_mode) & 0o077
+            or (os.name != "nt" and details.st_uid != os.geteuid())
+        ):
+            raise HostTaskQualificationError("Codex broker staging directory is unsafe")
+        staged = directory / "broker-executable"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        descriptor = os.open(staged, flags, 0o700)
+        try:
+            offset = 0
+            while offset < len(raw):
+                offset += os.write(descriptor, raw[offset:])
+            os.fchmod(descriptor, 0o500)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        os.chmod(directory, 0o500)
+        try:
+            staged_sha256, _ = _read_stable_regular_file(
+                staged,
+                label="staged Codex broker executable",
+                repository=repository,
+                require_external=True,
+                executable=True,
+                owner_only=True,
+                maximum_bytes=_BROKER_SOURCE_MAX_BYTES,
+            )
+            if staged_sha256 != expected_sha256:
+                raise HostTaskQualificationError("staged Codex broker bytes differ")
+            yield staged
+        finally:
+            os.chmod(directory, 0o700)
+
+
+def load_exact_candidate_binding(
+    path: Path | str,
+    *,
+    candidate_wheel: Path | str | None = None,
+    repository: Path = REPOSITORY,
+) -> dict[str, Any]:
+    """Reopen the frozen candidate input and exact local artifact bytes."""
+
+    selected = Path(path)
+    try:
+        _, raw = _read_stable_regular_file(
+            selected,
+            label="candidate binding input",
+            repository=repository,
+            require_external=True,
+            retain_bytes=True,
+            maximum_bytes=_CANDIDATE_MANIFEST_MAX_BYTES,
+        )
+        if raw is None:
+            raise HostTaskQualificationError("candidate binding input is unavailable")
+        value = strict_json_loads(raw)
+    except HostTaskQualificationError:
+        raise
+    except (UnicodeError, ValueError) as exc:
+        raise HostTaskQualificationError("candidate binding input is unavailable") from exc
+    if (
+        not isinstance(value, Mapping)
+        or value.get("schema_version") != _ACTIVE_CANDIDATE_SCHEMA
+        or value.get("status")
+        != "frozen_exact_candidate_machine_evaluation_pending"
+        or value.get("candidate_version") != "0.13.0"
+        or value.get("construction_package_version") != "0.12.0"
+        or not isinstance(value.get("candidate_binding"), Mapping)
+    ):
+        raise HostTaskQualificationError("candidate binding input is not frozen active v3")
+    source = value["candidate_binding"]
+    mapping = {
+        "commit": source.get("source_commit"),
+        "tree": source.get("source_tree"),
+        "lock_sha256": source.get("lock_sha256"),
+        "wheel_sha256": source.get("wheel_sha256"),
+        "sdist_sha256": source.get("sdist_sha256"),
+    }
+    if (
+        _GIT.fullmatch(str(mapping["commit"])) is None
+        or _GIT.fullmatch(str(mapping["tree"])) is None
+        or any(
+            _SHA256.fullmatch(str(mapping[field])) is None
+            or mapping[field] == "0" * 64
+            for field in ("lock_sha256", "wheel_sha256", "sdist_sha256")
+        )
+    ):
+        raise HostTaskQualificationError("candidate binding input is incomplete")
+    if source.get("package_version") != "0.13.0":
+        raise HostTaskQualificationError("candidate package version differs")
+    wheel_name = source.get("wheel_filename")
+    sdist_name = source.get("sdist_filename")
+    if any(
+        not isinstance(name, str)
+        or not name
+        or Path(name).name != name
+        or "/" in name
+        or "\\" in name
+        for name in (wheel_name, sdist_name)
+    ):
+        raise HostTaskQualificationError("candidate artifact filename is invalid")
+
+    expected_wheel = selected.parent / str(wheel_name)
+    selected_wheel = expected_wheel if candidate_wheel is None else Path(candidate_wheel)
+    try:
+        if not selected_wheel.is_absolute():
+            raise HostTaskQualificationError("candidate wheel must be absolute")
+        if selected_wheel.resolve(strict=True) != expected_wheel.resolve(strict=True):
+            raise HostTaskQualificationError(
+                "candidate wheel path differs from frozen input"
+            )
+        current = repository_binding(repository)
+        lock_sha256, _ = _read_stable_regular_file(
+            repository.resolve(strict=True) / "uv.lock",
+            label="candidate lock file",
+            repository=repository,
+            require_external=False,
+        )
+        wheel_sha256, _ = _read_stable_regular_file(
+            selected_wheel,
+            label="candidate wheel",
+            repository=repository,
+            require_external=True,
+        )
+        sdist_sha256, _ = _read_stable_regular_file(
+            selected.parent / str(sdist_name),
+            label="candidate sdist",
+            repository=repository,
+            require_external=True,
+        )
+    except HostTaskQualificationError:
+        raise
+    except (OSError, ValueError, QualificationOrchestrationError) as exc:
+        raise HostTaskQualificationError("candidate exact-byte binding failed") from exc
+    if (
+        mapping["commit"] != current["commit"]
+        or mapping["tree"] != current["tree"]
+        or mapping["lock_sha256"] != lock_sha256
+        or mapping["wheel_sha256"] != wheel_sha256
+        or mapping["sdist_sha256"] != sdist_sha256
+    ):
+        raise HostTaskQualificationError("candidate exact-byte binding differs")
+    return {field: mapping[field] for field in (
+        "commit",
+        "tree",
+        "lock_sha256",
+        "wheel_sha256",
+        "sdist_sha256",
+    )}
+
+
+def _validate_codex_binary_static(
+    path: Path | str,
+    *,
+    identity: Mapping[str, Any],
+    repository: Path,
+) -> dict[str, str]:
+    """Validate exact Codex bytes and topology without executing the Host."""
+
+    selected = Path(path)
+    expected = host_binary_identity(identity, "codex")
+    try:
+        observed_sha256, _ = _read_stable_regular_file(
+            selected,
+            label="Codex executable",
+            repository=repository,
+            require_external=True,
+            executable=True,
+        )
+    except HostTaskQualificationError:
+        raise
+    except OSError as exc:
+        raise HostTaskQualificationError("Codex executable hash probe failed") from exc
+    if observed_sha256 != expected["sha256"]:
+        raise HostTaskQualificationError("Codex executable hash differs")
+    return expected
+
+
+def run_codex_owner_external_zero_model_preflight(
+    *,
+    candidate_binding_input: Path | str,
+    candidate_wheel: Path | str | None = None,
+    host_identity_input: Path | str,
+    codex_binary: Path | str,
+    codex_broker: Path | str,
+    expected_broker_sha256: str,
+    task_case: str,
+    run_id: str,
+    evidence_run_id: int,
+    qualification_run_id: int,
+    repository: Path = REPOSITORY,
+    seen_nonce_sha256s: set[str] | None = None,
+) -> dict[str, Any]:
+    """Run one transient broker-owned Codex zero-model capability preflight.
+
+    The returned summary is not a Host task receipt and is never formal
+    admission.  Only the broker subprocess can supply the transient v2 object
+    that this function structurally validates in memory.
+    """
+
+    if (
+        task_case not in TASK_CASES
+        or not isinstance(run_id, str)
+        or not run_id
+        or type(evidence_run_id) is not int
+        or evidence_run_id < 1
+        or type(qualification_run_id) is not int
+        or qualification_run_id < 1
+        or not isinstance(expected_broker_sha256, str)
+        or _SHA256.fullmatch(expected_broker_sha256) is None
+        or expected_broker_sha256 == "0" * 64
+    ):
+        raise HostTaskQualificationError("Codex zero-model run binding is invalid")
+    candidate = load_exact_candidate_binding(
+        candidate_binding_input,
+        candidate_wheel=candidate_wheel,
+        repository=repository,
+    )
+    identity = _load_external_identity(host_identity_input, repository=repository)
+    expected_host_binary = _validate_codex_binary_static(
+        codex_binary,
+        identity=identity,
+        repository=repository,
+    )
+    issued = datetime.now(UTC).replace(microsecond=0)
+    expires = issued + timedelta(seconds=60)
+    nonce_sha256 = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+    request = build_codex_zero_model_preflight_request(
+        task_case=task_case,
+        run_id=run_id,
+        candidate_binding=candidate,
+        run_binding={
+            "evidence_run_id": evidence_run_id,
+            "qualification_run_id": qualification_run_id,
+        },
+        host_binary=expected_host_binary,
+        broker_source_sha256=expected_broker_sha256,
+        host_identity_sha256=host_identity_sha256(identity["hosts"]["codex"]),
+        host_identity_source_sha256=str(identity["source_sha256"]),
+        nonce_sha256=nonce_sha256,
+        issued_at=issued.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        expires_at=expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+    try:
+        with _stage_exact_broker_executable(
+            codex_broker,
+            repository=repository,
+            host_binary=Path(codex_binary),
+            expected_sha256=expected_broker_sha256,
+        ) as broker_executable:
+            admitted = consume_codex_zero_model_preflight(
+                broker_executable,
+                request=request,
+                seen_nonce_sha256s=(
+                    seen_nonce_sha256s if seen_nonce_sha256s is not None else set()
+                ),
+            )
+    except (CodexOwnerExternalBrokerError, OSError, ValueError) as exc:
+        raise HostTaskQualificationError(
+            "Codex owner-external zero-model preflight failed closed"
+        ) from exc
+    return {
+        "status": "passed",
+        "evidence_class": "zero_model_preflight_only",
+        "formal_admission": False,
+        "host": "codex",
+        "observed_sequence": list(CODEX_ZERO_MODEL_SEQUENCE),
+        "model_invocation_count": 0,
+        "provider_request_count": 0,
+        "broker_source_sha256": expected_broker_sha256,
+        "receipt_record_sha256": admitted["record_sha256"],
+    }
+
+
 def public_source_read(
     vault: Path | str,
     *,
@@ -626,11 +1086,47 @@ def _main(argv: list[str] | None = None) -> int:
     operation.add_argument("--manifest", type=Path, default=None)
     operation.add_argument("--build-handoff", action="store_true")
     operation.add_argument("--validate-handoff", type=Path, default=None)
+    operation.add_argument("--codex-zero-model-preflight", action="store_true")
     parser.add_argument("--root", type=Path, default=None)
     parser.add_argument("--host-identity-input", type=Path, default=None)
+    parser.add_argument("--candidate-binding-input", type=Path, default=None)
+    parser.add_argument("--codex-binary", type=Path, default=None)
+    parser.add_argument("--codex-broker", type=Path, default=None)
+    parser.add_argument("--expected-codex-broker-sha256", default=None)
+    parser.add_argument("--run-id", default=None)
+    parser.add_argument("--evidence-run-id", type=int, default=None)
+    parser.add_argument("--qualification-run-id", type=int, default=None)
     args = parser.parse_args(argv)
     try:
-        if args.build_handoff:
+        if args.codex_zero_model_preflight:
+            required = {
+                "--candidate-binding-input": args.candidate_binding_input,
+                "--host-identity-input": args.host_identity_input,
+                "--codex-binary": args.codex_binary,
+                "--codex-broker": args.codex_broker,
+                "--expected-codex-broker-sha256": args.expected_codex_broker_sha256,
+                "--task-case": args.task_case,
+                "--run-id": args.run_id,
+                "--evidence-run-id": args.evidence_run_id,
+                "--qualification-run-id": args.qualification_run_id,
+            }
+            missing = [name for name, item in required.items() if item is None]
+            if missing:
+                raise HostTaskQualificationError(
+                    "Codex zero-model preflight is missing required control input"
+                )
+            result = run_codex_owner_external_zero_model_preflight(
+                candidate_binding_input=args.candidate_binding_input,
+                host_identity_input=args.host_identity_input,
+                codex_binary=args.codex_binary,
+                codex_broker=args.codex_broker,
+                expected_broker_sha256=args.expected_codex_broker_sha256,
+                task_case=args.task_case,
+                run_id=args.run_id,
+                evidence_run_id=args.evidence_run_id,
+                qualification_run_id=args.qualification_run_id,
+            )
+        elif args.build_handoff:
             if args.host_identity_input is None:
                 raise HostTaskQualificationError(
                     "--host-identity-input is required with --build-handoff"
@@ -688,11 +1184,13 @@ __all__ = [
     "TYPED_SOURCE_SLOTS",
     "HostTaskQualificationError",
     "build_external_collector_handoff",
+    "load_exact_candidate_binding",
     "load_task_cases",
     "main",
     "public_context_read",
     "public_source_read",
     "public_wiki_read",
+    "run_codex_owner_external_zero_model_preflight",
     "task_case",
     "validate_external_collector_handoff",
     "validate_host_task_matrix",

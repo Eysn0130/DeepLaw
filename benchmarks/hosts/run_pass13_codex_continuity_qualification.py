@@ -52,6 +52,9 @@ from benchmarks.hosts.pass13_orchestrator import (
 from benchmarks.hosts.pass13_orchestrator import (
     sha256_file as _sha256_file,
 )
+from benchmarks.hosts.run_v013_host_task_qualification import (
+    run_codex_owner_external_zero_model_preflight,
+)
 
 MODEL = "gpt-5.6-luna"
 REASONING_EFFORT = "max"
@@ -3224,6 +3227,10 @@ def _execute_codex(
     codex_launcher: Path,
     host_identity_input: Path | None = None,
     expected_broker_sha256: str | None = None,
+    candidate_binding_input: Path | None = None,
+    run_id: str | None = None,
+    evidence_run_id: int | None = None,
+    qualification_run_id: int | None = None,
     keyring_home: Path | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
@@ -3236,18 +3243,54 @@ def _execute_codex(
     keyring bridge permits only the current user's system ``HOME`` for the
     Codex Host process; all other profile roots remain explicit and closed.
 
-    Neither mode is executable until the public Hook and the owner-external
-    collector can bind one exact initialized stdio connection to the real Hook
-    session.  Both fail closed before candidate preparation or Host execution.
+    Qualification may proceed only after the exact owner-external broker proves
+    a zero-model same-process, same-connection SessionStart preflight. Diagnostic
+    mode remains unavailable. Missing or rejected control input fails before
+    candidate preparation or Host execution.
     """
 
     if mode not in {"qualification", "diagnostic"}:
         raise QualificationFailure("Codex execution mode is invalid")
     if mode == "qualification":
-        raise QualificationFailure(
-            "Codex owner-external same-connection Hook session correlation is "
-            "unavailable; formal Host/model execution remains not_executed"
-        )
+        if (
+            host_identity_input is None
+            or expected_broker_sha256 is None
+            or candidate_binding_input is None
+            or run_id is None
+            or evidence_run_id is None
+            or qualification_run_id is None
+        ):
+            raise QualificationFailure(
+                "Codex owner-external same-connection Hook session correlation "
+                "control input is unavailable; formal Host/model execution remains "
+                "not_executed"
+            )
+        try:
+            preflight = run_codex_owner_external_zero_model_preflight(
+                candidate_binding_input=candidate_binding_input,
+                candidate_wheel=candidate_wheel,
+                host_identity_input=host_identity_input,
+                codex_binary=codex_binary,
+                codex_broker=codex_launcher,
+                expected_broker_sha256=expected_broker_sha256,
+                task_case="continuity",
+                run_id=run_id,
+                evidence_run_id=evidence_run_id,
+                qualification_run_id=qualification_run_id,
+                repository=_repository(),
+            )
+        except Exception as exc:
+            raise QualificationFailure(
+                "Codex owner-external zero-model preflight failed closed"
+            ) from exc
+        if (
+            preflight.get("status") != "passed"
+            or preflight.get("evidence_class") != "zero_model_preflight_only"
+            or preflight.get("formal_admission") is not False
+        ):
+            raise QualificationFailure(
+                "Codex owner-external zero-model preflight was not admitted"
+            )
     if mode == "diagnostic":
         raise QualificationFailure(
             "Codex public Hook lacks an independent owner-bound Host session identity; "
@@ -3877,6 +3920,10 @@ def execute(
     codex_launcher: Path,
     host_identity_input: Path | None = None,
     expected_broker_sha256: str | None = None,
+    candidate_binding_input: Path | None = None,
+    run_id: str | None = None,
+    evidence_run_id: int | None = None,
+    qualification_run_id: int | None = None,
     keyring_home: Path | None = None,
     mode: str = "qualification",
 ) -> dict[str, Any]:
@@ -3893,6 +3940,10 @@ def execute(
             codex_launcher=codex_launcher,
             host_identity_input=host_identity_input,
             expected_broker_sha256=expected_broker_sha256,
+            candidate_binding_input=candidate_binding_input,
+            run_id=run_id,
+            evidence_run_id=evidence_run_id,
+            qualification_run_id=qualification_run_id,
             keyring_home=keyring_home,
             mode=mode,
         )
@@ -3926,6 +3977,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--codex-launcher", required=True)
     parser.add_argument("--host-identity-input")
     parser.add_argument("--expected-broker-sha256")
+    parser.add_argument("--candidate-binding-input")
+    parser.add_argument("--run-id")
+    parser.add_argument("--evidence-run-id", type=int)
+    parser.add_argument("--qualification-run-id", type=int)
     parser.add_argument(
         "--keyring-home",
         help="current user's real system home used only by the Codex keyring bridge",
@@ -3949,6 +4004,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         codex_launcher=Path(args.codex_launcher),
         host_identity_input=Path(args.host_identity_input) if args.host_identity_input else None,
         expected_broker_sha256=args.expected_broker_sha256,
+        candidate_binding_input=(
+            Path(args.candidate_binding_input) if args.candidate_binding_input else None
+        ),
+        run_id=args.run_id,
+        evidence_run_id=args.evidence_run_id,
+        qualification_run_id=args.qualification_run_id,
         keyring_home=Path(args.keyring_home),
         mode=args.mode,
     )

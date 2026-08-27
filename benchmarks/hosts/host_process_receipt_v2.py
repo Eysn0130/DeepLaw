@@ -232,6 +232,8 @@ def _validate_codex_proof(value: Mapping[str, Any], proof: Mapping[str, Any]) ->
         )
     ):
         _fail("Codex proof native event binding differs")
+    if proof.get("hook_session_sha256") == native["session_identity_sha256"]:
+        _fail("Codex Hook session and native session identities must remain distinct")
     if proof.get("initialized_connection_count") != 1:
         _fail("Codex proof did not observe exactly one initialized connection")
     if proof.get("same_process") is not True or proof.get("same_connection") is not True:

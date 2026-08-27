@@ -214,17 +214,42 @@ The bound validation reference time makes an admitted historical bundle reproduc
 silently disabling expiry checks. Neither control record permits a command, environment, path,
 PID, stdout/stderr, raw identity, Provider body, prompt, transcript, hidden reasoning,
 authentication material, or Secret. A development diagnostic, runner-side observation, v1 record,
-or untyped process record is not current qualification evidence. The current public Host seams do
-not themselves supply owner-external v2 correlation. Both formal runners therefore reject before
-candidate preparation, turn, or model execution in qualification and diagnostic modes, and neither
-runner emits v2. The v2 and Kernel validators establish only closed structure and exact
-cross-binding to the candidate, run IDs, retained per-Host broker source, Host identity, native-event
-digests, nonce, and time window. They cannot self-attest observation provenance. Formal observation
-authority must instead come from a future exact repository-external per-Host broker at the target
-observation seam plus formal workflow provenance. The six existing Kernel `host_process_receipt`
-slots are the only receipt inventory; Kernel and Commercial reopen their exact bytes and
-cross-bindings. No second external receipt directory is required, retained, or uploaded. Focused
-contract acceptance is not formal Host evidence, and Codex x3/OpenCode x3 remains `not_executed`.
+or untyped process record is not current qualification evidence.
+
+The Codex runner now has one public, path-free
+`deeplaw.codex-owner-external-broker-control/v2` challenge/response IPC seam. Before candidate
+preparation it reopens the frozen candidate commit/tree/lock/wheel/sdist bytes, the owner-only
+repository-external exact broker source, Codex binary, and Host identity. It creates a fresh
+60-second nonce challenge bound to the task and evidence/qualification run IDs. The exact broker
+subprocess must directly return one transient v2 object showing only
+`initialize -> initialized -> thread/start -> SessionStart -> shutdown`, exactly one initialized
+stdio connection, the same exact Host process and connection, and a real Hook session identity
+distinct from the native session digest. Any `turn/start`, model inventory or invocation, Provider
+request, stderr, duplicate JSON key, missing/expired/replayed nonce, or cross-bound value fails
+closed. Combined broker stdout/stderr is capped at 256 KiB while the process is running; overflow
+immediately terminates the isolated broker process group, clears both buffers, and returns only a
+typed failure. The exact owner-only broker source is read through an unchanged stable FD, copied to
+a private non-writable execution path, and run from that copy, so replacing the inspected source
+path cannot substitute executable bytes. Candidate manifest/wheel/sdist and the Codex binary are
+likewise checked as repository-external, non-symlink-parent, regular single-link files with stable
+FD/stat identity; the repository `uv.lock` uses the same stable read under the clean HEAD/tree
+binding. The broker response is validated in memory and discarded; it is not uploaded, retained,
+or placed in a formal receipt slot. The Kernel workflow uses its current evidence run ID as the
+transient preflight qualification-run challenge because no future Commercial run may be predicted;
+that ephemeral binding can never be reused as a formal receipt.
+
+Passing this zero-model capability preflight only allows the Codex formal runner to move beyond its
+previous fail-before. It does not admit a Host task, prove the later model-bearing process, or close
+any Core Gate. Codex diagnostic mode and the OpenCode formal runner remain fail-before. Each of the
+six actual task processes must still return its own owner-external v2 receipt in the existing slot.
+The v2, consumer, and Kernel validators establish only closed structure and exact cross-binding to
+the candidate, run IDs, retained per-Host broker source, Host identity, native-event digests, nonce,
+and time window. They cannot self-attest observation provenance; formal authority additionally
+requires the exact external broker process and formal workflow provenance. The six existing Kernel
+`host_process_receipt` slots remain the only receipt inventory; Kernel and Commercial reopen their
+exact bytes and cross-bindings. No second external receipt directory is created or uploaded.
+Focused contract acceptance is not formal Host evidence, and Codex x3/OpenCode x3 remains
+`not_executed`.
 
 ### Living Wiki
 

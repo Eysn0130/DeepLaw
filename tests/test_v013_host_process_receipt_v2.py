@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import signal
 import sys
 import textwrap
 import threading
+import time
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from benchmarks.hosts import codex_app_server_client as codex_client
 from benchmarks.hosts import host_process_receipt_v2 as receipt_v2
 from benchmarks.hosts import run_pass13_opencode_continuity_qualification as opencode
 from benchmarks.hosts.codex_app_server_client import CodexAppServerClient
@@ -292,6 +297,50 @@ def _rehash(value: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def _write_executable_script(path: Path, source: str) -> None:
+    path.write_text(f"#!{sys.executable}\n{source}", encoding="utf-8")
+    path.chmod(0o700)
+
+
+def _process_exists(process_id: int) -> bool:
+    try:
+        os.kill(process_id, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _codex_control_request() -> dict[str, Any]:
+    value = _v2_receipt("codex")
+    return codex_client.build_codex_zero_model_preflight_request(
+        task_case="continuity",
+        run_id="formal-codex-1",
+        candidate_binding=_CANDIDATE,
+        run_binding=_RUN_BINDING,
+        host_binary=value["host_binary"],
+        broker_source_sha256=value["broker_source"]["sha256"],
+        host_identity_sha256=value["host_identity_sha256"],
+        host_identity_source_sha256=value["host_identity_source_sha256"],
+        nonce_sha256=value["nonce_sha256"],
+        issued_at="2026-08-27T00:00:00Z",
+        expires_at="2026-08-27T00:05:00Z",
+    )
+
+
+def _codex_control_response() -> dict[str, Any]:
+    return {
+        "schema_version": codex_client.CODEX_BROKER_CONTROL_SCHEMA_VERSION,
+        "operation": "zero_model_preflight",
+        "status": "observed",
+        "observed_sequence": list(codex_client.CODEX_ZERO_MODEL_SEQUENCE),
+        "turn_start_count": 0,
+        "model_inventory_count": 0,
+        "model_invocation_count": 0,
+        "provider_request_count": 0,
+        "host_process_receipt": _v2_receipt("codex"),
+    }
+
+
 @pytest.mark.parametrize("host", ("codex", "opencode"))
 def test_valid_v2_receipts_are_closed_path_free_and_exactly_bound(host: str) -> None:
     value = _v2_receipt(host)
@@ -369,7 +418,10 @@ def test_v2_time_window_and_nonce_replay_are_permanently_reproducible() -> None:
         receipt_v2.validate_receipt(_rehash(overlong), seen_nonce_sha256s=set())
 
 
-def test_v2_codex_cross_connection_and_hook_session_fail_closed() -> None:
+def test_v2_codex_cross_connection_and_hook_session_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     value = _v2_receipt("codex")
     for field, replacement in (
         ("same_connection", False),
@@ -386,6 +438,255 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed() -> None:
             receipt_v2.validate_receipt(
                 _rehash(changed), seen_nonce_sha256s=set()
             )
+    aliased = deepcopy(value)
+    aliased["proof"]["hook_session_sha256"] = aliased["native_event_binding"][
+        "session_identity_sha256"
+    ]
+    aliased["proof"]["connection_correlation_sha256"] = receipt_v2.correlation_sha256(
+        {
+            key: aliased["proof"][key]
+            for key in (
+                "process_identity_sha256",
+                "connection_sha256",
+                "initialize_request_sha256",
+                "initialized_notification_sha256",
+                "initialized_connection_count",
+                "hook_session_sha256",
+                "hook_event_sha256",
+                "native_event_sequence_sha256",
+                "native_session_identity_sha256",
+                "native_lifecycle_record_sha256",
+            )
+        }
+    )
+    _rehash(aliased)
+    with pytest.raises(
+        receipt_v2.HostProcessReceiptV2Error,
+        match="Hook session and native session",
+    ):
+        receipt_v2.validate_receipt(aliased, seen_nonce_sha256s=set())
+    with pytest.raises(
+        kernel_bundle.KernelQualificationBundleError,
+        match="structural or cross-binding",
+    ):
+        kernel_bundle._validate_process_receipt(
+            aliased,
+            relative="receipts/codex/process.json",
+            host_identity=_host_identity(),
+            candidate=_CANDIDATE,
+            run_ids={"candidate_run_id": 101, **_RUN_BINDING},
+            seen_nonce_sha256s=set(),
+        )
+    request = _codex_control_request()
+    response = _codex_control_response()
+    seen: set[str] = set()
+    admitted = codex_client.validate_codex_zero_model_preflight_response(
+        response,
+        request=request,
+        observed_at="2026-08-27T00:03:00Z",
+        seen_nonce_sha256s=seen,
+    )
+    assert admitted == response["host_process_receipt"]
+    assert seen == {response["host_process_receipt"]["nonce_sha256"]}
+
+    for field, replacement in (
+        ("observed_sequence", ["initialize", "initialized", "thread/start", "shutdown"]),
+        ("turn_start_count", 1),
+        ("model_inventory_count", 1),
+        ("model_invocation_count", 1),
+        ("provider_request_count", 1),
+    ):
+        changed = deepcopy(response)
+        changed[field] = replacement
+        with pytest.raises(codex_client.CodexOwnerExternalBrokerError):
+            codex_client.validate_codex_zero_model_preflight_response(
+                changed,
+                request=request,
+                observed_at="2026-08-27T00:03:00Z",
+                seen_nonce_sha256s=set(),
+            )
+    request = _codex_control_request()
+    response = _codex_control_response()
+    for observed_at, mutation in (
+        ("2026-08-27T00:05:01Z", lambda value: None),
+        (
+            "2026-08-27T00:03:00Z",
+            lambda value: value["host_process_receipt"]["candidate_binding"].update(
+                tree="f" * 40
+            ),
+        ),
+        (
+            "2026-08-27T00:03:00Z",
+            lambda value: value["host_process_receipt"]["run_binding"].update(
+                qualification_run_id=404
+            ),
+        ),
+        (
+            "2026-08-27T00:03:00Z",
+            lambda value: value["host_process_receipt"]["proof"].update(
+                hook_session_sha256=value["host_process_receipt"][
+                    "native_event_binding"
+                ]["session_identity_sha256"]
+            ),
+        ),
+    ):
+        changed = deepcopy(response)
+        mutation(changed)
+        receipt = changed["host_process_receipt"]
+        proof = receipt["proof"]
+        proof["connection_correlation_sha256"] = receipt_v2.correlation_sha256(
+            {
+                key: proof[key]
+                for key in (
+                    "process_identity_sha256",
+                    "connection_sha256",
+                    "initialize_request_sha256",
+                    "initialized_notification_sha256",
+                    "initialized_connection_count",
+                    "hook_session_sha256",
+                    "hook_event_sha256",
+                    "native_event_sequence_sha256",
+                    "native_session_identity_sha256",
+                    "native_lifecycle_record_sha256",
+                )
+            }
+        )
+        _rehash(receipt)
+        with pytest.raises(codex_client.CodexOwnerExternalBrokerError):
+            codex_client.validate_codex_zero_model_preflight_response(
+                changed,
+                request=request,
+                observed_at=observed_at,
+                seen_nonce_sha256s=set(),
+            )
+
+    seen = {response["host_process_receipt"]["nonce_sha256"]}
+    with pytest.raises(codex_client.CodexOwnerExternalBrokerError, match="replayed"):
+        codex_client.validate_codex_zero_model_preflight_response(
+            response,
+            request=request,
+            observed_at="2026-08-27T00:03:00Z",
+            seen_nonce_sha256s=seen,
+        )
+    issued = datetime.now(UTC).replace(microsecond=0)
+    expires = issued + timedelta(seconds=60)
+    receipt = deepcopy(_v2_receipt("codex"))
+    receipt["nonce_sha256"] = _digest("direct-ipc-nonce")
+    receipt["issued_at"] = issued.strftime("%Y-%m-%dT%H:%M:%SZ")
+    receipt["validation_reference_time"] = receipt["issued_at"]
+    receipt["expires_at"] = expires.strftime("%Y-%m-%dT%H:%M:%SZ")
+    _rehash(receipt)
+    request = codex_client.build_codex_zero_model_preflight_request(
+        task_case="continuity",
+        run_id=receipt["run_id"],
+        candidate_binding=receipt["candidate_binding"],
+        run_binding=receipt["run_binding"],
+        host_binary=receipt["host_binary"],
+        broker_source_sha256=receipt["broker_source"]["sha256"],
+        host_identity_sha256=receipt["host_identity_sha256"],
+        host_identity_source_sha256=receipt["host_identity_source_sha256"],
+        nonce_sha256=receipt["nonce_sha256"],
+        issued_at=receipt["issued_at"],
+        expires_at=receipt["expires_at"],
+    )
+    response = _codex_control_response()
+    response["host_process_receipt"] = receipt
+    launcher = tmp_path / "owner-external-broker"
+    response_raw = json.dumps(response, separators=(",", ":")).encode("utf-8")
+    _write_executable_script(
+        launcher,
+        textwrap.dedent(
+            f"""
+            import sys
+            if sys.argv[1:] != [{codex_client.CODEX_BROKER_CONTROL_ARGUMENT!r}]:
+                raise SystemExit(91)
+            sys.stdin.buffer.read()
+            sys.stdout.buffer.write({response_raw!r})
+            sys.stdout.buffer.flush()
+            """
+        ),
+    )
+    admitted = codex_client.consume_codex_zero_model_preflight(
+        launcher,
+        request=request,
+        seen_nonce_sha256s=set(),
+    )
+    assert admitted == receipt
+
+    duplicate = json.dumps(response, separators=(",", ":"))[:-1]
+    duplicate += ',"status":"observed"}'
+    _write_executable_script(
+        launcher,
+        textwrap.dedent(
+            f"""
+            import sys
+            sys.stdin.buffer.read()
+            sys.stdout.buffer.write({duplicate.encode("utf-8")!r})
+            sys.stdout.buffer.flush()
+            """
+        ),
+    )
+    with pytest.raises(
+        codex_client.CodexOwnerExternalBrokerError,
+        match="duplicate",
+    ):
+        codex_client.consume_codex_zero_model_preflight(
+            launcher,
+            request=request,
+            seen_nonce_sha256s=set(),
+        )
+
+    for stream_name in ("stdout", "stderr"):
+        child_pid_path = tmp_path / f"{stream_name}-child.pid"
+        _write_executable_script(
+            launcher,
+            textwrap.dedent(
+                f"""
+                import pathlib
+                import subprocess
+                import sys
+                import time
+
+                child = subprocess.Popen(
+                    [sys.executable, "-c", "import time; time.sleep(20)"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                pathlib.Path({str(child_pid_path)!r}).write_text(str(child.pid))
+                stream = sys.{stream_name}.buffer
+                stream.write(b"x" * ({codex_client._MAX_BROKER_CONTROL_BYTES} + 1))
+                stream.flush()
+                time.sleep(5)
+                """
+            ),
+        )
+        started = time.monotonic()
+        child_pid: int | None = None
+        try:
+            with pytest.raises(
+                codex_client.CodexOwnerExternalBrokerError,
+                match="output limit",
+            ) as overflow:
+                codex_client.consume_codex_zero_model_preflight(
+                    launcher,
+                    request=request,
+                    timeout_seconds=10,
+                    seen_nonce_sha256s=set(),
+                )
+            elapsed = time.monotonic() - started
+            assert elapsed < 2.5
+            assert "x" * 32 not in str(overflow.value)
+            child_pid = int(child_pid_path.read_text())
+            deadline = time.monotonic() + 2
+            while _process_exists(child_pid) and time.monotonic() < deadline:
+                time.sleep(0.02)
+            assert not _process_exists(child_pid)
+        finally:
+            if child_pid is None and child_pid_path.exists():
+                child_pid = int(child_pid_path.read_text())
+            if child_pid is not None and _process_exists(child_pid):
+                os.kill(child_pid, signal.SIGKILL)
 
 
 def test_v2_opencode_requires_actual_route_parent_child_and_plugin_event() -> None:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -549,7 +551,10 @@ def test_v013_host_task_manifest_accepts_current_native_v3_codex_identity(
     )
 
 
-def test_v013_host_task_schema_and_frozen_catalog_are_closed(tmp_path: Path) -> None:
+def test_v013_host_task_schema_and_frozen_catalog_are_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     schema = json.loads(
         (
             Path(__file__).resolve().parents[1] / "contracts/v013-host-task-evidence.v1.schema.json"
@@ -636,6 +641,228 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(tmp_path: Path) -> 
     )
     with pytest.raises(HostTaskQualificationError):
         validator(tampered, host_identity_input=identity_path)
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github/workflows/kernel-qualification-evidence.yml"
+    ).read_text(encoding="utf-8")
+    preflight = workflow.index("Run Codex owner-external zero-model preflight")
+    collector = workflow.index(
+        "Execute Codex x3, OpenCode x3, and deterministic Kernel evidence"
+    )
+    assert preflight < collector
+    assert "--codex-zero-model-preflight" in workflow
+    assert "--candidate-binding-input" in workflow
+    assert "--expected-codex-broker-sha256" in workflow
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    lock_raw = b"exact construction lock\n"
+    (repository / "uv.lock").write_bytes(lock_raw)
+    external_root = tmp_path / "candidate-external"
+    external_root.mkdir()
+    wheel_raw = b"exact wheel bytes"
+    sdist_raw = b"exact sdist bytes"
+    lock_sha256 = _sha(lock_raw)
+    wheel_sha256 = _sha(wheel_raw)
+    sdist_sha256 = _sha(sdist_raw)
+    active = {
+        "schema_version": "deeplaw.v013-active-qualification/v3",
+        "status": "frozen_exact_candidate_machine_evaluation_pending",
+        "candidate_version": "0.13.0",
+        "construction_package_version": "0.12.0",
+        "candidate_binding": {
+            "source_commit": COMMIT,
+            "source_tree": TREE,
+            "lock_sha256": lock_sha256,
+            "wheel_sha256": wheel_sha256,
+            "sdist_sha256": sdist_sha256,
+            "package_version": "0.13.0",
+            "wheel_filename": "deeplaw-0.13.0-py3-none-any.whl",
+            "sdist_filename": "deeplaw-0.13.0.tar.gz",
+        },
+    }
+    selected = external_root / "frozen-active-qualification.json"
+    selected.write_bytes(_canonical(active))
+    (external_root / active["candidate_binding"]["wheel_filename"]).write_bytes(
+        wheel_raw
+    )
+    (external_root / active["candidate_binding"]["sdist_filename"]).write_bytes(
+        sdist_raw
+    )
+    assert repository not in selected.resolve(strict=True).parents
+
+    monkeypatch.setattr(
+        host_task_runner,
+        "repository_binding",
+        lambda _repository: {"commit": COMMIT, "tree": TREE},
+    )
+    assert host_task_runner.load_exact_candidate_binding(
+        selected,
+        repository=repository,
+    ) == {
+        "commit": COMMIT,
+        "tree": TREE,
+        "lock_sha256": lock_sha256,
+        "wheel_sha256": wheel_sha256,
+        "sdist_sha256": sdist_sha256,
+    }
+
+    active["candidate_binding"]["package_version"] = "0.12.0"
+    selected.write_bytes(_canonical(active))
+    with pytest.raises(HostTaskQualificationError, match="package version differs"):
+        host_task_runner.load_exact_candidate_binding(
+            selected,
+            repository=repository,
+        )
+    active["candidate_binding"]["package_version"] = "0.13.0"
+    selected.write_bytes(_canonical(active))
+
+    other_wheel = external_root / "other.whl"
+    other_wheel.write_bytes(b"other")
+    with pytest.raises(HostTaskQualificationError, match="wheel path differs"):
+        host_task_runner.load_exact_candidate_binding(
+            selected,
+            candidate_wheel=other_wheel,
+            repository=repository,
+        )
+
+    active["candidate_binding"]["wheel_sha256"] = "f" * 64
+    selected.write_bytes(_canonical(active))
+    with pytest.raises(HostTaskQualificationError, match="exact-byte binding differs"):
+        host_task_runner.load_exact_candidate_binding(
+            selected,
+            repository=repository,
+        )
+    active["candidate_binding"]["wheel_sha256"] = wheel_sha256
+    selected.write_bytes(_canonical(active))
+
+    hard_link = external_root / "frozen-active-hard-link.json"
+    os.link(selected, hard_link)
+    try:
+        with pytest.raises(HostTaskQualificationError, match="single-link"):
+            host_task_runner.load_exact_candidate_binding(
+                selected,
+                repository=repository,
+            )
+    finally:
+        hard_link.unlink()
+
+    wheel_path = external_root / active["candidate_binding"]["wheel_filename"]
+    wheel_hard_link = external_root / "candidate-wheel-hard-link.whl"
+    os.link(wheel_path, wheel_hard_link)
+    try:
+        with pytest.raises(HostTaskQualificationError, match=r"wheel.*single-link"):
+            host_task_runner.load_exact_candidate_binding(
+                selected,
+                repository=repository,
+            )
+    finally:
+        wheel_hard_link.unlink()
+
+    sdist_path = external_root / active["candidate_binding"]["sdist_filename"]
+    sdist_target = external_root / "candidate-sdist-target.tar.gz"
+    os.replace(sdist_path, sdist_target)
+    try:
+        sdist_path.symlink_to(sdist_target.name)
+        with pytest.raises(
+            HostTaskQualificationError,
+            match=r"sdist.*regular non-symlink",
+        ):
+            host_task_runner.load_exact_candidate_binding(
+                selected,
+                repository=repository,
+            )
+    finally:
+        if sdist_path.is_symlink():
+            sdist_path.unlink()
+        os.replace(sdist_target, sdist_path)
+
+    linked_root = tmp_path / "candidate-linked-parent"
+    try:
+        linked_root.symlink_to(external_root, target_is_directory=True)
+    except OSError:
+        pytest.skip("symbolic links are unavailable")
+    with pytest.raises(HostTaskQualificationError, match="symlink"):
+        host_task_runner.load_exact_candidate_binding(
+            linked_root / selected.name,
+            repository=repository,
+        )
+
+    host_root = tmp_path / "host-external"
+    host_root.mkdir()
+    binary = host_root / "codex"
+    binary.write_bytes(b"codex fixture")
+    binary.chmod(0o700)
+    identity = {"hosts": {"codex": _host_identity("codex", current=True)}}
+    expected_sha256 = _sha(binary.read_bytes())
+    identity["hosts"]["codex"]["binary_sha256"] = expected_sha256
+    assert host_task_runner._validate_codex_binary_static(
+        binary,
+        identity=identity,
+        repository=repository,
+    ) == {
+        "version": identity["hosts"]["codex"]["binary_version"],
+        "sha256": expected_sha256,
+    }
+
+    linked_host_root = tmp_path / "host-linked-parent"
+    linked_host_root.symlink_to(host_root, target_is_directory=True)
+    with pytest.raises(HostTaskQualificationError, match=r"parent.*symlink"):
+        host_task_runner._validate_codex_binary_static(
+            linked_host_root / binary.name,
+            identity=identity,
+            repository=repository,
+        )
+
+    stable_signature = host_task_runner._stable_stat_signature
+    signature_calls = 0
+
+    def drifting_signature(details: os.stat_result) -> tuple[Any, ...]:
+        nonlocal signature_calls
+        signature_calls += 1
+        signature = stable_signature(details)
+        return (*signature, "drift") if signature_calls == 3 else signature
+
+    monkeypatch.setattr(
+        host_task_runner,
+        "_stable_stat_signature",
+        drifting_signature,
+    )
+    with pytest.raises(HostTaskQualificationError, match="changed while it was read"):
+        host_task_runner._validate_codex_binary_static(
+            binary,
+            identity=identity,
+            repository=repository,
+        )
+    monkeypatch.setattr(
+        host_task_runner,
+        "_stable_stat_signature",
+        stable_signature,
+    )
+
+    broker = host_root / "owner-broker"
+    original_broker_raw = b"#!/bin/sh\nprintf 'verified-original\\n'\n"
+    broker.write_bytes(original_broker_raw)
+    broker.chmod(0o700)
+    replacement = host_root / "owner-broker-replacement"
+    replacement.write_bytes(b"#!/bin/sh\nprintf 'replaced-path\\n'\n")
+    replacement.chmod(0o700)
+    with host_task_runner._stage_exact_broker_executable(
+        broker,
+        repository=repository,
+        host_binary=binary,
+        expected_sha256=_sha(original_broker_raw),
+    ) as staged_broker:
+        os.replace(replacement, broker)
+        completed = subprocess.run(
+            [str(staged_broker)],
+            capture_output=True,
+            check=False,
+            timeout=5,
+            env={"PATH": os.defpath, "LC_ALL": "C"},
+        )
+        assert completed.returncode == 0
+        assert completed.stdout == b"verified-original\n"
+        assert b"replaced-path" not in completed.stdout
 
 
 def test_v013_host_task_catalog_rejects_binary_drift(tmp_path: Path) -> None:
