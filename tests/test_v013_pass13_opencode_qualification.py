@@ -906,7 +906,8 @@ def _assert_zero_model_static_binary_topology_and_hash_fail_closed(
     external.mkdir()
     target_parent = repository if topology == "repository_internal" else external
     target = target_parent / "opencode-target"
-    target.write_bytes(b"exact static opencode target")
+    target_bytes = b"exact static opencode target"
+    target.write_bytes(target_bytes)
     target.chmod(0o700)
     selector = target_parent / "opencode"
     selector.symlink_to(target.name)
@@ -925,8 +926,11 @@ def _assert_zero_model_static_binary_topology_and_hash_fail_closed(
         os.link(target, target_parent / "opencode-hardlink")
     elif topology == "target_not_executable":
         target.chmod(0o600)
+    elif topology == "target_not_regular":
+        target.unlink()
+        target.mkdir()
 
-    expected_sha256 = hashlib.sha256(target.read_bytes()).hexdigest()
+    expected_sha256 = hashlib.sha256(target_bytes).hexdigest()
     if topology == "hash_drift":
         expected_sha256 = "6" * 64
     identity = {
@@ -1432,16 +1436,17 @@ def _assert_owner_external_regression_bundle(
             scoped,
             case_root("static-preflight"),
         )
-    for index, (topology, message) in enumerate(
-        (
-            ("hash_drift", "hash differs"),
-            ("selector_chain", "symlink chain"),
-            ("parent_symlink", "parent path"),
-            ("target_hardlink", "single-link"),
-            ("target_not_executable", "not executable"),
-            ("repository_internal", "repository-external"),
-        )
-    ):
+    topology_cases = [
+        ("hash_drift", "hash differs"),
+        ("selector_chain", "symlink chain"),
+        ("parent_symlink", "parent path"),
+        ("target_hardlink", "single-link"),
+        ("target_not_regular", "regular single-link"),
+        ("repository_internal", "repository-external"),
+    ]
+    if os.name != "nt":
+        topology_cases.insert(-1, ("target_not_executable", "not executable"))
+    for index, (topology, message) in enumerate(topology_cases):
         with monkeypatch.context() as scoped:
             _assert_zero_model_static_binary_topology_and_hash_fail_closed(
                 topology,
