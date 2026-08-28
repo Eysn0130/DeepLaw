@@ -510,16 +510,16 @@
         {
           "junit": {
             "classname": "tests.test_bounded_subprocess",
-            "name": "test_bounded_subprocess_kills_oversized_output[stderr-stderr exceeded]"
+            "name": "test_bounded_subprocess_kills_oversized_output[stderr-stderr exceeded-stderr_limit]"
           },
-          "node_id": "tests/test_bounded_subprocess.py::test_bounded_subprocess_kills_oversized_output[stderr-stderr exceeded]"
+          "node_id": "tests/test_bounded_subprocess.py::test_bounded_subprocess_kills_oversized_output[stderr-stderr exceeded-stderr_limit]"
         },
         {
           "junit": {
             "classname": "tests.test_bounded_subprocess",
-            "name": "test_bounded_subprocess_kills_oversized_output[stdout-stdout exceeded]"
+            "name": "test_bounded_subprocess_kills_oversized_output[stdout-stdout exceeded-stdout_limit]"
           },
-          "node_id": "tests/test_bounded_subprocess.py::test_bounded_subprocess_kills_oversized_output[stdout-stdout exceeded]"
+          "node_id": "tests/test_bounded_subprocess.py::test_bounded_subprocess_kills_oversized_output[stdout-stdout exceeded-stdout_limit]"
         },
         {
           "junit": {
@@ -527,6 +527,20 @@
             "name": "test_bounded_subprocess_kills_timeout"
           },
           "node_id": "tests/test_bounded_subprocess.py::test_bounded_subprocess_kills_timeout"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_bounded_subprocess",
+            "name": "test_bounded_subprocess_reports_start_failure"
+          },
+          "node_id": "tests/test_bounded_subprocess.py::test_bounded_subprocess_reports_start_failure"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_bounded_subprocess",
+            "name": "test_bounded_subprocess_reports_unavailable_pipes"
+          },
+          "node_id": "tests/test_bounded_subprocess.py::test_bounded_subprocess_reports_unavailable_pipes"
         },
         {
           "junit": {
@@ -16981,6 +16995,20 @@
         {
           "junit": {
             "classname": "tests.test_windows_acl",
+            "name": "test_windows_acl_bounded_failure_is_sanitized_by_operation[harden-DEEPLAW_ACL_ROOT_B64-stderr_limit]"
+          },
+          "node_id": "tests/test_windows_acl.py::test_windows_acl_bounded_failure_is_sanitized_by_operation[harden-DEEPLAW_ACL_ROOT_B64-stderr_limit]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_windows_acl",
+            "name": "test_windows_acl_bounded_failure_is_sanitized_by_operation[query-DEEPLAW_ACL_PATHS_B64-timeout]"
+          },
+          "node_id": "tests/test_windows_acl.py::test_windows_acl_bounded_failure_is_sanitized_by_operation[query-DEEPLAW_ACL_PATHS_B64-timeout]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_windows_acl",
             "name": "test_windows_acl_evaluator_rejects_users_everyone_and_reparse_points"
           },
           "node_id": "tests/test_windows_acl.py::test_windows_acl_evaluator_rejects_users_everyone_and_reparse_points"
@@ -17021,9 +17049,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2410,
+      "count": 2414,
       "selection": "not qualification and not windows_native",
-      "sha256": "26f9dd92f9c19c31bdf53e0409e671e5dc15a62e9564ed48bec6fe16a53e3c81"
+      "sha256": "9736807f853e99f2d33d804574590c53ebdac9364bf80ed798f06cf12db13beb"
     },
     "windows": {
       "additional_cases": [
@@ -17056,13 +17084,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2414,
+      "count": 2418,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "19d41b5c24efb00e72c96c21ef7a5b43460cf23c3c07c9dd771c87040f082cf5"
+      "sha256": "ddf2dfa9734ed8a67dcb5bbba5d7d3e4c56c12aee972e164b6ed7ef302e09608"
     }
   },
-  "manifest_sha256": "95379fba9482d1749c459b5a5f37b95f76025b33eb67ef85f93567d073213c17",
+  "manifest_sha256": "4e3b2d18552dab727a1213373e8d8e54092c68a0818191cc0df1a0ae0604333d",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

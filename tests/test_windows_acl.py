@@ -8,6 +8,10 @@ from types import SimpleNamespace
 import pytest
 
 from deeplaw import knowledge_autonomy, knowledge_store, windows_acl
+from deeplaw.bounded_subprocess import (
+    BoundedSubprocessError,
+    BoundedSubprocessFailureKind,
+)
 from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     initialize_autonomous_core,
@@ -34,6 +38,62 @@ def _rule(sid: str, *, inherited: bool = False) -> dict[str, object]:
         "inheritance_flags": "None",
         "propagation_flags": "None",
     }
+
+
+@pytest.mark.parametrize(
+    ("operation", "environment_name", "failure_kind"),
+    (
+        (
+            "query",
+            "DEEPLAW_ACL_PATHS_B64",
+            BoundedSubprocessFailureKind.TIMEOUT,
+        ),
+        (
+            "harden",
+            "DEEPLAW_ACL_ROOT_B64",
+            BoundedSubprocessFailureKind.STDERR_LIMIT,
+        ),
+    ),
+)
+def test_windows_acl_bounded_failure_is_sanitized_by_operation(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    environment_name: str,
+    failure_kind: BoundedSubprocessFailureKind,
+) -> None:
+    path_canary = r"C:\private\acl-canary"
+    secret_canary = "ambient-secret-canary"
+    source_error = BoundedSubprocessError(
+        f"PowerShell failed at {path_canary}: {secret_canary}",
+        kind=failure_kind,
+        stdout=path_canary.encode(),
+        stderr=secret_canary.encode(),
+    )
+
+    def fail_bounded_subprocess(*_args: object, **_kwargs: object) -> None:
+        raise source_error
+
+    monkeypatch.setattr(windows_acl, "_powershell", lambda: "powershell.exe")
+    monkeypatch.setattr(
+        windows_acl,
+        "run_bounded_subprocess",
+        fail_bounded_subprocess,
+    )
+
+    with pytest.raises(RuntimeError) as captured:
+        windows_acl._run_encoded_script(
+            "Write-Output '{}'",
+            operation=operation,  # type: ignore[arg-type]
+            environment={environment_name: path_canary},
+        )
+
+    message = str(captured.value)
+    assert message == (
+        f"native Windows ACL {operation} command failed closed: {failure_kind.value}"
+    )
+    assert path_canary not in message
+    assert secret_canary not in message
+    assert captured.value.__cause__ is source_error
 
 
 def test_windows_acl_prefers_the_matching_pwsh_runtime(

@@ -86,6 +86,7 @@ jobs:
           uv run --frozen pytest --strict-markers -q
           tests/test_windows_acl.py
           tests/test_v013_pass21_windows_acl_environment.py
+          tests/test_v013_no_model_production_registration.py::test_no_model_registration_starts_production_launcher_and_lists_tools
           tests/test_closed_mcp_launcher.py
           tests/test_v013_task_continuity_driver.py
           tests/test_v013_pass13_codex_qualification.py::test_codex_login_receipt_hashes_status_without_reading_auth_file

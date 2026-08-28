@@ -315,6 +315,11 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "timeout-minutes: 20" in ci
     assert "Ubuntu Python 3.12" in ci
     assert "windows-sentinel" in ci
+    windows_sentinel = ci.split("  windows-sentinel:", 1)[1]
+    assert windows_sentinel.count(
+        "tests/test_v013_no_model_production_registration.py::"
+        "test_no_model_registration_starts_production_launcher_and_lists_tools"
+    ) == 1
     assert "uv lock --check" in ci
     assert "ruff check ." in ci
     assert "git diff --check" in ci

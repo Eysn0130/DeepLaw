@@ -9,8 +9,19 @@ import threading
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import BinaryIO
+
+
+class BoundedSubprocessFailureKind(StrEnum):
+    """Stable, data-free failure categories for bounded subprocesses."""
+
+    START_FAILED = "start_failed"
+    PIPES_UNAVAILABLE = "pipes_unavailable"
+    TIMEOUT = "timeout"
+    STDOUT_LIMIT = "stdout_limit"
+    STDERR_LIMIT = "stderr_limit"
 
 
 class BoundedSubprocessError(RuntimeError):
@@ -20,6 +31,7 @@ class BoundedSubprocessError(RuntimeError):
         self,
         message: str,
         *,
+        kind: BoundedSubprocessFailureKind | str,
         returncode: int | None = None,
         stdout: bytes = b"",
         stderr: bytes = b"",
@@ -27,6 +39,7 @@ class BoundedSubprocessError(RuntimeError):
         stderr_truncated: bool = False,
     ) -> None:
         super().__init__(message)
+        self.kind = BoundedSubprocessFailureKind(kind)
         self.returncode = returncode
         self.stdout = stdout
         self.stderr = stderr
@@ -149,11 +162,17 @@ def run_bounded_subprocess(
             ),
         )
     except OSError as error:
-        raise BoundedSubprocessError("bounded subprocess failed to start") from error
+        raise BoundedSubprocessError(
+            "bounded subprocess failed to start",
+            kind=BoundedSubprocessFailureKind.START_FAILED,
+        ) from error
     if process.stdin is None or process.stdout is None or process.stderr is None:
         _kill(process)
         process.wait()
-        raise BoundedSubprocessError("bounded subprocess pipes are unavailable")
+        raise BoundedSubprocessError(
+            "bounded subprocess pipes are unavailable",
+            kind=BoundedSubprocessFailureKind.PIPES_UNAVAILABLE,
+        )
 
     stdout = _Capture(max_stdout_bytes)
     stderr = _Capture(max_stderr_bytes)
@@ -171,15 +190,19 @@ def run_bounded_subprocess(
 
     deadline = time.monotonic() + timeout_seconds
     failure: str | None = None
+    failure_kind: BoundedSubprocessFailureKind | None = None
     while process.poll() is None:
         if stdout.exceeded.is_set():
             failure = f"stdout exceeded {max_stdout_bytes} bytes"
+            failure_kind = BoundedSubprocessFailureKind.STDOUT_LIMIT
             break
         if stderr.exceeded.is_set():
             failure = f"stderr exceeded {max_stderr_bytes} bytes"
+            failure_kind = BoundedSubprocessFailureKind.STDERR_LIMIT
             break
         if time.monotonic() >= deadline:
             failure = f"timed out after {timeout_seconds:g} seconds"
+            failure_kind = BoundedSubprocessFailureKind.TIMEOUT
             break
         time.sleep(0.01)
     if failure is not None:
@@ -189,11 +212,15 @@ def run_bounded_subprocess(
         thread.join(timeout=2)
     if failure is None and stdout.exceeded.is_set():
         failure = f"stdout exceeded {max_stdout_bytes} bytes"
+        failure_kind = BoundedSubprocessFailureKind.STDOUT_LIMIT
     if failure is None and stderr.exceeded.is_set():
         failure = f"stderr exceeded {max_stderr_bytes} bytes"
+        failure_kind = BoundedSubprocessFailureKind.STDERR_LIMIT
     if failure is not None:
+        assert failure_kind is not None
         raise BoundedSubprocessError(
             f"bounded subprocess {failure}",
+            kind=failure_kind,
             returncode=process.returncode,
             stdout=bytes(stdout.value),
             stderr=bytes(stderr.value),

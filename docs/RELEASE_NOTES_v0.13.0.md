@@ -108,3 +108,13 @@ Python 3.12 calibration and 10k lanes succeeded but do not replace the final pla
 six full Windows jobs were cancelled under the old 100-minute bound, and the Python 3.11 shard 3
 failure signal was not parsed. A fresh Candidate Full run must validate the new bound and expose and
 verify that failure; these notes do not claim the unknown failure is fixed.
+
+Candidate-v5 Candidate Full run #10 (`33168253385`, exact head
+`cae1688c39ac17b94074987bdd7fc35aa381cd2b`) is also consumed failed evidence, not a pass: 11 jobs
+succeeded and 1 failed, with 4 skipped. The six POSIX matrix jobs, artifact freeze, exact-wheel public
+journey, 10k lane, and Windows Python 3.12 calibration shards 1 and 3 succeeded. Calibration shard 2
+failed in the real production-registration test with a bounded generic native Windows ACL command
+failure; the operation was not observable in that run. Windows calibration aggregation, all final
+Windows shards, and raw-evidence aggregation were `not_executed`/skipped. This diagnostic patch only
+adds the bounded failure kind and sanitized operation context; it does not fix the ACL behavior or
+constitute a Candidate Full pass. A fresh Candidate Full run is required.
