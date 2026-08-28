@@ -7300,6 +7300,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_candidate_regression",
+            "name": "test_candidate_windows_duration_estimate_uses_cross_python_stable_sum"
+          },
+          "node_id": "tests/test_v013_candidate_regression.py::test_candidate_windows_duration_estimate_uses_cross_python_stable_sum"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_regression",
             "name": "test_candidate_windows_duration_weighted_shards_are_rebuildable"
           },
           "node_id": "tests/test_v013_candidate_regression.py::test_candidate_windows_duration_weighted_shards_are_rebuildable"
@@ -17049,9 +17056,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2414,
+      "count": 2415,
       "selection": "not qualification and not windows_native",
-      "sha256": "9736807f853e99f2d33d804574590c53ebdac9364bf80ed798f06cf12db13beb"
+      "sha256": "0ff623ef4b32d5554dc95dfb4692ffbdc860664460854a5bce6d4a589c3e78e6"
     },
     "windows": {
       "additional_cases": [
@@ -17084,13 +17091,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2418,
+      "count": 2419,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "ddf2dfa9734ed8a67dcb5bbba5d7d3e4c56c12aee972e164b6ed7ef302e09608"
+      "sha256": "78b6e31c0afc5d92338a202aeaf30c244d690f6f84041410eaf16bccc6257a4b"
     }
   },
-  "manifest_sha256": "4e3b2d18552dab727a1213373e8d8e54092c68a0818191cc0df1a0ae0604333d",
+  "manifest_sha256": "a1d8c38eec7e77b558be06a8af2ef6bedcd7d4d4306eee6ed9593484d1044d89",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

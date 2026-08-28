@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -95,6 +96,25 @@ def test_candidate_windows_duration_weighted_shards_are_rebuildable() -> None:
         "longest_processing_time_duration_v1"
     }
     assert len({shard["duration_weights_sha256"] for shard in shards}) == 1
+
+
+def test_candidate_windows_duration_estimate_uses_cross_python_stable_sum() -> None:
+    files = sorted(
+        path.relative_to(REPOSITORY).as_posix()
+        for path in (REPOSITORY / "tests").glob("test_*.py")
+        if path.is_file() and not path.is_symlink()
+    )
+    weights = {path: 0.1 for path in files}
+    shard = build_shard_manifest(
+        repository=REPOSITORY,
+        shard_count=3,
+        shard_index=1,
+        duration_weights=weights,
+    )
+
+    assert shard["selected_estimated_duration_seconds"] == math.fsum(
+        weights[name] for name in shard["selected_test_files"]
+    )
 
 
 def test_candidate_shard_cli_writes_lf_only_paths(tmp_path: Path) -> None:

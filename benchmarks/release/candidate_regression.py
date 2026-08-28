@@ -115,7 +115,7 @@ def build_shard_manifest(
     if normalized_weights is not None:
         manifest["duration_weights"] = normalized_weights
         manifest["duration_weights_sha256"] = _sha256_json(normalized_weights)
-        manifest["selected_estimated_duration_seconds"] = sum(
+        manifest["selected_estimated_duration_seconds"] = math.fsum(
             normalized_weights[path] for path in selected
         )
     return manifest

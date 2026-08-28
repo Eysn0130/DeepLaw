@@ -118,3 +118,15 @@ failure; the operation was not observable in that run. Windows calibration aggre
 Windows shards, and raw-evidence aggregation were `not_executed`/skipped. This diagnostic patch only
 adds the bounded failure kind and sanitized operation context; it does not fix the ACL behavior or
 constitute a Candidate Full pass. A fresh Candidate Full run is required.
+
+Candidate-v5 Candidate Full run #11 (`33185134591`, exact head
+`c1048341e0407e1977ac8e4e93109751031bbfa9`) is consumed failed evidence, not a pass. The artifact
+freeze, exact-wheel public journey, 10k lane, six POSIX jobs, all three Windows calibration shards,
+all six final Windows shards, and the Python 3.13 coverage aggregate succeeded. The Python 3.11
+coverage aggregate alone failed closed while rebuilding two otherwise identical shard manifests:
+the shard producer used Python 3.11's ordinary floating-point `sum`, while the Ubuntu aggregate
+used a newer Python implementation with different rounding for the informational selected-duration
+total. Selected files, file hashes, duration weights, and their digests were identical. The raw
+evidence aggregate was therefore skipped/`not_executed`. The manifest producer now uses
+`math.fsum` for that information field without weakening strict manifest equality; a fresh
+Candidate Full run is required.
