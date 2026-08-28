@@ -452,7 +452,7 @@ jobs:
       - verified-artifact
       - windows-calibration
     runs-on: windows-latest
-    timeout-minutes: 100
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
@@ -510,6 +510,7 @@ jobs:
           set -euo pipefail
           mapfile -t test_files < "${RUNNER_TEMP}/candidate-test-files.txt"
           uv run --frozen pytest --strict-markers \
+            --maxfail=1 \
             -m "not qualification" \
             --junitxml="${RUNNER_TEMP}/candidate-tests.xml" \
             "${test_files[@]}"

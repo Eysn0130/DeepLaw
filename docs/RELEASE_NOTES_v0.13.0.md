@@ -78,8 +78,10 @@ candidate and make no platform-qualification or release-pass claim.
 
 Calibration shards 1 and 3 were cancelled at the 100-minute job limit before they could retain
 JUnit receipts. Their progress stream nevertheless contained failures, so timeout cannot be treated
-as the only cause or as a pass. The calibration-only limit is now 150 minutes, while the later
-duration-weighted platform shards keep their existing bound. Deterministically mapped failed nodes
+as the only cause or as a pass. The calibration-only limit is now 150 minutes, and the later
+duration-weighted final Windows platform shards now use the same 150-minute bound. Final Windows
+shards stop at the first failure (`--maxfail=1`) to expose its traceback immediately; a green shard
+still executes the complete selected inventory. Deterministically mapped failed nodes
 are included in the fast Windows sentinel before another expensive candidate is admitted. One
 confirmed OpenCode cause was the absolute-path scanner interpreting the drive suffix inside an
 already verified `file:///C:/...` project-plugin URI as a separate path. Preflight now first verifies
@@ -100,3 +102,9 @@ public journey but exceeded its previous 900-second subprocess limit. Its Window
 bound is now 3,600 seconds inside the still-bounded 150-minute Candidate Full calibration job. The
 fast Windows sentinel executes the separated environment-isolation contract and partial-checkpoint
 recovery test; the full 1k journey remains in Candidate Full and cannot be replaced by the sentinel.
+
+Candidate-v5 Candidate Full run #9 (`33149976563`) is consumed failed evidence, not a pass: the
+Python 3.12 calibration and 10k lanes succeeded but do not replace the final platform matrix; all
+six full Windows jobs were cancelled under the old 100-minute bound, and the Python 3.11 shard 3
+failure signal was not parsed. A fresh Candidate Full run must validate the new bound and expose and
+verify that failure; these notes do not claim the unknown failure is fixed.
