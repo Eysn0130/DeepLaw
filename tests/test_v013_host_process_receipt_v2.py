@@ -357,6 +357,10 @@ def _process_exists(process_id: int) -> bool:
         os.kill(process_id, 0)
     except ProcessLookupError:
         return False
+    except OSError as error:
+        if os.name == "nt" and getattr(error, "winerror", None) == 87:
+            return False
+        raise
     return True
 
 

@@ -756,6 +756,14 @@ def _safe_source_defaults(*, expected_sha256: str | None) -> dict[str, Any]:
     }
 
 
+def _windows_acl_report_owner_only(report: object) -> bool:
+    return bool(
+        isinstance(report, Mapping)
+        and report.get("platform") == "nt"
+        and report.get("permissions_verified") is True
+    )
+
+
 def inspect_broker_source(
     path: Path,
     *,
@@ -801,8 +809,18 @@ def inspect_broker_source(
         return result
 
     mode = stat.S_IMODE(details.st_mode)
-    owner_only = os.name == "nt" or not (mode & 0o077)
-    owner_uid = os.name == "nt" or not hasattr(os, "geteuid") or details.st_uid == os.geteuid()
+    if os.name == "nt":
+        try:
+            from deeplaw.windows_acl import native_windows_path_acl_report
+
+            acl_report = native_windows_path_acl_report(source)
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
+            acl_report = None
+        owner_only = _windows_acl_report_owner_only(acl_report)
+        owner_uid = owner_only
+    else:
+        owner_only = not (mode & 0o077)
+        owner_uid = not hasattr(os, "geteuid") or details.st_uid == os.geteuid()
     result["owner_only_mode"] = bool(owner_only and owner_uid)
     if (
         not stat.S_ISREG(details.st_mode)

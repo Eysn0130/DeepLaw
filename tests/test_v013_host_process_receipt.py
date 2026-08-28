@@ -74,6 +74,12 @@ def _artifacts(tmp_path: Path, host: str) -> tuple[dict[str, object], Path, Path
     broker = tmp_path / f"{host}-broker"
     broker.write_bytes(b"#!/bin/sh\nexit 0\n")
     broker.chmod(0o700)
+    if os.name == "nt":
+        from deeplaw.windows_acl import harden_windows_private_file
+
+        hardening = harden_windows_private_file(broker)
+        assert hardening["applied"] is True
+        assert hardening["verification"]["permissions_verified"] is True
     identity = _identity(
         codex_version="codex-cli 0.149.0-alpha.4.3",
         codex_sha256=binary_sha256 if host == "codex" else "d" * 64,
@@ -213,6 +219,16 @@ def test_isolation_and_topology_fail_closed(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("kind", ("symlink", "hardlink", "non_owner_only", "repo_inside"))
 def test_broker_identity_boundaries_fail_closed(tmp_path: Path, kind: str) -> None:
+    assert preflight._windows_acl_report_owner_only(
+        {"platform": "nt", "permissions_verified": True}
+    )
+    for invalid_report in (
+        None,
+        {},
+        {"platform": "posix", "permissions_verified": True},
+        {"platform": "nt", "permissions_verified": False},
+    ):
+        assert not preflight._windows_acl_report_owner_only(invalid_report)
     identity, repository, binary, broker = _artifacts(tmp_path, "opencode")
     selected = broker
     if kind == "symlink":
@@ -222,7 +238,23 @@ def test_broker_identity_boundaries_fail_closed(tmp_path: Path, kind: str) -> No
         selected = tmp_path / "broker-hardlink"
         os.link(broker, selected)
     elif kind == "non_owner_only":
-        broker.chmod(0o750)
+        if os.name == "nt":
+            system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+            assert system_root
+            icacls = Path(system_root) / "System32" / "icacls.exe"
+            assert icacls.is_file()
+            subprocess.run(
+                [str(icacls), str(broker), "/grant", "*S-1-1-0:R"],
+                capture_output=True,
+                check=True,
+                timeout=30,
+                env=preflight._host_version_probe_environment(),
+            )
+            from deeplaw.windows_acl import native_windows_path_acl_report
+
+            assert native_windows_path_acl_report(broker)["permissions_verified"] is False
+        else:
+            broker.chmod(0o750)
     elif kind == "repo_inside":
         selected = repository / "broker"
         selected.write_bytes(broker.read_bytes())
