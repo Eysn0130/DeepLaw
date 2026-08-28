@@ -61,6 +61,7 @@ OutputLimitError = CodexAppServerOutputLimitError
 
 
 DynamicToolHandler: TypeAlias = Callable[..., Mapping[str, Any]]
+BrokerLauncher: TypeAlias = Path | Sequence[str]
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -198,40 +199,129 @@ def _strict_control_json(raw: bytes) -> dict[str, Any]:
     return value
 
 
-def _terminate_broker_process_group(process: subprocess.Popen[bytes]) -> None:
-    """Terminate the isolated broker process group without exposing output."""
+def _windows_taskkill_executable() -> str | None:
+    """Return the absolute native process-tree terminator, if available."""
 
+    if os.name != "nt":
+        return None
+    system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+    if not system_root:
+        return None
+    selected = Path(system_root) / "System32" / "taskkill.exe"
+    return str(selected) if selected.is_absolute() and selected.is_file() else None
+
+
+def _windows_child_environment(environment: Mapping[str, str]) -> dict[str, str]:
+    """Project only the Windows system root into an otherwise closed env."""
+
+    projected = dict(environment)
+    if os.name != "nt":
+        return projected
+    system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+    if not system_root:
+        _broker_fail("Codex broker Windows system root is unavailable")
+    projected["SYSTEMROOT"] = system_root
+    projected["WINDIR"] = system_root
+    return projected
+
+
+def _process_group_popen_options() -> dict[str, Any]:
+    """Return native process-group options or fail closed before spawning."""
+
+    if os.name == "nt":
+        creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        if (
+            type(creation_flags) is not int
+            or creation_flags <= 0
+            or _windows_taskkill_executable() is None
+        ):
+            _broker_fail("Codex broker process-group isolation is unavailable")
+        return {"creationflags": creation_flags}
     if os.name == "posix":
+        if not callable(getattr(os, "killpg", None)) or not hasattr(signal, "SIGKILL"):
+            _broker_fail("Codex broker process-group isolation is unavailable")
+        return {"start_new_session": True}
+    _broker_fail("Codex broker process-group isolation is unavailable")
+
+
+def _terminate_broker_process_group(process: subprocess.Popen[bytes]) -> None:
+    """Terminate the isolated process group without exposing output."""
+
+    if os.name == "nt":
+        taskkill = _windows_taskkill_executable()
+        if taskkill is not None:
+            try:
+                result = subprocess.run(
+                    [taskkill, "/F", "/T", "/PID", str(process.pid)],
+                    env=_windows_child_environment({"PATH": os.defpath}),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    shell=False,
+                    timeout=5,
+                )
+            except (OSError, subprocess.SubprocessError):
+                result = None
+            if result is not None and result.returncode == 0:
+                with suppress(OSError):
+                    process.kill()
+                return
+    elif os.name == "posix":
         with suppress(ProcessLookupError, PermissionError):
             os.killpg(process.pid, signal.SIGKILL)
     with suppress(OSError):
         process.kill()
 
 
+def _broker_command(broker_launcher: BrokerLauncher) -> list[str]:
+    """Build the closed broker argv, retaining an absolute executable root."""
+
+    if isinstance(broker_launcher, (str, Path)):
+        command = [str(broker_launcher)]
+    elif isinstance(broker_launcher, Sequence):
+        command = list(broker_launcher)
+    else:
+        _broker_fail("Codex owner-external broker command is invalid")
+    if (
+        not command
+        or any(not isinstance(argument, str) or not argument for argument in command)
+        or not Path(command[0]).is_absolute()
+    ):
+        _broker_fail("Codex owner-external broker command is invalid")
+    return [*command, CODEX_BROKER_CONTROL_ARGUMENT]
+
+
+def _closed_broker_environment() -> dict[str, str]:
+    """Return the minimum non-secret environment needed by the broker."""
+
+    return _windows_child_environment(
+        {
+            "PATH": os.defpath,
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "NO_COLOR": "1",
+        }
+    )
+
+
 def _bounded_broker_control_exchange(
-    broker_executable: Path,
+    broker_launcher: BrokerLauncher,
     *,
     payload: bytes,
     timeout_seconds: float,
 ) -> bytes:
     """Run one broker process with an in-flight combined stdout/stderr bound."""
 
-    if os.name != "posix":
-        _broker_fail("Codex broker process-group isolation is unavailable")
-    closed_environment = {
-        "PATH": os.defpath,
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-        "NO_COLOR": "1",
-    }
+    closed_environment = _closed_broker_environment()
     try:
         process = subprocess.Popen(
-            [str(broker_executable), CODEX_BROKER_CONTROL_ARGUMENT],
+            _broker_command(broker_launcher),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=closed_environment,
-            start_new_session=True,
+            **_process_group_popen_options(),
         )
     except OSError as error:
         raise CodexOwnerExternalBrokerError(
@@ -622,7 +712,7 @@ def validate_codex_zero_model_preflight_response(
 
 
 def consume_codex_zero_model_preflight(
-    broker_launcher: Path,
+    broker_launcher: BrokerLauncher,
     *,
     request: Mapping[str, Any],
     timeout_seconds: float = 60.0,
@@ -1221,9 +1311,10 @@ class CodexAppServerClient:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=self.cwd,
-                env=dict(self.environment),
+                env=_windows_child_environment(self.environment),
                 bufsize=0,
                 close_fds=True,
+                **(_process_group_popen_options() if os.name == "nt" else {}),
             )
         except (OSError, ValueError) as exc:
             self._process = None
@@ -1553,13 +1644,18 @@ class CodexAppServerClient:
             return
         try:
             if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=0.5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
+                if os.name == "nt":
+                    _terminate_broker_process_group(process)
                     with suppress(subprocess.TimeoutExpired):
                         process.wait(timeout=0.5)
+                else:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=0.5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        with suppress(subprocess.TimeoutExpired):
+                            process.wait(timeout=0.5)
             for reader in self._reader_threads:
                 reader.join(timeout=0.2)
             self._drain_available_stderr()

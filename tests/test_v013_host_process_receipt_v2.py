@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import signal
+import subprocess
 import sys
 import textwrap
 import threading
@@ -341,9 +342,14 @@ def _rehash(value: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
-def _write_executable_script(path: Path, source: str) -> None:
+def _write_executable_script(path: Path, source: str) -> Path | list[str]:
+    if os.name == "nt":
+        script = path.with_suffix(".py")
+        script.write_text(source, encoding="utf-8")
+        return [sys.executable, "-u", str(script)]
     path.write_text(f"#!{sys.executable}\n{source}", encoding="utf-8")
     path.chmod(0o700)
+    return path
 
 
 def _process_exists(process_id: int) -> bool:
@@ -817,7 +823,7 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
     response = _codex_control_response(receipt)
     launcher = tmp_path / "owner-external-broker"
     response_raw = json.dumps(response, separators=(",", ":")).encode("utf-8")
-    _write_executable_script(
+    launcher_command = _write_executable_script(
         launcher,
         textwrap.dedent(
             f"""
@@ -831,7 +837,7 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
         ),
     )
     observation = codex_client.consume_codex_zero_model_preflight(
-        launcher,
+        launcher_command,
         request=request,
         seen_nonce_sha256s=set(),
     )
@@ -839,7 +845,7 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
 
     duplicate = json.dumps(response, separators=(",", ":"))[:-1]
     duplicate += ',"status":"observed"}'
-    _write_executable_script(
+    launcher_command = _write_executable_script(
         launcher,
         textwrap.dedent(
             f"""
@@ -855,14 +861,14 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
         match="duplicate",
     ):
         codex_client.consume_codex_zero_model_preflight(
-            launcher,
+            launcher_command,
             request=request,
             seen_nonce_sha256s=set(),
         )
 
     for stream_name in ("stdout", "stderr"):
         child_pid_path = tmp_path / f"{stream_name}-child.pid"
-        _write_executable_script(
+        launcher_command = _write_executable_script(
             launcher,
             textwrap.dedent(
                 f"""
@@ -893,7 +899,7 @@ def test_v2_codex_cross_connection_and_hook_session_fail_closed(
                 match="output limit",
             ) as overflow:
                 codex_client.consume_codex_zero_model_preflight(
-                    launcher,
+                    launcher_command,
                     request=request,
                     timeout_seconds=10,
                     seen_nonce_sha256s=set(),
@@ -938,7 +944,7 @@ def test_v2_opencode_requires_actual_route_parent_child_and_plugin_event() -> No
 
 
 def test_production_seams_reject_unattested_codex_connection_and_synthetic_opencode_fork(
-    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     client = CodexAppServerClient(
         _codex_stdio_fixture(),
@@ -1018,3 +1024,84 @@ def test_production_seams_reject_unattested_codex_connection_and_synthetic_openc
         "final Kernel admission accepted runner-only Codex lifecycle and synthetic "
         "OpenCode fork shapes without owner-external correlation"
     )
+
+    class Process:
+        pid = 4312
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def kill(self) -> None:
+            self.killed = True
+
+    taskkill = str(tmp_path / "System32" / "taskkill.exe")
+    calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def run_taskkill(argv: list[str], **kwargs: Any) -> None:
+        calls.append((argv, kwargs))
+
+    with monkeypatch.context() as windows:
+        windows.setattr(codex_client.os, "name", "nt")
+        windows.setattr(
+            codex_client.subprocess,
+            "CREATE_NEW_PROCESS_GROUP",
+            512,
+            raising=False,
+        )
+        windows.setattr(
+            codex_client,
+            "_windows_taskkill_executable",
+            lambda: taskkill,
+        )
+        windows.setattr(codex_client.subprocess, "run", run_taskkill)
+        options = codex_client._process_group_popen_options()
+        assert options["creationflags"] == codex_client.subprocess.CREATE_NEW_PROCESS_GROUP
+        windows.setenv("SYSTEMROOT", r"C:\Windows")
+        closed_environment = codex_client._closed_broker_environment()
+        assert closed_environment["SYSTEMROOT"] == r"C:\Windows"
+        assert closed_environment["WINDIR"] == r"C:\Windows"
+        assert set(closed_environment) == {
+            "PATH",
+            "LANG",
+            "LC_ALL",
+            "NO_COLOR",
+            "SYSTEMROOT",
+            "WINDIR",
+        }
+        process = Process()
+        codex_client._terminate_broker_process_group(process)  # type: ignore[arg-type]
+        assert calls[0][0] == [taskkill, "/F", "/T", "/PID", "4312"]
+        assert calls[0][1]["shell"] is False
+        assert calls[0][1]["stdin"] is subprocess.DEVNULL
+        assert calls[0][1]["stdout"] is subprocess.DEVNULL
+        assert calls[0][1]["stderr"] is subprocess.DEVNULL
+        assert calls[0][1]["env"] == {
+            "PATH": os.defpath,
+            "SYSTEMROOT": r"C:\Windows",
+            "WINDIR": r"C:\Windows",
+        }
+        assert process.killed is True
+
+    with monkeypatch.context() as windows:
+        windows.setattr(codex_client.os, "name", "nt")
+        windows.setattr(
+            codex_client.subprocess,
+            "CREATE_NEW_PROCESS_GROUP",
+            0,
+            raising=False,
+        )
+        with pytest.raises(
+            codex_client.CodexOwnerExternalBrokerError,
+            match="process-group isolation is unavailable",
+        ):
+            codex_client._process_group_popen_options()
+
+    with monkeypatch.context() as windows:
+        windows.setattr(codex_client.os, "name", "nt")
+        windows.delenv("SYSTEMROOT", raising=False)
+        windows.delenv("WINDIR", raising=False)
+        with pytest.raises(
+            codex_client.CodexOwnerExternalBrokerError,
+            match="Windows system root is unavailable",
+        ):
+            codex_client._closed_broker_environment()

@@ -122,7 +122,79 @@ _IDENTITY_FORBIDDEN_FILENAME = re.compile(
     r"private[_-]?key|token|prompt|transcript|reasoning)(?:$|[._-])",
     re.IGNORECASE,
 )
-_IDENTITY_STAT_FIELDS = ("st_ino", "st_size", "st_mode", "st_uid", "st_nlink")
+_STAT_MUTATION_FIELDS = (
+    "st_dev",
+    "st_ino",
+    "st_size",
+    "st_mode",
+    "st_uid",
+    "st_nlink",
+)
+
+
+def portable_file_stat_signature(
+    details: os.stat_result,
+) -> tuple[bool, int | None, int | None, int | None]:
+    """Return the cross-interface file identity that Windows can preserve.
+
+    ``Path.lstat`` and ``os.fstat`` are different observation interfaces.  On
+    Windows their mode, uid, and timestamp representations are not required
+    to be byte-for-byte equal even when they describe the same open file.  A
+    cross-interface comparison therefore binds only regular-file type,
+    non-zero device/inode identity, and size.  Same-interface mutation checks
+    continue to use :func:`stat_mutation_signature` below.
+    """
+
+    mode = getattr(details, "st_mode", None)
+    device = getattr(details, "st_dev", None)
+    inode = getattr(details, "st_ino", None)
+    size = getattr(details, "st_size", None)
+    return (
+        isinstance(mode, int) and stat.S_ISREG(mode),
+        device if type(device) is int and device > 0 else None,
+        inode if type(inode) is int and inode > 0 else None,
+        size if type(size) is int and size >= 0 else None,
+    )
+
+
+def portable_file_stat_matches(
+    left: os.stat_result,
+    right: os.stat_result,
+) -> bool:
+    """Compare lstat/fstat observations without weakening mutation checks."""
+
+    left_signature = portable_file_stat_signature(left)
+    right_signature = portable_file_stat_signature(right)
+    return (
+        left_signature == right_signature
+        and left_signature[0]
+        and left_signature[1] is not None
+        and left_signature[2] is not None
+        and left_signature[3] is not None
+    )
+
+
+def _host_version_probe_environment() -> dict[str, str]:
+    """Return the minimum non-secret environment needed by a Host probe."""
+
+    environment = {"PATH": os.defpath, "LANG": "C", "LC_ALL": "C"}
+    if os.name == "nt":
+        system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+        if not system_root:
+            _identity_fail("Host Windows system root is unavailable")
+        environment["SYSTEMROOT"] = system_root
+        environment["WINDIR"] = system_root
+    return environment
+
+
+def stat_mutation_signature(details: os.stat_result) -> tuple[Any, ...]:
+    """Return the full same-interface mutation signature."""
+
+    return (
+        *(getattr(details, field, None) for field in _STAT_MUTATION_FIELDS),
+        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
+        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
+    )
 
 
 class HostIdentityValidationError(ValueError):
@@ -364,11 +436,7 @@ def _identity_path_has_symlink(path: Path) -> bool:
 def _identity_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
     """Keep mutation-relevant metadata without treating atime as a mutation."""
 
-    return (
-        *(getattr(details, field, None) for field in _IDENTITY_STAT_FIELDS),
-        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
-        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
-    )
+    return stat_mutation_signature(details)
 
 
 def _read_identity_file(
@@ -402,13 +470,17 @@ def _read_identity_file(
             _identity_fail("Host identity input must be repository-external")
         if not 1 <= before.st_size <= HOST_IDENTITY_MAX_BYTES:
             _identity_fail("Host identity input exceeds its byte bound")
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
         if hasattr(os, "O_CLOEXEC"):
             flags |= os.O_CLOEXEC
         descriptor = os.open(selected, flags)
         try:
             fd_before = os.fstat(descriptor)
-            if _identity_stat_signature(fd_before) != _identity_stat_signature(before):
+            if not portable_file_stat_matches(fd_before, before):
                 _identity_fail("Host identity input changed before it was read")
             chunks: list[bytes] = []
             total = 0
@@ -430,6 +502,7 @@ def _read_identity_file(
     if (
         _identity_stat_signature(fd_before) != _identity_stat_signature(fd_after)
         or _identity_stat_signature(before) != _identity_stat_signature(after)
+        or not portable_file_stat_matches(fd_after, after)
         or len(raw) != before.st_size
     ):
         _identity_fail("Host identity input changed while it was read")
@@ -594,7 +667,7 @@ def inspect_host_binary(
             capture_output=True,
             check=False,
             timeout=30,
-            env={"PATH": os.defpath, "LANG": "C", "LC_ALL": "C"},
+            env=_host_version_probe_environment(),
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise HostIdentityValidationError("Host executable version probe failed") from error
@@ -624,17 +697,10 @@ class ReceiptValidationError(ValueError):
     """A preflight receipt is not safe or does not match the strict schema."""
 
 
-_STAT_FIELDS = ("st_ino", "st_size", "st_mode", "st_uid", "st_nlink")
-
-
 def _stat_signature(details: os.stat_result) -> tuple[Any, ...]:
     """Return the platform-available identity and mutation fields."""
 
-    return (
-        *(getattr(details, field, None) for field in _STAT_FIELDS),
-        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
-        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
-    )
+    return stat_mutation_signature(details)
 
 
 def _path_stat_signature(path: Path) -> tuple[Any, ...] | None:

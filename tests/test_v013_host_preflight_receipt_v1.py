@@ -3,6 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
+import stat
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -63,6 +67,30 @@ def _write_identity(path: Path, value: dict[str, object]) -> bytes:
     path.write_bytes(raw)
     path.chmod(0o600)
     return raw
+
+
+def _versioned_test_executable(
+    tmp_path: Path,
+    name: str,
+    posix_version: str,
+) -> tuple[Path, str]:
+    if os.name == "nt":
+        executable = Path(sys.executable).resolve(strict=True)
+        completed = subprocess.run(
+            [str(executable), "--version"],
+            capture_output=True,
+            check=True,
+            timeout=30,
+            env=receipt._host_version_probe_environment(),
+        )
+        return executable, (completed.stdout + completed.stderr).decode().strip()
+    executable = tmp_path / name
+    executable.write_text(
+        f"#!/bin/sh\nprintf '%s\\n' '{posix_version}'\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o700)
+    return executable, posix_version
 
 
 def test_v1_receipt_is_strict_and_has_no_free_text_or_sensitive_surface(
@@ -265,7 +293,9 @@ def test_opencode_availability_usage_missing_is_typed() -> None:
     assert receipt.reason_code_for_exception(failure.value) == "usage_receipt_missing"
 
 
-def test_external_host_identity_is_owner_only_and_source_bound(tmp_path: Path) -> None:
+def test_external_host_identity_is_owner_only_and_source_bound(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
     identity_path = tmp_path / "host-identity.json"
@@ -274,6 +304,54 @@ def test_external_host_identity_is_owner_only_and_source_bound(tmp_path: Path) -
     assert loaded["source_sha256"] == hashlib.sha256(raw).hexdigest()
     assert loaded["source_bytes"] == len(raw)
     assert loaded["hosts"]["codex"]["binary_version"] == "codex-cli moving"
+
+    # Windows lstat/fstat can expose different mode/uid/timestamp
+    # representations for the same open file.  The cross-interface check
+    # must retain only regular type, non-zero dev/ino, size, and bytes read;
+    # path-before/path-after and fd-before/fd-after still require the full
+    # mutation signature.  This is intentionally a production-seam canary.
+    original_lstat = Path.lstat
+    path_stat = original_lstat(identity_path)
+    path_snapshot = type(
+        "PathStat",
+        (),
+        {
+            "st_dev": path_stat.st_dev,
+            "st_ino": path_stat.st_ino,
+            "st_size": path_stat.st_size,
+            "st_mode": path_stat.st_mode,
+            "st_uid": getattr(os, "geteuid", lambda: path_stat.st_uid)(),
+            "st_nlink": path_stat.st_nlink,
+            "st_mtime_ns": 100,
+            "st_ctime_ns": 200,
+        },
+    )()
+    fd_snapshot = type(
+        "FdStat",
+        (),
+        {
+            "st_dev": path_stat.st_dev,
+            "st_ino": path_stat.st_ino,
+            "st_size": path_stat.st_size,
+            "st_mode": stat.S_IFREG | 0o600,
+            "st_uid": path_snapshot.st_uid + 1000,
+            "st_nlink": path_stat.st_nlink,
+            "st_mtime_ns": 300,
+            "st_ctime_ns": 400,
+        },
+    )()
+
+    def windows_lstat(path: Path) -> os.stat_result:
+        if Path(path) == identity_path:
+            return path_snapshot  # type: ignore[return-value]
+        return original_lstat(path)
+
+    def windows_fstat(descriptor: int) -> os.stat_result:
+        return fd_snapshot  # type: ignore[return-value]
+
+    monkeypatch.setattr(Path, "lstat", windows_lstat)
+    monkeypatch.setattr(os, "fstat", windows_fstat)
+    assert receipt.load_host_identity_input(identity_path, repository=repository) == loaded
 
     inside = repository / receipt.HOST_IDENTITY_FILENAME
     _write_identity(inside, _host_identity())
@@ -300,10 +378,10 @@ def test_external_host_identity_is_owner_only_and_source_bound(tmp_path: Path) -
 def test_host_identity_binary_probe_binds_exact_regular_target(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
-    executable = tmp_path / "codex"
-    executable.write_text("#!/bin/sh\nprintf '%s\\n' 'codex-cli moving'\n", encoding="utf-8")
-    executable.chmod(0o700)
-    identity_value = _host_identity()
+    executable, version = _versioned_test_executable(
+        tmp_path, "codex", "codex-cli moving"
+    )
+    identity_value = _host_identity(codex_version=version)
     identity_value["hosts"]["codex"]["binary_sha256"] = hashlib.sha256(
         executable.read_bytes()
     ).hexdigest()
@@ -316,7 +394,7 @@ def test_host_identity_binary_probe_binds_exact_regular_target(tmp_path: Path) -
         identity=loaded,
         repository=repository,
     )
-    assert observed["version"] == "codex-cli moving"
+    assert observed["version"] == version
     assert observed["source_symlink"] is False
     assert observed["host_identity_source_sha256"] == loaded["source_sha256"]
 
@@ -326,10 +404,11 @@ def test_opencode_selector_allows_one_symlink_but_rejects_a_symlink_chain(
 ) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
-    executable = tmp_path / "opencode-target"
-    executable.write_text("#!/bin/sh\nprintf '%s\\n' '1.18.16'\n", encoding="utf-8")
-    executable.chmod(0o700)
+    executable, version = _versioned_test_executable(
+        tmp_path, "opencode-target", "1.18.16"
+    )
     identity_value = _host_identity()
+    identity_value["hosts"]["opencode"]["version"] = version
     identity_value["hosts"]["opencode"]["executable_sha256"] = hashlib.sha256(
         executable.read_bytes()
     ).hexdigest()
@@ -366,10 +445,23 @@ def test_host_binary_mutation_after_hash_fails_closed(
 ) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
-    executable = tmp_path / "codex"
-    executable.write_text("#!/bin/sh\nprintf '%s\\n' 'codex-cli moving'\n", encoding="utf-8")
+    if os.name == "nt":
+        executable = tmp_path / "codex.exe"
+        shutil.copyfile(sys.executable, executable)
+        version = subprocess.run(
+            [sys.executable, "--version"],
+            capture_output=True,
+            check=True,
+            timeout=30,
+            env=receipt._host_version_probe_environment(),
+        )
+        codex_version = (version.stdout + version.stderr).decode().strip()
+    else:
+        executable, codex_version = _versioned_test_executable(
+            tmp_path, "codex", "codex-cli moving"
+        )
     executable.chmod(0o700)
-    identity_value = _host_identity()
+    identity_value = _host_identity(codex_version=codex_version)
     identity_value["hosts"]["codex"]["binary_sha256"] = hashlib.sha256(
         executable.read_bytes()
     ).hexdigest()

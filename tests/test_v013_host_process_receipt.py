@@ -4,6 +4,8 @@ import copy
 import hashlib
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -13,7 +15,11 @@ from benchmarks.hosts import host_process_receipt as receipt
 
 
 def _identity(
-    *, codex_version: str, codex_sha256: str, opencode_sha256: str
+    *,
+    codex_version: str,
+    codex_sha256: str,
+    opencode_sha256: str,
+    opencode_version: str = "1.18.16",
 ) -> dict[str, object]:
     return {
         "schema_version": preflight.HOST_IDENTITY_SCHEMA_VERSION,
@@ -27,7 +33,7 @@ def _identity(
                 "auth_material_access": "forbidden",
             },
             "opencode": {
-                "version": "1.18.16",
+                "version": opencode_version,
                 "source_commit": "a" * 40,
                 "config_selector": "deepseek/deepseek-v4-flash",
                 "expected_response_model_id": "deepseek-v4-flash",
@@ -48,8 +54,22 @@ def _artifacts(tmp_path: Path, host: str) -> tuple[dict[str, object], Path, Path
     repository.mkdir()
     version = "codex-cli 0.149.0-alpha.4.3" if host == "codex" else "1.18.16"
     binary = tmp_path / f"{host}-binary"
-    binary.write_text(f"#!/bin/sh\nprintf '%s\\n' '{version}'\n", encoding="utf-8")
-    binary.chmod(0o700)
+    if os.name == "nt":
+        binary = Path(sys.executable).resolve(strict=True)
+        completed = subprocess.run(
+            [str(binary), "--version"],
+            capture_output=True,
+            check=True,
+            timeout=30,
+            env=preflight._host_version_probe_environment(),
+        )
+        version = (completed.stdout + completed.stderr).decode("utf-8").strip()
+    else:
+        binary.write_text(
+            f"#!/bin/sh\nprintf '%s\\n' '{version}'\n", encoding="utf-8"
+        )
+    if os.name != "nt":
+        binary.chmod(0o700)
     binary_sha256 = hashlib.sha256(binary.read_bytes()).hexdigest()
     broker = tmp_path / f"{host}-broker"
     broker.write_bytes(b"#!/bin/sh\nexit 0\n")
@@ -58,7 +78,10 @@ def _artifacts(tmp_path: Path, host: str) -> tuple[dict[str, object], Path, Path
         codex_version="codex-cli 0.149.0-alpha.4.3",
         codex_sha256=binary_sha256 if host == "codex" else "d" * 64,
         opencode_sha256=binary_sha256 if host == "opencode" else "e" * 64,
+        opencode_version=version if host == "opencode" else "1.18.16",
     )
+    if host == "codex" and os.name == "nt":
+        identity["hosts"]["codex"]["binary_version"] = version
     return identity, repository, binary, broker
 
 
