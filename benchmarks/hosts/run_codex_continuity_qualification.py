@@ -460,6 +460,7 @@ def _wrapper_source(runtime_python: Path) -> str:
 from __future__ import annotations
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from deeplaw.closed_mcp_launcher import closed_mcp_environment
@@ -470,25 +471,33 @@ arguments = sys.argv[1:]
 expected_index = arguments.index("--expected-vault-id")
 expected_vault_id = arguments[expected_index + 1]
 surface = "knowledge_sink" if arguments[:3] == ["knowledge", "sink", "mcp"] else "knowledge_support"
+child_argv = ["runtime/bin/deeplaw", *arguments]
 with closed_mcp_environment(
     surface=surface,
     expected_vault_id=expected_vault_id,
 ) as launch:
     environment_names = sorted(launch.allowed_environment_names)
     home_isolated = launch.environment.get("HOME") != os.environ.get("HOME")
-child_argv = ["runtime/bin/deeplaw", *arguments]
-receipt = {{
-    "schema_version": "deeplaw.closed-mcp-environment-receipt/v1",
-    "closed": True,
-    "home_isolated": home_isolated,
-    "blocked_names_present": sorted(name for name in blocked if name in environment_names),
-    "environment_names": environment_names,
-    "child_argv": child_argv,
-}}
-Path("mcp-environment-receipt.json").write_text(
-    json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\\n",
-    encoding="utf-8",
-)
+    receipt = {{
+        "schema_version": "deeplaw.closed-mcp-environment-receipt/v1",
+        "closed": True,
+        "home_isolated": home_isolated,
+        "blocked_names_present": sorted(name for name in blocked if name in environment_names),
+        "environment_names": environment_names,
+        "child_argv": child_argv,
+    }}
+    Path("mcp-environment-receipt.json").write_text(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\\n",
+        encoding="utf-8",
+    )
+    if os.name == "nt":
+        completed = subprocess.run(
+            [sys.executable, *child_argv],
+            env=launch.environment,
+            check=False,
+            shell=False,
+        )
+        raise SystemExit(completed.returncode)
 os.execve(sys.executable, [sys.executable, *child_argv], launch.environment)
 '''
 

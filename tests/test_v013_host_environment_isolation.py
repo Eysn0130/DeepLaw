@@ -446,6 +446,15 @@ def test_codex_qualification_shim_delegates_to_production_closed_launcher(
         encoding="utf-8",
     )
     wrapper.chmod(0o700)
+    wrapper_source = wrapper.read_text(encoding="utf-8")
+    assert 'if os.name == "nt":' in wrapper_source
+    assert "subprocess.run(" in wrapper_source
+    assert "shell=False" in wrapper_source
+    assert "raise SystemExit(completed.returncode)" in wrapper_source
+    assert (
+        "os.execve(sys.executable, [sys.executable, *child_argv], launch.environment)"
+        in wrapper_source
+    )
     vault = output_dir / "vault"
     initialize_knowledge_vault(vault, name="qualification-shim", scope="project")
     initialize_autonomous_core(vault)

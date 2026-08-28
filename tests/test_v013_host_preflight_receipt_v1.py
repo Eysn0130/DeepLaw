@@ -69,6 +69,17 @@ def _write_identity(path: Path, value: dict[str, object]) -> bytes:
     return raw
 
 
+def _harden_windows_broker_fixture(path: Path) -> None:
+    if os.name != "nt":
+        return
+    from deeplaw.windows_acl import harden_windows_private_file
+
+    hardening = harden_windows_private_file(path)
+    assert hardening["platform"] == "nt"
+    assert hardening["applied"] is True
+    assert hardening["verification"]["permissions_verified"] is True
+
+
 def _versioned_test_executable(
     tmp_path: Path,
     name: str,
@@ -155,6 +166,7 @@ def test_broker_hash_is_exact_bytes_and_survives_source_deletion(tmp_path: Path)
     broker = tmp_path / "owner-broker"
     broker.write_bytes(b"owner-only broker bytes")
     broker.chmod(0o700)
+    _harden_windows_broker_fixture(broker)
     repository = tmp_path / "repository"
     repository.mkdir()
     observed = receipt.inspect_broker_source(broker, repository=repository)
@@ -179,6 +191,7 @@ def test_broker_change_during_exact_byte_read_fails_closed(
     broker = tmp_path / "owner-broker"
     broker.write_bytes(b"owner-only broker bytes")
     broker.chmod(0o700)
+    _harden_windows_broker_fixture(broker)
     repository = tmp_path / "repository"
     repository.mkdir()
 
@@ -214,6 +227,7 @@ def test_expected_broker_hash_mismatch_is_typed(tmp_path: Path) -> None:
     broker = tmp_path / "broker"
     broker.write_bytes(b"broker")
     broker.chmod(0o700)
+    _harden_windows_broker_fixture(broker)
     observed = receipt.inspect_broker_source(
         broker,
         repository=tmp_path / "repo",
@@ -261,6 +275,7 @@ def test_opencode_broker_missing_not_regular_and_hash_mismatch_are_closed(
     broker = tmp_path / "broker"
     broker.write_bytes(b"broker")
     broker.chmod(0o700)
+    _harden_windows_broker_fixture(broker)
     with pytest.raises(opencode.QualificationError) as hash_error:
         opencode._validate_owner_broker_launcher(
             broker,

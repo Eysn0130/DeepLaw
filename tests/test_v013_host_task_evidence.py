@@ -957,6 +957,13 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
         )
     broker.write_bytes(original_broker_raw)
     broker.chmod(0o700)
+    if os.name == "nt":
+        from deeplaw.windows_acl import harden_windows_private_file
+
+        hardening = harden_windows_private_file(broker)
+        assert hardening["platform"] == "nt"
+        assert hardening["applied"] is True
+        assert hardening["verification"]["permissions_verified"] is True
     replacement = host_root / "owner-broker-replacement"
     replacement.write_bytes(replacement_broker_raw)
     replacement.chmod(0o700)
