@@ -50,6 +50,7 @@ def _validate_contract(name: str, value: dict[str, object]) -> None:
 
 def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutation(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = _vault(tmp_path)
     with AutonomousKnowledgeStore(root, read_only=False) as store:
@@ -78,6 +79,18 @@ def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutat
         )
         store.rebuild_derived()
         before_head = store.audit_head
+        canonical_reads: dict[str, int] = {}
+        original_get_current = store.get_current
+
+        def counted_get_current(
+            knowledge_id: str, *, include_inactive: bool = False
+        ) -> dict[str, object]:
+            canonical_reads[knowledge_id] = canonical_reads.get(knowledge_id, 0) + 1
+            return original_get_current(
+                knowledge_id, include_inactive=include_inactive
+            )
+
+        monkeypatch.setattr(store, "get_current", counted_get_current)
 
         result = store.recall(
             "这两个日志政策有什么不同，哪里互相冲突?",
@@ -93,6 +106,8 @@ def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutat
         )
         assert result["query_plan"]["query_expansion_term_count"] >= 3
         assert store.audit_head == before_head
+        assert canonical_reads[target["knowledge_id"]] == 1
+        assert all(read_count <= 1 for read_count in canonical_reads.values())
         _validate_contract(
             "autonomous-query-plan.v1.schema.json", result["query_plan"]
         )
