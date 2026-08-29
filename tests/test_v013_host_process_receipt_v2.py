@@ -1041,8 +1041,11 @@ def test_production_seams_reject_unattested_codex_connection_and_synthetic_openc
     taskkill = str(tmp_path / "System32" / "taskkill.exe")
     calls: list[tuple[list[str], dict[str, Any]]] = []
 
-    def run_taskkill(argv: list[str], **kwargs: Any) -> None:
+    def run_taskkill(
+        argv: list[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[bytes]:
         calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, returncode=0)
 
     with monkeypatch.context() as windows:
         windows.setattr(codex_client.os, "name", "nt")
@@ -1073,7 +1076,7 @@ def test_production_seams_reject_unattested_codex_connection_and_synthetic_openc
             "WINDIR",
         }
         process = Process()
-        codex_client._terminate_broker_process_group(process)  # type: ignore[arg-type]
+        assert codex_client._terminate_broker_process_group(process) is True  # type: ignore[arg-type]
         assert calls[0][0] == [taskkill, "/F", "/T", "/PID", "4312"]
         assert calls[0][1]["shell"] is False
         assert calls[0][1]["stdin"] is subprocess.DEVNULL
@@ -1109,3 +1112,101 @@ def test_production_seams_reject_unattested_codex_connection_and_synthetic_openc
             match="Windows system root is unavailable",
         ):
             codex_client._closed_broker_environment()
+
+
+@pytest.mark.parametrize("failure", ("nonzero", "exception", "timeout"))
+def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    class Process:
+        pid = 4313
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def kill(self) -> None:
+            self.killed = True
+
+    taskkill = str(tmp_path / "System32" / "taskkill.exe")
+    calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def run_taskkill(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        calls.append((argv, kwargs))
+        if failure == "exception":
+            raise OSError("synthetic taskkill failure")
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(argv, timeout=kwargs["timeout"])
+        return subprocess.CompletedProcess(argv, returncode=1)
+
+    with monkeypatch.context() as windows:
+        windows.setattr(codex_client.os, "name", "nt")
+        windows.setattr(
+            codex_client,
+            "_windows_taskkill_executable",
+            lambda: taskkill,
+        )
+        windows.setattr(codex_client.subprocess, "run", run_taskkill)
+        windows.setenv("SYSTEMROOT", r"C:\Windows")
+        process = Process()
+        confirmed = codex_client._terminate_broker_process_group(process)  # type: ignore[arg-type]
+
+    assert confirmed is False
+    assert process.killed is True
+    assert calls[0][0] == [taskkill, "/F", "/T", "/PID", "4313"]
+
+
+def test_codex_close_fail_closed_after_unconfirmed_windows_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class Stream:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    class Process:
+        pid = 4314
+
+        def __init__(self) -> None:
+            self.stdin = Stream()
+            self.stdout = Stream()
+            self.stderr = Stream()
+
+        def poll(self) -> None:
+            return None
+
+        def wait(self, *, timeout: float) -> None:
+            del timeout
+
+    process = Process()
+    client = CodexAppServerClient(
+        [sys.executable, "-c", "pass"],
+        environment={},
+        cwd=tmp_path,
+    )
+    client._process = process  # type: ignore[assignment]
+    with monkeypatch.context() as windows:
+        windows.setattr(codex_client.os, "name", "nt")
+        windows.setattr(
+            codex_client,
+            "_terminate_broker_process_group",
+            lambda _process: False,
+        )
+        with pytest.raises(
+            codex_client.CodexOwnerExternalBrokerError,
+            match="process-tree cleanup could not be confirmed",
+        ) as failure:
+            client.close()
+
+    assert client._process is None
+    assert client._closed is True
+    assert process.stdin.closed is True
+    assert process.stdout.closed is True
+    assert process.stderr.closed is True
+    rendered = str(failure.value)
+    assert str(tmp_path) not in rendered
+    assert "4314" not in rendered

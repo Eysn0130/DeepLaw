@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import stat
+import subprocess
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -1319,6 +1320,168 @@ def test_process_group_options_fail_closed_for_platform() -> None:
         assert options["start_new_session"] is True
 
 
+def test_windows_process_group_options_require_bound_taskkill(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    system_root = tmp_path / "Windows"
+    taskkill = system_root / "System32" / "taskkill.exe"
+    taskkill.parent.mkdir(parents=True)
+    taskkill.write_bytes(b"taskkill")
+
+    with monkeypatch.context() as windows:
+        windows.setattr(runner.os, "name", "nt")
+        windows.setattr(
+            runner.subprocess,
+            "CREATE_NEW_PROCESS_GROUP",
+            512,
+            raising=False,
+        )
+        windows.setenv("SYSTEMROOT", str(system_root))
+        assert runner.process_creation_options() == {"creationflags": 512}
+        assert runner._windows_taskkill_executable() == str(taskkill)
+
+        windows.delenv("SYSTEMROOT", raising=False)
+        windows.delenv("WINDIR", raising=False)
+        with pytest.raises(
+            runner.QualificationError,
+            match="process-group isolation is unavailable",
+        ):
+            runner.process_creation_options()
+
+
+@pytest.mark.parametrize("failure", ("nonzero", "exception", "timeout"))
+def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    class Process:
+        pid = 4315
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def poll(self) -> None:
+            return None
+
+        def kill(self) -> None:
+            self.killed = True
+
+    system_root = tmp_path / "Windows"
+    taskkill = system_root / "System32" / "taskkill.exe"
+    taskkill.parent.mkdir(parents=True)
+    taskkill.write_bytes(b"taskkill")
+    calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def run_taskkill(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        calls.append((argv, kwargs))
+        if failure == "exception":
+            raise OSError("synthetic taskkill failure")
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(argv, timeout=kwargs["timeout"])
+        return subprocess.CompletedProcess(argv, returncode=1)
+
+    with monkeypatch.context() as windows:
+        windows.setattr(runner.os, "name", "nt")
+        windows.setenv("SYSTEMROOT", str(system_root))
+        windows.setattr(runner.subprocess, "run", run_taskkill)
+        process = Process()
+        confirmed = runner._terminate_process_tree(process)  # type: ignore[arg-type]
+
+    assert confirmed is False
+    assert process.killed is True
+    assert calls[0][0] == [str(taskkill), "/F", "/T", "/PID", "4315"]
+    assert calls[0][1]["timeout"] == 5
+    assert calls[0][1]["env"] == {
+        "PATH": os.defpath,
+        "SYSTEMROOT": str(system_root),
+        "WINDIR": str(system_root),
+    }
+
+
+def test_bounded_process_timeout_does_not_use_unbounded_communicate(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FakeProcess:
+        pid = 4316
+        returncode = -9
+
+        def __init__(self) -> None:
+            self.timeouts: list[float | None] = []
+
+        def communicate(
+            self, *, input: bytes = b"", timeout: float | None = None
+        ) -> tuple[bytes, bytes]:
+            del input
+            self.timeouts.append(timeout)
+            if timeout is not None and len(self.timeouts) == 1:
+                raise runner.subprocess.TimeoutExpired("fake", timeout)
+            if timeout is None:
+                raise AssertionError("unbounded communicate")
+            return b"", b""
+
+        def poll(self) -> None:
+            return None
+
+    fake = FakeProcess()
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *args, **kwargs: fake)
+    monkeypatch.setattr(runner, "_terminate_process_tree", lambda _process: True)
+    result = runner._run_bounded_process(
+        ["fake-opencode"],
+        environment={"PATH": os.defpath},
+        cwd=tmp_path,
+        timeout=0.01,
+    )
+    assert result["timed_out"] is True
+    assert fake.timeouts[0] == 0.01
+    assert fake.timeouts[1] is not None
+
+
+def test_local_server_stop_does_not_use_unbounded_communicate(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FakeProcess:
+        pid = 4317
+
+        def __init__(self) -> None:
+            self.timeouts: list[float | None] = []
+            self.killed = False
+
+        def poll(self) -> None:
+            return None
+
+        def communicate(
+            self, *, timeout: float | None = None
+        ) -> tuple[bytes, bytes]:
+            self.timeouts.append(timeout)
+            if len(self.timeouts) == 1:
+                raise runner.subprocess.TimeoutExpired("fake", timeout)
+            if timeout is None:
+                raise AssertionError("unbounded communicate")
+            return b"", b""
+
+        def kill(self) -> None:
+            self.killed = True
+
+    fake = FakeProcess()
+    server = runner._OpenCodeLocalServer(
+        binary=tmp_path / "opencode",
+        environment={},
+        cwd=tmp_path,
+        root=tmp_path,
+    )
+    server.process = fake  # type: ignore[assignment]
+    monkeypatch.setattr(runner, "_terminate_process_tree", lambda _process: True)
+    server.stop()
+    assert fake.killed is True
+    assert fake.timeouts[0] == 10
+    assert fake.timeouts[1] is not None
+    assert server.process is None
+
+
 def test_owner_broker_launcher_must_be_owner_only_and_process_separated(
     tmp_path: Path,
 ) -> None:
@@ -1507,7 +1670,7 @@ def test_timeout_terminates_the_created_process_group(
             self, *, input: bytes = b"", timeout: float | None = None
         ) -> tuple[bytes, bytes]:
             del input
-            if timeout is not None:
+            if timeout is not None and timeout <= 0.01:
                 raise runner.subprocess.TimeoutExpired("fake", timeout)
             return b"", b""
 
@@ -1517,7 +1680,11 @@ def test_timeout_terminates_the_created_process_group(
     fake = FakeProcess()
     killed: list[object] = []
     monkeypatch.setattr(runner.subprocess, "Popen", lambda *args, **kwargs: fake)
-    monkeypatch.setattr(runner, "_terminate_process_tree", lambda process: killed.append(process))
+    monkeypatch.setattr(
+        runner,
+        "_terminate_process_tree",
+        lambda process: killed.append(process) or True,
+    )
     result = runner._run_bounded_process(
         ["fake-opencode"], environment={"PATH": os.defpath}, cwd=tmp_path, timeout=0.01
     )

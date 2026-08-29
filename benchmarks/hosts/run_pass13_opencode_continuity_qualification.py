@@ -90,6 +90,11 @@ _MAX_BROKER_CONTROL_BYTES = 256 * 1024
 _BROKER_CONTROL_READ_CHUNK_BYTES = 16 * 1024
 _BROKER_SOURCE_MAX_BYTES = 256 * 1024
 _OPENCODE_PACKAGE_MAX_BYTES = 128 * 1024 * 1024
+_PROCESS_TREE_CLEANUP_UNCONFIRMED = (
+    "OpenCode process-tree cleanup could not be confirmed"
+)
+_PROCESS_TERMINATION_WAIT_SECONDS = 2
+_PROCESS_KILL_WAIT_SECONDS = 1
 OPENCODE_BROKER_CONTROL_SCHEMA_VERSION = (
     "deeplaw.opencode-owner-external-broker-control/v2"
 )
@@ -682,37 +687,88 @@ os.execve({str(deeplaw_executable)!r}, [
     del node_binary
 
 
+def _windows_taskkill_executable() -> str | None:
+    """Return the absolute native process-tree terminator, if available."""
+
+    if os.name != "nt":
+        return None
+    system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+    if not system_root:
+        return None
+    selected = os.path.join(system_root, "System32", "taskkill.exe")
+    return selected if os.path.isabs(selected) and os.path.isfile(selected) else None
+
+
+def _windows_child_environment(environment: Mapping[str, str]) -> dict[str, str]:
+    """Project the Windows system root into a closed child environment."""
+
+    projected = dict(environment)
+    if os.name != "nt":
+        return projected
+    system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+    if not system_root or not os.path.isabs(system_root):
+        _control_fail("OpenCode Windows system root is unavailable")
+    projected["SYSTEMROOT"] = system_root
+    projected["WINDIR"] = system_root
+    return projected
+
+
 def process_creation_options() -> dict[str, Any]:
     if os.name == "nt":
-        return {"creationflags": int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))}
-    return {"start_new_session": True}
+        creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        if (
+            type(creation_flags) is not int
+            or creation_flags <= 0
+            or _windows_taskkill_executable() is None
+        ):
+            _control_fail("OpenCode process-group isolation is unavailable")
+        return {"creationflags": creation_flags}
+    if os.name == "posix":
+        if not callable(getattr(os, "killpg", None)) or not hasattr(signal, "SIGKILL"):
+            _control_fail("OpenCode process-group isolation is unavailable")
+        return {"start_new_session": True}
+    _control_fail("OpenCode process-group isolation is unavailable")
 
 
-def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
-    """Terminate the process group we created, failing closed if unavailable."""
+def _terminate_process_tree(process: subprocess.Popen[bytes]) -> bool:
+    """Terminate the created process group and report confirmed cleanup."""
 
     if process.poll() is not None:
-        return
+        return True
     if os.name == "nt":
-        taskkill = shutil.which("taskkill")
-        if taskkill is None:
-            process.kill()
-            return
-        result = subprocess.run(
-            [taskkill, "/F", "/T", "/PID", str(process.pid)],
-            env={"PATH": os.defpath},
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        if result.returncode != 0:
-            process.kill()
-        return
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except (OSError, ProcessLookupError):
+        taskkill = _windows_taskkill_executable()
+        if taskkill is not None:
+            try:
+                result = subprocess.run(
+                    [taskkill, "/F", "/T", "/PID", str(process.pid)],
+                    env=_windows_child_environment({"PATH": os.defpath}),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    shell=False,
+                    timeout=5,
+                )
+            except (OSError, subprocess.SubprocessError, QualificationError):
+                result = None
+            if result is not None and result.returncode == 0:
+                with suppress(OSError):
+                    process.kill()
+                return True
+    elif os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return True
+        except OSError:
+            pass
+        else:
+            with suppress(OSError):
+                process.kill()
+            return True
+    with suppress(OSError):
         process.kill()
+    return False
 
 
 def _run_bounded_process(
@@ -729,22 +785,41 @@ def _run_bounded_process(
     process = subprocess.Popen(
         [str(item) for item in argv],
         cwd=str(cwd),
-        env=dict(environment),
+        env=_windows_child_environment(environment),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         **process_creation_options(),
     )
     timed_out = False
+    cleanup_confirmed = True
     try:
         stdout, stderr = process.communicate(input=input_bytes, timeout=timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
-        _terminate_process_tree(process)
-        stdout, stderr = process.communicate()
+        cleanup_confirmed = _terminate_process_tree(process)
+        try:
+            stdout, stderr = process.communicate(
+                timeout=_PROCESS_TERMINATION_WAIT_SECONDS
+            )
+        except subprocess.TimeoutExpired:
+            cleanup_confirmed = False
+            with suppress(OSError):
+                process.kill()
+            try:
+                stdout, stderr = process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
+            except (OSError, subprocess.SubprocessError, ValueError):
+                cleanup_confirmed = False
+                stdout, stderr = b"", b""
+        except (OSError, subprocess.SubprocessError, ValueError):
+            cleanup_confirmed = False
+            stdout, stderr = b"", b""
+    if not cleanup_confirmed:
+        _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
     elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
     if len(stdout) > MAX_OUTPUT_BYTES or len(stderr) > MAX_OUTPUT_BYTES:
-        _terminate_process_tree(process)
+        if not _terminate_process_tree(process):
+            _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
         return {
             "returncode": process.returncode,
             "stdout": b"",
@@ -3426,7 +3501,7 @@ class _OpenCodeLocalServer:
                 str(self.port),
             ],
             cwd=str(self.cwd),
-            env=dict(self.environment),
+            env=_windows_child_environment(self.environment),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -3512,13 +3587,22 @@ class _OpenCodeLocalServer:
         process = self.process
         if process is None:
             return
-        _terminate_process_tree(process)
+        cleanup_confirmed = _terminate_process_tree(process)
         try:
             process.communicate(timeout=10)
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate()
-        self.process = None
+            with suppress(OSError):
+                process.kill()
+            try:
+                process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
+            except (OSError, subprocess.SubprocessError, ValueError):
+                cleanup_confirmed = False
+        except (OSError, subprocess.SubprocessError, ValueError):
+            cleanup_confirmed = False
+        finally:
+            self.process = None
+        if not cleanup_confirmed:
+            _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
 
 
 def _bind_public_host_session(

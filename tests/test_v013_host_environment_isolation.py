@@ -522,6 +522,81 @@ def test_codex_qualification_shim_delegates_to_production_closed_launcher(
     )
 
 
+def test_codex_qualification_binds_windows_installed_wheel_layout_and_exe_argv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output_dir = tmp_path / "qualification"
+    output_dir.mkdir()
+    scripts = tmp_path / "runtime" / "Scripts"
+    scripts.mkdir(parents=True)
+    runtime_python = scripts / "python.exe"
+    runtime_executable = scripts / "deeplaw.exe"
+    runtime_python.write_bytes(b"python")
+    runtime_executable.write_bytes(b"deeplaw")
+
+    mismatched_scripts = tmp_path / "mismatched-runtime" / "Scripts"
+    mismatched_scripts.mkdir(parents=True)
+    mismatched_executable = mismatched_scripts / "deeplaw.exe"
+    mismatched_executable.write_bytes(b"deeplaw")
+    (mismatched_scripts / "python").write_bytes(b"python")
+    with pytest.raises(ValueError, match="adjacent Python interpreter"):
+        codex_qualification._prepare_runtime(
+            output_dir=tmp_path / "mismatched-output",
+            deeplaw_executable=mismatched_executable,
+        )
+
+    mixed_root = tmp_path / "mixed-runtime"
+    mixed_scripts = mixed_root / "Scripts"
+    mixed_bin = mixed_root / "bin"
+    mixed_scripts.mkdir(parents=True)
+    mixed_bin.mkdir()
+    mixed_executable = mixed_scripts / "deeplaw.exe"
+    mixed_executable.write_bytes(b"deeplaw")
+    (mixed_scripts / "python.exe").write_bytes(b"python")
+    (mixed_bin / "python").write_bytes(b"python")
+    with pytest.raises(ValueError, match="mixed platform layouts"):
+        codex_qualification._prepare_runtime(
+            output_dir=tmp_path / "mixed-output",
+            deeplaw_executable=mixed_executable,
+        )
+
+    wrapper, _ = codex_qualification._prepare_runtime(
+        output_dir=output_dir,
+        deeplaw_executable=runtime_executable,
+    )
+
+    assert wrapper == output_dir / "deeplaw-closed-mcp"
+    source = wrapper.read_text(encoding="utf-8")
+    assert "child_argv = ['runtime/Scripts/deeplaw.exe', *arguments]" in source
+    assert "[child_argv[0], *arguments]," in source
+    assert "[sys.executable, *child_argv]" in source
+
+    receipt = {
+        "schema_version": "deeplaw.closed-mcp-environment-receipt/v1",
+        "closed": True,
+        "home_isolated": True,
+        "blocked_names_present": [],
+        "environment_names": ["HOME", "PATH", "XDG_CONFIG_HOME"],
+        "child_argv": [
+            "runtime/Scripts/deeplaw.exe",
+            "knowledge",
+            "mcp",
+            "--closed-environment",
+            "--stdio",
+            "--expected-vault-id",
+            "vault_" + "0" * 24,
+        ],
+    }
+    receipt_path = output_dir / "mcp-environment-receipt.json"
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    monkeypatch.setattr(codex_qualification.os, "name", "nt")
+    assert codex_qualification._environment_receipt(receipt_path) == receipt
+
+    receipt["child_argv"][0] = "runtime/bin/deeplaw"
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    assert codex_qualification._environment_receipt(receipt_path) is None
+
+
 def test_codex_qualification_fixture_and_event_receipts_are_bounded(
     tmp_path: Path,
 ) -> None:
