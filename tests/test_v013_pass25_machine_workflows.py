@@ -146,6 +146,52 @@ def test_candidate_full_runs_the_exact_10k_public_path_once() -> None:
     assert "v013-scale-qualification-v9.json" in aggregate
 
 
+def test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate() -> None:
+    workflow = _workflow("candidate-full.yml")
+    parsed = yaml.safe_load(workflow)
+    assert isinstance(parsed, dict)
+    jobs = parsed.get("jobs")
+    assert isinstance(jobs, dict)
+    gate = jobs.get("semantic_scale_ten_thousand")
+    assert isinstance(gate, dict)
+    assert gate["needs"] == "scale_ten_thousand"
+    assert gate["runs-on"] == "ubuntu-latest"
+    assert isinstance(gate["timeout-minutes"], int)
+    assert 1 <= gate["timeout-minutes"] <= 10
+
+    block = workflow.split("\n  semantic_scale_ten_thousand:\n", maxsplit=1)[1].split(
+        "\n  windows-calibration-shards:\n", maxsplit=1
+    )[0]
+    for required in (
+        "actions/download-artifact@",
+        "name: scale-10000-evidence",
+        "import json",
+        "from pathlib import Path",
+        "json.load",
+        'report.get("schema_version")',
+        '"deeplaw.v013-scale-qualification-report/v9"',
+        'report.get("status")',
+        'report.get("release_gate_passed") is not True',
+        'report.get("hard_failures") != []',
+        "raise SystemExit",
+    ):
+        assert required in block
+    assert "continue-on-error" not in block
+    assert "print(" not in block
+    assert "metrics" not in block.casefold()
+    assert "uv run" not in block
+    assert "benchmarks" not in block
+
+    aggregate = jobs["aggregate-raw-evidence"]
+    assert isinstance(aggregate, dict)
+    assert "semantic_scale_ten_thousand" not in aggregate["needs"]
+    aggregate_block = workflow.split("\n  aggregate-raw-evidence:\n", maxsplit=1)[1]
+    assert "needs['semantic_scale_ten_thousand'].result" not in aggregate_block
+    assert "needs['scale_ten_thousand'].result == 'success'" in aggregate_block
+    assert "scale-10000-evidence" in aggregate_block
+    assert "v013-scale-qualification-v9.json" in aggregate_block
+
+
 def test_external_dispatch_requires_only_candidate_run_id() -> None:
     workflow = _workflow("external-qualification-evidence.yml")
     trigger = _trigger(workflow)

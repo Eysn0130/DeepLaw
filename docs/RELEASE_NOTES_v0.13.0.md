@@ -143,3 +143,15 @@ engineering evidence only: the frozen qualification record still has all 13 Kern
 literal `not_executed`, with `release_ready=false`. The subsequent legacy-CI lifecycle correction
 changes the candidate bytes, so run #12 is retained historical evidence and a fresh Candidate Full
 run must bind the resulting commit/tree before Kernel qualification can proceed.
+
+Candidate-v5 Candidate Full run #13 (`33229318619`, exact head
+`3fa70018eb29a8eafe351eb67bf77f4b52a8dbe7`, tree
+`529a3c7789ea5f5ba8581904ea09a90e3b6a4920`) is consumed failed evidence, not a pass. All 22 jobs
+reported success, but the retained 10k report records `release_gate_passed=false` with hard failures
+`query_p95_exceeded` and `context_p95_exceeded`: the measured p95 values were 2,083.576875 ms and
+2,085.145579 ms against the frozen 2,000 ms ceilings. The Candidate Full workflow now enforces the
+semantic result of that report in a separate bounded job without preventing raw failed-evidence
+aggregation. Alias discovery now applies containment before its bounded candidate window, and the
+dense scan removes repeated query-norm and temporary-vector work without changing its governed
+filters or result ordering. These changes invalidate run #13 and require a fresh exact Candidate
+Full run; their focused tests and local synthetic measurements are not a scale-qualification pass.

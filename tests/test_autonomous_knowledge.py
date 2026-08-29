@@ -1106,6 +1106,56 @@ def test_identity_lookup_keeps_exact_ambiguity_when_result_limit_is_one(
         assert result["alias_scan_truncated"] is False
 
 
+def test_recall_alias_discovery_filters_candidates_before_resource_bound(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = _grant(store)
+        target = store.remember(
+            grant_id=grant_id,
+            idempotency_key="alias-discovery-resource-target",
+            title="Target knowledge",
+            body="The target is discoverable through its short identity alias.",
+            aliases=["needle target"],
+            tags=["alias-target"],
+            confirm_no_case_data=True,
+        )
+        for object_index in range(32):
+            store.remember(
+                grant_id=grant_id,
+                idempotency_key=f"alias-discovery-resource-noise-{object_index:02d}",
+                title=f"Noise object {object_index:02d}",
+                body=(
+                    f"Noise object {object_index:02d} carries unrelated identity aliases."
+                ),
+                aliases=[
+                    (
+                        f"Unrelated Alias {object_index:02d} {alias_index:02d} "
+                        "with padding"
+                    )
+                    for alias_index in range(64)
+                ],
+                tags=["alias-target"],
+                confirm_no_case_data=True,
+            )
+
+        assert store.verify()["valid"] is True
+
+        result = store.recall(
+            "needle target",
+            retrieval_mode="exact",
+            graph_hops=0,
+            kinds=("memory",),
+            required_tags=("alias-target",),
+        )
+
+        assert [item["knowledge_id"] for item in result["results"]] == [
+            target["knowledge_id"]
+        ]
+        assert not any("identity alias discovery" in gap for gap in result["gaps"])
+
+
 def test_retrieval_filters_governance_before_lexical_top_k(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

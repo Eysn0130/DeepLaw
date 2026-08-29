@@ -248,6 +248,54 @@ jobs:
           retention-days: 90
           path: ${{ runner.temp }}/scale-10000/v013-scale-qualification-v9.json
 
+  semantic_scale_ten_thousand:
+    name: Enforce semantic 10k scale gate
+    needs: scale_ten_thousand
+    if: ${{ needs.scale_ten_thousand.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download exact 10k scale evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: scale-10000-evidence
+          path: ${{ runner.temp }}/scale-10000-evidence
+
+      - name: Enforce semantic 10k release gate
+        shell: bash
+        env:
+          EVIDENCE_ROOT: ${{ runner.temp }}/scale-10000-evidence
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["EVIDENCE_ROOT"])
+          evidence = tuple(root.rglob("v013-scale-qualification-v9.json"))
+          if len(evidence) != 1:
+              raise SystemExit("semantic 10k gate: evidence cardinality invalid")
+          try:
+              with evidence[0].open("r", encoding="utf-8") as stream:
+                  report = json.load(stream)
+          except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+              raise SystemExit(
+                  "semantic 10k gate: evidence unreadable "
+                  f"({type(error).__name__})"
+              ) from None
+          if not isinstance(report, dict):
+              raise SystemExit("semantic 10k gate: report shape invalid")
+          if report.get("schema_version") != "deeplaw.v013-scale-qualification-report/v9":
+              raise SystemExit("semantic 10k gate: schema version mismatch")
+          if report.get("status") != "executed":
+              raise SystemExit("semantic 10k gate: execution status is not executed")
+          if report.get("release_gate_passed") is not True:
+              raise SystemExit("semantic 10k gate: release gate is not passed")
+          if report.get("hard_failures") != []:
+              raise SystemExit("semantic 10k gate: hard failures are present")
+          PY
+
   windows-calibration-shards:
     name: Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3
     needs: verified-artifact

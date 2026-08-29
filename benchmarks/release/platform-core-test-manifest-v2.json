@@ -398,6 +398,13 @@
         {
           "junit": {
             "classname": "tests.test_autonomous_knowledge",
+            "name": "test_recall_alias_discovery_filters_candidates_before_resource_bound"
+          },
+          "node_id": "tests/test_autonomous_knowledge.py::test_recall_alias_discovery_filters_candidates_before_resource_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_autonomous_knowledge",
             "name": "test_retrieval_filters_governance_before_lexical_top_k"
           },
           "node_id": "tests/test_autonomous_knowledge.py::test_retrieval_filters_governance_before_lexical_top_k"
@@ -7957,6 +7964,20 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_dense_search_scan",
+            "name": "test_dense_search_matches_vector_cosine_reference_and_filters"
+          },
+          "node_id": "tests/test_v013_dense_search_scan.py::test_dense_search_matches_vector_cosine_reference_and_filters"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_dense_search_scan",
+            "name": "test_dense_search_rejects_direct_vector_file_tamper"
+          },
+          "node_id": "tests/test_v013_dense_search_scan.py::test_dense_search_rejects_direct_vector_file_tamper"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_evidence_wiki_benchmark",
             "name": "test_candidate_exercises_source_to_wiki_chain_without_payload_leak"
           },
@@ -13523,6 +13544,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
             "name": "test_commercial_qualification_dispatch_and_assembly_use_kernel_v9"
           },
           "node_id": "tests/test_v013_pass25_machine_workflows.py::test_commercial_qualification_dispatch_and_assembly_use_kernel_v9"
@@ -17063,9 +17091,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2416,
+      "count": 2420,
       "selection": "not qualification and not windows_native",
-      "sha256": "b21d3c972007489d0760d1bfc514752fbdd733ea555d93d9402a4fbbba84609f"
+      "sha256": "fe05b58065d427ba3987b275cbe7dfa1601d6723d182117e17135e9918865628"
     },
     "windows": {
       "additional_cases": [
@@ -17098,13 +17126,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2420,
+      "count": 2424,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "99780e35183b145d217cf1011f127f1a97de2ae8758d1b9a521332a61e075575"
+      "sha256": "f9c36df24a172dffe705696d5f72d16c7320956c742c3d97e6cdc235233d9915"
     }
   },
-  "manifest_sha256": "5fdb113fa25b8c85111c10dc9ef9621ee6830f38dca17ca6e1c2cbc2ec0834f1",
+  "manifest_sha256": "9ae0bc86feca3f8b740626fb5a67a22d9e32054a2c5deb48e7b98d6390a955ea",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

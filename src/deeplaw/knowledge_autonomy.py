@@ -9667,6 +9667,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if exact_id is None and as_of is None and normalized_query:
             alias_placeholders = ",".join("?" for _ in admitted_sensitivities)
             alias_filters = [
+                "LENGTH(knowledge_aliases_v4.alias_key) >= 3",
+                "instr(?, knowledge_aliases_v4.alias_key) > 0",
                 "knowledge_aliases_v4.retired_at IS NULL",
                 "knowledge_aliases_v4.revision_id = knowledge_revisions_v3.revision_id",
                 "knowledge_revisions_v3.lifecycle = 'active'",
@@ -9680,6 +9682,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 "OR knowledge_revisions_v3.expires_at > ?)",
             ]
             alias_parameters: list[Any] = [
+                normalized_query,
                 scope,
                 *admitted_sensitivities,
                 reference_time,
