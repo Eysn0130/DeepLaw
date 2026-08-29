@@ -1,9 +1,9 @@
 # DeepLaw v0.13.0 release notes
 
-Status: **release candidate contract; not yet released**. The construction branch remains at
-package `0.12.0` until its integration tree passes CI. These notes become release facts only when
-the exact `0.13.0` wheel/sdist, Gate v9 receipts, tag, public GitHub Release, and anonymous
-redownload verification are all bound by the final release manifest.
+Status: **release candidate contract; not yet released**. The qualification branch carries package
+`0.13.0`, but that version is not a release claim. These notes become release facts only when the
+exact `0.13.0` wheel/sdist, Gate v9 receipts, tag, public GitHub Release, and anonymous redownload
+verification are all bound by the final release manifest.
 
 ## Kernel release scope
 
@@ -130,3 +130,16 @@ total. Selected files, file hashes, duration weights, and their digests were ide
 evidence aggregate was therefore skipped/`not_executed`. The manifest producer now uses
 `math.fsum` for that information field without weakening strict manifest equality; a fresh
 Candidate Full run is required.
+
+Candidate-v5 Candidate Full run #12 (`33209378256`, exact head
+`12ec2bc66d8632d2ad5f09182f11f7ecc65d3378`, tree
+`e0f29884d925277c4b3260bb5f851dba78759a4d`) completed all 22 jobs successfully. Its raw-evidence
+bundle contains 46 inventoried files whose sizes and SHA-256 digests were independently checked,
+including byte-identical copies of the separately downloaded wheel, sdist, and exact-wheel
+receipt. The exact-wheel receipt records its bounded public journey as passed. Separately, the 10k
+report records `release_gate_passed=true` with exact full, incremental, and no-op equivalence, and
+the Linux, macOS, and Windows Candidate Full lanes completed. This establishes exact Candidate Full
+engineering evidence only: the frozen qualification record still has all 13 Kernel Core gates
+literal `not_executed`, with `release_ready=false`. The subsequent legacy-CI lifecycle correction
+changes the candidate bytes, so run #12 is retained historical evidence and a fresh Candidate Full
+run must bind the resulting commit/tree before Kernel qualification can proceed.

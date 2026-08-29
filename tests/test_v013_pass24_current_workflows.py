@@ -70,6 +70,26 @@ def test_external_qualification_consumes_candidate_full_and_emits_typed_evidence
     assert "hatch build" not in workflow
 
 
+def test_legacy_semantic_evidence_is_manual_only_and_stays_pre_v013() -> None:
+    workflow = _workflow("semantic-evidence.yml")
+    parsed = yaml.safe_load(workflow)
+    triggers = parsed.get("on", parsed.get(True))
+
+    assert set(triggers) == {"workflow_dispatch"}
+    inputs = triggers["workflow_dispatch"]["inputs"]
+    assert inputs["mode"]["type"] == "choice"
+    assert inputs["mode"]["options"] == ["deterministic_review", "package_consensus"]
+    assert inputs["mode"]["default"] == "deterministic_review"
+    assert inputs["release_ref"]["required"] is True
+    assert inputs["evidence_ref"]["required"] is False
+    assert "Legacy pre-v0.13 Semantic Living Wiki evidence" in parsed["name"]
+    assert "Gate v6" not in workflow
+    guard = 'if tuple(map(int, version.split("."))) >= (0, 13, 0):'
+    rejection = "v0.13 must use the active qualification and Gate v9 path"
+    assert workflow.count(guard) == 2
+    assert workflow.count(rejection) == 2
+
+
 def test_commercial_qualification_recomputes_current_typed_core_gates() -> None:
     workflow = _workflow("commercial-qualification.yml")
 
