@@ -9029,6 +9029,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_host_task_executor",
+            "name": "test_stable_reader_accepts_windows_cross_interface_mode_difference"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_stable_reader_accepts_windows_cross_interface_mode_difference"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
             "name": "test_symlink_and_hardlink_are_rejected"
           },
           "node_id": "tests/test_v013_host_task_executor.py::test_symlink_and_hardlink_are_rejected"
@@ -17364,9 +17371,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2459,
+      "count": 2460,
       "selection": "not qualification and not windows_native",
-      "sha256": "0e5a3ff590f362b6f9553dc74ce5b8d3d751fcc9982886df1dad2381ea2ac9a0"
+      "sha256": "84064c54da71ac5dd4bec84d7c48c3a757a8c446a891890a1b06d395d0a1448e"
     },
     "windows": {
       "additional_cases": [
@@ -17399,13 +17406,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2463,
+      "count": 2464,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "7b5b7c447cfb1b973a1a4eff34a13bd55f1cf6a87bf6bfe134f13dd71eee4160"
+      "sha256": "9a2b2a4748e30d2ee962a3a63c9880fee736b8c792ae862e19acb97d9b9e3852"
     }
   },
-  "manifest_sha256": "33714b75718b6481a44c3b5d78a42e099212413b4f36b4621d3b25fb0e111d5f",
+  "manifest_sha256": "a0deed95be5c1e692bebabe2a3d8a86615bede26c1c50bec67a88ccbd4c4b9d0",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

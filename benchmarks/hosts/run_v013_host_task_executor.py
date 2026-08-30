@@ -173,7 +173,7 @@ def _read_stable_file(path: Path, *, maximum_bytes: int) -> bytes:
     try:
         descriptor = os.open(path, flags)
         fd_before = os.fstat(descriptor)
-        if _stat_signature(fd_before) != _stat_signature(before):
+        if not host_preflight_receipt.portable_file_stat_matches(fd_before, before):
             _fail("Host task staging changed before it was read")
         while total <= maximum_bytes:
             chunk = os.read(descriptor, min(1024 * 1024, maximum_bytes + 1 - total))
@@ -194,8 +194,11 @@ def _read_stable_file(path: Path, *, maximum_bytes: int) -> bytes:
     if (
         len(raw) != before.st_size
         or len(raw) > maximum_bytes
-        or _stat_signature(fd_before) != _stat_signature(fd_after)
-        or _stat_signature(before) != _stat_signature(after)
+        or host_preflight_receipt.stat_mutation_signature(fd_before)
+        != host_preflight_receipt.stat_mutation_signature(fd_after)
+        or host_preflight_receipt.stat_mutation_signature(before)
+        != host_preflight_receipt.stat_mutation_signature(after)
+        or not host_preflight_receipt.portable_file_stat_matches(fd_after, after)
     ):
         _fail("Host task staging changed while it was read")
     return raw

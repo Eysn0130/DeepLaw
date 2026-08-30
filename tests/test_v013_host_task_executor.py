@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -248,6 +249,25 @@ def test_admits_exact_six_slot_tree_transactionally(
     assert executor._inventory(output) == executor._inventory(source)
 
 
+def test_stable_reader_accepts_windows_cross_interface_mode_difference(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.json"
+    source.write_bytes(b'{"safe":true}\n')
+    real_fstat = os.fstat
+
+    def windows_style_fstat(descriptor: int) -> os.stat_result:
+        observed = real_fstat(descriptor)
+        fields = list(observed)
+        fields[0] = observed.st_mode ^ stat.S_IXUSR
+        return os.stat_result(fields)
+
+    monkeypatch.setattr(executor.os, "fstat", windows_style_fstat)
+
+    assert executor._read_stable_file(source, maximum_bytes=1024) == b'{"safe":true}\n'
+
+
 def test_missing_slot_fails_without_output(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -404,6 +424,12 @@ def test_post_rename_fsync_failure_is_reported_as_committed_uncertain(
         raise OSError("injected post-rename fsync failure")
 
     monkeypatch.setattr(executor, "_fsync_promoted_parent", fail_parent_fsync)
+
+    if os.name == "nt":
+        result = executor.admit_host_task_staging(source, output, **_arguments(tmp_path))
+        assert result["status"] == "admitted"
+        assert executor._inventory(output) == executor._inventory(source)
+        return
 
     with pytest.raises(executor.HostTaskPromotionCommittedError):
         executor.admit_host_task_staging(source, output, **_arguments(tmp_path))
