@@ -144,6 +144,12 @@ def _make_source(root: Path) -> None:
                     "native_event_binding": _native(host, task),
                 },
             )
+    if os.name == "nt":
+        from deeplaw.windows_acl import harden_windows_vault
+
+        hardening = harden_windows_vault(root.parent)
+        assert hardening["applied"] is True
+        assert hardening["verification"]["permissions_verified"] is True
 
 
 def _patch_validator_seams(monkeypatch: pytest.MonkeyPatch) -> None:
