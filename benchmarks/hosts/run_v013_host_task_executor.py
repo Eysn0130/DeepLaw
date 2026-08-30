@@ -138,6 +138,84 @@ def _external_directory(
     _fail(f"{label} must be repository-external")
 
 
+def _acl_report_is_verified(
+    report: object,
+    *,
+    schema_version: str,
+    recursive: bool,
+) -> bool:
+    if not isinstance(report, Mapping):
+        return False
+    checked = report.get("files_and_directories_checked")
+    return bool(
+        report.get("schema_version") == schema_version
+        and report.get("platform") == "nt"
+        and report.get("status") == "verified"
+        and report.get("permissions_verified") is True
+        and report.get("scan_complete") is True
+        and type(checked) is int
+        and checked >= 1
+        and (recursive or checked == 1)
+    )
+
+
+def _verify_windows_acl(
+    path: Path,
+    *,
+    recursive: bool,
+    label: str,
+) -> None:
+    if os.name != "nt":
+        return
+    try:
+        from deeplaw.windows_acl import (
+            WINDOWS_ACL_SCHEMA,
+            native_windows_acl_report,
+            native_windows_path_acl_report,
+        )
+
+        report = (
+            native_windows_acl_report(path)
+            if recursive
+            else native_windows_path_acl_report(path)
+        )
+    except Exception as error:
+        raise HostTaskExecutorError(
+            f"{label} native Windows ACL verification failed"
+        ) from error
+    if not _acl_report_is_verified(
+        report,
+        schema_version=WINDOWS_ACL_SCHEMA,
+        recursive=recursive,
+    ):
+        raise HostTaskExecutorError(f"{label} native Windows ACL verification failed")
+
+
+def _harden_windows_staging(path: Path, *, label: str) -> None:
+    if os.name != "nt":
+        return
+    try:
+        from deeplaw.windows_acl import WINDOWS_ACL_SCHEMA, harden_windows_vault
+
+        result = harden_windows_vault(path)
+    except Exception as error:
+        raise HostTaskExecutorError(f"{label} native Windows ACL hardening failed") from error
+    if (
+        not isinstance(result, Mapping)
+        or result.get("schema_version") != "deeplaw.windows-acl-hardening/v1"
+        or result.get("platform") != "nt"
+        or result.get("applied") is not True
+        or type(result.get("item_count")) is not int
+        or result["item_count"] < 1
+        or not _acl_report_is_verified(
+            result.get("verification"),
+            schema_version=WINDOWS_ACL_SCHEMA,
+            recursive=True,
+        )
+    ):
+        raise HostTaskExecutorError(f"{label} native Windows ACL hardening failed")
+
+
 def _output_target(path: Path | str, *, repository: Path) -> tuple[Path, Path]:
     selected = Path(path)
     if not selected.is_absolute():
@@ -149,6 +227,7 @@ def _output_target(path: Path | str, *, repository: Path) -> tuple[Path, Path]:
         repository=repository,
         label="output parent",
     )
+    _verify_windows_acl(parent, recursive=False, label="output parent")
     return parent / selected.name, parent
 
 
@@ -689,6 +768,11 @@ def admit_host_task_staging(
         repository=repository,
         label="Host task source root",
     )
+    _verify_windows_acl(
+        source,
+        recursive=True,
+        label="Host task source root",
+    )
     output, output_parent = _output_target(output_root, repository=repository)
     if source == output_parent or source in output_parent.parents:
         _fail("Host task source and output roots overlap")
@@ -761,12 +845,21 @@ def admit_host_task_staging(
             raise HostTaskExecutorError(
                 "Host task temporary staging hardening failed"
             ) from error
+        _harden_windows_staging(
+            staging,
+            label="Host task temporary staging",
+        )
         _write_snapshot(source_snapshot, staging)
         if _inventory(staging) != {
             relative: (len(raw), _sha256(raw))
             for relative, raw in source_snapshot.items()
         }:
             _fail("Host task staged bytes differ from the external source")
+        _verify_windows_acl(
+            staging,
+            recursive=True,
+            label="Host task temporary staging",
+        )
         _validate_staging(
             staging,
             candidate=candidate,

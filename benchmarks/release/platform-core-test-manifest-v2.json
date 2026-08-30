@@ -9042,6 +9042,41 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_canary_rejects_unverified_output_parent"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_canary_rejects_unverified_output_parent"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_canary_rejects_unverified_source_root"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_canary_rejects_unverified_source_root"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_hardener_failure_rolls_back_temporary_tree"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_hardener_failure_rolls_back_temporary_tree"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_hardening_and_validation_run_before_promotion"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_hardening_and_validation_run_before_promotion"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_post_write_recursive_failure_rolls_back_temporary_tree"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_post_write_recursive_failure_rolls_back_temporary_tree"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_kernel_qualification_bundle_v1",
             "name": "test_broker_receipts_bind_the_exact_retained_source"
           },
@@ -17371,9 +17406,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2460,
+      "count": 2465,
       "selection": "not qualification and not windows_native",
-      "sha256": "84064c54da71ac5dd4bec84d7c48c3a757a8c446a891890a1b06d395d0a1448e"
+      "sha256": "49b658dff766eecab94c1ce6e7a2ca3356026292f5ccb6452d2f2fffbe95efc5"
     },
     "windows": {
       "additional_cases": [
@@ -17406,13 +17441,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2464,
+      "count": 2469,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "9a2b2a4748e30d2ee962a3a63c9880fee736b8c792ae862e19acb97d9b9e3852"
+      "sha256": "4f2df48f5c2a6cb67a8371b61e454a05e74d927b1a54ba2407cd652844b1a11d"
     }
   },
-  "manifest_sha256": "a0deed95be5c1e692bebabe2a3d8a86615bede26c1c50bec67a88ccbd4c4b9d0",
+  "manifest_sha256": "791b2a9216a42e8dc4b6e26f7af4736404656288ee3f7ab191ec985bc85804ba",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

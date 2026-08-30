@@ -217,6 +217,233 @@ def _arguments(tmp_path: Path) -> dict[str, Any]:
     }
 
 
+class _WindowsOSProxy:
+    """Simulate executor platform branching without mutating the test runner."""
+
+    name = "nt"
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(os, name)
+
+
+def _simulate_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(executor, "os", _WindowsOSProxy())
+
+
+def _verified_acl_report(*, checked: int = 1) -> dict[str, Any]:
+    return {
+        "schema_version": "deeplaw.windows-acl-report/v1",
+        "platform": "nt",
+        "status": "verified",
+        "permissions_verified": True,
+        "scan_complete": True,
+        "files_and_directories_checked": checked,
+    }
+
+
+def _verified_hardening_report() -> dict[str, Any]:
+    return {
+        "schema_version": "deeplaw.windows-acl-hardening/v1",
+        "platform": "nt",
+        "applied": True,
+        "item_count": 1,
+        "verification": _verified_acl_report(),
+    }
+
+
+def test_windows_acl_canary_rejects_unverified_source_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A macOS simulation must fail closed on an unverified native ACL report."""
+
+    source = tmp_path / "source"
+    source.mkdir()
+    _make_source(source)
+    _patch_validator_seams(monkeypatch)
+
+    _simulate_windows(monkeypatch)
+    from deeplaw import windows_acl
+
+    monkeypatch.setattr(
+        windows_acl,
+        "native_windows_acl_report",
+        lambda _root: {"permissions_verified": False},
+    )
+
+    with pytest.raises(executor.HostTaskExecutorError, match="source root"):
+        executor.admit_host_task_staging(
+            source,
+            tmp_path / "final",
+            **_arguments(tmp_path),
+        )
+
+
+def test_windows_acl_canary_rejects_unverified_output_parent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    _make_source(source)
+    _patch_validator_seams(monkeypatch)
+    _simulate_windows(monkeypatch)
+    from deeplaw import windows_acl
+
+    monkeypatch.setattr(
+        windows_acl,
+        "native_windows_acl_report",
+        lambda _path: _verified_acl_report(checked=1),
+    )
+    unverified = _verified_acl_report()
+    unverified["status"] = "failed"
+    unverified["permissions_verified"] = False
+    monkeypatch.setattr(
+        windows_acl,
+        "native_windows_path_acl_report",
+        lambda _path: unverified,
+    )
+
+    output = tmp_path / "final"
+    with pytest.raises(executor.HostTaskExecutorError, match="output parent"):
+        executor.admit_host_task_staging(source, output, **_arguments(tmp_path))
+    assert not output.exists()
+    assert not list(tmp_path.glob(".final.admit-*"))
+
+
+def test_windows_acl_hardener_failure_rolls_back_temporary_tree(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    _make_source(source)
+    _patch_validator_seams(monkeypatch)
+    _simulate_windows(monkeypatch)
+    from deeplaw import windows_acl
+
+    events: list[tuple[str, Path]] = []
+
+    def source_acl(path: Path) -> dict[str, Any]:
+        events.append(("source", Path(path)))
+        return _verified_acl_report(checked=1)
+
+    def parent_acl(path: Path) -> dict[str, Any]:
+        events.append(("parent", Path(path)))
+        return _verified_acl_report(checked=1)
+
+    def fail_hardener(path: Path) -> None:
+        events.append(("harden", Path(path)))
+        raise RuntimeError("injected hardener failure")
+
+    monkeypatch.setattr(windows_acl, "native_windows_acl_report", source_acl)
+    monkeypatch.setattr(windows_acl, "native_windows_path_acl_report", parent_acl)
+    monkeypatch.setattr(windows_acl, "harden_windows_vault", fail_hardener)
+
+    output = tmp_path / "final"
+    with pytest.raises(executor.HostTaskExecutorError):
+        executor.admit_host_task_staging(source, output, **_arguments(tmp_path))
+    assert [kind for kind, _ in events] == ["source", "parent", "harden"]
+    assert not output.exists()
+    assert not list(tmp_path.glob(".final.admit-*"))
+
+
+def test_windows_acl_post_write_recursive_failure_rolls_back_temporary_tree(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    _make_source(source)
+    _patch_validator_seams(monkeypatch)
+    _simulate_windows(monkeypatch)
+    from deeplaw import windows_acl
+
+    recursive_roots: list[Path] = []
+    unverified = _verified_acl_report(checked=1)
+    unverified["status"] = "failed"
+    unverified["permissions_verified"] = False
+
+    def recursive_acl(path: Path) -> dict[str, Any]:
+        selected = Path(path)
+        recursive_roots.append(selected)
+        if len(recursive_roots) == 2:
+            assert (
+                selected / "candidate-inventory" / "host-execution-identity.json"
+            ).is_file()
+            return unverified
+        return _verified_acl_report(checked=1)
+
+    monkeypatch.setattr(windows_acl, "native_windows_acl_report", recursive_acl)
+    monkeypatch.setattr(
+        windows_acl,
+        "native_windows_path_acl_report",
+        lambda _path: _verified_acl_report(checked=1),
+    )
+    monkeypatch.setattr(
+        windows_acl,
+        "harden_windows_vault",
+        lambda _path: _verified_hardening_report(),
+    )
+
+    output = tmp_path / "final"
+    with pytest.raises(executor.HostTaskExecutorError):
+        executor.admit_host_task_staging(source, output, **_arguments(tmp_path))
+    assert len(recursive_roots) == 2
+    assert not output.exists()
+    assert not list(tmp_path.glob(".final.admit-*"))
+
+
+def test_windows_acl_hardening_and_validation_run_before_promotion(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    _make_source(source)
+    _patch_validator_seams(monkeypatch)
+    _simulate_windows(monkeypatch)
+    from deeplaw import windows_acl
+
+    events: list[tuple[str, Path]] = []
+
+    def recursive_acl(path: Path) -> dict[str, Any]:
+        selected = Path(path)
+        events.append(("recursive", selected))
+        return _verified_acl_report(checked=1)
+
+    def parent_acl(path: Path) -> dict[str, Any]:
+        selected = Path(path)
+        events.append(("parent", selected))
+        return _verified_acl_report(checked=1)
+
+    def hardener(path: Path) -> dict[str, Any]:
+        selected = Path(path)
+        events.append(("harden", selected))
+        return _verified_hardening_report()
+
+    monkeypatch.setattr(windows_acl, "native_windows_acl_report", recursive_acl)
+    monkeypatch.setattr(windows_acl, "native_windows_path_acl_report", parent_acl)
+    monkeypatch.setattr(windows_acl, "harden_windows_vault", hardener)
+
+    output = tmp_path / "final"
+    result = executor.admit_host_task_staging(source, output, **_arguments(tmp_path))
+
+    assert result["status"] == "admitted"
+    assert [kind for kind, _ in events] == [
+        "recursive",
+        "parent",
+        "harden",
+        "recursive",
+    ]
+    assert events[0][1] == source.resolve()
+    assert events[1][1] == tmp_path.resolve()
+    assert events[2][1].name.startswith(".final.admit-")
+    assert events[3][1] == events[2][1]
+    assert executor._inventory(output) == executor._inventory(source)
+    assert not list(tmp_path.glob(".final.admit-*"))
+
+
 def test_admits_exact_six_slot_tree_transactionally(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
