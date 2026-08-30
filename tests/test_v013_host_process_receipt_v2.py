@@ -1076,7 +1076,11 @@ def test_production_seams_reject_unattested_codex_connection_and_synthetic_openc
             "WINDIR",
         }
         process = Process()
-        assert codex_client._terminate_broker_process_group(process) is True  # type: ignore[arg-type]
+        # taskkill rc=0 without native post-verification is not proof that the
+        # requested process tree was removed.
+        confirmed = codex_client._terminate_broker_process_group(process)  # type: ignore[arg-type]
+        assert process.killed is True
+        assert confirmed is False
         assert calls[0][0] == [taskkill, "/F", "/T", "/PID", "4312"]
         assert calls[0][1]["shell"] is False
         assert calls[0][1]["stdin"] is subprocess.DEVNULL

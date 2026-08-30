@@ -1382,7 +1382,9 @@ def test_windows_process_group_options_require_bound_taskkill(
             runner.process_creation_options()
 
 
-@pytest.mark.parametrize("failure", ("nonzero", "exception", "timeout"))
+@pytest.mark.parametrize(
+    "failure", ("nonzero", "exception", "timeout", "rc0-unverified")
+)
 def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -1412,6 +1414,8 @@ def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
             raise OSError("synthetic taskkill failure")
         if failure == "timeout":
             raise subprocess.TimeoutExpired(argv, timeout=kwargs["timeout"])
+        if failure == "rc0-unverified":
+            return subprocess.CompletedProcess(argv, returncode=0)
         return subprocess.CompletedProcess(argv, returncode=1)
 
     with monkeypatch.context() as windows:

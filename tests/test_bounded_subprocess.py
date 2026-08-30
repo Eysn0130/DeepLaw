@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ctypes
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -136,34 +139,84 @@ def test_bounded_subprocess_reports_unavailable_pipes(
 
 
 def test_bounded_subprocess_kills_descendants_that_inherit_output_pipes(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     started = tmp_path / "child-started"
+    child_pid = tmp_path / "child-pid"
+    parent_pid = tmp_path / "parent-pid"
     survived = tmp_path / "child-survived"
     child = (
-        "import pathlib,time;"
+        "import os,pathlib,time;"
         f"pathlib.Path({str(started)!r}).write_text('started', encoding='utf-8');"
+        f"pathlib.Path({str(child_pid)!r}).write_text(str(os.getpid()), encoding='utf-8');"
         "time.sleep(1);"
         f"pathlib.Path({str(survived)!r}).write_text('survived', encoding='utf-8');"
         "time.sleep(10)"
     )
     parent = tmp_path / "process-tree.py"
     parent.write_text(
-        "import subprocess,sys,time\n"
+        "import os,pathlib,subprocess,sys,time\n"
+        f"pathlib.Path({str(parent_pid)!r}).write_text(str(os.getpid()), encoding='utf-8')\n"
         f"subprocess.Popen([sys.executable, '-c', {child!r}])\n"
         "time.sleep(10)\n",
         encoding="utf-8",
     )
 
-    with pytest.raises(BoundedSubprocessError, match="timed out") as captured:
-        run_bounded_subprocess(
-            [sys.executable, str(parent)],
-            timeout_seconds=0.5,
-            max_stdout_bytes=1_024,
-            max_stderr_bytes=1_024,
+    native_taskkill: Path | None = None
+    if os.name == "nt":
+        system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+        assert system_root
+        native_taskkill = (Path(system_root) / "System32" / "taskkill.exe").resolve(
+            strict=True
         )
-    assert captured.value.kind is BoundedSubprocessFailureKind.TIMEOUT
+        assert native_taskkill.is_file()
+        monkeypatch.setattr(
+            bounded_subprocess,
+            "_kill_windows_process_tree",
+            lambda _pid: False,
+        )
 
-    assert started.is_file()
-    time.sleep(1)
-    assert not survived.exists()
+    try:
+        with pytest.raises(BoundedSubprocessError, match="timed out") as captured:
+            run_bounded_subprocess(
+                [sys.executable, str(parent)],
+                timeout_seconds=0.5,
+                max_stdout_bytes=1_024,
+                max_stderr_bytes=1_024,
+            )
+        assert captured.value.kind is BoundedSubprocessFailureKind.TIMEOUT
+
+        assert started.is_file()
+        assert child_pid.is_file()
+        time.sleep(1)
+        assert not survived.exists()
+    finally:
+        cleanup_pid_path = child_pid if child_pid.is_file() else parent_pid
+        if native_taskkill is not None and cleanup_pid_path.is_file():
+            fixture_pid = int(cleanup_pid_path.read_text(encoding="utf-8"))
+            assert fixture_pid > 0
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+            kernel32.OpenProcess.restype = ctypes.c_void_p
+            kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+            kernel32.WaitForSingleObject.restype = ctypes.c_uint32
+            kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+            kernel32.CloseHandle.restype = ctypes.c_int
+            handle = kernel32.OpenProcess(0x00100000, False, fixture_pid)
+            try:
+                cleanup = subprocess.run(
+                    [str(native_taskkill), "/F", "/T", "/PID", str(fixture_pid)],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    shell=False,
+                    timeout=5,
+                )
+                if handle:
+                    assert cleanup.returncode == 0
+                    assert kernel32.WaitForSingleObject(handle, 5_000) == 0
+            finally:
+                if handle:
+                    assert kernel32.CloseHandle(handle) != 0
