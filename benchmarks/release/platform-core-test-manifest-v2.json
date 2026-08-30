@@ -8881,6 +8881,160 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_admits_exact_six_slot_tree_transactionally"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_admits_exact_six_slot_tree_transactionally"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_atomic_promotion_never_replaces_racing_output"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_atomic_promotion_never_replaces_racing_output"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_broker_source_rejects_credential_literal"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_broker_source_rejects_credential_literal"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_chmod_failure_rolls_back_temporary_tree"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_chmod_failure_rolls_back_temporary_tree"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_construction_v2_candidate_is_rejected_by_real_exact_loader"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_construction_v2_candidate_is_rejected_by_real_exact_loader"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_existing_output_is_never_replaced"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_existing_output_is_never_replaced"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_failed_or_record_unbound_typed_evidence_is_rejected[record]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_failed_or_record_unbound_typed_evidence_is_rejected[record]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_failed_or_record_unbound_typed_evidence_is_rejected[status]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_failed_or_record_unbound_typed_evidence_is_rejected[status]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_forbidden_source_component_is_rejected_before_content_read[.env]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_forbidden_source_component_is_rejected_before_content_read[.env]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_forbidden_source_component_is_rejected_before_content_read[credentials/input.json]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_forbidden_source_component_is_rejected_before_content_read[credentials/input.json]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_forbidden_source_component_is_rejected_before_content_read[secrets.json]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_forbidden_source_component_is_rejected_before_content_read[secrets.json]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_identity_change_between_public_reads_fails_closed"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_identity_change_between_public_reads_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_missing_slot_fails_without_output"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_missing_slot_fails_without_output"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_native_process_binding_mismatch_fails_closed"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_native_process_binding_mismatch_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_post_rename_fsync_failure_is_reported_as_committed_uncertain"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_post_rename_fsync_failure_is_reported_as_committed_uncertain"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_process_topology_must_match_execution_identity"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_process_topology_must_match_execution_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_second_validation_failure_rolls_back_temporary_tree"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_second_validation_failure_rolls_back_temporary_tree"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_slot_topology_rejects_every_extra_entry[directory]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_slot_topology_rejects_every_extra_entry[directory]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_slot_topology_rejects_every_extra_entry[file]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_slot_topology_rejects_every_extra_entry[file]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_slot_topology_rejects_every_extra_entry[forbidden_directory]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_slot_topology_rejects_every_extra_entry[forbidden_directory]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_source_symlink_race_after_snapshot_cannot_escape_captured_bytes"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_source_symlink_race_after_snapshot_cannot_escape_captured_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_symlink_and_hardlink_are_rejected"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_symlink_and_hardlink_are_rejected"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_kernel_qualification_bundle_v1",
             "name": "test_broker_receipts_bind_the_exact_retained_source"
           },
@@ -17210,9 +17364,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2437,
+      "count": 2459,
       "selection": "not qualification and not windows_native",
-      "sha256": "fe513cf43b2e2dec43fb2308577e9ed502c3550a777af00f076b941687573fab"
+      "sha256": "0e5a3ff590f362b6f9553dc74ce5b8d3d751fcc9982886df1dad2381ea2ac9a0"
     },
     "windows": {
       "additional_cases": [
@@ -17245,13 +17399,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2441,
+      "count": 2463,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "7106a3f5607a66ab51f168b4366d3239922496bbce855073d313d315d386b18c"
+      "sha256": "7b5b7c447cfb1b973a1a4eff34a13bd55f1cf6a87bf6bfe134f13dd71eee4160"
     }
   },
-  "manifest_sha256": "3d47a7323c06a9ab686b7fd60e932ce981fc0ed2e93996cb36dc488af7fd19ee",
+  "manifest_sha256": "33714b75718b6481a44c3b5d78a42e099212413b4f36b4621d3b25fb0e111d5f",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
