@@ -854,6 +854,107 @@ def test_v013_installed_runtime_prepare_and_report_bind_exact_version(
     assert binding["package_version"] == "0.13.0"
     assert installed["wheel_name"] == wheel.name
 
+    windows_scripts = tmp_path / "windows-venv" / "Scripts"
+    windows_scripts.mkdir(parents=True)
+    windows_executable = windows_scripts / "deeplaw.exe"
+    windows_executable.write_bytes(b"candidate windows executable")
+    windows_python = windows_scripts / "python.exe"
+    windows_python.write_bytes(b"candidate windows python")
+    windows_installed = pass13_orchestrator.installed_runtime_binding(
+        candidate_wheel=wheel,
+        deeplaw_executable=windows_executable,
+        repository=repository,
+        expected_package_version="0.13.0",
+    )
+    assert windows_installed["wheel_name"] == wheel.name
+
+    original_is_symlink = Path.is_symlink
+    with monkeypatch.context() as executable_symlink:
+        executable_symlink.setattr(
+            Path,
+            "is_symlink",
+            lambda path: path == windows_executable or original_is_symlink(path),
+        )
+        with pytest.raises(
+            pass13_orchestrator.QualificationOrchestrationError,
+            match="executable is not regular",
+        ):
+            pass13_orchestrator.installed_runtime_binding(
+                candidate_wheel=wheel,
+                deeplaw_executable=windows_executable,
+                repository=repository,
+                expected_package_version="0.13.0",
+            )
+
+    with monkeypatch.context() as python_symlink:
+        python_symlink.setattr(
+            Path,
+            "is_symlink",
+            lambda path: path == windows_python or original_is_symlink(path),
+        )
+        with pytest.raises(
+            pass13_orchestrator.QualificationOrchestrationError,
+            match="adjacent Python",
+        ):
+            pass13_orchestrator.installed_runtime_binding(
+                candidate_wheel=wheel,
+                deeplaw_executable=windows_executable,
+                repository=repository,
+                expected_package_version="0.13.0",
+            )
+
+    nonregular_runtime = tmp_path / "nonregular-venv" / "Scripts"
+    nonregular_runtime.mkdir(parents=True)
+    nonregular_executable = nonregular_runtime / "deeplaw.exe"
+    nonregular_executable.write_bytes(b"nonregular executable case")
+    (nonregular_runtime / "python.exe").mkdir()
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="adjacent Python",
+    ):
+        pass13_orchestrator.installed_runtime_binding(
+            candidate_wheel=wheel,
+            deeplaw_executable=nonregular_executable,
+            repository=repository,
+            expected_package_version="0.13.0",
+        )
+
+    mixed_runtime = tmp_path / "mixed-venv"
+    mixed_scripts = mixed_runtime / "Scripts"
+    mixed_bin = mixed_runtime / "bin"
+    mixed_scripts.mkdir(parents=True)
+    mixed_bin.mkdir()
+    mixed_executable = mixed_scripts / "deeplaw.exe"
+    mixed_executable.write_bytes(b"mixed windows executable")
+    (mixed_scripts / "python.exe").write_bytes(b"mixed windows python")
+    (mixed_bin / "deeplaw").write_bytes(b"mixed posix executable")
+    (mixed_bin / "python").write_bytes(b"mixed posix python")
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="mixed platform layouts",
+    ):
+        pass13_orchestrator.installed_runtime_binding(
+            candidate_wheel=wheel,
+            deeplaw_executable=mixed_executable,
+            repository=repository,
+            expected_package_version="0.13.0",
+        )
+
+    wrong_layout = tmp_path / "wrong-venv" / "bin" / "deeplaw.exe"
+    wrong_layout.parent.mkdir(parents=True)
+    wrong_layout.write_bytes(b"wrong entrypoint")
+    (wrong_layout.parent / "python").write_bytes(b"wrong python")
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="runtime layout",
+    ):
+        pass13_orchestrator.installed_runtime_binding(
+            candidate_wheel=wheel,
+            deeplaw_executable=wrong_layout,
+            repository=repository,
+            expected_package_version="0.13.0",
+        )
+
     report = pass13_orchestrator.build_host_report(
         host="opencode",
         binding={

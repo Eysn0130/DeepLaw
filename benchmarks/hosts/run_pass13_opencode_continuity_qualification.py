@@ -43,7 +43,9 @@ from benchmarks.hosts import (
     pass17_development_diagnostic,
 )
 from benchmarks.hosts.pass13_orchestrator import (
+    QualificationOrchestrationError,
     QualificationOrchestrator,
+    installed_runtime_python,
     observe_knowledge_support_tools_list,
 )
 from benchmarks.hosts.pass13_orchestrator import (
@@ -4020,8 +4022,10 @@ def _freeze_local_plugin_dependency_state(
 def _installed_opencode_plugin_bytes(deeplaw_executable: Path) -> bytes:
     """Read the plugin only from the isolated candidate-wheel installation."""
 
-    runtime_python = deeplaw_executable.parent / "python"
-    _require_regular_path(runtime_python, label="candidate runtime Python")
+    try:
+        runtime_python = installed_runtime_python(deeplaw_executable)
+    except QualificationOrchestrationError as exc:
+        raise QualificationError(str(exc)) from exc
     resource = _PLUGIN_RESOURCE_RELATIVE.as_posix()
     script = (
         "import importlib.resources, sys\n"
@@ -4036,7 +4040,7 @@ def _installed_opencode_plugin_bytes(deeplaw_executable: Path) -> bytes:
             "LC_ALL": "C.UTF-8",
             "PYTHONNOUSERSITE": "1",
         },
-        cwd=deeplaw_executable.parent,
+        cwd=runtime_python.parent,
         timeout=30,
     )
     source_bytes = bytes(result["stdout"])

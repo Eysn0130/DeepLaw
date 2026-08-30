@@ -23,6 +23,8 @@ from benchmarks.hosts import (
 from benchmarks.release.kernel_qualification_bundle_v1 import host_identity_sha256
 from deeplaw.task_context import build_task_context_binding
 
+_REAL_INSTALLED_OPENCODE_PLUGIN_BYTES = runner._installed_opencode_plugin_bytes
+
 _TASK_BINDING = build_task_context_binding(
     "1" * 64,
     "2" * 64,
@@ -401,13 +403,43 @@ def _preflight_plugin_fixture(tmp_path: Path) -> tuple[Path, dict[str, object], 
     return project, receipt, resolved
 
 
-def test_runner_routes_owner_dotenv_only_to_external_broker() -> None:
+def test_runner_routes_owner_dotenv_only_to_external_broker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     source = Path(runner.__file__).read_text(encoding="utf-8")
     assert not hasattr(runner, "load_deepseek_key")
     assert "--dotenv" not in source
     assert "load_deepseek_key" not in source
     assert "--opencode-dotenv" in source
     assert runner._OWNER_DOTENV_ENV_NAME == "DEEPLAW_OWNER_DOTENV"
+
+    windows_scripts = tmp_path / "runtime" / "Scripts"
+    windows_scripts.mkdir(parents=True)
+    windows_executable = windows_scripts / "deeplaw.exe"
+    windows_executable.write_bytes(b"candidate windows executable")
+    windows_python = windows_scripts / "python.exe"
+    windows_python.write_bytes(b"candidate windows python")
+    calls: list[tuple[Path, ...]] = []
+
+    def fake_run(
+        argv: list[Path | str], **_kwargs: object
+    ) -> dict[str, object]:
+        calls.append(tuple(Path(item) for item in argv))
+        return {
+            "stdout": b"candidate plugin bytes",
+            "stderr": b"",
+            "returncode": 0,
+            "timed_out": False,
+            "output_overflow": False,
+        }
+
+    monkeypatch.setattr(runner, "_run_bounded_process", fake_run)
+    assert (
+        _REAL_INSTALLED_OPENCODE_PLUGIN_BYTES(windows_executable)
+        == b"candidate plugin bytes"
+    )
+    assert calls and calls[0][0] == windows_python
+    assert calls[0][1:2] == (Path("-I"),)
 
 
 def _owner_dotenv(path: Path) -> Path:

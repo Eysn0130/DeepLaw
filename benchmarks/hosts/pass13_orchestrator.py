@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import tomllib
 import zipfile
@@ -181,6 +182,60 @@ def _runtime_contract_script(contract_names: Sequence[str]) -> str:
     )
 
 
+def installed_runtime_python(deeplaw_executable: Path) -> Path:
+    """Resolve the adjacent Python from one supported installed runtime layout."""
+
+    try:
+        executable_mode = deeplaw_executable.lstat().st_mode
+    except (OSError, ValueError) as exc:
+        raise QualificationOrchestrationError(
+            "installed DeepLaw executable is not regular"
+        ) from exc
+    if deeplaw_executable.is_symlink() or not stat.S_ISREG(executable_mode):
+        raise QualificationOrchestrationError(
+            "installed DeepLaw executable is not regular"
+        )
+
+    parent = deeplaw_executable.parent
+    if parent.name == "bin" and deeplaw_executable.name == "deeplaw":
+        runtime_python = parent / "python"
+        alternate_paths = (
+            parent.parent / "Scripts" / "python.exe",
+            parent.parent / "Scripts" / "deeplaw.exe",
+        )
+    elif parent.name == "Scripts" and deeplaw_executable.name == "deeplaw.exe":
+        runtime_python = parent / "python.exe"
+        alternate_paths = (
+            parent.parent / "bin" / "python",
+            parent.parent / "bin" / "deeplaw",
+        )
+    else:
+        raise QualificationOrchestrationError(
+            "installed DeepLaw runtime layout is invalid"
+        )
+
+    if any(path.exists() or path.is_symlink() for path in alternate_paths):
+        raise QualificationOrchestrationError(
+            "installed DeepLaw runtime has mixed platform layouts"
+        )
+    try:
+        python_mode = runtime_python.lstat().st_mode
+    except OSError as exc:
+        raise QualificationOrchestrationError(
+            "installed DeepLaw executable has no adjacent Python"
+        ) from exc
+    if runtime_python.is_symlink() or not stat.S_ISREG(python_mode):
+        raise QualificationOrchestrationError(
+            "installed DeepLaw executable has no adjacent Python"
+        )
+    try:
+        return runtime_python.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise QualificationOrchestrationError(
+            "installed DeepLaw executable has no adjacent Python"
+        ) from exc
+
+
 def installed_runtime_binding(
     *,
     candidate_wheel: Path,
@@ -197,16 +252,8 @@ def installed_runtime_binding(
     wheel = candidate_wheel.resolve(strict=True)
     if _wheel_package_version(wheel.name) != expected_version:
         raise QualificationOrchestrationError("candidate wheel name is invalid")
-    if deeplaw_executable.is_symlink() or not deeplaw_executable.is_file():
-        raise QualificationOrchestrationError(
-            "installed DeepLaw executable is not regular"
-        )
+    runtime_python = installed_runtime_python(deeplaw_executable)
     executable = deeplaw_executable.resolve(strict=True)
-    runtime_python = executable.parent / "python"
-    if not runtime_python.exists() or not runtime_python.resolve(strict=True).is_file():
-        raise QualificationOrchestrationError(
-            "installed DeepLaw executable has no adjacent Python"
-        )
     try:
         completed = subprocess.run(
             [
