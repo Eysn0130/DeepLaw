@@ -43,7 +43,6 @@ from benchmarks.hosts import (
     pass17_development_diagnostic,
 )
 from benchmarks.hosts.pass13_orchestrator import (
-    PACKAGE_VERSION,
     QualificationOrchestrator,
     observe_knowledge_support_tools_list,
 )
@@ -5848,6 +5847,7 @@ def _execute_qualification_body(
     )
     output_dir, binding, installed = orchestrator.prepare_candidate()
     output_dir.mkdir(parents=True)
+    expected_package_version = binding["package_version"]
     host_identity: Mapping[str, Any] | None = None
     expected_version = HISTORICAL_OPENCODE_VERSION_FIXTURE
     if host_identity_input is None:
@@ -5950,8 +5950,14 @@ def _execute_qualification_body(
         cwd=root,
     )
     runtime_text = runtime_check["stdout"].decode("utf-8", errors="replace").strip()
-    if runtime_check["returncode"] != 0 or PACKAGE_VERSION not in runtime_text:
-        raise QualificationError("installed DeepLaw runtime is not version 0.12.0")
+    if (
+        runtime_check["returncode"] != 0
+        or runtime_text != f"deeplaw {expected_package_version}"
+    ):
+        raise QualificationError(
+            "installed DeepLaw runtime is not version "
+            f"{expected_package_version}"
+        )
     preflight_project = root / "preflight-project"
     preflight_project.mkdir(parents=True, exist_ok=True)
     preflight_plugin_receipt, _preflight_plugin_receipt_path = (

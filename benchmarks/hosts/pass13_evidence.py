@@ -19,8 +19,17 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 PROVIDER_HARD_LIMIT_BYTES = 65_536
 SAFE_READ_OPERATIONS = frozenset({"context", "query"})
+HISTORICAL_PACKAGE_VERSION = "0.12.0"
+CURRENT_PACKAGE_VERSION = "0.13.0"
+SUPPORTED_PACKAGE_VERSIONS = (
+    HISTORICAL_PACKAGE_VERSION,
+    CURRENT_PACKAGE_VERSION,
+)
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_OID = re.compile(r"^[0-9a-f]{40}$")
+_WHEEL_NAME = re.compile(
+    r"^deeplaw-(?P<version>0\.12\.0|0\.13\.0)-py3-none-any\.whl$"
+)
 _ABSOLUTE_PATH = re.compile(
     rb'(?:^|[\s=:\"\'])/(?!/)[A-Za-z0-9._~-]+(?:/[^\s\"\'\\]*)?|'
     rb'(?:^|[\s="\'(])[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._$-]+[\\/]'
@@ -50,6 +59,40 @@ _MAX_BUNDLE_BYTES = 32 * 1024 * 1024
 
 class EvidenceValidationError(ValueError):
     """Qualification evidence was incomplete, inconsistent, or unsafe."""
+
+
+def supported_package_version(value: object, *, label: str = "package version") -> str:
+    """Return one explicitly supported package version or fail closed."""
+
+    if not isinstance(value, str) or value not in SUPPORTED_PACKAGE_VERSIONS:
+        raise EvidenceValidationError(f"unsupported {label}")
+    return value
+
+
+def wheel_package_version(name: object) -> str:
+    """Parse the only frozen universal DeepLaw wheel layout."""
+
+    if not isinstance(name, str):
+        raise EvidenceValidationError("candidate wheel name is invalid")
+    match = _WHEEL_NAME.fullmatch(name)
+    if match is None:
+        raise EvidenceValidationError("candidate wheel name or layout is invalid")
+    return supported_package_version(match.group("version"), label="package version in wheel name")
+
+
+def validate_package_version_binding(
+    package_version: object,
+    wheel_name: object,
+) -> str:
+    """Require report package version and exact wheel layout to agree."""
+
+    version = supported_package_version(package_version)
+    wheel_version = wheel_package_version(wheel_name)
+    if version != wheel_version:
+        raise EvidenceValidationError(
+            "package version does not match candidate wheel name"
+        )
+    return version
 
 
 def isolation_receipt(*, host: str, keyring_bridge: bool = False) -> dict[str, Any]:
@@ -1458,9 +1501,13 @@ def validate_host_report_consistency(report: Mapping[str, Any]) -> None:
     if host not in {"codex", "opencode"} or mode not in {"qualification", "diagnostic"}:
         raise EvidenceValidationError("Host receipt mode or identity is invalid")
     binding = report.get("binding")
-    contract_digests = (
-        binding.get("contract_digests") if isinstance(binding, Mapping) else None
+    if not isinstance(binding, Mapping):
+        raise EvidenceValidationError("Host receipt candidate binding is invalid")
+    validate_package_version_binding(
+        report.get("package_version"),
+        binding.get("wheel_name"),
     )
+    contract_digests = binding.get("contract_digests")
     current_contract = (
         Path(__file__).resolve().parents[2]
         / "contracts"

@@ -10198,9 +10198,37 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_host_evidence",
+            "name": "test_current_repository_binding_accepts_exact_v013_and_rejects_unknown_version"
+          },
+          "node_id": "tests/test_v013_pass13_host_evidence.py::test_current_repository_binding_accepts_exact_v013_and_rejects_unknown_version"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_host_evidence",
+            "name": "test_current_v2_validator_rejects_package_wheel_cross_version_mismatch"
+          },
+          "node_id": "tests/test_v013_pass13_host_evidence.py::test_current_v2_validator_rejects_package_wheel_cross_version_mismatch"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_host_evidence",
             "name": "test_historical_v1_metric_digest_ignores_absent_v2_native_receipts"
           },
           "node_id": "tests/test_v013_pass13_host_evidence.py::test_historical_v1_metric_digest_ignores_absent_v2_native_receipts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_host_evidence",
+            "name": "test_installed_binding_rejects_noncanonical_wheel_layout[deeplaw-0.13.0-.whl]"
+          },
+          "node_id": "tests/test_v013_pass13_host_evidence.py::test_installed_binding_rejects_noncanonical_wheel_layout[deeplaw-0.13.0-.whl]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_host_evidence",
+            "name": "test_installed_binding_rejects_noncanonical_wheel_layout[deeplaw-0.13.0-not-a-wheel-layout.whl]"
+          },
+          "node_id": "tests/test_v013_pass13_host_evidence.py::test_installed_binding_rejects_noncanonical_wheel_layout[deeplaw-0.13.0-not-a-wheel-layout.whl]"
         },
         {
           "junit": {
@@ -10261,9 +10289,23 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_host_evidence",
+            "name": "test_v013_installed_runtime_prepare_and_report_bind_exact_version"
+          },
+          "node_id": "tests/test_v013_pass13_host_evidence.py::test_v013_installed_runtime_prepare_and_report_bind_exact_version"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_host_evidence",
             "name": "test_v2_accepts_only_the_exact_codex_keyring_bridge_isolation_variant"
           },
           "node_id": "tests/test_v013_pass13_host_evidence.py::test_v2_accepts_only_the_exact_codex_keyring_bridge_isolation_variant"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_host_evidence",
+            "name": "test_v2_schema_accepts_supported_versions_and_rejects_unknown_version"
+          },
+          "node_id": "tests/test_v013_pass13_host_evidence.py::test_v2_schema_accepts_supported_versions_and_rejects_unknown_version"
         },
         {
           "junit": {
@@ -17168,9 +17210,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2431,
+      "count": 2437,
       "selection": "not qualification and not windows_native",
-      "sha256": "ad6fd342d6d794dfc28417fc2813e19ee346ce03471331c67756775d72557616"
+      "sha256": "fe513cf43b2e2dec43fb2308577e9ed502c3550a777af00f076b941687573fab"
     },
     "windows": {
       "additional_cases": [
@@ -17203,13 +17245,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2435,
+      "count": 2441,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "84a09cc556d4042cd04ce899fe8d14c5a034ded146bf1db3b507f7c600eabfe2"
+      "sha256": "7106a3f5607a66ab51f168b4366d3239922496bbce855073d313d315d386b18c"
     }
   },
-  "manifest_sha256": "52e11f72267587dc8e984b208ceb0051d696bad90c267c7c2b378570561d9728",
+  "manifest_sha256": "3d47a7323c06a9ab686b7fd60e932ce981fc0ed2e93996cb36dc488af7fd19ee",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

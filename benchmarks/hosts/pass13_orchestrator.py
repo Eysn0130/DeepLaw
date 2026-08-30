@@ -11,6 +11,7 @@ import tomllib
 import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from email.parser import Parser
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,12 @@ from mcp.client.stdio import stdio_client
 
 from benchmarks.hosts import pass13_evidence
 
-PACKAGE_VERSION = "0.12.0"
+HISTORICAL_PACKAGE_VERSION = pass13_evidence.HISTORICAL_PACKAGE_VERSION
+CURRENT_PACKAGE_VERSION = pass13_evidence.CURRENT_PACKAGE_VERSION
+SUPPORTED_PACKAGE_VERSIONS = pass13_evidence.SUPPORTED_PACKAGE_VERSIONS
+# Kept as a compatibility export for callers that only need the current target;
+# all candidate/report binding decisions below use an observed exact version.
+PACKAGE_VERSION = CURRENT_PACKAGE_VERSION
 REPORT_SCHEMA_VERSION = "deeplaw.host-continuity-qualification/v2"
 RUNTIME_CONTRACT_NAMES = (
     "host-preflight-receipt.v1.schema.json",
@@ -47,6 +53,33 @@ RUNTIME_CONTRACT_NAMES = (
 
 class QualificationOrchestrationError(RuntimeError):
     """The common Host candidate or retained bundle failed closed."""
+
+
+def _supported_package_version(value: object, *, label: str) -> str:
+    try:
+        return pass13_evidence.supported_package_version(value, label=label)
+    except pass13_evidence.EvidenceValidationError as exc:
+        raise QualificationOrchestrationError(str(exc)) from exc
+
+
+def _wheel_package_version(name: object) -> str:
+    try:
+        return pass13_evidence.wheel_package_version(name)
+    except pass13_evidence.EvidenceValidationError as exc:
+        raise QualificationOrchestrationError(str(exc)) from exc
+
+
+def _binding_package_version(binding: Mapping[str, Any]) -> str:
+    declared_version = binding.get("package_version")
+    if declared_version is None:
+        declared_version = _wheel_package_version(binding.get("wheel_name"))
+    try:
+        return pass13_evidence.validate_package_version_binding(
+            declared_version,
+            binding.get("wheel_name"),
+        )
+    except pass13_evidence.EvidenceValidationError as exc:
+        raise QualificationOrchestrationError(str(exc)) from exc
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -88,11 +121,13 @@ def repository_binding(repository: Path) -> dict[str, Any]:
         )
     except (OSError, UnicodeError, ValueError) as exc:
         raise QualificationOrchestrationError("project metadata is unavailable") from exc
-    version = project.get("project", {}).get("version")
-    if version != PACKAGE_VERSION:
-        raise QualificationOrchestrationError(
-            "qualification requires package version 0.12.0"
-        )
+    project_metadata = project.get("project")
+    version = (
+        project_metadata.get("version")
+        if isinstance(project_metadata, Mapping)
+        else None
+    )
+    version = _supported_package_version(version, label="package version")
     status = _git(repository, "status", "--porcelain=v1", "--untracked-files=all")
     if status:
         raise QualificationOrchestrationError(
@@ -151,13 +186,16 @@ def installed_runtime_binding(
     candidate_wheel: Path,
     deeplaw_executable: Path,
     repository: Path,
+    expected_package_version: str,
 ) -> dict[str, Any]:
+    expected_version = _supported_package_version(
+        expected_package_version,
+        label="expected package version",
+    )
     if candidate_wheel.is_symlink() or not candidate_wheel.is_file():
         raise QualificationOrchestrationError("candidate wheel is not one regular file")
     wheel = candidate_wheel.resolve(strict=True)
-    if not wheel.name.startswith(f"deeplaw-{PACKAGE_VERSION}-") or not wheel.name.endswith(
-        ".whl"
-    ):
+    if _wheel_package_version(wheel.name) != expected_version:
         raise QualificationOrchestrationError("candidate wheel name is invalid")
     if deeplaw_executable.is_symlink() or not deeplaw_executable.is_file():
         raise QualificationOrchestrationError(
@@ -203,7 +241,7 @@ def installed_runtime_binding(
     }
     if (
         not isinstance(observed, Mapping)
-        or observed.get("version") != PACKAGE_VERSION
+        or observed.get("version") != expected_version
         or observed.get("import_path_class") != "isolated_site_packages"
         or observed.get("contracts") != source_digests
         or not isinstance(observed.get("files"), Mapping)
@@ -213,6 +251,31 @@ def installed_runtime_binding(
         )
     try:
         with zipfile.ZipFile(wheel) as archive:
+            metadata_name = f"deeplaw-{expected_version}.dist-info/METADATA"
+            metadata_names = [
+                name
+                for name in archive.namelist()
+                if name == metadata_name
+            ]
+            if len(metadata_names) != 1:
+                raise QualificationOrchestrationError(
+                    "candidate wheel metadata is missing or ambiguous"
+                )
+            try:
+                metadata = Parser().parsestr(
+                    archive.read(metadata_name).decode("utf-8")
+                )
+            except (UnicodeDecodeError, KeyError) as exc:
+                raise QualificationOrchestrationError(
+                    "candidate wheel metadata is invalid"
+                ) from exc
+            if (
+                metadata.get_all("Name") != ["deeplaw"]
+                or metadata.get_all("Version") != [expected_version]
+            ):
+                raise QualificationOrchestrationError(
+                    "candidate wheel metadata version is invalid"
+                )
             wheel_files = {
                 name.removeprefix("deeplaw/"): sha256_bytes(archive.read(name))
                 for name in archive.namelist()
@@ -227,6 +290,7 @@ def installed_runtime_binding(
             "installed DeepLaw package does not match the candidate wheel"
         )
     return {
+        "package_version": expected_version,
         "wheel_name": wheel.name,
         "wheel_sha256": sha256_file(wheel),
         "wheel_bytes": wheel.stat().st_size,
@@ -317,6 +381,7 @@ def build_host_report(
         raise QualificationOrchestrationError("Host report identity is invalid")
     if execution_mode not in {"qualification", "diagnostic"}:
         raise QualificationOrchestrationError("Host execution mode is invalid")
+    package_version = _binding_package_version(binding)
     expected_run_count = 3 if execution_mode == "qualification" else 1
     run_rows = [dict(run) for run in runs]
     passed = sum(run.get("status") == "passed" for run in run_rows)
@@ -389,7 +454,7 @@ def build_host_report(
         ),
         "host": host,
         "status": report_status,
-        "package_version": PACKAGE_VERSION,
+        "package_version": package_version,
         "release_ready": False,
         "claim_eligible": False,
         "binding": dict(binding),
@@ -428,6 +493,7 @@ class QualificationOrchestrator:
                 candidate_wheel=self.candidate_wheel,
                 deeplaw_executable=self.deeplaw_executable,
                 repository=self.repository,
+                expected_package_version=binding["package_version"],
             )
         except QualificationOrchestrationError as exc:
             raise self._translate(exc) from exc
