@@ -586,6 +586,16 @@ def test_chmod_failure_rolls_back_temporary_tree(
 
     monkeypatch.setattr(Path, "chmod", fail_staging)
 
+    if os.name == "nt":
+        result = executor.admit_host_task_staging(
+            source,
+            tmp_path / "final",
+            **_arguments(tmp_path),
+        )
+        assert result["status"] == "admitted"
+        assert not list(tmp_path.glob(".final.admit-*"))
+        return
+
     with pytest.raises(executor.HostTaskExecutorError):
         executor.admit_host_task_staging(
             source,
