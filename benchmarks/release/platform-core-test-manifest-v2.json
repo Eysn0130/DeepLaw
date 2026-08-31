@@ -8622,6 +8622,188 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_builder_accepts_receipt_members_and_normalizes_rows"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_builder_accepts_receipt_members_and_normalizes_rows"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_duplicate_member_identity_fields_fail_closed[broker_instance_sha256]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_duplicate_member_identity_fields_fail_closed[broker_instance_sha256]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_duplicate_member_identity_fields_fail_closed[nonce_sha256]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_duplicate_member_identity_fields_fail_closed[nonce_sha256]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_duplicate_member_identity_fields_fail_closed[process_identity_sha256]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_duplicate_member_identity_fields_fail_closed[process_identity_sha256]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_duplicate_member_identity_fields_fail_closed[receipt]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_duplicate_member_identity_fields_fail_closed[receipt]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_empty_and_count_mismatch_fail_closed[<lambda>0]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_empty_and_count_mismatch_fail_closed[<lambda>0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_empty_and_count_mismatch_fail_closed[<lambda>1]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_empty_and_count_mismatch_fail_closed[<lambda>1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_empty_and_count_mismatch_fail_closed[<lambda>2]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_empty_and_count_mismatch_fail_closed[<lambda>2]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_member_cross_bindings_fail_closed[broker_source-replacement8]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_member_cross_bindings_fail_closed[broker_source-replacement8]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_member_cross_bindings_fail_closed[candidate_binding-replacement3]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_member_cross_bindings_fail_closed[candidate_binding-replacement3]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_member_cross_bindings_fail_closed[host-opencode]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_member_cross_bindings_fail_closed[host-opencode]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_member_cross_bindings_fail_closed[host_binary-replacement7]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_member_cross_bindings_fail_closed[host_binary-replacement7]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_member_cross_bindings_fail_closed[host_identity_sha256-6666666666666666666666666666666666666666666666666666666666666666]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_member_cross_bindings_fail_closed[host_identity_sha256-6666666666666666666666666666666666666666666666666666666666666666]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_member_cross_bindings_fail_closed[host_identity_source_sha256-7777777777777777777777777777777777777777777777777777777777777777]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_member_cross_bindings_fail_closed[host_identity_source_sha256-7777777777777777777777777777777777777777777777777777777777777777]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_member_cross_bindings_fail_closed[run_binding-replacement4]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_member_cross_bindings_fail_closed[run_binding-replacement4]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_member_cross_bindings_fail_closed[run_id-other-run]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_member_cross_bindings_fail_closed[run_id-other-run]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_member_cross_bindings_fail_closed[task_case-living_wiki]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_member_cross_bindings_fail_closed[task_case-living_wiki]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_process_rows_are_ordered_and_host_specific[process_role-opencode_run]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_process_rows_are_ordered_and_host_specific[process_role-opencode_run]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_process_rows_are_ordered_and_host_specific[sequence_index-3]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_process_rows_are_ordered_and_host_specific[sequence_index-3]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_task_native_event_binding_expected_cross_binding_and_tamper_fail_closed"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_task_native_event_binding_expected_cross_binding_and_tamper_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_unknown_path_and_secret_fields_fail_closed[<lambda>0]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_unknown_path_and_secret_fields_fail_closed[<lambda>0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_unknown_path_and_secret_fields_fail_closed[<lambda>1]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_unknown_path_and_secret_fields_fail_closed[<lambda>1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_unknown_path_and_secret_fields_fail_closed[<lambda>2]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_unknown_path_and_secret_fields_fail_closed[<lambda>2]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_valid_multi_process_sets_are_closed_path_free_and_identity_bound[codex]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_valid_multi_process_sets_are_closed_path_free_and_identity_bound[codex]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_valid_multi_process_sets_are_closed_path_free_and_identity_bound[opencode]"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_valid_multi_process_sets_are_closed_path_free_and_identity_bound[opencode]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_set_v1",
+            "name": "test_validator_calls_existing_v2_validator_for_each_member"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_set_v1.py::test_validator_calls_existing_v2_validator_for_each_member"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_host_process_receipt_v2",
             "name": "test_codex_close_fail_closed_after_unconfirmed_windows_cleanup"
           },
@@ -17406,9 +17588,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2465,
+      "count": 2491,
       "selection": "not qualification and not windows_native",
-      "sha256": "49b658dff766eecab94c1ce6e7a2ca3356026292f5ccb6452d2f2fffbe95efc5"
+      "sha256": "05ca54f3f22af3f6a916b39b1b4c527e493b9e400140a1f5ac5c43f440f3e028"
     },
     "windows": {
       "additional_cases": [
@@ -17441,13 +17623,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2469,
+      "count": 2495,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "4f2df48f5c2a6cb67a8371b61e454a05e74d927b1a54ba2407cd652844b1a11d"
+      "sha256": "d3bd3f6ef8a577ee19e9d5882a7f6599b2942aad3be99bbc78ae4ea6717d1ed5"
     }
   },
-  "manifest_sha256": "791b2a9216a42e8dc4b6e26f7af4736404656288ee3f7ab191ec985bc85804ba",
+  "manifest_sha256": "047ac079d810ed8c53df5422eda210c143529ed8099e2199843cf88d60e810ee",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
