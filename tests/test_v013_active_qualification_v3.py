@@ -279,6 +279,7 @@ def test_active_v3_pending_template_is_separate_and_release_closed() -> None:
     assert "not_executed" in adapters_doc
     assert "host-preflight-receipt/v1" in security_doc
     assert "host-process-receipt/v2" in security_doc
+    assert "host-process-receipt-set/v1" in security_doc
     assert "host-process-receipt/v1" in security_doc
     assert "historical/invalidated" in security_doc
 

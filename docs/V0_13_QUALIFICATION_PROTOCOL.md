@@ -16,7 +16,8 @@ The machine-readable protocol is
 v1-v8 remain historical compatibility inputs. They are not rewritten or used as current state.
 The frozen Host process receipt v1 remains a historical compatibility record and is
 `invalidated-for-current-qualification`; current Gate v9 control admission requires the sibling
-`deeplaw.host-process-receipt/v2`. Current Host evidence continues to use
+`deeplaw.host-process-receipt/v2` for each observed model-bearing Host process and the bounded
+`deeplaw.host-process-receipt-set/v1` wrapper for each Host/task control slot. Current Host evidence continues to use
 `deeplaw.host-continuity-qualification/v2`.
 
 ## Product and Provider boundary
@@ -210,6 +211,16 @@ values, PID, thread digests, or broker nonces cannot become Host identity or sat
 Duplicate, replayed, expired, future-issued, cross-candidate, cross-run, cross-task, cross-process,
 cross-connection, and cross-session records fail closed.
 
+One Host/task can require more than one model-bearing Host process. The existing
+`host_process_receipt` slot therefore retains one
+`deeplaw.host-process-receipt-set/v1` wrapper rather than pretending that one v2 record observed a
+whole process set. The wrapper is bounded to 32 ordered members, requires declared and observed
+counts to agree with a complete non-empty inventory, and cross-binds every embedded v2 record to
+the same Host, task, run, candidate, broker, Host identity, and binary. Member record digests,
+process identities, broker instances, and nonces are unique. The wrapper separately binds the
+typed task-level native-event aggregate; it cannot create, repair, or confer observation Authority
+on a member receipt.
+
 The bound validation reference time makes an admitted historical bundle reproducible without
 silently disabling expiry checks. Neither control record permits a command, environment, path,
 PID, stdout/stderr, raw identity, Provider body, prompt, transcript, hidden reasoning,
@@ -368,13 +379,14 @@ receipt output.
 Passing either zero-model capability preflight only allows that Host's formal runner to move beyond
 its previous fail-before. It does not admit a Host task, prove the later model-bearing process, or
 close any Core Gate. Both diagnostic modes remain fail-before. Each of the six actual task processes
-must still return its own owner-external v2 receipt in the existing slot.
-The v2, consumer, and Kernel validators establish only closed structure and exact cross-binding to
+must still return its own owner-external v2 receipt inside the existing Host/task slot's receipt
+set. The v2, receipt-set, consumer, and Kernel validators establish only closed structure and exact cross-binding to
 the candidate, run IDs, retained per-Host broker source, Host identity, native-event digests, nonce,
 and time window. They cannot self-attest observation provenance; formal authority additionally
 requires the exact external broker process and formal workflow provenance. The six existing Kernel
 `host_process_receipt` slots remain the only receipt inventory; Kernel and Commercial reopen their
-exact bytes and cross-bindings. No second external receipt directory is created or uploaded.
+exact set bytes, embedded v2 bytes, and cross-bindings. No second external receipt directory is
+created or uploaded.
 Focused contract acceptance is not formal Host evidence, and Codex x3/OpenCode x3 remains
 `not_executed`.
 

@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from benchmarks.hosts import host_process_receipt_v2
 from benchmarks.hosts import run_v013_host_task_executor as executor
 
 
@@ -56,6 +57,122 @@ def _native(host: str, task: str) -> dict[str, str]:
         "session_identity_sha256": _sha(f"{host}:{task}:session"),
         "lifecycle_record_sha256": _sha(f"{host}:{task}:lifecycle"),
     }
+
+
+def _v2_process(host: str, task: str, *, index: int) -> dict[str, Any]:
+    process_identity = _sha(f"{host}:{task}:{index}:process")
+    native = _native(host, task)
+    if host == "codex":
+        proof = {
+            "proof_kind": "codex_stdio_hook_correlation",
+            "process_identity_sha256": process_identity,
+            "connection_sha256": _sha(f"{host}:{task}:{index}:connection"),
+            "initialize_request_sha256": _sha(
+                f"{host}:{task}:{index}:initialize-request"
+            ),
+            "initialized_notification_sha256": _sha(
+                f"{host}:{task}:{index}:initialized-notification"
+            ),
+            "initialized_connection_count": 1,
+            "hook_session_sha256": _sha(f"{host}:{task}:{index}:hook-session"),
+            "hook_event_sha256": _sha(f"{host}:{task}:{index}:hook-event"),
+            "native_event_sequence_sha256": native["event_sequence_sha256"],
+            "native_session_identity_sha256": native["session_identity_sha256"],
+            "native_lifecycle_record_sha256": native["lifecycle_record_sha256"],
+            "same_process": True,
+            "same_connection": True,
+        }
+        proof["connection_correlation_sha256"] = host_process_receipt_v2.correlation_sha256(
+            {
+                key: proof[key]
+                for key in (
+                    "process_identity_sha256",
+                    "connection_sha256",
+                    "initialize_request_sha256",
+                    "initialized_notification_sha256",
+                    "initialized_connection_count",
+                    "hook_session_sha256",
+                    "hook_event_sha256",
+                    "native_event_sequence_sha256",
+                    "native_session_identity_sha256",
+                    "native_lifecycle_record_sha256",
+                )
+            }
+        )
+    else:
+        child_session = _sha(f"{host}:{task}:{index}:child-session")
+        proof = {
+            "proof_kind": "opencode_public_fork_route_correlation",
+            "process_identity_sha256": process_identity,
+            "request_method": "POST",
+            "route_observation_sha256": _sha(f"{host}:{task}:{index}:actual-route"),
+            "request_body_sha256": hashlib.sha256(b"{}").hexdigest(),
+            "response_sha256": _sha(f"{host}:{task}:{index}:response"),
+            "parent_session_sha256": _sha(f"{host}:{task}:{index}:parent-session"),
+            "child_session_sha256": child_session,
+            "child_plugin_event_sha256": _sha(f"{host}:{task}:{index}:plugin-event"),
+            "child_plugin_session_sha256": child_session,
+            "native_event_sequence_sha256": native["event_sequence_sha256"],
+            "native_session_identity_sha256": native["session_identity_sha256"],
+            "native_lifecycle_record_sha256": native["lifecycle_record_sha256"],
+            "same_process": True,
+            "actual_route_observed": True,
+        }
+        proof["route_correlation_sha256"] = host_process_receipt_v2.correlation_sha256(
+            {
+                key: proof[key]
+                for key in (
+                    "process_identity_sha256",
+                    "request_method",
+                    "route_observation_sha256",
+                    "request_body_sha256",
+                    "response_sha256",
+                    "parent_session_sha256",
+                    "child_session_sha256",
+                    "child_plugin_event_sha256",
+                    "child_plugin_session_sha256",
+                    "native_event_sequence_sha256",
+                    "native_session_identity_sha256",
+                    "native_lifecycle_record_sha256",
+                )
+            }
+        )
+    return host_process_receipt_v2.build_receipt(
+        host=host,
+        task_case=task,
+        run_id=f"run-{host}-{task}",
+        candidate_binding=CANDIDATE,
+        run_binding={"evidence_run_id": 202, "qualification_run_id": 303},
+        host_binary=executor.host_preflight_receipt.host_binary_identity(IDENTITY, host),
+        broker_source={
+            "repository_external": True,
+            "owner_only_mode": True,
+            "sha256": BROKER_SHA[host],
+        },
+        host_identity_sha256=executor.host_preflight_receipt.host_identity_sha256(
+            IDENTITY["hosts"][host]
+        ),
+        host_identity_source_sha256=IDENTITY["source_sha256"],
+        process_identity_sha256=process_identity,
+        broker_instance_sha256=_sha(f"{host}:{task}:{index}:broker-instance"),
+        nonce_sha256=_sha(f"{host}:{task}:{index}:nonce"),
+        issued_at="2026-08-27T00:00:00Z",
+        expires_at="2026-08-27T00:05:00Z",
+        validation_reference_time="2026-08-27T00:02:00Z",
+        selector_source_symlink=host == "opencode",
+        execution_target_regular=True,
+        execution_target_single_link=True,
+        status="exited",
+        exit_code=0,
+        native_event_binding=native,
+        proof=proof,
+        isolation={
+            "runner_received_secret": False,
+            "mcp_received_secret": False,
+            "ambient_auth_forwarded_to_mcp": False,
+            "raw_output_retained": False,
+        },
+    )
 
 
 def _make_source(root: Path) -> None:
@@ -131,18 +248,32 @@ def _make_source(root: Path) -> None:
                     },
                 },
             )
+            process_receipts = [
+                _v2_process(host, task, index=index)
+                for index in (1, 2)
+            ]
+            process_set = executor.host_process_receipt_set_v1.build_receipt_set(
+                host=host,
+                task_case=task,
+                run_id=f"run-{host}-{task}",
+                candidate_binding=CANDIDATE,
+                run_binding={"evidence_run_id": 202, "qualification_run_id": 303},
+                host_binary=binary,
+                broker_source={
+                    "repository_external": True,
+                    "owner_only_mode": True,
+                    "sha256": BROKER_SHA[host],
+                },
+                host_identity_sha256=executor.host_preflight_receipt.host_identity_sha256(
+                    IDENTITY["hosts"][host]
+                ),
+                host_identity_source_sha256=IDENTITY["source_sha256"],
+                task_native_event_binding=_native(host, task),
+                processes=process_receipts,
+            )
             _write_json(
                 root / "receipts" / host / task / "host-process.json",
-                {
-                    "host": host,
-                    "task_case": task,
-                    "run_id": f"run-{host}-{task}",
-                    "nonce_sha256": _sha(f"{host}:{task}:nonce"),
-                    "selector_source_symlink": host == "opencode",
-                    "execution_target_regular": True,
-                    "execution_target_single_link": True,
-                    "native_event_binding": _native(host, task),
-                },
+                process_set,
             )
     if os.name == "nt":
         from deeplaw.windows_acl import harden_windows_vault
@@ -199,17 +330,6 @@ def _patch_validator_seams(monkeypatch: pytest.MonkeyPatch) -> None:
             "result_count": len(results),
         },
     )
-
-    def process_receipt(value: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
-        kwargs["seen_nonce_sha256s"].add(value["nonce_sha256"])
-        return dict(value)
-
-    monkeypatch.setattr(
-        executor.host_process_receipt_v2,
-        "validate_receipt",
-        process_receipt,
-    )
-
 
 def _arguments(tmp_path: Path) -> dict[str, Any]:
     return {
@@ -557,7 +677,7 @@ def test_native_process_binding_mismatch_fails_closed(
     _make_source(source)
     receipt = source / "receipts" / "opencode" / "professional_evidence" / "host-process.json"
     value = json.loads(receipt.read_text(encoding="utf-8"))
-    value["native_event_binding"]["event_sequence_sha256"] = "f" * 64
+    value["task_native_event_binding"]["event_sequence_sha256"] = "f" * 64
     _write_json(receipt, value)
     _patch_validator_seams(monkeypatch)
     output = tmp_path / "final"
@@ -576,7 +696,7 @@ def test_process_topology_must_match_execution_identity(
     _make_source(source)
     receipt = source / "receipts" / "opencode" / "continuity" / "host-process.json"
     value = json.loads(receipt.read_text(encoding="utf-8"))
-    value["selector_source_symlink"] = False
+    value["processes"][0]["receipt"]["selector_source_symlink"] = False
     _write_json(receipt, value)
     _patch_validator_seams(monkeypatch)
     output = tmp_path / "final"

@@ -23,7 +23,7 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from benchmarks.hosts import host_preflight_receipt, host_process_receipt_v2
+from benchmarks.hosts import host_preflight_receipt, host_process_receipt_set_v1
 from benchmarks.hosts.run_v013_host_task_qualification import (
     HOSTS,
     TASK_CASES,
@@ -692,13 +692,18 @@ def _validate_staging(
                 identity=identity,
                 broker_sha256=retained_brokers[host],
             )
-            process = _strict_object(
+            process_set = _strict_object(
                 root / "receipts" / host / task / "host-process.json",
-                label="Host process receipt",
+                label="Host process receipt set",
             )
+            expected_native = {
+                "event_sequence_sha256": metrics.get("event_sequence_sha256"),
+                "session_identity_sha256": metrics.get("session_identity_sha256"),
+                "lifecycle_record_sha256": metrics.get("lifecycle_record_sha256"),
+            }
             try:
-                admitted_process = host_process_receipt_v2.validate_receipt(
-                    process,
+                admitted_set = host_process_receipt_set_v1.validate_receipt_set(
+                    process_set,
                     expected_host=host,
                     expected_task_case=task,
                     expected_run_id=metrics["run_id"],
@@ -711,29 +716,35 @@ def _validate_staging(
                     expected_host_identity_sha256=expected_identity_sha,
                     expected_host_identity_source_sha256=identity["source_sha256"],
                     expected_host_binary=expected_host_binary,
+                    expected_task_native_event_binding=expected_native,
                     seen_nonce_sha256s=seen_nonces,
                 )
             except (TypeError, ValueError) as error:
-                raise HostTaskExecutorError("Host process receipt was rejected") from error
+                raise HostTaskExecutorError("Host process receipt set was rejected") from error
+            if not isinstance(admitted_set, Mapping):
+                _fail("Host process receipt set was rejected")
+            members = admitted_set.get("processes")
+            if not isinstance(members, list) or not members:
+                _fail("Host process receipt set was rejected")
             topology_fields = (
                 "selector_source_symlink",
                 "execution_target_regular",
                 "execution_target_single_link",
             )
             execution_row = execution_identity["hosts"][host]
-            if any(
-                admitted_process.get(field) != execution_row[field]
-                for field in topology_fields
-            ):
-                _fail("Host process receipt differs from the execution topology")
-            native = admitted_process.get("native_event_binding")
-            expected_native = {
-                "event_sequence_sha256": metrics.get("event_sequence_sha256"),
-                "session_identity_sha256": metrics.get("session_identity_sha256"),
-                "lifecycle_record_sha256": metrics.get("lifecycle_record_sha256"),
-            }
-            if native != expected_native:
-                _fail("Host process receipt differs from the typed native event binding")
+            if admitted_set.get("task_native_event_binding") != expected_native:
+                _fail("Host process receipt set differs from the typed native event binding")
+            for member in members:
+                if not isinstance(member, Mapping):
+                    _fail("Host process receipt set member was rejected")
+                admitted_process = member.get("receipt")
+                if not isinstance(admitted_process, Mapping):
+                    _fail("Host process receipt set member was rejected")
+                if any(
+                    admitted_process.get(field) != execution_row[field]
+                    for field in topology_fields
+                ):
+                    _fail("Host process receipt differs from the execution topology")
             results.append(dict(derived))
     try:
         validate_host_task_matrix(results, host_identity_input=host_identity_input)

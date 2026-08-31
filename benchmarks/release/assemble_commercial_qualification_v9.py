@@ -27,7 +27,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from benchmarks.hosts import host_process_receipt_v2
+from benchmarks.hosts import host_process_receipt_set_v1
 from benchmarks.release import kernel_qualification_bundle_v1
 from benchmarks.release.typed_qualification_evidence import parse_typed_evidence
 
@@ -664,7 +664,8 @@ def _validate_host_receipts(
         "host-preflight-receipt.v1.schema.json", label="Host preflight schema"
     )
     process_schema = _schema(
-        host_process_receipt_v2.SCHEMA_FILENAME, label="Host process schema"
+        host_process_receipt_set_v1.SCHEMA_FILENAME,
+        label="Host process receipt set schema",
     )
     seen_nonce_sha256s: set[str] = set()
     for relative, reference in references.items():
@@ -679,7 +680,7 @@ def _validate_host_receipts(
         else:
             _validate_schema(value, process_schema, label="Host process receipt")
             try:
-                admitted = host_process_receipt_v2.validate_receipt(
+                admitted = host_process_receipt_set_v1.validate_receipt_set(
                     value,
                     expected_candidate=candidate,
                     expected_run_binding={
@@ -690,7 +691,7 @@ def _validate_host_receipts(
                 )
             except (TypeError, ValueError) as error:
                 raise CommercialQualificationAssemblerError(
-                    "Host process receipt v2 structural or cross-binding validation failed"
+                    "Host process receipt set structural or cross-binding validation failed"
                 ) from error
             host = admitted.get("host")
             task_case = admitted.get("task_case")
