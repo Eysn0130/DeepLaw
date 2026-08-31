@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, TypeAlias
 
 from benchmarks.hosts import host_process_receipt_v2
+from deeplaw import bounded_subprocess
 
 UNREPORTED = "unreported"
 _JSON_VALUE: TypeAlias = dict[str, Any] | list[Any] | str | int | float | bool | None
@@ -199,18 +200,6 @@ def _strict_control_json(raw: bytes) -> dict[str, Any]:
     return value
 
 
-def _windows_taskkill_executable() -> str | None:
-    """Return the absolute native process-tree terminator, if available."""
-
-    if os.name != "nt":
-        return None
-    system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
-    if not system_root:
-        return None
-    selected = os.path.join(system_root, "System32", "taskkill.exe")
-    return selected if os.path.isabs(selected) and os.path.isfile(selected) else None
-
-
 def _windows_child_environment(environment: Mapping[str, str]) -> dict[str, str]:
     """Project only the Windows system root into an otherwise closed env."""
 
@@ -230,11 +219,7 @@ def _process_group_popen_options() -> dict[str, Any]:
 
     if os.name == "nt":
         creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        if (
-            type(creation_flags) is not int
-            or creation_flags <= 0
-            or _windows_taskkill_executable() is None
-        ):
+        if type(creation_flags) is not int or creation_flags <= 0:
             _broker_fail("Codex broker process-group isolation is unavailable")
         return {"creationflags": creation_flags}
     if os.name == "posix":
@@ -244,29 +229,22 @@ def _process_group_popen_options() -> dict[str, Any]:
     _broker_fail("Codex broker process-group isolation is unavailable")
 
 
-def _terminate_broker_process_group(process: subprocess.Popen[bytes]) -> bool:
+def _terminate_broker_process_group(
+    process: subprocess.Popen[bytes],
+    guard: bounded_subprocess.WindowsJobGuard | None = None,
+) -> bool:
     """Terminate the isolated process group and report confirmed cleanup."""
 
     if os.name == "nt":
-        taskkill = _windows_taskkill_executable()
-        if taskkill is not None:
+        cleanup_confirmed = False
+        if guard is not None:
             try:
-                result = subprocess.run(
-                    [taskkill, "/F", "/T", "/PID", str(process.pid)],
-                    env=_windows_child_environment({"PATH": os.defpath}),
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                    shell=False,
-                    timeout=5,
-                )
-            except (OSError, subprocess.SubprocessError, CodexOwnerExternalBrokerError):
-                result = None
-            if result is not None and result.returncode == 0:
-                with suppress(OSError):
-                    process.kill()
-                return True
+                cleanup_confirmed = guard.cleanup(timeout_seconds=5)
+            except Exception:
+                cleanup_confirmed = False
+        with suppress(OSError):
+            process.kill()
+        return cleanup_confirmed
     elif os.name == "posix":
         try:
             os.killpg(process.pid, signal.SIGKILL)
@@ -324,7 +302,7 @@ def _bounded_broker_control_exchange(
 
     closed_environment = _closed_broker_environment()
     try:
-        process = subprocess.Popen(
+        process, guard = bounded_subprocess.spawn_process(
             _broker_command(broker_launcher),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -332,12 +310,12 @@ def _bounded_broker_control_exchange(
             env=closed_environment,
             **_process_group_popen_options(),
         )
-    except OSError as error:
+    except (OSError, ValueError, bounded_subprocess.WindowsJobStartError) as error:
         raise CodexOwnerExternalBrokerError(
             "Codex owner-external broker control IPC failed to start"
         ) from error
     if process.stdin is None or process.stdout is None or process.stderr is None:
-        cleanup_confirmed = _terminate_broker_process_group(process)
+        cleanup_confirmed = _terminate_broker_process_group(process, guard)
         if not cleanup_confirmed:
             _broker_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
         _broker_fail("Codex owner-external broker control pipes are unavailable")
@@ -351,7 +329,7 @@ def _bounded_broker_control_exchange(
     total_bytes = 0
 
     def terminate_process_group() -> None:
-        if not _terminate_broker_process_group(process):
+        if not _terminate_broker_process_group(process, guard):
             cleanup_unconfirmed.set()
 
     def drain(stream: Any, target: bytearray) -> None:
@@ -436,6 +414,8 @@ def _bounded_broker_control_exchange(
         fail_closed("Codex owner-external broker control IPC failed")
     if stderr_buffer:
         fail_closed("Codex owner-external broker emitted unexpected stderr")
+    if not _terminate_broker_process_group(process, guard):
+        _broker_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
     return bytes(stdout_buffer)
 
 
@@ -1210,6 +1190,7 @@ class CodexAppServerClient:
         self._secret_leak = False
 
         self._process: subprocess.Popen[bytes] | None = None
+        self._job_guard: bounded_subprocess.WindowsJobGuard | None = None
         self._output_queue_max_chunks = max(
             2,
             (self.max_output_bytes + 4095) // 4096 + 2,
@@ -1325,8 +1306,18 @@ class CodexAppServerClient:
             raise CodexAppServerError("client is closed")
         if self._process is not None and self._process.poll() is None:
             return self
+        if self._process is not None:
+            stale_process = self._process
+            stale_guard = self._job_guard
+            self._process = None
+            self._job_guard = None
+            if os.name == "nt" and not _terminate_broker_process_group(
+                stale_process,
+                stale_guard,
+            ):
+                raise CodexAppServerError(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
         try:
-            self._process = subprocess.Popen(
+            self._process, self._job_guard = bounded_subprocess.spawn_process(
                 self.command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
@@ -1337,8 +1328,9 @@ class CodexAppServerClient:
                 close_fds=True,
                 **(_process_group_popen_options() if os.name == "nt" else {}),
             )
-        except (OSError, ValueError) as exc:
+        except (OSError, ValueError, bounded_subprocess.WindowsJobStartError) as exc:
             self._process = None
+            self._job_guard = None
             raise CodexAppServerError("unable to start app server") from exc
         self._output_queue = queue.Queue(maxsize=self._output_queue_max_chunks)
         self._reader_threads = []
@@ -1661,13 +1653,19 @@ class CodexAppServerClient:
     def close(self) -> None:
         process = self._process
         if process is None:
+            self._job_guard = None
             self._closed = True
             return
+        guard = self._job_guard
         cleanup_confirmed = True
         try:
-            if process.poll() is None:
+            if os.name == "nt":
+                cleanup_confirmed = _terminate_broker_process_group(process, guard)
+                with suppress(subprocess.TimeoutExpired):
+                    process.wait(timeout=0.5)
+            elif process.poll() is None:
                 if os.name == "nt":
-                    cleanup_confirmed = _terminate_broker_process_group(process)
+                    cleanup_confirmed = _terminate_broker_process_group(process, guard)
                     with suppress(subprocess.TimeoutExpired):
                         process.wait(timeout=0.5)
                 else:
@@ -1690,6 +1688,7 @@ class CodexAppServerClient:
                 reader.join(timeout=0.2)
             self._reader_threads = []
             self._process = None
+            self._job_guard = None
             self._closed = True
         if not cleanup_confirmed:
             _broker_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)

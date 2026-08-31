@@ -58,6 +58,7 @@ from benchmarks.hosts.run_v013_host_task_qualification import (
     HostTaskQualificationError,
     load_zero_model_candidate_binding,
 )
+from deeplaw import bounded_subprocess
 
 MODEL = "deepseek/deepseek-v4-flash"
 VARIANT = "max"
@@ -688,18 +689,6 @@ os.execve({str(deeplaw_executable)!r}, [
     del node_binary
 
 
-def _windows_taskkill_executable() -> str | None:
-    """Return the absolute native process-tree terminator, if available."""
-
-    if os.name != "nt":
-        return None
-    system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
-    if not system_root:
-        return None
-    selected = os.path.join(system_root, "System32", "taskkill.exe")
-    return selected if os.path.isabs(selected) and os.path.isfile(selected) else None
-
-
 def _windows_child_environment(environment: Mapping[str, str]) -> dict[str, str]:
     """Project the Windows system root into a closed child environment."""
 
@@ -717,11 +706,7 @@ def _windows_child_environment(environment: Mapping[str, str]) -> dict[str, str]
 def process_creation_options() -> dict[str, Any]:
     if os.name == "nt":
         creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        if (
-            type(creation_flags) is not int
-            or creation_flags <= 0
-            or _windows_taskkill_executable() is None
-        ):
+        if type(creation_flags) is not int or creation_flags <= 0:
             _control_fail("OpenCode process-group isolation is unavailable")
         return {"creationflags": creation_flags}
     if os.name == "posix":
@@ -731,32 +716,27 @@ def process_creation_options() -> dict[str, Any]:
     _control_fail("OpenCode process-group isolation is unavailable")
 
 
-def _terminate_process_tree(process: subprocess.Popen[bytes]) -> bool:
+def _terminate_process_tree(
+    process: subprocess.Popen[bytes],
+    guard: bounded_subprocess.WindowsJobGuard | None = None,
+) -> bool:
     """Terminate the created process group and report confirmed cleanup."""
 
-    if process.poll() is not None:
-        return True
     if os.name == "nt":
-        taskkill = _windows_taskkill_executable()
-        if taskkill is not None:
+        cleanup_confirmed = False
+        if guard is not None:
             try:
-                result = subprocess.run(
-                    [taskkill, "/F", "/T", "/PID", str(process.pid)],
-                    env=_windows_child_environment({"PATH": os.defpath}),
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                    shell=False,
-                    timeout=5,
-                )
-            except (OSError, subprocess.SubprocessError, QualificationError):
-                result = None
-            if result is not None and result.returncode == 0:
-                with suppress(OSError):
-                    process.kill()
-                return True
+                cleanup_confirmed = guard.cleanup(timeout_seconds=5)
+            except Exception:
+                cleanup_confirmed = False
+        # Parent termination is best-effort containment only.  It must never
+        # upgrade a missing or failed Job Object proof into success.
+        with suppress(Exception):
+            process.kill()
+        return cleanup_confirmed
     elif os.name == "posix":
+        if process.poll() is not None:
+            return True
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -764,10 +744,10 @@ def _terminate_process_tree(process: subprocess.Popen[bytes]) -> bool:
         except OSError:
             pass
         else:
-            with suppress(OSError):
+            with suppress(Exception):
                 process.kill()
             return True
-    with suppress(OSError):
+    with suppress(Exception):
         process.kill()
     return False
 
@@ -783,22 +763,25 @@ def _run_bounded_process(
     if not argv:
         raise QualificationError("bounded process argv is empty")
     started = time.monotonic()
-    process = subprocess.Popen(
-        [str(item) for item in argv],
-        cwd=str(cwd),
-        env=_windows_child_environment(environment),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        **process_creation_options(),
-    )
+    try:
+        process, guard = bounded_subprocess.spawn_process(
+            [str(item) for item in argv],
+            cwd=str(cwd),
+            env=_windows_child_environment(environment),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **process_creation_options(),
+        )
+    except (OSError, ValueError, bounded_subprocess.WindowsJobStartError) as exc:
+        raise QualificationError("bounded process failed to start") from exc
     timed_out = False
     cleanup_confirmed = True
     try:
         stdout, stderr = process.communicate(input=input_bytes, timeout=timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
-        cleanup_confirmed = _terminate_process_tree(process)
+        cleanup_confirmed = _terminate_process_tree(process, guard)
         try:
             stdout, stderr = process.communicate(
                 timeout=_PROCESS_TERMINATION_WAIT_SECONDS
@@ -815,11 +798,13 @@ def _run_bounded_process(
         except (OSError, subprocess.SubprocessError, ValueError):
             cleanup_confirmed = False
             stdout, stderr = b"", b""
+    if not timed_out:
+        cleanup_confirmed = _terminate_process_tree(process, guard)
     if not cleanup_confirmed:
         _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
     elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
     if len(stdout) > MAX_OUTPUT_BYTES or len(stderr) > MAX_OUTPUT_BYTES:
-        if not _terminate_process_tree(process):
+        if not _terminate_process_tree(process, guard):
             _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
         return {
             "returncode": process.returncode,
@@ -3480,6 +3465,7 @@ class _OpenCodeLocalServer:
         self.root = root
         self.forbidden_output_values = tuple(forbidden_output_values)
         self.process: subprocess.Popen[bytes] | None = None
+        self.job_guard: bounded_subprocess.WindowsJobGuard | None = None
         self.base_url = ""
         self.port = 0
 
@@ -3492,26 +3478,32 @@ class _OpenCodeLocalServer:
         # This process is intentionally loopback-only and uses the isolated
         # OpenCode environment; it is terminated before the scenario root is
         # cleaned up.
-        self.process = subprocess.Popen(
-            [
-                str(self.binary),
-                "serve",
-                "--hostname",
-                "127.0.0.1",
-                "--port",
-                str(self.port),
-            ],
-            cwd=str(self.cwd),
-            env=_windows_child_environment(self.environment),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            **process_creation_options(),
-        )
+        try:
+            self.process, self.job_guard = bounded_subprocess.spawn_process(
+                [
+                    str(self.binary),
+                    "serve",
+                    "--hostname",
+                    "127.0.0.1",
+                    "--port",
+                    str(self.port),
+                ],
+                cwd=str(self.cwd),
+                env=_windows_child_environment(self.environment),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                **process_creation_options(),
+            )
+        except (OSError, ValueError, bounded_subprocess.WindowsJobStartError) as exc:
+            self.process = None
+            self.job_guard = None
+            raise QualificationError("OpenCode local server failed to start") from exc
         self.base_url = f"http://127.0.0.1:{self.port}"
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
+                self.stop()
                 raise QualificationError("OpenCode local server exited before readiness")
             try:
                 self.request("GET", "/global/health")
@@ -3587,8 +3579,10 @@ class _OpenCodeLocalServer:
     def stop(self) -> None:
         process = self.process
         if process is None:
+            self.job_guard = None
             return
-        cleanup_confirmed = _terminate_process_tree(process)
+        guard = self.job_guard
+        cleanup_confirmed = _terminate_process_tree(process, guard)
         try:
             process.communicate(timeout=10)
         except subprocess.TimeoutExpired:
@@ -3602,6 +3596,7 @@ class _OpenCodeLocalServer:
             cleanup_confirmed = False
         finally:
             self.process = None
+            self.job_guard = None
         if not cleanup_confirmed:
             _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
 

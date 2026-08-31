@@ -1038,14 +1038,12 @@ def test_production_seams_reject_unattested_codex_connection_and_synthetic_openc
         def kill(self) -> None:
             self.killed = True
 
-    taskkill = str(tmp_path / "System32" / "taskkill.exe")
-    calls: list[tuple[list[str], dict[str, Any]]] = []
+    cleanup_timeouts: list[float] = []
 
-    def run_taskkill(
-        argv: list[str], **kwargs: Any
-    ) -> subprocess.CompletedProcess[bytes]:
-        calls.append((argv, kwargs))
-        return subprocess.CompletedProcess(argv, returncode=0)
+    class Guard:
+        def cleanup(self, *, timeout_seconds: float) -> bool:
+            cleanup_timeouts.append(timeout_seconds)
+            return False
 
     with monkeypatch.context() as windows:
         windows.setattr(codex_client.os, "name", "nt")
@@ -1055,12 +1053,6 @@ def test_production_seams_reject_unattested_codex_connection_and_synthetic_openc
             512,
             raising=False,
         )
-        windows.setattr(
-            codex_client,
-            "_windows_taskkill_executable",
-            lambda: taskkill,
-        )
-        windows.setattr(codex_client.subprocess, "run", run_taskkill)
         options = codex_client._process_group_popen_options()
         assert options["creationflags"] == codex_client.subprocess.CREATE_NEW_PROCESS_GROUP
         windows.setenv("SYSTEMROOT", r"C:\Windows")
@@ -1076,21 +1068,14 @@ def test_production_seams_reject_unattested_codex_connection_and_synthetic_openc
             "WINDIR",
         }
         process = Process()
-        # taskkill rc=0 without native post-verification is not proof that the
-        # requested process tree was removed.
-        confirmed = codex_client._terminate_broker_process_group(process)  # type: ignore[arg-type]
+        # A parent exit cannot replace the creation-time Job Object proof.
+        confirmed = codex_client._terminate_broker_process_group(  # type: ignore[arg-type]
+            process,
+            Guard(),  # type: ignore[arg-type]
+        )
         assert process.killed is True
         assert confirmed is False
-        assert calls[0][0] == [taskkill, "/F", "/T", "/PID", "4312"]
-        assert calls[0][1]["shell"] is False
-        assert calls[0][1]["stdin"] is subprocess.DEVNULL
-        assert calls[0][1]["stdout"] is subprocess.DEVNULL
-        assert calls[0][1]["stderr"] is subprocess.DEVNULL
-        assert calls[0][1]["env"] == {
-            "PATH": os.defpath,
-            "SYSTEMROOT": r"C:\Windows",
-            "WINDIR": r"C:\Windows",
-        }
+        assert cleanup_timeouts == [5]
         assert process.killed is True
 
     with monkeypatch.context() as windows:
@@ -1124,6 +1109,8 @@ def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
     tmp_path: Path,
     failure: str,
 ) -> None:
+    del tmp_path
+
     class Process:
         pid = 4313
 
@@ -1133,32 +1120,28 @@ def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
         def kill(self) -> None:
             self.killed = True
 
-    taskkill = str(tmp_path / "System32" / "taskkill.exe")
-    calls: list[tuple[list[str], dict[str, Any]]] = []
+    cleanup_timeouts: list[float] = []
 
-    def run_taskkill(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
-        calls.append((argv, kwargs))
-        if failure == "exception":
-            raise OSError("synthetic taskkill failure")
-        if failure == "timeout":
-            raise subprocess.TimeoutExpired(argv, timeout=kwargs["timeout"])
-        return subprocess.CompletedProcess(argv, returncode=1)
+    class Guard:
+        def cleanup(self, *, timeout_seconds: float) -> bool:
+            cleanup_timeouts.append(timeout_seconds)
+            if failure == "exception":
+                raise OSError("synthetic job cleanup failure")
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired("synthetic job cleanup", timeout_seconds)
+            return False
 
     with monkeypatch.context() as windows:
         windows.setattr(codex_client.os, "name", "nt")
-        windows.setattr(
-            codex_client,
-            "_windows_taskkill_executable",
-            lambda: taskkill,
-        )
-        windows.setattr(codex_client.subprocess, "run", run_taskkill)
-        windows.setenv("SYSTEMROOT", r"C:\Windows")
         process = Process()
-        confirmed = codex_client._terminate_broker_process_group(process)  # type: ignore[arg-type]
+        confirmed = codex_client._terminate_broker_process_group(  # type: ignore[arg-type]
+            process,
+            Guard(),  # type: ignore[arg-type]
+        )
 
     assert confirmed is False
     assert process.killed is True
-    assert calls[0][0] == [taskkill, "/F", "/T", "/PID", "4313"]
+    assert cleanup_timeouts == [5]
 
 
 def test_codex_close_fail_closed_after_unconfirmed_windows_cleanup(
@@ -1198,7 +1181,7 @@ def test_codex_close_fail_closed_after_unconfirmed_windows_cleanup(
         windows.setattr(
             codex_client,
             "_terminate_broker_process_group",
-            lambda _process: False,
+            lambda _process, _guard=None: False,
         )
         with pytest.raises(
             codex_client.CodexOwnerExternalBrokerError,

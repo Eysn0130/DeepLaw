@@ -1357,9 +1357,7 @@ def test_windows_process_group_options_require_bound_taskkill(
     tmp_path: Path,
 ) -> None:
     system_root = tmp_path / "Windows"
-    taskkill = system_root / "System32" / "taskkill.exe"
-    taskkill.parent.mkdir(parents=True)
-    taskkill.write_bytes(b"taskkill")
+    system_root.mkdir()
 
     with monkeypatch.context() as windows:
         windows.setattr(runner.os, "name", "nt")
@@ -1371,25 +1369,25 @@ def test_windows_process_group_options_require_bound_taskkill(
         )
         windows.setenv("SYSTEMROOT", str(system_root))
         assert runner.process_creation_options() == {"creationflags": 512}
-        assert runner._windows_taskkill_executable() == str(taskkill)
 
         windows.delenv("SYSTEMROOT", raising=False)
         windows.delenv("WINDIR", raising=False)
+        assert runner.process_creation_options() == {"creationflags": 512}
         with pytest.raises(
             runner.QualificationError,
-            match="process-group isolation is unavailable",
+            match="Windows system root is unavailable",
         ):
-            runner.process_creation_options()
+            runner._windows_child_environment({"PATH": os.defpath})
 
 
-@pytest.mark.parametrize(
-    "failure", ("nonzero", "exception", "timeout", "rc0-unverified")
-)
+@pytest.mark.parametrize("failure", ("nonzero", "exception", "timeout"))
 def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     failure: str,
 ) -> None:
+    del tmp_path
+
     class Process:
         pid = 4315
 
@@ -1402,38 +1400,37 @@ def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
         def kill(self) -> None:
             self.killed = True
 
-    system_root = tmp_path / "Windows"
-    taskkill = system_root / "System32" / "taskkill.exe"
-    taskkill.parent.mkdir(parents=True)
-    taskkill.write_bytes(b"taskkill")
-    calls: list[tuple[list[str], dict[str, Any]]] = []
+    cleanup_timeouts: list[float] = []
 
-    def run_taskkill(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
-        calls.append((argv, kwargs))
-        if failure == "exception":
-            raise OSError("synthetic taskkill failure")
-        if failure == "timeout":
-            raise subprocess.TimeoutExpired(argv, timeout=kwargs["timeout"])
-        if failure == "rc0-unverified":
-            return subprocess.CompletedProcess(argv, returncode=0)
-        return subprocess.CompletedProcess(argv, returncode=1)
+    class Guard:
+        def cleanup(self, *, timeout_seconds: float) -> bool:
+            cleanup_timeouts.append(timeout_seconds)
+            if failure == "exception":
+                raise OSError("synthetic job cleanup failure")
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired("synthetic job cleanup", timeout_seconds)
+            return False
 
     with monkeypatch.context() as windows:
         windows.setattr(runner.os, "name", "nt")
-        windows.setenv("SYSTEMROOT", str(system_root))
-        windows.setattr(runner.subprocess, "run", run_taskkill)
         process = Process()
-        confirmed = runner._terminate_process_tree(process)  # type: ignore[arg-type]
+        confirmed = runner._terminate_process_tree(  # type: ignore[arg-type]
+            process,
+            Guard(),  # type: ignore[arg-type]
+        )
 
     assert confirmed is False
     assert process.killed is True
-    assert calls[0][0] == [str(taskkill), "/F", "/T", "/PID", "4315"]
-    assert calls[0][1]["timeout"] == 5
-    assert calls[0][1]["env"] == {
-        "PATH": os.defpath,
-        "SYSTEMROOT": str(system_root),
-        "WINDIR": str(system_root),
-    }
+    assert cleanup_timeouts == [5]
+
+    if failure == "nonzero":
+        with monkeypatch.context() as windows:
+            windows.setattr(runner.os, "name", "nt")
+            missing_guard = Process()
+            assert runner._terminate_process_tree(  # type: ignore[arg-type]
+                missing_guard
+            ) is False
+        assert missing_guard.killed is True
 
 
 def test_bounded_process_timeout_does_not_use_unbounded_communicate(
@@ -1463,7 +1460,11 @@ def test_bounded_process_timeout_does_not_use_unbounded_communicate(
 
     fake = FakeProcess()
     monkeypatch.setattr(runner.subprocess, "Popen", lambda *args, **kwargs: fake)
-    monkeypatch.setattr(runner, "_terminate_process_tree", lambda _process: True)
+    monkeypatch.setattr(
+        runner,
+        "_terminate_process_tree",
+        lambda _process, _guard=None: True,
+    )
     result = runner._run_bounded_process(
         ["fake-opencode"],
         environment={"PATH": os.defpath},
@@ -1510,7 +1511,11 @@ def test_local_server_stop_does_not_use_unbounded_communicate(
         root=tmp_path,
     )
     server.process = fake  # type: ignore[assignment]
-    monkeypatch.setattr(runner, "_terminate_process_tree", lambda _process: True)
+    monkeypatch.setattr(
+        runner,
+        "_terminate_process_tree",
+        lambda _process, _guard=None: True,
+    )
     server.stop()
     assert fake.killed is True
     assert fake.timeouts[0] == 10
@@ -1719,7 +1724,7 @@ def test_timeout_terminates_the_created_process_group(
     monkeypatch.setattr(
         runner,
         "_terminate_process_tree",
-        lambda process: killed.append(process) or True,
+        lambda process, _guard=None: killed.append(process) or True,
     )
     result = runner._run_bounded_process(
         ["fake-opencode"], environment={"PATH": os.defpath}, cwd=tmp_path, timeout=0.01
