@@ -175,7 +175,8 @@ def test_bounded_subprocess_reports_unavailable_pipes(
     def fail_group_kill(_pid: int, _signal: int) -> None:
         raise OSError("synthetic process-group cleanup failure")
 
-    monkeypatch.setattr(bounded_subprocess.os, "killpg", fail_group_kill)
+    if os.name == "posix":
+        monkeypatch.setattr(bounded_subprocess.os, "killpg", fail_group_kill)
     monkeypatch.setattr(
         bounded_subprocess,
         "spawn_process",
@@ -403,6 +404,124 @@ def test_bounded_subprocess_kills_descendants_that_inherit_output_pipes(
         assert not survived.exists()
     finally:
         cleanup_windows_fixture(child_pid, parent_pid, require_live_handle=False)
+
+    if os.name == "posix":
+        early_root = tmp_path / "parent-exits-first"
+        early_root.mkdir()
+        early_started = early_root / "child-started"
+        early_child_pid = early_root / "child-pid"
+        early_parent_pid = early_root / "parent-pid"
+        early_survived = early_root / "child-survived"
+        early_child = (
+            "import os,pathlib,time;"
+            f"pathlib.Path({str(early_child_pid)!r}).write_text("
+            "str(os.getpid()), encoding='utf-8');"
+            f"pathlib.Path({str(early_started)!r}).write_text('started', encoding='utf-8');"
+            "time.sleep(1);"
+            f"pathlib.Path({str(early_survived)!r}).write_text('survived', encoding='utf-8');"
+            "time.sleep(10)"
+        )
+        early_parent = early_root / "process-tree.py"
+        early_parent.write_text(
+            "import os,pathlib,subprocess,sys,time\n"
+            f"pathlib.Path({str(early_parent_pid)!r}).write_text("
+            "str(os.getpid()), encoding='utf-8')\n"
+            f"subprocess.Popen([sys.executable, '-c', {early_child!r}])\n"
+            f"while not pathlib.Path({str(early_started)!r}).is_file(): time.sleep(0.001)\n",
+            encoding="utf-8",
+        )
+
+        def cleanup_posix_fixture(child_pid: Path, parent_pid: Path) -> None:
+            if parent_pid.is_file():
+                try:
+                    process_group = int(parent_pid.read_text(encoding="utf-8"))
+                    if process_group > 1 and process_group != os.getpgrp():
+                        os.killpg(process_group, 9)
+                except (OSError, ValueError):
+                    pass
+            if child_pid.is_file():
+                try:
+                    descendant = int(child_pid.read_text(encoding="utf-8"))
+                    if descendant > 1 and descendant != os.getpid():
+                        os.kill(descendant, 9)
+                except (OSError, ValueError):
+                    pass
+
+        try:
+            result = run_bounded_subprocess(
+                [sys.executable, str(early_parent)],
+                timeout_seconds=5,
+                max_stdout_bytes=1_024,
+                max_stderr_bytes=1_024,
+            )
+            assert result.returncode == 0
+            assert early_started.is_file()
+            assert early_child_pid.is_file()
+            assert not early_survived.exists()
+        finally:
+            cleanup_posix_fixture(early_child_pid, early_parent_pid)
+
+        from io import BytesIO
+        from threading import Event
+
+        release_overflow = Event()
+        killpg_calls: list[tuple[int, int]] = []
+
+        class LateOverflowStream:
+            def __init__(self) -> None:
+                self._read = False
+
+            def read(self, _size: int) -> bytes:
+                if not self._read:
+                    release_overflow.wait(timeout=5)
+                    self._read = True
+                    return b"overflow"
+                return b""
+
+            def close(self) -> None:
+                return
+
+        class LateOverflowProcess:
+            pid = 731
+            returncode = 0
+            stdin = BytesIO()
+            stdout = LateOverflowStream()
+            stderr = BytesIO()
+
+            def poll(self) -> int:
+                return 0
+
+            def kill(self) -> None:
+                return
+
+            def wait(self, *, timeout: float) -> int:
+                del timeout
+                return 0
+
+        late_overflow_process = LateOverflowProcess()
+
+        def record_group_kill(pid: int, sig: int) -> None:
+            killpg_calls.append((pid, sig))
+            release_overflow.set()
+
+        monkeypatch.setattr(bounded_subprocess.os, "killpg", record_group_kill)
+        monkeypatch.setattr(
+            bounded_subprocess,
+            "spawn_process",
+            lambda *_args, **_kwargs: (late_overflow_process, None),
+        )
+        try:
+            with pytest.raises(BoundedSubprocessError, match="stdout exceeded") as captured:
+                run_bounded_subprocess(
+                    [sys.executable, "-c", ""],
+                    timeout_seconds=5,
+                    max_stdout_bytes=1,
+                    max_stderr_bytes=1,
+                )
+            assert captured.value.kind is BoundedSubprocessFailureKind.STDOUT_LIMIT
+            assert len(killpg_calls) == 1
+        finally:
+            release_overflow.set()
 
     if os.name != "nt":
         return

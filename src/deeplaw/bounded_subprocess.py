@@ -541,19 +541,22 @@ def _kill(
     guard: WindowsJobGuard | None = None,
 ) -> bool:
     if os.name == "posix":
-        if process.poll() is not None:
-            return True
+        process_pid = getattr(process, "pid", None)
+        if process_pid is None:
+            if process.poll() is not None:
+                return True
+            with suppress(Exception):
+                process.kill()
+            return False
         try:
-            os.killpg(process.pid, signal.SIGKILL)
+            os.killpg(process_pid, signal.SIGKILL)
         except ProcessLookupError:
             return True
-        except OSError:
-            pass
-        else:
-            return True
-        with suppress(Exception):
-            process.kill()
-        return False
+        except (OSError, TypeError, ValueError):
+            with suppress(Exception):
+                process.kill()
+            return False
+        return True
     if os.name == "nt":
         cleanup_confirmed = guard is not None and guard.cleanup(timeout_seconds=5)
         with suppress(Exception):
@@ -696,6 +699,9 @@ def run_bounded_subprocess(
             failure_kind = BoundedSubprocessFailureKind.TIMEOUT
             break
         time.sleep(0.01)
+    cleanup_before_join = failure is None and os.name == "posix"
+    if cleanup_before_join:
+        cleanup_confirmed = _kill(process, guard)
     if failure is not None:
         cleanup_confirmed = _kill(process, guard)
         if cleanup_confirmed:
@@ -713,13 +719,16 @@ def run_bounded_subprocess(
     if failure is None and stdout.exceeded.is_set():
         failure = f"stdout exceeded {max_stdout_bytes} bytes"
         failure_kind = BoundedSubprocessFailureKind.STDOUT_LIMIT
-        cleanup_confirmed = _kill(process, guard)
+        if not cleanup_before_join:
+            cleanup_confirmed = _kill(process, guard)
     if failure is None and stderr.exceeded.is_set():
         failure = f"stderr exceeded {max_stderr_bytes} bytes"
         failure_kind = BoundedSubprocessFailureKind.STDERR_LIMIT
-        cleanup_confirmed = _kill(process, guard)
+        if not cleanup_before_join:
+            cleanup_confirmed = _kill(process, guard)
     if failure is None:
-        cleanup_confirmed = _kill(process, guard)
+        if not cleanup_before_join:
+            cleanup_confirmed = _kill(process, guard)
         if not cleanup_confirmed:
             failure = "cleanup could not be confirmed"
             failure_kind = BoundedSubprocessFailureKind.CLEANUP_UNCONFIRMED
