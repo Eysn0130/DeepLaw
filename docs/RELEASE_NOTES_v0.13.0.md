@@ -155,3 +155,10 @@ aggregation. Alias discovery now applies containment before its bounded candidat
 dense scan removes repeated query-norm and temporary-vector work without changing its governed
 filters or result ordering. These changes invalidate run #13 and require a fresh exact Candidate
 Full run; their focused tests and local synthetic measurements are not a scale-qualification pass.
+
+Candidate Full run `33405198495` (exact head
+`b928b08a472f60b888261c1e0b4ac40def3cda91`, tree
+`c10e6b7a577ac7e04aad503172e07bff8c834268`) is consumed failed evidence, not a pass: the Platform
+manifest was stale for 26 nodes, and Windows calibration shard 3 was cancelled at 150 minutes.
+Source-byte LPT repairs only the self-contained bootstrap assignment; a fresh Candidate Full run is
+required, and Formal gates remain `not_executed`.

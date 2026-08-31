@@ -71,6 +71,138 @@ def test_candidate_windows_shards_are_deterministic_complete_and_disjoint() -> N
     assert {shard["all_test_files_sha256"] for shard in shards} == {
         shards[0]["all_test_files_sha256"]
     }
+    assert {shard["algorithm"] for shard in shards} == {
+        "longest_processing_time_source_bytes_v1"
+    }
+    assert {shard["source_file_sizes_sha256"] for shard in shards} == {
+        shards[0]["source_file_sizes_sha256"]
+    }
+
+
+def test_candidate_windows_source_byte_lpt_handles_inserted_small_file(
+    tmp_path: Path,
+) -> None:
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    heavy_sizes = {
+        "test_a.py": 90,
+        "test_b.py": 80,
+        "test_c.py": 70,
+        "test_e.py": 60,
+        "test_f.py": 50,
+        "test_g.py": 40,
+    }
+    for name, size in heavy_sizes.items():
+        (tests / name).write_bytes(b"x" * size)
+
+    baseline_shards = [
+        build_shard_manifest(repository=tmp_path, shard_count=3, shard_index=index)
+        for index in range(1, 4)
+    ]
+    baseline_assignment = {
+        path: index
+        for index, shard in enumerate(baseline_shards)
+        for path in shard["selected_test_files"]
+    }
+
+    (tests / "test_d.py").write_bytes(b"x")
+    shards = [
+        build_shard_manifest(repository=tmp_path, shard_count=3, shard_index=index)
+        for index in range(1, 4)
+    ]
+    totals = [
+        sum((tmp_path / path).stat().st_size for path in shard["selected_test_files"])
+        for shard in shards
+    ]
+    assert totals == [131, 130, 130]
+    assert {shard["algorithm"] for shard in shards} == {
+        "longest_processing_time_source_bytes_v1"
+    }
+    assert all(
+        baseline_assignment[path] == index
+        for index, shard in enumerate(shards)
+        for path in shard["selected_test_files"]
+        if path != "tests/test_d.py"
+    )
+
+    all_files = sorted(
+        path.relative_to(tmp_path).as_posix() for path in tests.glob("test_*.py")
+    )
+    round_robin_totals = [
+        sum(
+            (tmp_path / path).stat().st_size
+            for offset, path in enumerate(all_files)
+            if offset % 3 == index
+        )
+        for index in range(3)
+    ]
+    assert round_robin_totals != totals
+
+    zero_repository = tmp_path / "zero-repository"
+    zero_tests = zero_repository / "tests"
+    zero_tests.mkdir(parents=True)
+    for name in ("test_a.py", "test_b.py", "test_c.py"):
+        (zero_tests / name).write_bytes(b"")
+    zero_shards = [
+        build_shard_manifest(
+            repository=zero_repository,
+            shard_count=3,
+            shard_index=index,
+        )
+        for index in range(1, 4)
+    ]
+    assert [shard["selected_test_file_count"] for shard in zero_shards] == [1, 1, 1]
+    assert len({shard["source_file_sizes_sha256"] for shard in zero_shards}) == 1
+
+
+def test_candidate_source_size_digest_rebuilds_and_rejects_size_drift(
+    tmp_path: Path,
+) -> None:
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    sizes = {
+        "test_a.py": 90,
+        "test_b.py": 80,
+        "test_c.py": 70,
+        "test_d.py": 1,
+        "test_e.py": 60,
+        "test_f.py": 50,
+        "test_g.py": 40,
+    }
+    for name, size in sizes.items():
+        (tests / name).write_bytes(b"x" * size)
+
+    shards = [
+        build_shard_manifest(repository=tmp_path, shard_count=3, shard_index=index)
+        for index in range(1, 4)
+    ]
+    input_directory = tmp_path / "receipts"
+    for index, shard in enumerate(shards, start=1):
+        directory = input_directory / f"shard-{index}"
+        directory.mkdir(parents=True)
+        (directory / "candidate-test-shard.json").write_text(
+            canonical_json(shard) + "\n",
+            encoding="utf-8",
+        )
+        (directory / "candidate-skip-receipt.json").write_text(
+            canonical_json(_receipt(shard, tests=index)) + "\n",
+            encoding="utf-8",
+        )
+
+    original_digest = shards[0]["source_file_sizes_sha256"]
+    (tests / "test_c.py").write_bytes(b"x" * 71)
+    rebuilt = build_shard_manifest(
+        repository=tmp_path,
+        shard_count=3,
+        shard_index=1,
+    )
+    assert rebuilt["source_file_sizes_sha256"] != original_digest
+    with pytest.raises(RuntimeError, match="does not match the source tree"):
+        aggregate_shard_receipts(
+            repository=tmp_path,
+            input_directory=input_directory,
+            matrix_python="3.12",
+        )
 
 
 def test_candidate_windows_duration_weighted_shards_are_rebuildable() -> None:
@@ -96,6 +228,7 @@ def test_candidate_windows_duration_weighted_shards_are_rebuildable() -> None:
         "longest_processing_time_duration_v1"
     }
     assert len({shard["duration_weights_sha256"] for shard in shards}) == 1
+    assert all("source_file_sizes_sha256" not in shard for shard in shards)
 
 
 def test_candidate_windows_duration_estimate_uses_cross_python_stable_sum() -> None:
@@ -214,6 +347,10 @@ def test_candidate_windows_shard_aggregate_rejects_drift(
     }
     assert aggregate["shards"]["complete"] is True
     assert aggregate["shards"]["overlap_absent"] is True
+    assert aggregate["shards"]["source_file_sizes_sha256"] == shard[
+        "source_file_sizes_sha256"
+    ]
+    assert "duration_weights_sha256" not in aggregate["shards"]
 
     merged = tmp_path / "merged.xml"
     merge_shard_junit(

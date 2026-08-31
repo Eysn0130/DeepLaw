@@ -7307,6 +7307,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_candidate_regression",
+            "name": "test_candidate_source_size_digest_rebuilds_and_rejects_size_drift"
+          },
+          "node_id": "tests/test_v013_candidate_regression.py::test_candidate_source_size_digest_rebuilds_and_rejects_size_drift"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_regression",
             "name": "test_candidate_windows_duration_estimate_uses_cross_python_stable_sum"
           },
           "node_id": "tests/test_v013_candidate_regression.py::test_candidate_windows_duration_estimate_uses_cross_python_stable_sum"
@@ -7331,6 +7338,13 @@
             "name": "test_candidate_windows_shards_are_deterministic_complete_and_disjoint"
           },
           "node_id": "tests/test_v013_candidate_regression.py::test_candidate_windows_shards_are_deterministic_complete_and_disjoint"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_regression",
+            "name": "test_candidate_windows_source_byte_lpt_handles_inserted_small_file"
+          },
+          "node_id": "tests/test_v013_candidate_regression.py::test_candidate_windows_source_byte_lpt_handles_inserted_small_file"
         },
         {
           "junit": {
@@ -17588,9 +17602,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2491,
+      "count": 2493,
       "selection": "not qualification and not windows_native",
-      "sha256": "05ca54f3f22af3f6a916b39b1b4c527e493b9e400140a1f5ac5c43f440f3e028"
+      "sha256": "fb1c80370e85174931d4a5f6845d10aa5ab0c91c747c61556830fe2860cbb622"
     },
     "windows": {
       "additional_cases": [
@@ -17623,13 +17637,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2495,
+      "count": 2497,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "d3bd3f6ef8a577ee19e9d5882a7f6599b2942aad3be99bbc78ae4ea6717d1ed5"
+      "sha256": "77e92623e1bec6887f2884d65250f017f8ca7a9a4c85fecc4c588962c0ed1fa0"
     }
   },
-  "manifest_sha256": "047ac079d810ed8c53df5422eda210c143529ed8099e2199843cf88d60e810ee",
+  "manifest_sha256": "ffd195979029e7778ec5c381fb2ad69caad518e322e435fbf06838618ff85c68",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
