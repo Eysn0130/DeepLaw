@@ -855,6 +855,10 @@ def admit_host_task_staging(
             for relative, raw in source_snapshot.items()
         }:
             _fail("Host task staged bytes differ from the external source")
+        _harden_windows_staging(
+            staging,
+            label="Host task temporary staging",
+        )
         _verify_windows_acl(
             staging,
             recursive=True,

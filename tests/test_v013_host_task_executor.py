@@ -426,6 +426,10 @@ def test_windows_acl_hardening_and_validation_run_before_promotion(
     def hardener(path: Path) -> dict[str, Any]:
         selected = Path(path)
         events.append(("harden", selected))
+        if len([kind for kind, _ in events if kind == "harden"]) == 2:
+            assert (
+                selected / "candidate-inventory" / "host-execution-identity.json"
+            ).is_file()
         return _verified_hardening_report()
 
     monkeypatch.setattr(windows_acl, "native_windows_acl_report", recursive_acl)
@@ -440,12 +444,14 @@ def test_windows_acl_hardening_and_validation_run_before_promotion(
         "recursive",
         "parent",
         "harden",
+        "harden",
         "recursive",
     ]
     assert events[0][1] == source.resolve()
     assert events[1][1] == tmp_path.resolve()
     assert events[2][1].name.startswith(".final.admit-")
     assert events[3][1] == events[2][1]
+    assert events[4][1] == events[2][1]
     assert executor._inventory(output) == executor._inventory(source)
     assert not list(tmp_path.glob(".final.admit-*"))
 
@@ -523,7 +529,11 @@ def test_symlink_and_hardlink_are_rejected(
 ) -> None:
     _patch_validator_seams(monkeypatch)
     for kind in ("symlink", "hardlink"):
-        source = tmp_path / kind
+        case_parent = tmp_path / f"{kind}-case"
+        case_parent.mkdir(mode=0o700)
+        if os.name != "nt":
+            case_parent.chmod(0o700)
+        source = case_parent / "source"
         source.mkdir()
         _make_source(source)
         original = source / "retained-broker-source" / "codex.launcher-source"
@@ -532,9 +542,9 @@ def test_symlink_and_hardlink_are_rejected(
             extra.symlink_to(original)
         else:
             os.link(original, extra)
-        output = tmp_path / f"final-{kind}"
+        output = case_parent / "final"
         with pytest.raises(executor.HostTaskExecutorError):
-            executor.admit_host_task_staging(source, output, **_arguments(tmp_path))
+            executor.admit_host_task_staging(source, output, **_arguments(case_parent))
         assert not output.exists()
 
 
