@@ -1459,11 +1459,20 @@ def test_bounded_process_timeout_does_not_use_unbounded_communicate(
             return None
 
     fake = FakeProcess()
-    monkeypatch.setattr(runner.subprocess, "Popen", lambda *args, **kwargs: fake)
+    guard = object()
+    terminated: list[tuple[object, object | None]] = []
+    monkeypatch.setattr(
+        runner.bounded_subprocess,
+        "spawn_process",
+        lambda *args, **kwargs: (fake, guard),
+    )
     monkeypatch.setattr(
         runner,
         "_terminate_process_tree",
-        lambda _process, _guard=None: True,
+        lambda process, selected_guard=None: terminated.append(
+            (process, selected_guard)
+        )
+        or True,
     )
     result = runner._run_bounded_process(
         ["fake-opencode"],
@@ -1474,6 +1483,7 @@ def test_bounded_process_timeout_does_not_use_unbounded_communicate(
     assert result["timed_out"] is True
     assert fake.timeouts[0] == 0.01
     assert fake.timeouts[1] is not None
+    assert terminated == [(fake, guard)]
 
 
 def test_local_server_stop_does_not_use_unbounded_communicate(
@@ -1719,18 +1729,26 @@ def test_timeout_terminates_the_created_process_group(
             return None
 
     fake = FakeProcess()
-    killed: list[object] = []
-    monkeypatch.setattr(runner.subprocess, "Popen", lambda *args, **kwargs: fake)
+    guard = object()
+    killed: list[tuple[object, object | None]] = []
+    monkeypatch.setattr(
+        runner.bounded_subprocess,
+        "spawn_process",
+        lambda *args, **kwargs: (fake, guard),
+    )
     monkeypatch.setattr(
         runner,
         "_terminate_process_tree",
-        lambda process, _guard=None: killed.append(process) or True,
+        lambda process, selected_guard=None: killed.append(
+            (process, selected_guard)
+        )
+        or True,
     )
     result = runner._run_bounded_process(
         ["fake-opencode"], environment={"PATH": os.defpath}, cwd=tmp_path, timeout=0.01
     )
     assert result["timed_out"] is True
-    assert killed == [fake]
+    assert killed == [(fake, guard)]
 
 
 def test_mcp_receipt_proves_provider_and_auth_are_absent() -> None:
