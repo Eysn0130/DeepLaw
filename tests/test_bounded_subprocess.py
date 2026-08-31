@@ -109,6 +109,15 @@ def test_bounded_subprocess_reports_start_failure(
 def test_bounded_subprocess_reports_unavailable_pipes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    class CleanupGuard:
+        def __init__(self, result: bool) -> None:
+            self.result = result
+            self.timeouts: list[float] = []
+
+        def cleanup(self, *, timeout_seconds: float) -> bool:
+            self.timeouts.append(timeout_seconds)
+            return self.result
+
     class NoPipesProcess:
         stdin = None
         stdout = None
@@ -122,10 +131,11 @@ def test_bounded_subprocess_reports_unavailable_pipes(
             return 0
 
     process = NoPipesProcess()
+    confirmed_guard = CleanupGuard(True)
     monkeypatch.setattr(
-        bounded_subprocess.subprocess,
-        "Popen",
-        lambda *_args, **_kwargs: process,
+        bounded_subprocess,
+        "spawn_process",
+        lambda *_args, **_kwargs: (process, confirmed_guard),
     )
 
     with pytest.raises(BoundedSubprocessError, match="pipes are unavailable") as captured:
@@ -137,6 +147,7 @@ def test_bounded_subprocess_reports_unavailable_pipes(
         )
 
     assert captured.value.kind is BoundedSubprocessFailureKind.PIPES_UNAVAILABLE
+    assert confirmed_guard.timeouts == ([5] if os.name == "nt" else [])
 
     class UnreapedPipesProcess:
         pid = 4320
@@ -159,15 +170,16 @@ def test_bounded_subprocess_reports_unavailable_pipes(
             raise subprocess.TimeoutExpired("fake-pipes", timeout)
 
     unreaped = UnreapedPipesProcess()
+    unconfirmed_guard = CleanupGuard(False)
 
     def fail_group_kill(_pid: int, _signal: int) -> None:
         raise OSError("synthetic process-group cleanup failure")
 
     monkeypatch.setattr(bounded_subprocess.os, "killpg", fail_group_kill)
     monkeypatch.setattr(
-        bounded_subprocess.subprocess,
-        "Popen",
-        lambda *_args, **_kwargs: unreaped,
+        bounded_subprocess,
+        "spawn_process",
+        lambda *_args, **_kwargs: (unreaped, unconfirmed_guard),
     )
 
     with pytest.raises(
@@ -187,6 +199,7 @@ def test_bounded_subprocess_reports_unavailable_pipes(
     assert unreaped.killed is True
     assert len(unreaped.wait_timeouts) == 2
     assert all(0 < timeout <= 0.05 for timeout in unreaped.wait_timeouts)
+    assert unconfirmed_guard.timeouts == ([5] if os.name == "nt" else [])
 
 
 def test_bounded_subprocess_kills_descendants_that_inherit_output_pipes(
