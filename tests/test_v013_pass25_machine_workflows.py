@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import yaml
@@ -29,6 +33,80 @@ def _job_block(workflow: str, name: str) -> str:
         end = matches[index + 1].start() if index + 1 < len(matches) else len(workflow)
         return workflow[match.start() : end]
     raise AssertionError(f"workflow job {name!r} is missing")
+
+
+def _semantic_gate_script(workflow: str) -> str:
+    block = _job_block(workflow, "semantic_scale_ten_thousand")
+    marker = "          python - <<'PY'\n"
+    script = block.split(marker, maxsplit=1)[1].split("          PY\n", maxsplit=1)[0]
+    return textwrap.dedent(script)
+
+
+def _run_semantic_gate(
+    tmp_path: Path,
+    *,
+    workflow_run_id: object,
+    candidate_commit: str,
+) -> subprocess.CompletedProcess[str]:
+    evidence_root = tmp_path / "scale-10000-evidence"
+    evidence_root.mkdir()
+    (evidence_root / "v013-scale-qualification-v9.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "deeplaw.v013-scale-qualification-report/v9",
+                "status": "executed",
+                "release_gate_passed": True,
+                "hard_failures": [],
+                "run_binding": {"workflow_run_id": workflow_run_id},
+                "candidate_binding": {"commit": candidate_commit},
+            }
+        ),
+        encoding="utf-8",
+    )
+    environment = {
+        "EVIDENCE_ROOT": str(evidence_root),
+        "EXPECTED_WORKFLOW_RUN_ID": "123456789",
+        "EXPECTED_CANDIDATE_HEAD_SHA": "1" * 40,
+    }
+    return subprocess.run(
+        [sys.executable, "-c", _semantic_gate_script(_workflow("candidate-full.yml"))],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_candidate_full_semantic_gate_rejects_wrong_workflow_run_id(tmp_path: Path) -> None:
+    result = _run_semantic_gate(
+        tmp_path,
+        workflow_run_id=999999999,
+        candidate_commit="1" * 40,
+    )
+
+    assert result.returncode != 0
+    assert "semantic 10k gate: workflow run id mismatch" in result.stderr
+
+
+def test_candidate_full_semantic_gate_rejects_wrong_candidate_head(tmp_path: Path) -> None:
+    result = _run_semantic_gate(
+        tmp_path,
+        workflow_run_id=123456789,
+        candidate_commit="0" * 40,
+    )
+
+    assert result.returncode != 0
+    assert "semantic 10k gate: candidate head mismatch" in result.stderr
+
+
+def test_candidate_full_semantic_gate_accepts_exact_run_and_candidate_head(tmp_path: Path) -> None:
+    result = _run_semantic_gate(
+        tmp_path,
+        workflow_run_id=123456789,
+        candidate_commit="1" * 40,
+    )
+
+    assert result.returncode == 0
 
 
 def test_external_has_six_role_domains_and_one_way_security_handoffs() -> None:
@@ -173,6 +251,11 @@ def test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate() 
         'report.get("status")',
         'report.get("release_gate_passed") is not True',
         'report.get("hard_failures") != []',
+        "EXPECTED_WORKFLOW_RUN_ID",
+        "EXPECTED_CANDIDATE_HEAD_SHA",
+        'run_binding = report.get("run_binding")',
+        'candidate_binding = report.get("candidate_binding")',
+        'candidate_binding.get("commit") != expected_candidate_head_sha',
         "raise SystemExit",
     ):
         assert required in block

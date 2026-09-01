@@ -14286,6 +14286,27 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_candidate_full_semantic_gate_accepts_exact_run_and_candidate_head"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_semantic_gate_accepts_exact_run_and_candidate_head"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_candidate_full_semantic_gate_rejects_wrong_candidate_head"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_semantic_gate_rejects_wrong_candidate_head"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_candidate_full_semantic_gate_rejects_wrong_workflow_run_id"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_semantic_gate_rejects_wrong_workflow_run_id"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
             "name": "test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate"
           },
           "node_id": "tests/test_v013_pass25_machine_workflows.py::test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate"
@@ -17833,9 +17854,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2526,
+      "count": 2529,
       "selection": "not qualification and not windows_native",
-      "sha256": "7b0ebfdc0c57d07de678c9272384f31980e84d085b5cc20a05d07a5c5fbaa101"
+      "sha256": "c3bb2ae322d506f1329ca1b2ff6ebcc5258d6b98b270f053a5b76ac4eb890242"
     },
     "windows": {
       "additional_cases": [
@@ -17868,13 +17889,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2530,
+      "count": 2533,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "340f009d1e28c4b4890c902bd7a2cff021cc1621bc6727b05124d8ce4688465b"
+      "sha256": "2a9eeb3b930458b01068a01df95c580bdf6a32321cf4b77268b589746f1cc740"
     }
   },
-  "manifest_sha256": "dcd69426b29dcf8913edd6e5ea10e98b0b9b899d49209f301fb8bea7ddc2e7ac",
+  "manifest_sha256": "a3f8362572bee0172f33cf87fc7283a9546d62a42b21ab44dae80052405c9181",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

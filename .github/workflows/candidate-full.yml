@@ -278,12 +278,22 @@ jobs:
         shell: bash
         env:
           EVIDENCE_ROOT: ${{ runner.temp }}/scale-10000-evidence
+          EXPECTED_WORKFLOW_RUN_ID: ${{ github.run_id }}
+          EXPECTED_CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
           import os
+          import re
           from pathlib import Path
+
+          expected_workflow_run_id = os.environ.get("EXPECTED_WORKFLOW_RUN_ID", "")
+          if not re.fullmatch(r"[1-9][0-9]*", expected_workflow_run_id):
+              raise SystemExit("semantic 10k gate: expected workflow run id invalid")
+          expected_candidate_head_sha = os.environ.get("EXPECTED_CANDIDATE_HEAD_SHA", "")
+          if not re.fullmatch(r"[0-9a-f]{40}", expected_candidate_head_sha):
+              raise SystemExit("semantic 10k gate: expected candidate head invalid")
 
           root = Path(os.environ["EVIDENCE_ROOT"])
           evidence = tuple(root.rglob("v013-scale-qualification-v9.json"))
@@ -299,6 +309,19 @@ jobs:
               ) from None
           if not isinstance(report, dict):
               raise SystemExit("semantic 10k gate: report shape invalid")
+          run_binding = report.get("run_binding")
+          if not isinstance(run_binding, dict):
+              raise SystemExit("semantic 10k gate: run binding shape invalid")
+          workflow_run_id = run_binding.get("workflow_run_id")
+          if type(workflow_run_id) is not int or workflow_run_id <= 0:
+              raise SystemExit("semantic 10k gate: workflow run id invalid")
+          if workflow_run_id != int(expected_workflow_run_id):
+              raise SystemExit("semantic 10k gate: workflow run id mismatch")
+          candidate_binding = report.get("candidate_binding")
+          if not isinstance(candidate_binding, dict):
+              raise SystemExit("semantic 10k gate: candidate binding shape invalid")
+          if candidate_binding.get("commit") != expected_candidate_head_sha:
+              raise SystemExit("semantic 10k gate: candidate head mismatch")
           if report.get("schema_version") != "deeplaw.v013-scale-qualification-report/v9":
               raise SystemExit("semantic 10k gate: schema version mismatch")
           if report.get("status") != "executed":
