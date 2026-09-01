@@ -7173,6 +7173,139 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_final_validator_allows_identity_fixtures_and_skips_structured_or_binary_artifacts"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_final_validator_allows_identity_fixtures_and_skips_structured_or_binary_artifacts"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_final_validator_rejects_formal_forbidden_filenames[auth.json]"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_final_validator_rejects_formal_forbidden_filenames[auth.json]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_final_validator_rejects_formal_forbidden_filenames[credentials.txt]"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_final_validator_rejects_formal_forbidden_filenames[credentials.txt]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_final_validator_rejects_formal_forbidden_filenames[private-key.pem]"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_final_validator_rejects_formal_forbidden_filenames[private-key.pem]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_final_validator_rejects_formal_forbidden_filenames[raw-log.txt]"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_final_validator_rejects_formal_forbidden_filenames[raw-log.txt]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_final_validator_rejects_path_in_skipped_system_text"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_final_validator_rejects_path_in_skipped_system_text"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_final_validator_requires_one_retained_requirements_file"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_final_validator_requires_one_retained_requirements_file"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_accepts_the_exact_supplied_symlinked_root_spelling"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_accepts_the_exact_supplied_symlinked_root_spelling"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_does_not_exempt_namespaced_identity_attributes"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_does_not_exempt_namespaced_identity_attributes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_keeps_explicit_identity_fixture_path"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_keeps_explicit_identity_fixture_path"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_rejects_symlink_and_unsafe_xml"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_rejects_symlink_and_unsafe_xml"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_rejects_unrelated_paths_and_secret_markers[/home/other/checkout/tests/test_demo.py:7]"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_rejects_unrelated_paths_and_secret_markers[/home/other/checkout/tests/test_demo.py:7]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_rejects_unrelated_paths_and_secret_markers[/opt/other/checkout/tests/test_demo.py:7]"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_rejects_unrelated_paths_and_secret_markers[/opt/other/checkout/tests/test_demo.py:7]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_rejects_unrelated_paths_and_secret_markers[C:\\\\\\\\other\\\\\\\\checkout\\\\\\\\tests\\\\\\\\test_demo.py:7]"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_rejects_unrelated_paths_and_secret_markers[C:\\\\\\\\other\\\\\\\\checkout\\\\\\\\tests\\\\\\\\test_demo.py:7]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_rejects_unrelated_paths_and_secret_markers[Secret: do-not-retain]"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_rejects_unrelated_paths_and_secret_markers[Secret: do-not-retain]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_rejects_unrelated_paths_and_secret_markers[\\\\\\\\server\\\\share\\\\tests\\\\test_demo.py:7]"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_rejects_unrelated_paths_and_secret_markers[\\\\\\\\server\\\\share\\\\tests\\\\test_demo.py:7]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_normalize_junit_removes_only_checkout_root_and_preserves_identity_and_outcome"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalize_junit_removes_only_checkout_root_and_preserves_identity_and_outcome"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_posix_normalizer_does_not_remove_backslash_root_variant"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_posix_normalizer_does_not_remove_backslash_root_variant"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_artifact_path_policy",
+            "name": "test_requirements_relative_uv_output_comment_passes_and_runner_path_fails"
+          },
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_requirements_relative_uv_output_comment_passes_and_runner_path_fails"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_candidate_prep",
             "name": "test_apply_is_rejected_on_main_without_writing"
           },
@@ -17602,9 +17735,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2493,
+      "count": 2512,
       "selection": "not qualification and not windows_native",
-      "sha256": "fb1c80370e85174931d4a5f6845d10aa5ab0c91c747c61556830fe2860cbb622"
+      "sha256": "7c1bd89409a9370c09dea00d6646dcb194ed8106086913d9ba0075c47b8c4b47"
     },
     "windows": {
       "additional_cases": [
@@ -17637,13 +17770,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2497,
+      "count": 2516,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "77e92623e1bec6887f2884d65250f017f8ca7a9a4c85fecc4c588962c0ed1fa0"
+      "sha256": "6c2dc910bedcdb577c6d78003128706f0fa67b60a1191f6622af959d4188ce70"
     }
   },
-  "manifest_sha256": "ffd195979029e7778ec5c381fb2ad69caad518e322e435fbf06838618ff85c68",
+  "manifest_sha256": "744cfa1c20f6d6adf28aa5243eb30c7abc252d94d6c139dd7e536f9d44814124",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

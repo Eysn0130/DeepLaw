@@ -36,6 +36,28 @@ def test_candidate_full_retains_raw_platform_and_exact_wheel_evidence() -> None:
     assert "windows-calibration-aggregate.json" in workflow
     assert "windows-aggregate.json" in workflow
     assert "--junit-output" in workflow
+    assert "--output-file candidate-requirements.txt" in workflow
+    assert 'export_dir="$(mktemp -d ' in workflow
+    assert 'UV_PROJECT="${GITHUB_WORKSPACE}" \\' in workflow
+    assert 'test ! -e "${destination}"' in workflow
+    assert 'test ! -L "${destination}"' in workflow
+    assert 'test ! -L "${source}"' in workflow
+    assert 'mv "${source}" "${destination}"' in workflow
+    assert '--output-file "${RUNNER_TEMP}' not in workflow
+    assert "benchmarks.release.candidate_artifact_path_policy" in workflow
+    assert workflow.count("normalize-junit") >= 5
+    assert workflow.count('--checkout-root "${GITHUB_WORKSPACE}"') >= 5
+    assert "--root \"${RUNNER_TEMP}/candidate-full-raw-evidence\"" in workflow
+    assert (
+        '--requirements "${RUNNER_TEMP}/candidate-full-raw-evidence/'
+        'verified-candidate-artifacts/candidate-requirements.txt"'
+        in workflow
+    )
+    assert workflow.index(
+        "Validate retained Candidate Full text and XML before inventory upload"
+    ) < workflow.index(
+        "Write path-independent raw evidence inventory receipt"
+    )
     assert "= 14" in workflow
     assert "candidate_regression platform" in workflow
     assert "platform-matrix-receipt.json" in workflow

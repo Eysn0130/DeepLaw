@@ -29,6 +29,13 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from defusedxml import ElementTree as DefusedET
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.release.qualification_artifact_safety import (
+    ABSOLUTE_PATH_RE as _ABSOLUTE_PATH_RE,
+)
+from benchmarks.release.qualification_artifact_safety import MAX_SOURCE_BYTES
+from benchmarks.release.qualification_artifact_safety import (
+    SECRET_MARKER_RE as _SECRET_RE,
+)
 from benchmarks.release.security_domain_receipt import (
     ROLES as _SECURITY_DOMAIN_ROLES,
 )
@@ -53,7 +60,6 @@ SCHEMA_V3_VERSION = "deeplaw.typed-qualification-evidence/v3"
 DERIVED_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v1"
 DERIVED_V2_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v2"
 DERIVED_V3_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v3"
-MAX_SOURCE_BYTES = 64 * 1024 * 1024
 PACKAGE_NAME = "deeplaw"
 _V2_COMPATIBLE_SCHEMA_VERSIONS = frozenset({SCHEMA_V2_VERSION, SCHEMA_V3_VERSION})
 _V3_PROFESSIONAL_CASE_TYPES = frozenset(
@@ -124,7 +130,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "a6e72235f6ee7acfe3ae0cd83e115bb37cb90ac3a5416eddf09e96007887d7ac"
+    "500bd6317fe1b8027643bdbd3304e1874258a3352855d4976457c9ce88c77349"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -151,24 +157,9 @@ _FORBIDDEN_KEYS = frozenset(
     }
 )
 _COUNT_KEY_RE = re.compile(r"(?:^|_)(?:count|counts)$")
-# Sanitized receipts may contain URLs and legal locators (for example
-# ``https://example.test/page/1`` and ``page:/1``), but must never retain a
-# local path.  Keep the local roots explicit so a URL's ``://`` is not
-# mistaken for an absolute path.  The Windows alternatives are deliberately
-# separate because a drive/UNC path is not POSIX-absolute on this host.
-_ABSOLUTE_PATH_RE = re.compile(
-    r"""(?:
-        (?<![A-Za-z0-9_:/])/(?:Users|home|root|private|tmp|var|etc|opt|workspace|Volumes|System|Library|bin|sbin|usr|dev|proc|sys|run|mnt)(?:/|[\s"']|$)
-        |(?<![A-Za-z0-9_\\:])(?:[A-Za-z]:[\\/]|\\\\(?!u[0-9a-fA-F]{4}[\\/])[^\\/\s]+[\\/])
-    )""",
-    re.VERBOSE,
-)
 _RAW_JSON_POSIX_PATH_RE = re.compile(
     r"""(?<![A-Za-z0-9_:/\[])/(?:Users|home|root|private|tmp|var|etc|opt|workspace|Volumes|System|Library|bin|sbin|usr|dev|proc|sys|run|mnt)(?:/|[\s"']|$)""",
     re.VERBOSE,
-)
-_SECRET_RE = re.compile(
-    r"""(?i)(?:api[_-]?key|access[_-]?token|authorization|bearer|private[_-]?key|secret)\s*[:=]"""
 )
 _SECRET_ENV_KEY_RE = re.compile(
     r"(?:auth|credential|secret|password|passwd|api[_-]?key|private[_-]?key|"

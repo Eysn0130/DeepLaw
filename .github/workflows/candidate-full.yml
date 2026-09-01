@@ -64,8 +64,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv export --frozen --no-dev --no-emit-project --no-emit-local \
-            --output-file "${RUNNER_TEMP}/verified-dist/candidate-requirements.txt"
+          export_dir="$(mktemp -d "${RUNNER_TEMP}/candidate-requirements-export.XXXXXX")"
+          destination="${RUNNER_TEMP}/verified-dist/candidate-requirements.txt"
+          test ! -e "${destination}"
+          test ! -L "${destination}"
+          (
+            cd "${export_dir}"
+            UV_PROJECT="${GITHUB_WORKSPACE}" \
+              uv export --frozen --no-dev --no-emit-project --no-emit-local \
+              --output-file candidate-requirements.txt
+          )
+          source="${export_dir}/candidate-requirements.txt"
+          test -f "${source}"
+          test ! -L "${source}"
+          mv "${source}" "${destination}"
+          rmdir "${export_dir}"
 
       - name: Derive closed pre-publish supply-chain evidence from the verified bytes
         shell: bash
@@ -353,6 +366,11 @@ jobs:
             -m "not qualification" \
             --junitxml="${RUNNER_TEMP}/candidate-tests.xml" \
             "${test_files[@]}"
+          uv run --frozen python -m benchmarks.release.candidate_artifact_path_policy \
+            normalize-junit \
+            --input "${RUNNER_TEMP}/candidate-tests.xml" \
+            --output "${RUNNER_TEMP}/candidate-tests.xml" \
+            --checkout-root "${GITHUB_WORKSPACE}"
           uv run --frozen python -m benchmarks.release.candidate_regression \
             receipt \
             --junit "${RUNNER_TEMP}/candidate-tests.xml" \
@@ -414,6 +432,11 @@ jobs:
             --matrix-python "3.12" \
             --output "${RUNNER_TEMP}/windows-calibration-aggregate.json" \
             --junit-output "${RUNNER_TEMP}/windows-calibration.xml"
+          python -m benchmarks.release.candidate_artifact_path_policy \
+            normalize-junit \
+            --input "${RUNNER_TEMP}/windows-calibration.xml" \
+            --output "${RUNNER_TEMP}/windows-calibration.xml" \
+            --checkout-root "${GITHUB_WORKSPACE}"
           python -m benchmarks.release.candidate_regression \
             weights \
             --junit "${RUNNER_TEMP}/windows-calibration.xml" \
@@ -480,6 +503,11 @@ jobs:
           uv run --frozen pytest --strict-markers \
             -m "not qualification and not windows_native" \
             --junitxml="${RUNNER_TEMP}/candidate-tests.xml"
+          uv run --frozen python -m benchmarks.release.candidate_artifact_path_policy \
+            normalize-junit \
+            --input "${RUNNER_TEMP}/candidate-tests.xml" \
+            --output "${RUNNER_TEMP}/candidate-tests.xml" \
+            --checkout-root "${GITHUB_WORKSPACE}"
           wheel=$(find "${RUNNER_TEMP}/verified-dist" -maxdepth 1 -type f -name '*.whl')
           test "$(printf '%s\n' "${wheel}" | wc -l | tr -d ' ')" = 1
           uv venv "${RUNNER_TEMP}/fresh" --python "${{ matrix.python-version }}" --seed
@@ -562,6 +590,11 @@ jobs:
             -m "not qualification" \
             --junitxml="${RUNNER_TEMP}/candidate-tests.xml" \
             "${test_files[@]}"
+          uv run --frozen python -m benchmarks.release.candidate_artifact_path_policy \
+            normalize-junit \
+            --input "${RUNNER_TEMP}/candidate-tests.xml" \
+            --output "${RUNNER_TEMP}/candidate-tests.xml" \
+            --checkout-root "${GITHUB_WORKSPACE}"
           uv run --frozen python -m benchmarks.release.candidate_regression \
             receipt \
             --junit "${RUNNER_TEMP}/candidate-tests.xml" \
@@ -627,6 +660,16 @@ jobs:
           --matrix-python "${{ matrix.python-version }}"
           --output "${{ runner.temp }}/windows-aggregate.json"
           --junit-output "${{ runner.temp }}/candidate-tests.xml"
+
+      - name: Normalize aggregate JUnit before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m benchmarks.release.candidate_artifact_path_policy \
+            normalize-junit \
+            --input "${RUNNER_TEMP}/candidate-tests.xml" \
+            --output "${RUNNER_TEMP}/candidate-tests.xml" \
+            --checkout-root "${GITHUB_WORKSPACE}"
 
       - name: Retain aggregate receipt
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -759,6 +802,15 @@ jobs:
               encoding="utf-8",
           )
           PY
+
+      - name: Validate retained Candidate Full text and XML before inventory upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m benchmarks.release.candidate_artifact_path_policy \
+            validate \
+            --root "${RUNNER_TEMP}/candidate-full-raw-evidence" \
+            --requirements "${RUNNER_TEMP}/candidate-full-raw-evidence/verified-candidate-artifacts/candidate-requirements.txt"
 
       - name: Write path-independent raw evidence inventory receipt
         shell: bash

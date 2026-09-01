@@ -162,3 +162,10 @@ Candidate Full run `33405198495` (exact head
 manifest was stale for 26 nodes, and Windows calibration shard 3 was cancelled at 150 minutes.
 Source-byte LPT repairs only the self-contained bootstrap assignment; a fresh Candidate Full run is
 required, and Formal gates remain `not_executed`.
+
+Candidate Full run `33427103571` completed successfully, but a downstream path-safety audit found
+runner-local absolute paths in retained requirements and JUnit bytes, so the run is consumed and is
+not admissible as the next Formal input. This candidate-only remediation uses a relative uv export
+output argument, removes only the originating checkout-root prefix from non-identity JUnit content,
+and validates retained JUnit/XML plus the explicit requirements text before upload. It makes no new
+Candidate Full or Formal pass claim; a fresh exact run is required.
