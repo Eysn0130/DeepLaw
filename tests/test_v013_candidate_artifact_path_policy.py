@@ -129,8 +129,7 @@ def test_normalize_junit_does_not_exempt_namespaced_identity_attributes(
     assert not output.exists()
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX spelling policy")
-def test_posix_normalizer_does_not_remove_backslash_root_variant(
+def test_normalizer_handles_all_backslash_root_spelling_by_platform(
     tmp_path: Path,
 ) -> None:
     checkout = tmp_path / "checkout"
@@ -142,8 +141,13 @@ def test_posix_normalizer_does_not_remove_backslash_root_variant(
 
     result = normalize_junit(source, output, checkout)
 
-    assert result.replacements == 0
-    assert output.read_bytes() == source.read_bytes()
+    if os.name == "nt":
+        assert result.replacements == 1
+        assert b"tests\\test_demo.py:7" in output.read_bytes()
+        assert output.read_bytes() != source.read_bytes()
+    else:
+        assert result.replacements == 0
+        assert output.read_bytes() == source.read_bytes()
 
 
 def test_requirements_relative_uv_output_comment_passes_and_runner_path_fails(

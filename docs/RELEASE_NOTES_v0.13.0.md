@@ -169,3 +169,8 @@ not admissible as the next Formal input. This candidate-only remediation uses a 
 output argument, removes only the originating checkout-root prefix from non-identity JUnit content,
 and validates retained JUnit/XML plus the explicit requirements text before upload. It makes no new
 Candidate Full or Formal pass claim; a fresh exact run is required.
+
+Candidate Full run `33456027141` is consumed failed evidence, not a pass: Windows calibration shard 3
+completed with a fail-closed `unclassified candidate skips` error after the path-policy test identity
+drifted. All downstream Windows aggregate/raw-evidence jobs were skipped. A fresh Candidate Full run
+is required after this taxonomy correction; no Formal claim is made.

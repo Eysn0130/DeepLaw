@@ -7293,9 +7293,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_candidate_artifact_path_policy",
-            "name": "test_posix_normalizer_does_not_remove_backslash_root_variant"
+            "name": "test_normalizer_handles_all_backslash_root_spelling_by_platform"
           },
-          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_posix_normalizer_does_not_remove_backslash_root_variant"
+          "node_id": "tests/test_v013_candidate_artifact_path_policy.py::test_normalizer_handles_all_backslash_root_spelling_by_platform"
         },
         {
           "junit": {
@@ -17737,7 +17737,7 @@
       ],
       "count": 2512,
       "selection": "not qualification and not windows_native",
-      "sha256": "7c1bd89409a9370c09dea00d6646dcb194ed8106086913d9ba0075c47b8c4b47"
+      "sha256": "9b4a956d0189e8f5bdfffefb2bfbf29d8a8548d1055c5767bd56917211a18a78"
     },
     "windows": {
       "additional_cases": [
@@ -17773,10 +17773,10 @@
       "count": 2516,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "6c2dc910bedcdb577c6d78003128706f0fa67b60a1191f6622af959d4188ce70"
+      "sha256": "e6ea7d16ee55c46e5f4933db916b57a9f63d2cb1b911a95c7849451832f2719f"
     }
   },
-  "manifest_sha256": "744cfa1c20f6d6adf28aa5243eb30c7abc252d94d6c139dd7e536f9d44814124",
+  "manifest_sha256": "0e820c7980683d54f3b7bcc44c74184afa177ce2a618fa2fe809d718674381e7",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
