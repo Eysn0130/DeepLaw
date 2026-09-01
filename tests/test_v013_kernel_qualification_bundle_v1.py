@@ -489,6 +489,32 @@ def test_build_and_validate_exact_candidate_bundle(
     assert validated["corpus_roles"] == sorted(bundle.CORPUS_ROLES)
 
 
+def test_bundle_rejects_coherent_passed_active_core_row(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    active_path = root / bundle.ACTIVE_RELATIVE_PATH
+    active = json.loads(active_path.read_text(encoding="utf-8"))
+    row = next(
+        row for row in active["core_statuses"] if row["gate_id"] == "canonical_integrity"
+    )
+    row.update(status="passed", passed=True, claim=True)
+    _write_json(active_path, active)
+
+    with pytest.raises(
+        bundle.KernelQualificationBundleError,
+        match=r"active qualification schema validation failed at core_statuses",
+    ):
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
+
+
 def test_bundle_accepts_six_retained_v2_slots_without_parallel_receipt_family(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

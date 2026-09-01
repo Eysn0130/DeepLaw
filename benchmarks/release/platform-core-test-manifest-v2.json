@@ -6985,6 +6985,48 @@
         {
           "junit": {
             "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_active_v3_core_rows_remain_pending_across_all_stages[failed-False-False-construction_candidate_machine_evaluation_pending-0.13.0-candidate_artifact_not_built-candidate_binding1]"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_active_v3_core_rows_remain_pending_across_all_stages[failed-False-False-construction_candidate_machine_evaluation_pending-0.13.0-candidate_artifact_not_built-candidate_binding1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_active_v3_core_rows_remain_pending_across_all_stages[failed-False-False-frozen_exact_candidate_machine_evaluation_pending-0.13.0-None-candidate_binding2]"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_active_v3_core_rows_remain_pending_across_all_stages[failed-False-False-frozen_exact_candidate_machine_evaluation_pending-0.13.0-None-candidate_binding2]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_active_v3_core_rows_remain_pending_across_all_stages[failed-False-False-machine_evaluation_pending-0.12.0-machine_evaluation_not_executed-candidate_binding0]"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_active_v3_core_rows_remain_pending_across_all_stages[failed-False-False-machine_evaluation_pending-0.12.0-machine_evaluation_not_executed-candidate_binding0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_active_v3_core_rows_remain_pending_across_all_stages[passed-True-True-construction_candidate_machine_evaluation_pending-0.13.0-candidate_artifact_not_built-candidate_binding1]"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_active_v3_core_rows_remain_pending_across_all_stages[passed-True-True-construction_candidate_machine_evaluation_pending-0.13.0-candidate_artifact_not_built-candidate_binding1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_active_v3_core_rows_remain_pending_across_all_stages[passed-True-True-frozen_exact_candidate_machine_evaluation_pending-0.13.0-None-candidate_binding2]"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_active_v3_core_rows_remain_pending_across_all_stages[passed-True-True-frozen_exact_candidate_machine_evaluation_pending-0.13.0-None-candidate_binding2]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
+            "name": "test_active_v3_core_rows_remain_pending_across_all_stages[passed-True-True-machine_evaluation_pending-0.12.0-machine_evaluation_not_executed-candidate_binding0]"
+          },
+          "node_id": "tests/test_v013_active_qualification_v3.py::test_active_v3_core_rows_remain_pending_across_all_stages[passed-True-True-machine_evaluation_pending-0.12.0-machine_evaluation_not_executed-candidate_binding0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_active_qualification_v3",
             "name": "test_active_v3_pending_template_is_separate_and_release_closed"
           },
           "node_id": "tests/test_v013_active_qualification_v3.py::test_active_v3_pending_template_is_separate_and_release_closed"
@@ -9620,6 +9662,13 @@
             "name": "test_bundle_rejects_a_file_above_the_closed_size_bound"
           },
           "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_rejects_a_file_above_the_closed_size_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_bundle_rejects_coherent_passed_active_core_row"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_rejects_coherent_passed_active_core_row"
         },
         {
           "junit": {
@@ -17973,9 +18022,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2545,
+      "count": 2552,
       "selection": "not qualification and not windows_native",
-      "sha256": "a8085cade1f9098d4a4337e10939d622134133202a4b0b5d18622faf6373e66e"
+      "sha256": "c7d6bd1a0058c31ca62e4a7122c9dcf61aeff7ec61e8b71113f60b00ec6e2d4d"
     },
     "windows": {
       "additional_cases": [
@@ -18015,13 +18064,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2550,
+      "count": 2557,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "b5f7facacddb9413dae58b530fd2e0ba12a5fdd68132b03d19d214106eb6f58b"
+      "sha256": "ba122ae4264817028219e7189ecd63d080098f99a61ed89e8482580e4b05209a"
     }
   },
-  "manifest_sha256": "1d2fee518a1dcc01108c93a3847f5eb221751bded0b7ffbddbe7cf8f8c0cc847",
+  "manifest_sha256": "e6ae3061f3f40a67ec2e4994ac369361a0f2025e33f7013ac1368323abe405d2",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

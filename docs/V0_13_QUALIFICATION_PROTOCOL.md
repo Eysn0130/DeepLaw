@@ -10,6 +10,11 @@ Package and main remain `0.12.0 Beta`. The active record is
 protocol does not authorize a `0.13.0` tag/release, RC, GA, Human Gold, legal attestation, or a
 competitive claim.
 
+Current: every active `core_statuses` row is schema-constrained to
+`status=not_executed`, `passed=false`, and `claim=false` in all three pending stages; formal Gate
+results exist only in retained evidence and Commercial-derived outputs and are never backfilled
+into the active record.
+
 The machine-readable protocol is
 `contracts/v013-qualification-protocol.v3.schema.json`; the frozen bytes are
 `benchmarks/v013/qualification-protocol-v3.json` and its recorded SHA-256. Protocol v1-v2 and Gate

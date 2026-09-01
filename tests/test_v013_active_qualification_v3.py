@@ -320,3 +320,107 @@ def test_active_v3_stage_transitions_do_not_require_optional_external_hashes() -
     forged_claim["capability_claims"][0]["claim"] = True
     with pytest.raises(ValidationError):
         validator.validate(forged_claim)
+
+
+@pytest.mark.parametrize(
+    ("status", "candidate_version", "blocker", "candidate_binding"),
+    (
+        (
+            "machine_evaluation_pending",
+            "0.12.0",
+            "machine_evaluation_not_executed",
+            {
+                "package_version": "0.12.0",
+                "source_commit": None,
+                "source_tree": None,
+                "lock_sha256": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082",
+                "wheel_filename": None,
+                "wheel_sha256": None,
+                "sdist_filename": None,
+                "sdist_sha256": None,
+                "artifact_manifest_sha256": None,
+            },
+        ),
+        (
+            "construction_candidate_machine_evaluation_pending",
+            "0.13.0",
+            "candidate_artifact_not_built",
+            {
+                "package_version": "0.13.0",
+                "source_commit": None,
+                "source_tree": None,
+                "lock_sha256": "3" * 64,
+                "wheel_filename": None,
+                "wheel_sha256": None,
+                "sdist_filename": None,
+                "sdist_sha256": None,
+                "artifact_manifest_sha256": None,
+            },
+        ),
+        (
+            "frozen_exact_candidate_machine_evaluation_pending",
+            "0.13.0",
+            None,
+            {
+                "package_version": "0.13.0",
+                "source_commit": "1" * 40,
+                "source_tree": "2" * 40,
+                "lock_sha256": "3" * 64,
+                "wheel_filename": "deeplaw-0.13.0-py3-none-any.whl",
+                "wheel_sha256": "4" * 64,
+                "sdist_filename": "deeplaw-0.13.0.tar.gz",
+                "sdist_sha256": "5" * 64,
+                "artifact_manifest_sha256": "6" * 64,
+            },
+        ),
+    ),
+)
+@pytest.mark.parametrize(
+    ("forged_status", "forged_passed", "forged_claim"),
+    (("passed", True, True), ("failed", False, False)),
+)
+def test_active_v3_core_rows_remain_pending_across_all_stages(
+    status: str,
+    candidate_version: str,
+    blocker: str | None,
+    candidate_binding: dict[str, Any],
+    forged_status: str,
+    forged_passed: bool,
+    forged_claim: bool,
+) -> None:
+    schema = _load(ACTIVE_SCHEMA)
+    validator = Draft202012Validator(schema)
+    active = _load(ACTIVE)
+    active.update(
+        status=status,
+        candidate_version=candidate_version,
+        blocker=blocker,
+        candidate_binding=candidate_binding,
+    )
+    validator.validate(active)
+
+    row_index = next(
+        index
+        for index, row in enumerate(active["core_statuses"])
+        if row["gate_id"] == "canonical_integrity"
+    )
+    forged = copy.deepcopy(active)
+    forged["core_statuses"][row_index].update(
+        status=forged_status,
+        passed=forged_passed,
+        claim=forged_claim,
+    )
+    errors = sorted(
+        validator.iter_errors(forged),
+        key=lambda error: list(error.path),
+    )
+    assert errors
+    assert any(
+        list(error.path) == ["core_statuses", row_index, "status"]
+        for error in errors
+    )
+
+    release_ready = copy.deepcopy(active)
+    release_ready["release_ready"] = True
+    with pytest.raises(ValidationError):
+        validator.validate(release_ready)
