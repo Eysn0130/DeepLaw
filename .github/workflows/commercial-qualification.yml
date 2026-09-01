@@ -96,9 +96,22 @@ jobs:
           uv sync --frozen --extra dev
           verified="${RUNNER_TEMP}/verified-dist"
           staging="${RUNNER_TEMP}/kernel-evidence-staging"
+          staging_identity="${staging}/candidate-inventory/host-exact-identity.json"
+          frozen_identity="${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"
           assets="${RUNNER_TEMP}/commercial-release-assets"
           bundle="${assets}/evidence/kernel-bundle"
           test ! -e "${assets}"
+          test -f "${staging_identity}"
+          test ! -L "${staging_identity}"
+          test "$(find "${staging_identity}" -maxdepth 0 -type f ! -type l -print)" = "${staging_identity}"
+          mkdir -p "${RUNNER_TEMP}/candidate-inputs"
+          test ! -e "${frozen_identity}"
+          test ! -L "${frozen_identity}"
+          cp "${staging_identity}" "${frozen_identity}"
+          test -f "${frozen_identity}"
+          test ! -L "${frozen_identity}"
+          chmod 600 "${frozen_identity}"
+          test "$(stat -c '%a' "${frozen_identity}")" = "600"
           mkdir -p "${bundle}"
           test -z "$(find "${verified}" "${staging}" -type l -print -quit)"
           find "${verified}" -maxdepth 1 -type f -exec cp {} "${assets}/" \;
@@ -112,6 +125,7 @@ jobs:
             --candidate-run-id "${CANDIDATE_RUN_ID}" \
             --evidence-run-id "${EVIDENCE_RUN_ID}" \
             --qualification-run-id "${QUALIFICATION_RUN_ID}" \
+            --host-identity-input "${frozen_identity}" \
             > "${assets}/kernel-bundle-validation.json"
           uv run --frozen python -m benchmarks.release.assemble_commercial_qualification_v9 \
             --bundle-root "${bundle}" \

@@ -583,6 +583,35 @@ def test_commercial_qualification_dispatch_and_assembly_use_kernel_v9() -> None:
     assert "qualification-protocol-v2.json" not in workflow
     assert "post_build_machine_reference_binding" not in workflow
     assert "candidate_machine_reference" not in workflow
+    staging_identity = (
+        'staging_identity="${staging}/candidate-inventory/'
+        'host-exact-identity.json"'
+    )
+    frozen_identity = (
+        'frozen_identity="${RUNNER_TEMP}/candidate-inputs/'
+        'frozen-host-exact-identity.json"'
+    )
+    assert staging_identity in workflow
+    assert frozen_identity in workflow
+    assert 'test -f "${staging_identity}"' in workflow
+    assert 'test ! -L "${staging_identity}"' in workflow
+    assert 'cp "${staging_identity}" "${frozen_identity}"' in workflow
+    assert 'chmod 600 "${frozen_identity}"' in workflow
+    assert 'test ! -L "${frozen_identity}"' in workflow
+    assert "stat -c '%a' \"${frozen_identity}\"" in workflow
+    assert '--host-identity-input "${frozen_identity}"' in workflow
+    assert '--host-identity-input "${bundle}/' not in workflow
+    assert 'frozen_identity="${bundle}/' not in workflow
+    assert "DEEPLAW_HOST_IDENTITY_INPUT" not in workflow
+    assembly = workflow.split(
+        "      - name: Build the run-bound Kernel bundle and assemble Gate v9", 1
+    )[1].split("      - name: Retain exact v9 commercial release assets", 1)[0]
+    assert assembly.index('test -f "${staging_identity}"') < assembly.index(
+        'cp "${staging_identity}" "${frozen_identity}"'
+    )
+    assert assembly.index('cp "${staging_identity}" "${frozen_identity}"') < assembly.index(
+        '--host-identity-input "${frozen_identity}"'
+    )
     for forbidden in (
         "trusted-human-approver",
         "trusted-human",
