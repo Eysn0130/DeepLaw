@@ -130,7 +130,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "bea23519cdbee61035545df553cc234dcb2eabe27cc08cad73a53d49ba8b009f"
+    "20d6d87404a6a7fd0c0b5c43d36884880500628f84a81ad4a01bc3f57ab4381a"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -439,6 +439,7 @@ def _source_json(
     label: str,
     allow_count_paths: frozenset[tuple[str, ...]] = frozenset(),
     allow_frozen_identity_literals: bool = False,
+    allow_public_signature_b64: bool = False,
 ) -> tuple[Any, _SourceData]:
     source = _source_data(ref, root=root, label=label, media_type="application/json")
     if not allow_frozen_identity_literals:
@@ -448,6 +449,7 @@ def _source_json(
         value,
         label=label,
         allow_frozen_identity_literals=allow_frozen_identity_literals,
+        allow_public_signature_b64=allow_public_signature_b64,
     )
     _reject_forbidden_keys(value, allow_count_paths=allow_count_paths)
     return value, source
@@ -489,12 +491,15 @@ def _reject_projection_strings(
     label: str,
     path: tuple[str, ...] = (),
     allow_frozen_identity_literals: bool = False,
+    allow_public_signature_b64: bool = False,
 ) -> None:
     if isinstance(value, str):
         if allow_frozen_identity_literals and (
             path[-1:] == ("node_id",)
             or path[-2:] in {("junit", "classname"), ("junit", "name")}
         ):
+            return
+        if allow_public_signature_b64 and path == ("signature_b64",):
             return
         if _ABSOLUTE_PATH_RE.search(value) or _SECRET_RE.search(value):
             _fail(f"{label} contains a secret or local absolute path")
@@ -505,6 +510,7 @@ def _reject_projection_strings(
                 label=label,
                 path=(*path, str(key)),
                 allow_frozen_identity_literals=allow_frozen_identity_literals,
+                allow_public_signature_b64=allow_public_signature_b64,
             )
     elif isinstance(value, list):
         for index, item in enumerate(value):
@@ -513,6 +519,7 @@ def _reject_projection_strings(
                 label=label,
                 path=(*path, str(index)),
                 allow_frozen_identity_literals=allow_frozen_identity_literals,
+                allow_public_signature_b64=allow_public_signature_b64,
             )
 
 
@@ -970,7 +977,12 @@ def _platform_manifest_expectations(
     ref: Mapping[str, Any],
     *,
     root: Path,
-) -> tuple[dict[str, set[tuple[str, str]]], str, str]:
+) -> tuple[
+    dict[str, set[tuple[str, str]]],
+    dict[str, set[tuple[str, str]]],
+    str,
+    str,
+]:
     manifest, source = _source_json(
         ref,
         root=root,
@@ -1022,9 +1034,17 @@ def _platform_manifest_expectations(
         return set(values)
 
     common_identities = identities(common["cases"], label="Platform common inventory")
+    windows_native_identities = identities(
+        windows["additional_cases"],
+        label="Platform Windows-native inventory",
+    )
     windows_identities = identities(
         [*common["cases"], *windows["additional_cases"]],
         label="Platform Windows inventory",
+    )
+    nonapplicable_identities = identities(
+        manifest["classifications"]["nonapplicable"]["cases"],
+        label="Platform nonapplicable classification",
     )
     common_digest = _sha256_bytes(_canonical(common["cases"]))
     windows_digest = _sha256_bytes(
@@ -1039,11 +1059,25 @@ def _platform_manifest_expectations(
         _fail("Platform core test manifest inventory digest or count is invalid")
     if not windows_identities.issuperset(common_identities):
         _fail("Platform Windows inventory does not extend common inventory")
+    if not (
+        windows_native_identities
+        <= nonapplicable_identities
+        <= windows_identities
+    ):
+        _fail("Platform nonapplicable classification is inconsistent")
+    posix_only_on_windows = nonapplicable_identities - windows_native_identities
+    if not posix_only_on_windows <= common_identities:
+        _fail("Platform POSIX-only classification is outside common inventory")
     return (
         {
             "ubuntu": common_identities,
             "macos": common_identities,
             "windows": windows_identities,
+        },
+        {
+            "ubuntu": set(),
+            "macos": set(),
+            "windows": posix_only_on_windows,
         },
         source.ref["sha256"],
         manifest_digest,
@@ -1124,11 +1158,14 @@ def _parse_platform(
         label="Candidate Platform receipt",
     )
     _platform_wrapper, rows = _platform_rows(value, envelope=envelope)
-    required_by_platform, platform_manifest_source_sha256, platform_manifest_digest = (
-        _platform_manifest_expectations(
-            envelope["payload"]["platform_manifest_source"],
-            root=root,
-        )
+    (
+        required_by_platform,
+        nonapplicable_by_platform,
+        platform_manifest_source_sha256,
+        platform_manifest_digest,
+    ) = _platform_manifest_expectations(
+        envelope["payload"]["platform_manifest_source"],
+        root=root,
     )
     descriptors, observations_by_digest = _platform_junit_sources(
         envelope["payload"],
@@ -1138,6 +1175,8 @@ def _parse_platform(
     binding_keys: set[tuple[str, str, str]] = set()
     testcase_keys: set[tuple[str, str, str]] = set()
     outcomes: Counter[str] = Counter()
+    nonapplicable_testcase_count = 0
+    mandatory_skip_count = 0
     identity_sets: list[tuple[str, str, set[tuple[str, str]]]] = []
     wheel_sha = envelope["candidate_binding"]["wheel_sha256"]
     for index, row in enumerate(rows):
@@ -1176,6 +1215,12 @@ def _parse_platform(
                 _fail("Candidate Platform receipt contains duplicate testcase identity")
             testcase_keys.add(testcase_key)
             outcomes[outcome] += 1
+            if outcome == "skip":
+                identity = tuple(testcase_identity.split("::", 1))
+                if identity in nonapplicable_by_platform[platform]:
+                    nonapplicable_testcase_count += 1
+                else:
+                    mandatory_skip_count += 1
     expected_bindings = {
         (item["platform"], item["python_version"], item["source"]["sha256"])
         for item in descriptors
@@ -1204,6 +1249,7 @@ def _parse_platform(
             "row_count": len(rows),
             "testcase_count": sum(outcomes.values()),
             "successful_testcase_count": outcomes["success"],
+            "nonapplicable_testcase_count": nonapplicable_testcase_count,
             "platforms": ["ubuntu", "macos", "windows"],
             "python_versions": ["3.11", "3.12", "3.13"],
             "platform_matrix_rows": len(rows),
@@ -1233,11 +1279,11 @@ def _parse_platform(
         },
         {
             "platform_failure": outcomes["failure"],
-            "platform_skip": outcomes["skip"],
+            "platform_skip": mandatory_skip_count,
             "platform_identity_set_mismatch": identity_set_mismatch,
             "platform_required_identity_missing": missing_required,
             "platform_unexpected_identity": unexpected_identities,
-            "mandatory_skip": outcomes["skip"],
+            "mandatory_skip": mandatory_skip_count,
         },
         record_sha256,
     )
@@ -2033,6 +2079,7 @@ def _parse_human_gold(
         payload["human_attestation_source"],
         root=root,
         label="external human attestation",
+        allow_public_signature_b64=True,
     )
     _validate_contract(
         gold,

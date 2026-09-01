@@ -17,6 +17,90 @@
       "cases": [
         {
           "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_codex_posix_close_cleans_group_after_leader_exit"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_codex_posix_close_cleans_group_after_leader_exit"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_codex_posix_group_cleanup_send_failure_is_unconfirmed"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_codex_posix_group_cleanup_send_failure_is_unconfirmed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_codex_posix_start_cleans_stale_group_after_leader_exit"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_codex_posix_start_cleans_stale_group_after_leader_exit"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt_v2",
+            "name": "test_codex_posix_start_uses_new_session_process_group"
+          },
+          "node_id": "tests/test_v013_host_process_receipt_v2.py::test_codex_posix_start_uses_new_session_process_group"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_owner_external_collector",
+            "name": "test_frozen_collector_survives_ambient_path_replacement"
+          },
+          "node_id": "tests/test_v013_owner_external_collector.py::test_frozen_collector_survives_ambient_path_replacement"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_owner_external_collector",
+            "name": "test_source_must_be_owner_only_and_credential_free"
+          },
+          "node_id": "tests/test_v013_owner_external_collector.py::test_source_must_be_owner_only_and_credential_free"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_owner_external_collector",
+            "name": "test_tampered_frozen_collector_fails_closed"
+          },
+          "node_id": "tests/test_v013_owner_external_collector.py::test_tampered_frozen_collector_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_owner_external_collector",
+            "name": "test_wrong_run_binding_and_identity_tamper_fail_closed"
+          },
+          "node_id": "tests/test_v013_owner_external_collector.py::test_wrong_run_binding_and_identity_tamper_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_owner_broker_process_group_cleanup_send_failure_is_unconfirmed"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_owner_broker_process_group_cleanup_send_failure_is_unconfirmed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_owner_broker_success_fails_closed_when_final_cleanup_is_unconfirmed"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_owner_broker_success_fails_closed_when_final_cleanup_is_unconfirmed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_posix_process_tree_cleanup_kills_group_after_leader_exit"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_posix_process_tree_cleanup_kills_group_after_leader_exit"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_posix_process_tree_cleanup_send_failure_is_unconfirmed"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_posix_process_tree_cleanup_send_failure_is_unconfirmed"
+        },
+        {
+          "junit": {
             "classname": "tests.test_windows_acl",
             "name": "test_closed_launcher_hardens_root_home_tmp_and_work_with_native_acl"
           },
@@ -51,7 +135,7 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "selection": "windows_native on non-Windows",
+      "selection": "platform-specific tests outside their applicable OS",
       "status": "nonapplicable"
     },
     "qualification": {
@@ -18140,7 +18224,7 @@
       "sha256": "f2d02de02a76d36170231e67f83cc5475d0ec3cbc7d15db7371592538bf02870"
     }
   },
-  "manifest_sha256": "de4d396bad567ffe6726258fede1c76a79a500d8b064a56ac8f51b419ff3d0b3",
+  "manifest_sha256": "42621afc1f09eb814967f3c188f4051c89a2bd312b489a8100d84e8cf5b72f69",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

@@ -177,12 +177,26 @@ def _platform_junit_bytes(
     failure: bool = False,
     cell: str = "cell",
     windows: bool = False,
+    nonapplicable_skips: bool = False,
+    applicable_skip: bool = False,
 ) -> bytes:
     root = ET.Element("testsuites")
     suite = ET.SubElement(root, "testsuite", {"name": f"pytest-{cell}"})
     cases = list(manifest["inventories"]["common"]["cases"])
     if windows:
         cases.extend(manifest["inventories"]["windows"]["additional_cases"])
+    windows_native = {
+        (case["junit"]["classname"], case["junit"]["name"])
+        for case in manifest["inventories"]["windows"]["additional_cases"]
+    }
+    first_windows_native = (
+        manifest["inventories"]["windows"]["additional_cases"][0]["junit"]
+    )
+    nonapplicable = {
+        (case["junit"]["classname"], case["junit"]["name"])
+        for case in manifest["classifications"]["nonapplicable"]["cases"]
+    }
+    posix_only_on_windows = nonapplicable - windows_native
     for index, item in enumerate(cases):
         junit = item["junit"]
         testcase = ET.SubElement(
@@ -192,7 +206,15 @@ def _platform_junit_bytes(
         )
         if failure and index == 0:
             ET.SubElement(testcase, "failure")
-        elif failure and index == 1:
+        elif (
+            (failure and index == 1)
+            or (
+                nonapplicable_skips
+                and (junit["classname"], junit["name"])
+                in posix_only_on_windows
+            )
+            or (applicable_skip and junit == first_windows_native)
+        ):
             ET.SubElement(testcase, "skipped")
     return ET.tostring(root, encoding="utf-8")
 
@@ -371,6 +393,7 @@ def test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding(
                 platform_manifest,
                 cell=f"{platform}-{python_version}",
                 windows=platform == "windows",
+                nonapplicable_skips=platform == "windows",
             )
             source_ref = _bytes_file(
                 tmp_path,
@@ -414,6 +437,9 @@ def test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding(
         6 * platform_manifest["inventories"]["common"]["count"]
         + 3 * platform_manifest["inventories"]["windows"]["count"]
     )
+    assert result["metrics"]["nonapplicable_testcase_count"] == 36
+    assert result["hard_failure_counts"]["platform_skip"] == 0
+    assert result["hard_failure_counts"]["mandatory_skip"] == 0
     duplicate_path = _envelope(
         tmp_path,
         kind="candidate_platform_receipt",
@@ -442,6 +468,7 @@ def test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding(
             failure=index == 0,
             cell=f"{platform}-{python_version}",
             windows=platform == "windows",
+            applicable_skip=index == 6,
         )
         source_ref = _bytes_file(
             failure_root,
@@ -477,7 +504,8 @@ def test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding(
     failure_result = parse_typed_evidence(failure_path)
     assert failure_result["status"] == "failed"
     assert failure_result["hard_failure_counts"]["platform_failure"] == 1
-    assert failure_result["hard_failure_counts"]["platform_skip"] == 1
+    assert failure_result["hard_failure_counts"]["platform_skip"] == 2
+    assert failure_result["hard_failure_counts"]["mandatory_skip"] == 2
 
     value["rows"][0]["artifact_sha256"] = "9" * 64
     bad_source = _json_file(tmp_path, "platform-bad.json", value)
@@ -1501,7 +1529,9 @@ def test_human_gold_requires_external_attestation_and_crosses_processes(
     gold = _semantic_gold()
     gold_source = _json_file(tmp_path, "gold.json", gold)
     gold_raw = (tmp_path / "gold.json").read_bytes()
-    private_key = Ed25519PrivateKey.generate()
+    # Seed 3 yields a valid public test signature whose base64 text also
+    # resembles a POSIX path to the generic artifact scanner.
+    private_key = Ed25519PrivateKey.from_private_bytes((3).to_bytes(32, "big"))
     public_key_b64 = base64.b64encode(
         private_key.public_key().public_bytes_raw()
     ).decode("ascii")

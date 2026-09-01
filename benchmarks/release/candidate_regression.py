@@ -16,6 +16,11 @@ RECEIPT_SCHEMA = "deeplaw.platform-candidate-regression-receipt/v1"
 AGGREGATE_SCHEMA = "deeplaw.platform-candidate-regression-aggregate/v1"
 DURATION_SCHEMA = "deeplaw.candidate-duration-weights/v1"
 PLATFORM_MATRIX_SCHEMA = "deeplaw.candidate-platform-matrix-receipt/v1"
+_MATRIX_OS_NONAPPLICABLE_CLASSIFICATION = {
+    "windows-latest": "posix_only_on_windows",
+    "ubuntu-latest": "windows_native",
+    "macos-latest": "windows_native",
+}
 
 
 def _canonical_json(value: Any) -> str:
@@ -221,13 +226,17 @@ def _classified_skip_identities(
         }
 
     classifications = manifest["classifications"]
-    return manifest, {
+    classified = {
         "qualification": identities(classifications["qualification"]["cases"]),
         "nonapplicable": identities(classifications["nonapplicable"]["cases"]),
         "historical_compatibility": identities(
             classifications["historical_compatibility"]["cases"]
         ),
     }
+    windows_native = identities(manifest["inventories"]["windows"]["additional_cases"])
+    classified["windows_native"] = windows_native
+    classified["posix_only_on_windows"] = classified["nonapplicable"] - windows_native
+    return manifest, classified
 
 
 def build_regression_receipt(
@@ -239,6 +248,14 @@ def build_regression_receipt(
     shard_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     repository = repository.resolve(strict=True)
+    try:
+        nonapplicable_classification = _MATRIX_OS_NONAPPLICABLE_CLASSIFICATION[
+            matrix_os
+        ]
+    except KeyError as error:
+        raise RuntimeError(
+            f"unsupported candidate regression matrix OS: {matrix_os!r}"
+        ) from error
     actual_python = f"{sys.version_info.major}.{sys.version_info.minor}"
     if actual_python != matrix_python:
         raise RuntimeError(
@@ -251,7 +268,12 @@ def build_regression_receipt(
         for case in root.findall(".//testcase")
         if case.find("skipped") is not None
     ]
-    classified = set().union(*classifications.values())
+    allowed_nonapplicable = classifications[nonapplicable_classification]
+    classified = (
+        classifications["qualification"]
+        | classifications["historical_compatibility"]
+        | allowed_nonapplicable
+    )
     unclassified = sorted(set(skipped) - classified)
     if unclassified:
         raise RuntimeError(f"unclassified candidate skips: {unclassified[:8]}")
@@ -281,7 +303,7 @@ def build_regression_receipt(
         },
         "nonapplicable": {
             "status": "nonapplicable",
-            "skipped": sum(item in classifications["nonapplicable"] for item in skipped),
+            "skipped": sum(item in allowed_nonapplicable for item in skipped),
         },
         "historical_compatibility": {
             "status": "not_executed",

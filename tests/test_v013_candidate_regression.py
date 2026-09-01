@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -305,6 +306,142 @@ def test_candidate_regression_receipt_parses_junit_and_binds_python(
         "skipped": 0,
     }
     assert receipt["release_ready"] is False
+
+    matrix_python = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+    def write_skipped_junit(
+        path: Path,
+        cases: list[tuple[str, str]],
+    ) -> None:
+        root = ET.Element("testsuites")
+        suite = ET.SubElement(root, "testsuite", tests=str(len(cases)))
+        for classname, name in cases:
+            testcase = ET.SubElement(
+                suite,
+                "testcase",
+                classname=classname,
+                name=name,
+            )
+            ET.SubElement(testcase, "skipped")
+        ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
+
+    def assert_unclassified(path: Path, matrix_os: str) -> None:
+        with pytest.raises(RuntimeError, match="unclassified candidate skips"):
+            build_regression_receipt(
+                repository=REPOSITORY,
+                junit_path=path,
+                matrix_os=matrix_os,
+                matrix_python=matrix_python,
+            )
+
+    junit = tmp_path / "candidate-windows-skips.xml"
+    skipped_cases = [
+        (
+            "tests.test_v013_owner_external_collector",
+            "test_frozen_collector_survives_ambient_path_replacement",
+        ),
+        (
+            "tests.test_v013_owner_external_collector",
+            "test_tampered_frozen_collector_fails_closed",
+        ),
+        (
+            "tests.test_v013_owner_external_collector",
+            "test_wrong_run_binding_and_identity_tamper_fail_closed",
+        ),
+        (
+            "tests.test_v013_owner_external_collector",
+            "test_source_must_be_owner_only_and_credential_free",
+        ),
+        (
+            "tests.test_v013_host_process_receipt_v2",
+            "test_codex_posix_close_cleans_group_after_leader_exit",
+        ),
+        (
+            "tests.test_v013_host_process_receipt_v2",
+            "test_codex_posix_group_cleanup_send_failure_is_unconfirmed",
+        ),
+        (
+            "tests.test_v013_host_process_receipt_v2",
+            "test_codex_posix_start_cleans_stale_group_after_leader_exit",
+        ),
+        (
+            "tests.test_v013_host_process_receipt_v2",
+            "test_codex_posix_start_uses_new_session_process_group",
+        ),
+        (
+            "tests.test_v013_pass13_opencode_qualification",
+            "test_owner_broker_process_group_cleanup_send_failure_is_unconfirmed",
+        ),
+        (
+            "tests.test_v013_pass13_opencode_qualification",
+            "test_owner_broker_success_fails_closed_when_final_cleanup_is_unconfirmed",
+        ),
+        (
+            "tests.test_v013_pass13_opencode_qualification",
+            "test_posix_process_tree_cleanup_kills_group_after_leader_exit",
+        ),
+        (
+            "tests.test_v013_pass13_opencode_qualification",
+            "test_posix_process_tree_cleanup_send_failure_is_unconfirmed",
+        ),
+    ]
+    write_skipped_junit(junit, skipped_cases)
+
+    receipt = build_regression_receipt(
+        repository=REPOSITORY,
+        junit_path=junit,
+        matrix_os="windows-latest",
+        matrix_python=matrix_python,
+    )
+
+    assert receipt["junit"]["skipped"] == len(skipped_cases)
+    assert receipt["qualification"]["skipped"] == 0
+    assert receipt["nonapplicable"]["skipped"] == len(skipped_cases)
+    assert receipt["historical_compatibility"]["skipped"] == 0
+
+    unknown = tmp_path / "unknown-skip.xml"
+    unknown.write_text(
+        '<testsuites><testsuite tests="1">'
+        '<testcase classname="tests.test_v013_owner_external_collector" '
+        'name="test_unknown_skip">'
+        "<skipped />"
+        "</testcase></testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    assert_unclassified(unknown, "windows-latest")
+
+    windows_native = tmp_path / "windows-native-on-windows.xml"
+    windows_native.write_text(
+        '<testsuites><testsuite tests="1">'
+        '<testcase classname="tests.test_windows_acl" '
+        'name="test_native_windows_vault_acl_is_owner_only_after_real_ingest">'
+        "<skipped />"
+        "</testcase></testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    assert_unclassified(windows_native, "windows-latest")
+
+    posix_only_on_ubuntu = tmp_path / "posix-only-on-ubuntu.xml"
+    posix_only_on_ubuntu.write_text(
+        '<testsuites><testsuite tests="1">'
+        '<testcase classname="tests.test_v013_owner_external_collector" '
+        'name="test_frozen_collector_survives_ambient_path_replacement">'
+        "<skipped />"
+        "</testcase></testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    assert_unclassified(posix_only_on_ubuntu, "ubuntu-latest")
+
+    with pytest.raises(
+        RuntimeError,
+        match="unsupported candidate regression matrix OS",
+    ):
+        build_regression_receipt(
+            repository=REPOSITORY,
+            junit_path=junit,
+            matrix_os="unsupported-latest",
+            matrix_python=matrix_python,
+        )
 
 
 def test_candidate_windows_shard_aggregate_rejects_drift(

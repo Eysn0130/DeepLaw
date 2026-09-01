@@ -69,6 +69,10 @@ def test_platform_core_manifest_is_closed_frozen_and_digest_bound() -> None:
     }
     assert manifest["classifications"]["nonapplicable"]["status"] == "nonapplicable"
     assert (
+        manifest["classifications"]["nonapplicable"]["selection"]
+        == "platform-specific tests outside their applicable OS"
+    )
+    assert (
         manifest["classifications"]["historical_compatibility"]["status"]
         == "required_fixture"
     )
@@ -168,6 +172,39 @@ def test_platform_core_manifest_rejects_tampered_digest(tmp_path: Path) -> None:
     manifest["manifest_sha256"] = _manifest_digest(manifest)
     path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(RuntimeError, match="classification status"):
+        load_platform_manifest(path)
+
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    additional = manifest["inventories"]["windows"]["additional_cases"]
+    manifest["classifications"]["nonapplicable"]["cases"] = [
+        case
+        for case in manifest["classifications"]["nonapplicable"]["cases"]
+        if case["node_id"] != additional[0]["node_id"]
+    ]
+    manifest["manifest_sha256"] = _manifest_digest(manifest)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(
+        PlatformGateError,
+        match="Windows additional cases must be classified nonapplicable",
+    ):
+        load_platform_manifest(path)
+
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    manifest["classifications"]["nonapplicable"]["cases"].append(
+        {
+            "junit": {
+                "classname": "tests.fixture",
+                "name": "test_outside_platform_inventory",
+            },
+            "node_id": "tests/fixture.py::test_outside_platform_inventory",
+        }
+    )
+    manifest["manifest_sha256"] = _manifest_digest(manifest)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(
+        PlatformGateError,
+        match="nonapplicable cases must belong to the Platform inventory",
+    ):
         load_platform_manifest(path)
 
 
