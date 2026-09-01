@@ -143,20 +143,21 @@ def _acl_report_is_verified(
     *,
     schema_version: str,
     recursive: bool,
+    expected_path: Path | str | None = None,
+    expected_kind: str | None = None,
 ) -> bool:
-    if not isinstance(report, Mapping):
+    if schema_version != "deeplaw.windows-acl-report/v1":
         return False
-    checked = report.get("files_and_directories_checked")
-    return bool(
-        report.get("schema_version") == schema_version
-        and report.get("platform") == "nt"
-        and report.get("status") == "verified"
-        and report.get("permissions_verified") is True
-        and report.get("scan_complete") is True
-        and type(checked) is int
-        and checked >= 1
-        and (recursive or checked == 1)
-    )
+    try:
+        host_preflight_receipt.validate_windows_acl_report(
+            report,
+            expected_path=expected_path,
+            expected_kind=expected_kind,
+            recursive=recursive,
+        )
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _verify_windows_acl(
@@ -187,6 +188,8 @@ def _verify_windows_acl(
         report,
         schema_version=WINDOWS_ACL_SCHEMA,
         recursive=recursive,
+        expected_path=path,
+        expected_kind="directory",
     ):
         raise HostTaskExecutorError(f"{label} native Windows ACL verification failed")
 
@@ -195,25 +198,22 @@ def _harden_windows_staging(path: Path, *, label: str) -> None:
     if os.name != "nt":
         return
     try:
-        from deeplaw.windows_acl import WINDOWS_ACL_SCHEMA, harden_windows_vault
+        from deeplaw.windows_acl import harden_windows_vault
 
         result = harden_windows_vault(path)
     except Exception as error:
         raise HostTaskExecutorError(f"{label} native Windows ACL hardening failed") from error
-    if (
-        not isinstance(result, Mapping)
-        or result.get("schema_version") != "deeplaw.windows-acl-hardening/v1"
-        or result.get("platform") != "nt"
-        or result.get("applied") is not True
-        or type(result.get("item_count")) is not int
-        or result["item_count"] < 1
-        or not _acl_report_is_verified(
-            result.get("verification"),
-            schema_version=WINDOWS_ACL_SCHEMA,
+    try:
+        host_preflight_receipt.validate_windows_acl_hardening_report(
+            result,
+            expected_path=path,
+            expected_kind="directory",
             recursive=True,
         )
-    ):
-        raise HostTaskExecutorError(f"{label} native Windows ACL hardening failed")
+    except (TypeError, ValueError) as error:
+        raise HostTaskExecutorError(
+            f"{label} native Windows ACL hardening failed"
+        ) from error
 
 
 def _output_target(path: Path | str, *, repository: Path) -> tuple[Path, Path]:

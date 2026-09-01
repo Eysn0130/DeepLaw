@@ -8805,6 +8805,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_host_process_receipt",
+            "name": "test_windows_acl_recursive_entry_truncation_matches_native_bound"
+          },
+          "node_id": "tests/test_v013_host_process_receipt.py::test_windows_acl_recursive_entry_truncation_matches_native_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_process_receipt",
             "name": "test_wrong_expected_broker_digest_fails_closed"
           },
           "node_id": "tests/test_v013_host_process_receipt.py::test_wrong_expected_broker_digest_fails_closed"
@@ -9438,6 +9445,111 @@
             "name": "test_symlink_and_hardlink_are_rejected"
           },
           "node_id": "tests/test_v013_host_task_executor.py::test_symlink_and_hardlink_are_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_hardening_wrapper[count]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_hardening_wrapper[count]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_hardening_wrapper[details]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_hardening_wrapper[details]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_hardening_wrapper[inheritance]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_hardening_wrapper[inheritance]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_hardening_wrapper[wrong_owner]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_hardening_wrapper[wrong_owner]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_hardening_wrapper[wrong_path]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_hardening_wrapper[wrong_path]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[count]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[count]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[error]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[error]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[extra]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[extra]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[incomplete]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[incomplete]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[inheritance]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[inheritance]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[reparse]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[reparse]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[truncated]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[truncated]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[wrong_kind]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[wrong_kind]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[wrong_owner]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[wrong_owner]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
+            "name": "test_windows_acl_admission_rejects_malformed_source_report[wrong_path]"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_windows_acl_admission_rejects_malformed_source_report[wrong_path]"
         },
         {
           "junit": {
@@ -17854,9 +17966,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2529,
+      "count": 2545,
       "selection": "not qualification and not windows_native",
-      "sha256": "c3bb2ae322d506f1329ca1b2ff6ebcc5258d6b98b270f053a5b76ac4eb890242"
+      "sha256": "a8085cade1f9098d4a4337e10939d622134133202a4b0b5d18622faf6373e66e"
     },
     "windows": {
       "additional_cases": [
@@ -17889,13 +18001,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2533,
+      "count": 2549,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "2a9eeb3b930458b01068a01df95c580bdf6a32321cf4b77268b589746f1cc740"
+      "sha256": "900e7657bea15b5a514cb110309f9e06b9cf020af7eef480695ada3a2c3a20c0"
     }
   },
-  "manifest_sha256": "a3f8362572bee0172f33cf87fc7283a9546d62a42b21ab44dae80052405c9181",
+  "manifest_sha256": "a18b40c208d22cd2caf11e02b8f38eda0f94bc1cf8f1cae609b73755c6fbf47a",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

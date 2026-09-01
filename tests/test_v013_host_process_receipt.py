@@ -14,6 +14,41 @@ from benchmarks.hosts import host_preflight_receipt as preflight
 from benchmarks.hosts import host_process_receipt as receipt
 
 
+def _verified_acl_report(path: Path, *, kind: str = "file") -> dict[str, object]:
+    current_sid = "S-1-5-21-1000"
+    return {
+        "schema_version": "deeplaw.windows-acl-report/v1",
+        "current_user_sid": current_sid,
+        "entry_count": 1,
+        "owner_sid_verified": True,
+        "users_principal_sid": "S-1-5-32-545",
+        "everyone_principal_sid": "S-1-1-0",
+        "reparse_points_absent": True,
+        "permissions_verified": True,
+        "errors": [],
+        "errors_truncated": False,
+        "entries": [
+            {
+                "path": str(path),
+                "kind": kind,
+                "owner_sid": current_sid,
+                "owner_matches_current_user": True,
+                "reparse_point": False,
+                "acl_inheritance_enabled": False,
+                "inherited_rule_count": 0,
+                "users_rule_count": 0,
+                "everyone_rule_count": 0,
+                "valid": True,
+            }
+        ],
+        "entries_truncated": False,
+        "platform": "nt",
+        "status": "verified",
+        "scan_complete": True,
+        "files_and_directories_checked": 1,
+    }
+
+
 def _identity(
     *,
     codex_version: str,
@@ -219,16 +254,22 @@ def test_isolation_and_topology_fail_closed(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("kind", ("symlink", "hardlink", "non_owner_only", "repo_inside"))
 def test_broker_identity_boundaries_fail_closed(tmp_path: Path, kind: str) -> None:
+    expected_acl_path = tmp_path / "reported-broker"
     assert preflight._windows_acl_report_owner_only(
-        {"platform": "nt", "permissions_verified": True}
+        _verified_acl_report(expected_acl_path),
+        expected_path=expected_acl_path,
     )
     for invalid_report in (
         None,
         {},
+        {"platform": "nt", "permissions_verified": True},
         {"platform": "posix", "permissions_verified": True},
         {"platform": "nt", "permissions_verified": False},
     ):
-        assert not preflight._windows_acl_report_owner_only(invalid_report)
+        assert not preflight._windows_acl_report_owner_only(
+            invalid_report,
+            expected_path=expected_acl_path,
+        )
     identity, repository, binary, broker = _artifacts(tmp_path, "opencode")
     selected = broker
     if kind == "symlink":
@@ -276,6 +317,44 @@ def test_broker_identity_boundaries_fail_closed(tmp_path: Path, kind: str) -> No
                 "raw_output_retained": False,
             },
             expected_broker_sha256=hashlib.sha256(broker.read_bytes()).hexdigest(),
+        )
+
+
+def test_windows_acl_recursive_entry_truncation_matches_native_bound(tmp_path: Path) -> None:
+    root = tmp_path / "staging"
+    report = _verified_acl_report(root, kind="directory")
+    first = report["entries"][0]
+    report["entries"] = [
+        first,
+        *[
+            {
+                **copy.deepcopy(first),
+                "path": str(root / f"entry-{index}"),
+                "kind": "file",
+            }
+            for index in range(1, 1_000)
+        ],
+    ]
+    report["entry_count"] = 1_001
+    report["files_and_directories_checked"] = 1_001
+    report["entries_truncated"] = True
+    assert preflight.validate_windows_acl_report(
+        report,
+        expected_path=root,
+        expected_kind="directory",
+        recursive=True,
+    ) == report
+    assert not preflight._windows_acl_report_owner_only(
+        report,
+        expected_path=root,
+    )
+    report["entries_truncated"] = False
+    with pytest.raises(preflight.ReceiptValidationError):
+        preflight.validate_windows_acl_report(
+            report,
+            expected_path=root,
+            expected_kind="directory",
+            recursive=True,
         )
 
 

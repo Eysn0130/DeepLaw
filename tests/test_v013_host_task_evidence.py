@@ -43,6 +43,49 @@ RUNNER = {"identity": "runner:v013-host-task", "sha256": "1" * 64}
 SCORER = {"identity": "scorer:v013-derived", "sha256": "2" * 64}
 
 
+def _verified_acl_hardening_report(path: Path, *, kind: str = "file") -> dict[str, Any]:
+    current_sid = "S-1-5-21-1000"
+    verification = {
+        "schema_version": "deeplaw.windows-acl-report/v1",
+        "current_user_sid": current_sid,
+        "entry_count": 1,
+        "owner_sid_verified": True,
+        "users_principal_sid": "S-1-5-32-545",
+        "everyone_principal_sid": "S-1-1-0",
+        "reparse_points_absent": True,
+        "permissions_verified": True,
+        "errors": [],
+        "errors_truncated": False,
+        "entries": [
+            {
+                "path": str(path),
+                "kind": kind,
+                "owner_sid": current_sid,
+                "owner_matches_current_user": True,
+                "reparse_point": False,
+                "acl_inheritance_enabled": False,
+                "inherited_rule_count": 0,
+                "users_rule_count": 0,
+                "everyone_rule_count": 0,
+                "valid": True,
+            }
+        ],
+        "entries_truncated": False,
+        "platform": "nt",
+        "status": "verified",
+        "scan_complete": True,
+        "files_and_directories_checked": 1,
+    }
+    return {
+        "schema_version": "deeplaw.windows-acl-hardening/v1",
+        "platform": "nt",
+        "applied": True,
+        "item_count": 1,
+        "current_user_sid": current_sid,
+        "verification": verification,
+    }
+
+
 def _canonical(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
@@ -821,21 +864,37 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
         "version": identity["hosts"]["codex"]["binary_version"],
         "sha256": expected_sha256,
     }
+    hardening_path = host_root / "staged-broker"
     assert host_task_runner._windows_acl_hardening_verified(
-        {
-            "platform": "nt",
-            "applied": True,
-            "verification": {"permissions_verified": True},
-        }
+        _verified_acl_hardening_report(hardening_path),
+        expected_path=hardening_path,
+        directory=False,
     )
     for invalid_acl_report in (
         None,
         {},
-        {"platform": "posix", "applied": True, "verification": {"permissions_verified": True}},
-        {"platform": "nt", "applied": False, "verification": {"permissions_verified": True}},
-        {"platform": "nt", "applied": True, "verification": {"permissions_verified": False}},
+        {"platform": "nt", "applied": True, "verification": {"permissions_verified": True}},
+        {
+            **_verified_acl_hardening_report(hardening_path),
+            "platform": "posix",
+        },
+        {
+            **_verified_acl_hardening_report(hardening_path),
+            "applied": False,
+        },
+        {
+            **_verified_acl_hardening_report(hardening_path),
+            "verification": {
+                **_verified_acl_hardening_report(hardening_path)["verification"],
+                "permissions_verified": False,
+            },
+        },
     ):
-        assert not host_task_runner._windows_acl_hardening_verified(invalid_acl_report)
+        assert not host_task_runner._windows_acl_hardening_verified(
+            invalid_acl_report,
+            expected_path=hardening_path,
+            directory=False,
+        )
 
     original_lstat = Path.lstat
     original_fstat = os.fstat

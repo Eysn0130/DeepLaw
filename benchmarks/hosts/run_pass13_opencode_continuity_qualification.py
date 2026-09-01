@@ -3061,16 +3061,24 @@ def _validate_stable_path_fd_binding(
         _control_fail(error_message)
 
 
-def _windows_acl_hardening_verified(report: object) -> bool:
-    if not isinstance(report, Mapping):
+def _windows_acl_hardening_verified(
+    report: object,
+    *,
+    expected_path: Path | str | None = None,
+    directory: bool | None = None,
+) -> bool:
+    try:
+        host_preflight_receipt.validate_windows_acl_hardening_report(
+            report,
+            expected_path=expected_path,
+            expected_kind=(
+                "directory" if directory is True else "file" if directory is False else None
+            ),
+            recursive=directory,
+        )
+    except (TypeError, ValueError):
         return False
-    verification = report.get("verification")
-    return bool(
-        report.get("platform") == "nt"
-        and report.get("applied") is True
-        and isinstance(verification, Mapping)
-        and verification.get("permissions_verified") is True
-    )
+    return True
 
 
 def _harden_windows_broker_path(
@@ -3092,7 +3100,11 @@ def _harden_windows_broker_path(
         )
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
         raise QualificationError(error_message) from exc
-    if not _windows_acl_hardening_verified(report):
+    if not _windows_acl_hardening_verified(
+        report,
+        expected_path=path,
+        directory=directory,
+    ):
         _control_fail(error_message)
 
 

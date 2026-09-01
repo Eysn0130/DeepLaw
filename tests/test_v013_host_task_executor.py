@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -356,24 +357,58 @@ def _simulate_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(executor, "os", _WindowsOSProxy())
 
 
-def _verified_acl_report(*, checked: int = 1) -> dict[str, Any]:
+def _verified_acl_report(
+    path: Path | None = None,
+    *,
+    checked: int = 1,
+    kind: str = "directory",
+) -> dict[str, Any]:
+    selected = path or Path("/tmp/acl-fixture")
+    current_sid = "S-1-5-21-1000"
+    entries = [
+        {
+            "path": str(selected if index == 0 else selected / f"entry-{index}"),
+            "kind": kind if index == 0 else "file",
+            "owner_sid": current_sid,
+            "owner_matches_current_user": True,
+            "reparse_point": False,
+            "acl_inheritance_enabled": False,
+            "inherited_rule_count": 0,
+            "users_rule_count": 0,
+            "everyone_rule_count": 0,
+            "valid": True,
+        }
+        for index in range(min(checked, 1000))
+    ]
     return {
         "schema_version": "deeplaw.windows-acl-report/v1",
+        "current_user_sid": current_sid,
+        "entry_count": checked,
+        "owner_sid_verified": True,
+        "users_principal_sid": "S-1-5-32-545",
+        "everyone_principal_sid": "S-1-1-0",
+        "reparse_points_absent": True,
+        "permissions_verified": True,
+        "errors": [],
+        "errors_truncated": False,
+        "entries": entries,
+        "entries_truncated": checked > 1000,
         "platform": "nt",
         "status": "verified",
-        "permissions_verified": True,
         "scan_complete": True,
         "files_and_directories_checked": checked,
     }
 
 
-def _verified_hardening_report() -> dict[str, Any]:
+def _verified_hardening_report(path: Path | None = None, *, checked: int = 1) -> dict[str, Any]:
+    selected = path or Path("/tmp/acl-fixture")
     return {
         "schema_version": "deeplaw.windows-acl-hardening/v1",
         "platform": "nt",
         "applied": True,
-        "item_count": 1,
-        "verification": _verified_acl_report(),
+        "item_count": checked,
+        "current_user_sid": "S-1-5-21-1000",
+        "verification": _verified_acl_report(selected, checked=checked),
     }
 
 
@@ -405,6 +440,117 @@ def test_windows_acl_canary_rejects_unverified_source_root(
         )
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "incomplete",
+        "extra",
+        "wrong_owner",
+        "inheritance",
+        "reparse",
+        "wrong_path",
+        "wrong_kind",
+        "count",
+        "truncated",
+        "error",
+    ),
+)
+def test_windows_acl_admission_rejects_malformed_source_report(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    _make_source(source)
+    _patch_validator_seams(monkeypatch)
+    _simulate_windows(monkeypatch)
+    from deeplaw import windows_acl
+
+    report: dict[str, Any] = _verified_acl_report(source.resolve())
+    if mutation == "incomplete":
+        report = {"platform": "nt", "permissions_verified": True}
+    elif mutation == "extra":
+        report["unexpected"] = True
+    elif mutation == "wrong_owner":
+        report["entries"][0]["owner_sid"] = "S-1-5-21-9999"
+    elif mutation == "inheritance":
+        report["entries"][0]["acl_inheritance_enabled"] = True
+        report["entries"][0]["inherited_rule_count"] = 1
+    elif mutation == "reparse":
+        report["entries"][0]["reparse_point"] = True
+    elif mutation == "wrong_path":
+        report["entries"][0]["path"] = str(tmp_path / "other")
+    elif mutation == "wrong_kind":
+        report["entries"][0]["kind"] = "file"
+    elif mutation == "count":
+        report["entry_count"] = 2
+    elif mutation == "truncated":
+        report["entries_truncated"] = True
+    else:
+        report["errors"] = ["unexpected_acl_error"]
+
+    monkeypatch.setattr(
+        windows_acl,
+        "native_windows_acl_report",
+        lambda _path: copy.deepcopy(report),
+    )
+    output = tmp_path / "final"
+    with pytest.raises(executor.HostTaskExecutorError, match="source root"):
+        executor.admit_host_task_staging(source, output, **_arguments(tmp_path))
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("wrong_owner", "inheritance", "wrong_path", "details", "count"),
+)
+def test_windows_acl_admission_rejects_malformed_hardening_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    _make_source(source)
+    _patch_validator_seams(monkeypatch)
+    _simulate_windows(monkeypatch)
+    from deeplaw import windows_acl
+
+    monkeypatch.setattr(
+        windows_acl,
+        "native_windows_acl_report",
+        lambda path: _verified_acl_report(Path(path), checked=1),
+    )
+    monkeypatch.setattr(
+        windows_acl,
+        "native_windows_path_acl_report",
+        lambda path: _verified_acl_report(Path(path), checked=1),
+    )
+
+    def hardener(path: Path) -> dict[str, Any]:
+        report = _verified_hardening_report(Path(path))
+        verification = report["verification"]
+        if mutation == "wrong_owner":
+            report["current_user_sid"] = "S-1-5-21-9999"
+        elif mutation == "inheritance":
+            verification["entries"][0]["acl_inheritance_enabled"] = True
+        elif mutation == "wrong_path":
+            verification["entries"][0]["path"] = str(tmp_path / "other")
+        elif mutation == "details":
+            verification.pop("entries")
+        else:
+            report["item_count"] = 2
+        return report
+
+    monkeypatch.setattr(windows_acl, "harden_windows_vault", hardener)
+    output = tmp_path / "final"
+    with pytest.raises(executor.HostTaskExecutorError, match="temporary staging"):
+        executor.admit_host_task_staging(source, output, **_arguments(tmp_path))
+    assert not output.exists()
+    assert not list(tmp_path.glob(".final.admit-*"))
+
+
 def test_windows_acl_canary_rejects_unverified_output_parent(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -419,7 +565,7 @@ def test_windows_acl_canary_rejects_unverified_output_parent(
     monkeypatch.setattr(
         windows_acl,
         "native_windows_acl_report",
-        lambda _path: _verified_acl_report(checked=1),
+        lambda path: _verified_acl_report(Path(path), checked=1),
     )
     unverified = _verified_acl_report()
     unverified["status"] = "failed"
@@ -452,11 +598,11 @@ def test_windows_acl_hardener_failure_rolls_back_temporary_tree(
 
     def source_acl(path: Path) -> dict[str, Any]:
         events.append(("source", Path(path)))
-        return _verified_acl_report(checked=1)
+        return _verified_acl_report(Path(path), checked=1)
 
     def parent_acl(path: Path) -> dict[str, Any]:
         events.append(("parent", Path(path)))
-        return _verified_acl_report(checked=1)
+        return _verified_acl_report(Path(path), checked=1)
 
     def fail_hardener(path: Path) -> None:
         events.append(("harden", Path(path)))
@@ -498,18 +644,18 @@ def test_windows_acl_post_write_recursive_failure_rolls_back_temporary_tree(
                 selected / "candidate-inventory" / "host-execution-identity.json"
             ).is_file()
             return unverified
-        return _verified_acl_report(checked=1)
+        return _verified_acl_report(Path(path), checked=1)
 
     monkeypatch.setattr(windows_acl, "native_windows_acl_report", recursive_acl)
     monkeypatch.setattr(
         windows_acl,
         "native_windows_path_acl_report",
-        lambda _path: _verified_acl_report(checked=1),
+        lambda path: _verified_acl_report(Path(path), checked=1),
     )
     monkeypatch.setattr(
         windows_acl,
         "harden_windows_vault",
-        lambda _path: _verified_hardening_report(),
+        lambda path: _verified_hardening_report(Path(path)),
     )
 
     output = tmp_path / "final"
@@ -536,12 +682,12 @@ def test_windows_acl_hardening_and_validation_run_before_promotion(
     def recursive_acl(path: Path) -> dict[str, Any]:
         selected = Path(path)
         events.append(("recursive", selected))
-        return _verified_acl_report(checked=1)
+        return _verified_acl_report(selected, checked=1)
 
     def parent_acl(path: Path) -> dict[str, Any]:
         selected = Path(path)
         events.append(("parent", selected))
-        return _verified_acl_report(checked=1)
+        return _verified_acl_report(selected, checked=1)
 
     def hardener(path: Path) -> dict[str, Any]:
         selected = Path(path)
@@ -550,7 +696,7 @@ def test_windows_acl_hardening_and_validation_run_before_promotion(
             assert (
                 selected / "candidate-inventory" / "host-execution-identity.json"
             ).is_file()
-        return _verified_hardening_report()
+        return _verified_hardening_report(selected)
 
     monkeypatch.setattr(windows_acl, "native_windows_acl_report", recursive_acl)
     monkeypatch.setattr(windows_acl, "native_windows_path_acl_report", parent_acl)

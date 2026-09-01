@@ -38,6 +38,7 @@ from benchmarks.hosts.host_preflight_receipt import (
     load_host_identity_input,
     portable_file_stat_matches,
     stat_mutation_signature,
+    validate_windows_acl_hardening_report,
 )
 from benchmarks.hosts.pass13_orchestrator import (
     QualificationOrchestrationError,
@@ -522,16 +523,24 @@ def _parent_chain_has_symlink(path: Path) -> bool:
     return False
 
 
-def _windows_acl_hardening_verified(report: object) -> bool:
-    if not isinstance(report, Mapping):
+def _windows_acl_hardening_verified(
+    report: object,
+    *,
+    expected_path: Path | str | None = None,
+    directory: bool | None = None,
+) -> bool:
+    try:
+        validate_windows_acl_hardening_report(
+            report,
+            expected_path=expected_path,
+            expected_kind=(
+                "directory" if directory is True else "file" if directory is False else None
+            ),
+            recursive=directory,
+        )
+    except (TypeError, ValueError):
         return False
-    verification = report.get("verification")
-    return bool(
-        report.get("platform") == "nt"
-        and report.get("applied") is True
-        and isinstance(verification, Mapping)
-        and verification.get("permissions_verified") is True
-    )
+    return True
 
 
 def _harden_windows_broker_path(
@@ -553,7 +562,11 @@ def _harden_windows_broker_path(
         )
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
         raise HostTaskQualificationError(error_message) from exc
-    if not _windows_acl_hardening_verified(report):
+    if not _windows_acl_hardening_verified(
+        report,
+        expected_path=path,
+        directory=directory,
+    ):
         raise HostTaskQualificationError(error_message)
 
 
