@@ -26,7 +26,11 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from benchmarks.hosts import host_process_receipt_set_v1, host_process_receipt_v2
+from benchmarks.hosts import (
+    host_process_receipt_set_v1,
+    host_process_receipt_v2,
+    owner_external_collector,
+)
 from benchmarks.hosts.host_preflight_receipt import (
     HostIdentityValidationError,
     host_binary_identity,
@@ -51,6 +55,12 @@ CLASSIFICATION_RELATIVE_PATH = "benchmarks/release/v013-gate-classification-v9.j
 PROTOCOL_RELATIVE_PATH = "benchmarks/v013/qualification-protocol-v3.json"
 HOST_IDENTITY_RELATIVE_PATH = "candidate-inventory/host-exact-identity.json"
 HOST_EXECUTION_IDENTITY_RELATIVE_PATH = "candidate-inventory/host-execution-identity.json"
+COLLECTOR_IDENTITY_RELATIVE_PATH = (
+    "candidate-inventory/kernel-evidence-collector-identity.json"
+)
+COLLECTOR_SOURCE_RELATIVE_PATH = (
+    "retained-collector-source/kernel-evidence-collector"
+)
 ACTIVE_SCHEMA_FILENAME = "v013-active-qualification.v3.schema.json"
 CLASSIFICATION_SCHEMA_FILENAME = "v013-release-gate-classification.v9.schema.json"
 PROTOCOL_SCHEMA_FILENAME = "v013-qualification-protocol.v3.schema.json"
@@ -955,6 +965,49 @@ def _validate_broker_source(relative: str, raw: bytes) -> dict[str, str]:
     return {"host": match.group("host"), "sha256": _sha256(raw)}
 
 
+def _validate_collector_binding(
+    files: Mapping[str, tuple[Path, bytes]],
+    *,
+    run_ids: Mapping[str, int],
+) -> dict[str, Any]:
+    source = files.get(COLLECTOR_SOURCE_RELATIVE_PATH)
+    identity = files.get(COLLECTOR_IDENTITY_RELATIVE_PATH)
+    if source is None or identity is None:
+        _fail("bundle must retain the exact Kernel evidence collector and identity")
+    raw = source[1]
+    if (
+        not 1 <= len(raw) <= owner_external_collector.MAX_COLLECTOR_BYTES
+        or b"\x00" in raw
+    ):
+        _fail("retained Kernel evidence collector source is unsafe")
+    try:
+        raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise KernelQualificationBundleError(
+            "retained Kernel evidence collector is not UTF-8 source text"
+        ) from error
+    if _BROKER_SECRET_LITERAL.search(raw):
+        _fail("retained Kernel evidence collector contains a credential literal")
+    value = _json_at(COLLECTOR_IDENTITY_RELATIVE_PATH, files)
+    if value is None:
+        _fail("Kernel evidence collector identity must be strict JSON")
+    try:
+        admitted = owner_external_collector.validate_identity(
+            value,
+            candidate_run_id=run_ids["candidate_run_id"],
+            evidence_run_id=run_ids["evidence_run_id"],
+            frozen_raw=raw,
+        )
+    except (TypeError, ValueError, owner_external_collector.OwnerExternalCollectorError) as error:
+        raise KernelQualificationBundleError(
+            "Kernel evidence collector identity is not cross-bound"
+        ) from error
+    return {
+        "sha256": admitted["frozen_sha256"],
+        "byte_size": admitted["frozen_byte_size"],
+    }
+
+
 def _load_host_identity_binding(
     root: Path,
     files: Mapping[str, tuple[Path, bytes]],
@@ -1000,6 +1053,7 @@ def _validate_inventory(
     run_ids: Mapping[str, int],
     host_identity: Mapping[str, Any],
 ) -> dict[str, Any]:
+    collector = _validate_collector_binding(files, run_ids=run_ids)
     typed_paths: dict[str, list[str]] = defaultdict(list)
     typed_values: dict[str, Mapping[str, Any]] = {}
     preflight_receipts: list[dict[str, str]] = []
@@ -1073,6 +1127,8 @@ def _validate_inventory(
         ACTIVE_RELATIVE_PATH,
         CLASSIFICATION_RELATIVE_PATH,
         PROTOCOL_RELATIVE_PATH,
+        COLLECTOR_IDENTITY_RELATIVE_PATH,
+        COLLECTOR_SOURCE_RELATIVE_PATH,
         *receipt_paths,
         *broker_source_paths,
         *(path for paths in typed_paths.values() for path in paths),
@@ -1247,6 +1303,8 @@ def _validate_inventory(
             for host, task_case, run_id in sorted(retained_process_runs)
         ],
         "broker_source_count": len(broker_sources),
+        "collector_source_count": 1,
+        "collector_sha256": collector["sha256"],
         "corpus_roles": sorted(corpus_by_role),
         "candidate": dict(candidate),
         "run_ids": dict(run_ids),

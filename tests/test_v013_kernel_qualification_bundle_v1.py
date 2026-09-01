@@ -41,6 +41,7 @@ BROKER_SOURCE_SHA256 = {
     host: hashlib.sha256(raw).hexdigest()
     for host, raw in BROKER_SOURCE_BYTES.items()
 }
+COLLECTOR_SOURCE_BYTES = b"#!/bin/sh\nprintf 'collector fixture\\n'\n"
 HOST_BINARY = {
     "codex": (
         "codex-cli 0.148.0-alpha.15",
@@ -80,6 +81,30 @@ HOST_IDENTITY = {
 def _write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(bundle.canonical_json(value) + b"\n")
+
+
+def _collector_identity(raw: bytes) -> dict[str, Any]:
+    digest = hashlib.sha256(raw).hexdigest()
+    value: dict[str, Any] = {
+        "schema_version": bundle.owner_external_collector.SCHEMA_VERSION,
+        "artifact_kind": bundle.owner_external_collector.ARTIFACT_KIND,
+        "candidate_run_id": RUN_IDS["candidate_run_id"],
+        "evidence_run_id": RUN_IDS["evidence_run_id"],
+        "source_sha256": digest,
+        "source_byte_size": len(raw),
+        "frozen_sha256": digest,
+        "frozen_byte_size": len(raw),
+        "repository_external": True,
+        "source_regular": True,
+        "source_single_link": True,
+        "source_owner_only": True,
+        "frozen_private": True,
+        "frozen_non_writable": True,
+        "frozen_executable": True,
+        "formal_authority": False,
+    }
+    value["record_sha256"] = bundle.owner_external_collector.record_sha256(value)
+    return value
 
 
 def _copy_bindings(root: Path) -> None:
@@ -353,6 +378,13 @@ def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             },
         },
     )
+    collector_source = root / bundle.COLLECTOR_SOURCE_RELATIVE_PATH
+    collector_source.parent.mkdir(parents=True, exist_ok=True)
+    collector_source.write_bytes(COLLECTOR_SOURCE_BYTES)
+    _write_json(
+        root / bundle.COLLECTOR_IDENTITY_RELATIVE_PATH,
+        _collector_identity(COLLECTOR_SOURCE_BYTES),
+    )
     external_identity = root.parent / "external-host-exact-identity.json"
     _write_json(external_identity, HOST_IDENTITY)
     if external_identity.is_symlink():
@@ -490,7 +522,76 @@ def test_build_and_validate_exact_candidate_bundle(
     assert validated["preflight_receipt_count"] == 6
     assert validated["process_receipt_count"] == 6
     assert validated["broker_source_count"] == 2
+    assert validated["collector_source_count"] == 1
+    assert validated["collector_sha256"] == hashlib.sha256(
+        COLLECTOR_SOURCE_BYTES
+    ).hexdigest()
     assert validated["corpus_roles"] == sorted(bundle.CORPUS_ROLES)
+
+
+def test_bundle_rejects_missing_collector_identity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    (root / bundle.COLLECTOR_IDENTITY_RELATIVE_PATH).unlink()
+
+    with pytest.raises(
+        bundle.KernelQualificationBundleError,
+        match="must retain the exact Kernel evidence collector and identity",
+    ):
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
+
+
+def test_bundle_rejects_collector_bytes_that_differ_from_identity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    (root / bundle.COLLECTOR_SOURCE_RELATIVE_PATH).write_bytes(
+        COLLECTOR_SOURCE_BYTES + b"# changed\n"
+    )
+
+    with pytest.raises(
+        bundle.KernelQualificationBundleError,
+        match="collector identity is not cross-bound",
+    ):
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
+
+
+def test_bundle_rejects_collector_identity_for_another_evidence_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    identity = _collector_identity(COLLECTOR_SOURCE_BYTES)
+    identity["evidence_run_id"] += 1
+    identity["record_sha256"] = bundle.owner_external_collector.record_sha256(identity)
+    _write_json(root / bundle.COLLECTOR_IDENTITY_RELATIVE_PATH, identity)
+
+    with pytest.raises(
+        bundle.KernelQualificationBundleError,
+        match="collector identity is not cross-bound",
+    ):
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
 
 
 def test_bundle_rebuilds_exact_evidence_with_new_commercial_run_id(

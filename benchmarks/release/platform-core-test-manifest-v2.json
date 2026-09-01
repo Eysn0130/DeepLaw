@@ -9687,6 +9687,27 @@
         {
           "junit": {
             "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_bundle_rejects_collector_bytes_that_differ_from_identity"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_rejects_collector_bytes_that_differ_from_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_bundle_rejects_collector_identity_for_another_evidence_run"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_rejects_collector_identity_for_another_evidence_run"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_bundle_rejects_missing_collector_identity"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_rejects_missing_collector_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
             "name": "test_bundle_rejects_symlink_and_competitive_field"
           },
           "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_rejects_symlink_and_competitive_field"
@@ -10117,6 +10138,34 @@
             "name": "test_no_model_registration_starts_production_launcher_and_lists_tools"
           },
           "node_id": "tests/test_v013_no_model_production_registration.py::test_no_model_registration_starts_production_launcher_and_lists_tools"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_owner_external_collector",
+            "name": "test_frozen_collector_survives_ambient_path_replacement"
+          },
+          "node_id": "tests/test_v013_owner_external_collector.py::test_frozen_collector_survives_ambient_path_replacement"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_owner_external_collector",
+            "name": "test_source_must_be_owner_only_and_credential_free"
+          },
+          "node_id": "tests/test_v013_owner_external_collector.py::test_source_must_be_owner_only_and_credential_free"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_owner_external_collector",
+            "name": "test_tampered_frozen_collector_fails_closed"
+          },
+          "node_id": "tests/test_v013_owner_external_collector.py::test_tampered_frozen_collector_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_owner_external_collector",
+            "name": "test_wrong_run_binding_and_identity_tamper_fail_closed"
+          },
+          "node_id": "tests/test_v013_owner_external_collector.py::test_wrong_run_binding_and_identity_tamper_fail_closed"
         },
         {
           "junit": {
@@ -14573,6 +14622,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass25_machine_workflows",
+            "name": "test_kernel_evidence_freezes_collector_before_ambient_execution"
+          },
+          "node_id": "tests/test_v013_pass25_machine_workflows.py::test_kernel_evidence_freezes_collector_before_ambient_execution"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass25_machine_workflows",
             "name": "test_release_reopens_v9_kernel_provenance_and_keeps_public_state_separate"
           },
           "node_id": "tests/test_v013_pass25_machine_workflows.py::test_release_reopens_v9_kernel_provenance_and_keeps_public_state_separate"
@@ -18036,9 +18092,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2554,
+      "count": 2562,
       "selection": "not qualification and not windows_native",
-      "sha256": "562c3307a4d86327109eb09545fb7257a30743179f1362eba70ade5261551333"
+      "sha256": "5cfb4f0e2cd416356cc2f9c9cafd8e29a2ff885bb687eda1531eb7030960bfbb"
     },
     "windows": {
       "additional_cases": [
@@ -18078,13 +18134,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2559,
+      "count": 2567,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "cfc4f03757bac99b37b7047c66edbb094db534f7da032c1a3d6a6539f0ef6333"
+      "sha256": "f2d02de02a76d36170231e67f83cc5475d0ec3cbc7d15db7371592538bf02870"
     }
   },
-  "manifest_sha256": "027fdad0f50f891edc12ec25c656f9d3c1c3ee66384269bc4b605cd015594e4c",
+  "manifest_sha256": "de4d396bad567ffe6726258fede1c76a79a500d8b064a56ac8f51b419ff3d0b3",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

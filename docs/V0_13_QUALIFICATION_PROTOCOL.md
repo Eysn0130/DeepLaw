@@ -482,9 +482,13 @@ Formal order is:
    required Python/3-OS matrix, SBOM/licenses/OpenVEX/provenance.
 2. Kernel Qualification Evidence: download the same artifact, run isolated
    Host/Evidence/Wiki/Context tasks through the exact owner-controlled external collector, retain
-   the no-Secret broker sources, and upload only sanitized evidence. The collector and both brokers
-   are repository-external, owner-only, exact-hash inputs; their presence is a prerequisite, not
-   product runtime.
+   the no-Secret broker sources, and upload only sanitized evidence. Before execution, the workflow
+   reads the collector through a stable file descriptor, freezes those exact bytes into a private
+   non-writable executable, and uses only that copy. The sanitized bundle retains the exact frozen
+   source plus a path-free candidate/Evidence-run descriptor; Kernel, Commercial, and release
+   validators reopen both. This byte binding does not establish third-party collector attestation
+   or observation Authority. The collector and both brokers are repository-external, owner-only,
+   exact-hash inputs; their presence is a prerequisite, not product runtime.
 3. Commercial Qualification: download the same artifact, reopen every source, and derive all 13
    Core gates plus explicit optional-claim statuses, `assembly_enabled`, `release_ready`, and
    bounded Kernel technical claims.

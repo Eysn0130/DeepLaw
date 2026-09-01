@@ -564,6 +564,66 @@ def test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding(
     _assert_kernel_workflow_gates_opencode_on_transient_zero_model_broker_preflight()
 
 
+def test_kernel_evidence_freezes_collector_before_ambient_execution() -> None:
+    workflow = _workflow("kernel-qualification-evidence.yml")
+    prerequisite = workflow.split(
+        "      - name: Validate owner-controlled Host prerequisites without reading credentials",
+        1,
+    )[1].split(
+        "      - name: Build and validate the pre-execution Host task handoff", 1
+    )[0]
+    execution = workflow.split(
+        "      - name: Execute Codex x3, OpenCode x3, and deterministic Kernel evidence",
+        1,
+    )[1].split("      - name: Reopen every typed receipt with the repository validator", 1)[0]
+
+    frozen_collector = (
+        "${RUNNER_TEMP}/candidate-inputs/"
+        "frozen-kernel-evidence-collector"
+    )
+    collector_identity = (
+        "${RUNNER_TEMP}/candidate-inputs/"
+        "frozen-kernel-evidence-collector-identity.json"
+    )
+    assert frozen_collector in prerequisite, (
+        "Kernel evidence prerequisite must freeze "
+        "DEEPLAW_KERNEL_EVIDENCE_COLLECTOR bytes under RUNNER_TEMP/candidate-inputs"
+    )
+    collector_lines = "\n".join(
+        line for line in prerequisite.splitlines() if "collector" in line.casefold()
+    )
+    assert "benchmarks.hosts.owner_external_collector freeze" in prerequisite
+    assert "frozen_root.chmod(0o700)" in prerequisite
+    assert "stat.S_IMODE(frozen_root_details.st_mode) != 0o700" in prerequisite
+
+    assert collector_identity in prerequisite, (
+        "Kernel evidence prerequisite must generate a path-free collector identity "
+        "under RUNNER_TEMP/candidate-inputs"
+    )
+    assert re.search(
+        r"(sha256|digest).*?(bytes|size)|(?:bytes|size).*?(sha256|digest)",
+        prerequisite,
+        flags=re.IGNORECASE | re.DOTALL,
+    ), "Frozen collector identity must bind exact bytes without an ambient path"
+
+    assert f'frozen_collector="{frozen_collector}"' in execution
+    assert '"${frozen_collector}" \\\n' in execution, (
+        "Kernel evidence Execute step must invoke only the frozen collector path"
+    )
+    assert '"${DEEPLAW_KERNEL_EVIDENCE_COLLECTOR}" \\\n' not in execution, (
+        "Kernel evidence Execute step must not invoke the ambient collector path"
+    )
+    assert 'cp "${frozen_collector}" \\\n' in execution
+    assert '"${output}/retained-collector-source/kernel-evidence-collector"' in execution
+    assert 'cp "${collector_identity}" \\\n' in execution
+    assert (
+        '"${output}/candidate-inventory/kernel-evidence-collector-identity.json"'
+        in execution
+    )
+    assert "DEEPLAW_OPENCODE_DOTENV" not in collector_lines
+    assert collector_identity in execution or "collector_identity" in execution
+
+
 def test_commercial_qualification_dispatch_and_assembly_use_kernel_v9() -> None:
     workflow = _workflow("commercial-qualification.yml")
     trigger = _trigger(workflow)
