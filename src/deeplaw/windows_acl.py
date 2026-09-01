@@ -77,8 +77,11 @@ $root = [Text.Encoding]::UTF8.GetString(
   [Convert]::FromBase64String($env:DEEPLAW_ACL_ROOT_B64)
 )
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
-$items = @((Get-Item -LiteralPath $root -Force))
-$items += @(Get-ChildItem -LiteralPath $root -Force -Recurse)
+$rootItem = Get-Item -LiteralPath $root -Force
+$items = @($rootItem)
+if ($rootItem.PSIsContainer) {
+  $items += @(Get-ChildItem -LiteralPath $root -Force -Recurse)
+}
 foreach ($item in $items) {
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
     throw "Refusing to harden a reparse point: $($item.FullName)"

@@ -24,6 +24,7 @@ from deeplaw.knowledge_store import (
 )
 from deeplaw.windows_acl import (
     evaluate_windows_acl_payload,
+    harden_windows_private_file,
     harden_windows_vault,
     native_windows_acl_report,
 )
@@ -374,6 +375,35 @@ def test_native_windows_vault_acl_is_owner_only_after_real_ingest(tmp_path: Path
     assert {"fixture-model.bin", "fixture-index.bin"} <= checked_paths
     assert permissions["status"] == "verified"
     assert permissions["permissions_verified"] is True
+
+
+@pytest.mark.windows_native
+@pytest.mark.skipif(os.name != "nt", reason="requires native Windows ACLs")
+def test_native_windows_private_file_hardening_is_single_item_and_receipt_compatible(
+    tmp_path: Path,
+) -> None:
+    from benchmarks.hosts.host_preflight_receipt import validate_windows_acl_hardening_report
+
+    path = (tmp_path / "private-broker.exe").resolve()
+    path.write_bytes(b"private-broker-fixture")
+
+    hardening = harden_windows_private_file(path)
+    verification = hardening["verification"]
+    entry = verification["entries"][0]
+
+    assert hardening["applied"] is True
+    assert hardening["item_count"] == 1
+    assert verification["entry_count"] == 1
+    assert verification["files_and_directories_checked"] == 1
+    assert len(verification["entries"]) == 1
+    assert entry["path"] == str(path)
+    assert entry["kind"] == "file"
+    assert validate_windows_acl_hardening_report(
+        hardening,
+        expected_path=path,
+        expected_kind="file",
+        recursive=False,
+    ) == hardening
 
 
 @pytest.mark.windows_native
