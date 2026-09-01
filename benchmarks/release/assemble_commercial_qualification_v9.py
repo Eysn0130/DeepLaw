@@ -685,7 +685,7 @@ def _validate_host_receipts(
                     expected_candidate=candidate,
                     expected_run_binding={
                         "evidence_run_id": run_ids["evidence_run_id"],
-                        "qualification_run_id": run_ids["qualification_run_id"],
+                        "qualification_run_id": run_ids["evidence_run_id"],
                     },
                     seen_nonce_sha256s=seen_nonce_sha256s,
                 )

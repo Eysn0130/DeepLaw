@@ -42,6 +42,7 @@ IDENTITY = {
 }
 BROKER_BYTES = {"codex": b"codex broker\n", "opencode": b"opencode broker\n"}
 BROKER_SHA = {host: hashlib.sha256(raw).hexdigest() for host, raw in BROKER_BYTES.items()}
+RECEIPT_RUN_BINDING = {"evidence_run_id": 202, "qualification_run_id": 202}
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -143,7 +144,7 @@ def _v2_process(host: str, task: str, *, index: int) -> dict[str, Any]:
         task_case=task,
         run_id=f"run-{host}-{task}",
         candidate_binding=CANDIDATE,
-        run_binding={"evidence_run_id": 202, "qualification_run_id": 303},
+        run_binding=RECEIPT_RUN_BINDING,
         host_binary=executor.host_preflight_receipt.host_binary_identity(IDENTITY, host),
         broker_source={
             "repository_external": True,
@@ -258,7 +259,7 @@ def _make_source(root: Path) -> None:
                 task_case=task,
                 run_id=f"run-{host}-{task}",
                 candidate_binding=CANDIDATE,
-                run_binding={"evidence_run_id": 202, "qualification_run_id": 303},
+                run_binding=RECEIPT_RUN_BINDING,
                 host_binary=binary,
                 broker_source={
                     "repository_external": True,
@@ -337,7 +338,7 @@ def _arguments(tmp_path: Path) -> dict[str, Any]:
         "handoff": tmp_path / "handoff.json",
         "candidate_binding_input": tmp_path / "candidate.json",
         "evidence_run_id": 202,
-        "qualification_run_id": 303,
+        "qualification_run_id": 202,
         "host_identity_input": tmp_path / "identity.json",
         "codex_broker_sha256": BROKER_SHA["codex"],
         "opencode_broker_sha256": BROKER_SHA["opencode"],
@@ -746,12 +747,26 @@ def test_admits_exact_six_slot_tree_transactionally(
         "task_count_per_host": 3,
         "candidate_binding": CANDIDATE,
         "evidence_run_id": 202,
-        "qualification_run_id": 303,
+        "qualification_run_id": 202,
         "claim_eligible": False,
         "formal_admission": False,
         "release_ready": False,
     }
     assert executor._inventory(output) == executor._inventory(source)
+
+
+def test_distinct_evidence_and_qualification_runs_fail_closed(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    arguments = _arguments(tmp_path)
+    arguments["qualification_run_id"] = 303
+
+    with pytest.raises(
+        executor.HostTaskExecutorError,
+        match="Host task evidence and qualification run ids must match",
+    ):
+        executor.admit_host_task_staging(source, tmp_path / "final", **arguments)
+    assert not (tmp_path / "final").exists()
 
 
 def test_stable_reader_accepts_windows_cross_interface_mode_difference(

@@ -9372,6 +9372,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_host_task_executor",
+            "name": "test_distinct_evidence_and_qualification_runs_fail_closed"
+          },
+          "node_id": "tests/test_v013_host_task_executor.py::test_distinct_evidence_and_qualification_runs_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_executor",
             "name": "test_existing_output_is_never_replaced"
           },
           "node_id": "tests/test_v013_host_task_executor.py::test_existing_output_is_never_replaced"
@@ -9655,6 +9662,13 @@
             "name": "test_bundle_accepts_six_retained_v2_slots_without_parallel_receipt_family"
           },
           "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_accepts_six_retained_v2_slots_without_parallel_receipt_family"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_kernel_qualification_bundle_v1",
+            "name": "test_bundle_rebuilds_exact_evidence_with_new_commercial_run_id"
+          },
+          "node_id": "tests/test_v013_kernel_qualification_bundle_v1.py::test_bundle_rebuilds_exact_evidence_with_new_commercial_run_id"
         },
         {
           "junit": {
@@ -18022,9 +18036,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2552,
+      "count": 2554,
       "selection": "not qualification and not windows_native",
-      "sha256": "c7d6bd1a0058c31ca62e4a7122c9dcf61aeff7ec61e8b71113f60b00ec6e2d4d"
+      "sha256": "562c3307a4d86327109eb09545fb7257a30743179f1362eba70ade5261551333"
     },
     "windows": {
       "additional_cases": [
@@ -18064,13 +18078,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2557,
+      "count": 2559,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "ba122ae4264817028219e7189ecd63d080098f99a61ed89e8482580e4b05209a"
+      "sha256": "cfc4f03757bac99b37b7047c66edbb094db534f7da032c1a3d6a6539f0ef6333"
     }
   },
-  "manifest_sha256": "e6ae3061f3f40a67ec2e4994ac369361a0f2025e33f7013ac1368323abe405d2",
+  "manifest_sha256": "027fdad0f50f891edc12ec25c656f9d3c1c3ee66384269bc4b605cd015594e4c",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

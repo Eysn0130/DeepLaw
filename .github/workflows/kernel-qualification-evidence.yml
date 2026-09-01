@@ -468,9 +468,9 @@ jobs:
             "${root}/benchmarks/v013/qualification-protocol-v3.json"
           cp benchmarks/release/v013-gate-classification-v9.json \
             "${root}/benchmarks/release/v013-gate-classification-v9.json"
-          # A temporary non-future qualification identity proves that the raw
-          # evidence is already a valid closed bundle. Commercial Qualification
-          # rebuilds the manifest with its actual workflow run id.
+          # This sentinel is only a temporary bundle/Commercial identity. Immutable
+          # Host process receipts stay bound to the current Kernel Evidence run;
+          # Commercial Qualification rebuilds the manifest with its actual run id.
           sentinel=9223372036854775807
           uv run --frozen python -m benchmarks.release.kernel_qualification_bundle_v1 build \
             --root "${root}" \

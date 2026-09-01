@@ -774,7 +774,7 @@ def _validate_process_receipt(
             expected_candidate=candidate,
             expected_run_binding={
                 "evidence_run_id": run_ids["evidence_run_id"],
-                "qualification_run_id": run_ids["qualification_run_id"],
+                "qualification_run_id": run_ids["evidence_run_id"],
             },
             expected_host_identity_sha256=expected_host_identity_sha256,
             expected_host_identity_source_sha256=str(host_identity["source_sha256"]),
@@ -848,7 +848,7 @@ def _validate_process_receipt_set(
             expected_candidate=candidate,
             expected_run_binding={
                 "evidence_run_id": run_ids["evidence_run_id"],
-                "qualification_run_id": run_ids["qualification_run_id"],
+                "qualification_run_id": run_ids["evidence_run_id"],
             },
             expected_broker_sha256=str(broker_source["sha256"]),
             expected_host_identity_sha256=expected_host_identity_sha256,

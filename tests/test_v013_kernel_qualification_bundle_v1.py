@@ -18,6 +18,10 @@ RUN_IDS = {
     "evidence_run_id": 202,
     "qualification_run_id": 303,
 }
+RECEIPT_RUN_BINDING = {
+    "evidence_run_id": RUN_IDS["evidence_run_id"],
+    "qualification_run_id": RUN_IDS["evidence_run_id"],
+}
 EXPECTED_CANDIDATE = {
     "commit": "1" * 40,
     "tree": "2" * 40,
@@ -289,7 +293,7 @@ def _process_receipt(
         task_case=task_case,
         run_id=f"fixture-{host}-{slot_index}",
         candidate_binding=EXPECTED_CANDIDATE,
-        run_binding=RUN_IDS,
+        run_binding=RECEIPT_RUN_BINDING,
         host_binary={"version": HOST_BINARY[host][0], "sha256": HOST_BINARY[host][1]},
         broker_source={
             "repository_external": True,
@@ -410,7 +414,7 @@ def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             task_case=task_case,
             run_id=f"fixture-{host}-{index}",
             candidate_binding=EXPECTED_CANDIDATE,
-            run_binding=RUN_IDS,
+            run_binding=RECEIPT_RUN_BINDING,
             host_binary={"version": HOST_BINARY[host][0], "sha256": HOST_BINARY[host][1]},
             broker_source={
                 "repository_external": True,
@@ -487,6 +491,42 @@ def test_build_and_validate_exact_candidate_bundle(
     assert validated["process_receipt_count"] == 6
     assert validated["broker_source_count"] == 2
     assert validated["corpus_roles"] == sorted(bundle.CORPUS_ROLES)
+
+
+def test_bundle_rebuilds_exact_evidence_with_new_commercial_run_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
+    before = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != bundle.MANIFEST_FILENAME
+    }
+
+    (root / bundle.MANIFEST_FILENAME).unlink()
+    rebuilt_run_ids = {**RUN_IDS, "qualification_run_id": 304}
+    rebuilt = bundle.build_bundle(
+        root,
+        run_ids=rebuilt_run_ids,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
+
+    after = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != bundle.MANIFEST_FILENAME
+    }
+    assert after == before
+    assert rebuilt["run_ids"] == rebuilt_run_ids
 
 
 def test_bundle_rejects_coherent_passed_active_core_row(

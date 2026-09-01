@@ -15,6 +15,11 @@ Current: every active `core_statuses` row is schema-constrained to
 results exist only in retained evidence and Commercial-derived outputs and are never backfilled
 into the active record.
 
+Current: formal Host process receipts and receipt sets are produced by the Kernel Evidence
+workflow and bind both `evidence_run_id` and `qualification_run_id` to that current Evidence run.
+The future Commercial run ID cannot be known during collection, so it remains only in
+bundle/report/release run bindings; this does not establish third-party attestation or Authority.
+
 The machine-readable protocol is
 `contracts/v013-qualification-protocol.v3.schema.json`; the frozen bytes are
 `benchmarks/v013/qualification-protocol-v3.json` and its recorded SHA-256. Protocol v1-v2 and Gate

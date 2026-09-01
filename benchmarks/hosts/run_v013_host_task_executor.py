@@ -710,7 +710,7 @@ def _validate_staging(
                     expected_candidate=candidate,
                     expected_run_binding={
                         "evidence_run_id": run_binding["evidence_run_id"],
-                        "qualification_run_id": run_binding["qualification_run_id"],
+                        "qualification_run_id": run_binding["evidence_run_id"],
                     },
                     expected_broker_sha256=retained_brokers[host],
                     expected_host_identity_sha256=expected_identity_sha,
@@ -774,6 +774,8 @@ def admit_host_task_staging(
         for value in (evidence_run_id, qualification_run_id)
     ):
         _fail("Host task run binding is invalid")
+    if evidence_run_id != qualification_run_id:
+        _fail("Host task evidence and qualification run ids must match")
     source = _external_directory(
         source_root,
         repository=repository,
