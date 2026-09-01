@@ -79,6 +79,7 @@ def test_normalize_junit_accepts_the_exact_supplied_symlinked_root_spelling(
         "/home/other/checkout/tests/test_demo.py:7",
         r"C:\\other\\checkout\\tests\\test_demo.py:7",
         r"\\server\share\tests\test_demo.py:7",
+        r"\\U1234\share\tests\test_demo.py:7",
         "Secret: do-not-retain",
     ],
 )
@@ -220,6 +221,82 @@ def test_final_validator_rejects_path_in_skipped_system_text(tmp_path: Path) -> 
 
     with pytest.raises(CandidateArtifactPathPolicyError):
         validate_candidate_full_raw_evidence(root)
+
+
+def test_final_validator_rejects_unenumerated_absolute_path_in_text(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "raw"
+    root.mkdir()
+    (root / "candidate-requirements.txt").write_text(
+        "#    uv export --output-file candidate-requirements.txt\n",
+        encoding="utf-8",
+    )
+    (root / "report.txt").write_text(
+        "runner traceback: /custom/runner/private.py:4\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CandidateArtifactPathPolicyError):
+        validate_candidate_full_raw_evidence(root)
+
+
+@pytest.mark.parametrize("unsafe", ["file:///custom/runner/private.py", "file:///etc/passwd"])
+def test_final_validator_rejects_local_file_uri(tmp_path: Path, unsafe: str) -> None:
+    root = tmp_path / "raw"
+    root.mkdir()
+    (root / "candidate-requirements.txt").write_text(
+        "#    uv export --output-file candidate-requirements.txt\n",
+        encoding="utf-8",
+    )
+    (root / "candidate-tests.xml").write_bytes(
+        _junit(body=f"<system-out>{unsafe}</system-out>")
+    )
+
+    with pytest.raises(CandidateArtifactPathPolicyError):
+        validate_candidate_full_raw_evidence(root)
+
+
+def test_final_validator_allows_urls_locators_and_masked_junit_identity(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "raw"
+    root.mkdir()
+    (root / "candidate-requirements.txt").write_text(
+        "#    uv export --output-file candidate-requirements.txt\n",
+        encoding="utf-8",
+    )
+    (root / "candidate-tests.xml").write_bytes(
+        _junit(
+            body=(
+                "<system-out>https://example.test/page/1 page:/1 "
+                "./relative/path.txt ../relative/path.txt 1/2</system-out>"
+            ),
+            classname=r"tests.fixture[/custom/runner/private.py]",
+        )
+    )
+
+    result = validate_candidate_full_raw_evidence(root)
+
+    assert result.files_scanned == 2
+    assert result.requirements_files == 1
+
+
+def test_final_validator_allows_self_closing_junit_testcase(tmp_path: Path) -> None:
+    root = tmp_path / "raw"
+    root.mkdir()
+    (root / "candidate-requirements.txt").write_text(
+        "#    uv export --output-file candidate-requirements.txt\n",
+        encoding="utf-8",
+    )
+    (root / "candidate-tests.xml").write_bytes(
+        b'<testsuite><testcase classname="tests.fixture" name="test_case"/></testsuite>'
+    )
+
+    result = validate_candidate_full_raw_evidence(root)
+
+    assert result.files_scanned == 2
+    assert result.requirements_files == 1
 
 
 def test_final_validator_requires_one_retained_requirements_file(
