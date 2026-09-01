@@ -1197,3 +1197,199 @@ def test_codex_close_fail_closed_after_unconfirmed_windows_cleanup(
     rendered = str(failure.value)
     assert str(tmp_path) not in rendered
     assert "4314" not in rendered
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_codex_posix_start_uses_new_session_process_group(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class Stream:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def read(self, _size: int) -> bytes:
+            return b""
+
+        def write(self, _payload: bytes) -> int:
+            return 0
+
+        def flush(self) -> None:
+            return
+
+        def close(self) -> None:
+            self.closed = True
+
+    class Process:
+        pid = 4318
+
+        def __init__(self) -> None:
+            self.stdin = Stream()
+            self.stdout = Stream()
+            self.stderr = Stream()
+            self.returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def wait(self, *, timeout: float | None = None) -> int:
+            del timeout
+            self.returncode = 0
+            return 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    process = Process()
+    captured: dict[str, object] = {}
+
+    def spawn(*_args: object, **kwargs: object) -> tuple[Process, None]:
+        captured.update(kwargs)
+        return process, None
+
+    cleanup_calls: list[Process] = []
+    monkeypatch.setattr(codex_client.bounded_subprocess, "spawn_process", spawn)
+    monkeypatch.setattr(
+        codex_client,
+        "_terminate_broker_process_group",
+        lambda selected, _guard=None: cleanup_calls.append(selected) or True,
+    )
+
+    client = CodexAppServerClient(
+        [sys.executable, "-c", "pass"],
+        environment={},
+        cwd=tmp_path,
+    )
+    client.start()
+    assert captured["start_new_session"] is True
+    assert "creationflags" not in captured
+    client.close()
+    assert cleanup_calls == [process]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_codex_posix_close_cleans_group_after_leader_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class Process:
+        pid = 4319
+        stdin = None
+        stdout = None
+        stderr = None
+
+        def poll(self) -> int:
+            return 0
+
+        def wait(self, *, timeout: float | None = None) -> int:
+            del timeout
+            return 0
+
+    process = Process()
+    cleanup_calls: list[Process] = []
+    monkeypatch.setattr(
+        codex_client,
+        "_terminate_broker_process_group",
+        lambda selected, _guard=None: cleanup_calls.append(selected) or True,
+    )
+    client = CodexAppServerClient(
+        [sys.executable, "-c", "pass"],
+        environment={},
+        cwd=tmp_path,
+    )
+    client._process = process  # type: ignore[assignment]
+
+    client.close()
+
+    assert cleanup_calls == [process]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_codex_posix_start_cleans_stale_group_after_leader_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class Stream:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def read(self, _size: int) -> bytes:
+            return b""
+
+        def close(self) -> None:
+            self.closed = True
+
+    class Process:
+        def __init__(self, pid: int, returncode: int | None) -> None:
+            self.pid = pid
+            self.stdin = Stream()
+            self.stdout = Stream()
+            self.stderr = Stream()
+            self.returncode = returncode
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def wait(self, *, timeout: float | None = None) -> int:
+            del timeout
+            self.returncode = 0
+            return 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    stale = Process(4320, 0)
+    replacement = Process(4321, None)
+    cleanup_calls: list[Process] = []
+    spawn_calls = 0
+
+    def spawn(*_args: object, **_kwargs: object) -> tuple[Process, None]:
+        nonlocal spawn_calls
+        spawn_calls += 1
+        return replacement, None
+
+    monkeypatch.setattr(codex_client.bounded_subprocess, "spawn_process", spawn)
+    monkeypatch.setattr(
+        codex_client,
+        "_terminate_broker_process_group",
+        lambda selected, _guard=None: cleanup_calls.append(selected) or True,
+    )
+    client = CodexAppServerClient(
+        [sys.executable, "-c", "pass"],
+        environment={},
+        cwd=tmp_path,
+    )
+    client._process = stale  # type: ignore[assignment]
+
+    client.start()
+    assert spawn_calls == 1
+    assert cleanup_calls == [stale]
+    client.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_codex_posix_group_cleanup_send_failure_is_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Process:
+        pid = 4322
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def kill(self) -> None:
+            self.killed = True
+
+    def fail_group_kill(_pid: int, _signal: int) -> None:
+        raise OSError("synthetic process-group cleanup failure")
+
+    monkeypatch.setattr(codex_client.os, "killpg", fail_group_kill)
+
+    process = Process()
+    assert (
+        codex_client._terminate_broker_process_group(  # type: ignore[arg-type]
+            process,
+        )
+        is False
+    )
+    assert process.killed is True

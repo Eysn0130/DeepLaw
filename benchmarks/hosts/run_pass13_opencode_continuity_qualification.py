@@ -704,6 +704,13 @@ def _windows_child_environment(environment: Mapping[str, str]) -> dict[str, str]
 
 
 def process_creation_options() -> dict[str, Any]:
+    """Return native group options or fail closed before spawning.
+
+    POSIX ``start_new_session`` provides best-effort session/process-group
+    containment, not an operating-system sandbox or an all-descendant-empty
+    proof.  Windows creation flags pair with the Job Guard cleanup proof.
+    """
+
     if os.name == "nt":
         creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         if type(creation_flags) is not int or creation_flags <= 0:
@@ -720,7 +727,14 @@ def _terminate_process_tree(
     process: subprocess.Popen[bytes],
     guard: bounded_subprocess.WindowsJobGuard | None = None,
 ) -> bool:
-    """Terminate the created process group and report confirmed cleanup."""
+    """Terminate the created group and report only the bounded cleanup result.
+
+    POSIX ``killpg`` is best-effort process-group containment, not an
+    operating-system sandbox.  It cannot prove that a descendant which
+    deliberately calls ``setsid()`` has terminated.
+    Windows Job Guard cleanup has an independent bounded five-second proof
+    grace and is not the caller's child-execution timeout.
+    """
 
     if os.name == "nt":
         cleanup_confirmed = False
@@ -734,15 +748,15 @@ def _terminate_process_tree(
         with suppress(Exception):
             process.kill()
         return cleanup_confirmed
-    elif os.name == "posix":
-        if process.poll() is not None:
-            return True
+    if os.name == "posix":
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             return True
         except OSError:
-            pass
+            with suppress(Exception):
+                process.kill()
+            return False
         else:
             with suppress(Exception):
                 process.kill()
@@ -2791,12 +2805,25 @@ def validate_opencode_zero_model_preflight_response(
     return admitted
 
 
-def _terminate_broker_process_group(process: subprocess.Popen[bytes]) -> None:
+def _terminate_broker_process_group(process: subprocess.Popen[bytes]) -> bool:
+    """Request broker process-group cleanup and report signal delivery status."""
+
+    cleanup_confirmed = False
     if os.name == "posix":
-        with suppress(ProcessLookupError, PermissionError):
+        try:
             os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            # The group disappeared between observation and cleanup.  This is
+            # the only benign race; it does not prove escaped ``setsid()``
+            # descendants are gone.
+            cleanup_confirmed = True
+        except OSError:
+            cleanup_confirmed = False
+        else:
+            cleanup_confirmed = True
     with suppress(OSError):
         process.kill()
+    return cleanup_confirmed
 
 
 def _bounded_broker_control_exchange(
@@ -2805,7 +2832,11 @@ def _bounded_broker_control_exchange(
     payload: bytes,
     timeout_seconds: float,
 ) -> bytes:
-    """Consume one owner-external response with an in-flight combined bound."""
+    """Consume one owner-external response with bounded group cleanup.
+
+    The POSIX group check is best-effort containment only; it cannot prove
+    that a descendant which calls ``setsid()`` has terminated.
+    """
 
     if os.name != "posix":
         _control_fail("OpenCode broker process-group isolation is unavailable")
@@ -2827,8 +2858,26 @@ def _bounded_broker_control_exchange(
         raise QualificationError(
             "OpenCode owner-external broker control IPC failed to start"
         ) from exc
+
+    cleanup_failure = threading.Event()
+    cleanup_lock = threading.Lock()
+
+    def terminate_process_group() -> bool:
+        """Serialize cleanup requests and retain any failure for final gating."""
+
+        with cleanup_lock:
+            try:
+                cleanup_confirmed = _terminate_broker_process_group(process)
+            except Exception:
+                cleanup_confirmed = False
+        if not cleanup_confirmed:
+            cleanup_failure.set()
+        return cleanup_confirmed
+
     if process.stdin is None or process.stdout is None or process.stderr is None:
-        _terminate_broker_process_group(process)
+        terminate_process_group()
+        if cleanup_failure.is_set():
+            _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
         _control_fail("OpenCode owner-external broker control pipes are unavailable")
 
     stdout_buffer = bytearray()
@@ -2858,10 +2907,10 @@ def _bounded_broker_control_exchange(
                     else:
                         target.extend(chunk)
                 if terminate:
-                    _terminate_broker_process_group(process)
+                    terminate_process_group()
         except OSError:
             read_failure.set()
-            _terminate_broker_process_group(process)
+            terminate_process_group()
 
     readers = (
         threading.Thread(target=drain, args=(process.stdout, stdout_buffer), daemon=True),
@@ -2885,14 +2934,14 @@ def _bounded_broker_control_exchange(
         process.wait(timeout=max(0.001, deadline - time.monotonic()))
     except subprocess.TimeoutExpired:
         timed_out = True
-        _terminate_broker_process_group(process)
+        terminate_process_group()
         with suppress(subprocess.TimeoutExpired):
             process.wait(timeout=2)
     for reader in readers:
         reader.join(timeout=max(0.0, deadline - time.monotonic()))
     if any(reader.is_alive() for reader in readers):
         timed_out = True
-        _terminate_broker_process_group(process)
+        terminate_process_group()
         for stream in (process.stdout, process.stderr):
             with suppress(OSError):
                 stream.close()
@@ -2903,7 +2952,9 @@ def _bounded_broker_control_exchange(
         with buffer_lock:
             stdout_buffer.clear()
             stderr_buffer.clear()
-        _terminate_broker_process_group(process)
+        terminate_process_group()
+        if cleanup_failure.is_set():
+            _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
         _control_fail(message)
 
     if overflow.is_set():
@@ -2914,6 +2965,16 @@ def _bounded_broker_control_exchange(
         fail_closed("OpenCode owner-external broker control IPC failed")
     if stderr_buffer:
         fail_closed("OpenCode owner-external broker emitted unexpected stderr")
+
+    # Even an otherwise clean response must prove cleanup before exposing the
+    # broker bytes.  This is process-group containment only on POSIX; the
+    # helper deliberately cannot prove a descendant that called ``setsid()``
+    # is gone.
+    if not terminate_process_group() or cleanup_failure.is_set():
+        with buffer_lock:
+            stdout_buffer.clear()
+            stderr_buffer.clear()
+        _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
     return bytes(stdout_buffer)
 
 

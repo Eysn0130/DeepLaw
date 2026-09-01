@@ -304,7 +304,11 @@ class WindowsJobGuard:
         return self._cleanup_result is not None and not _valid_handle(self._job_handle)
 
     def cleanup(self, *, timeout_seconds: float = 5) -> bool:
-        """Terminate remaining members and prove the Job Object is empty."""
+        """Terminate remaining members and prove the Job Object is empty.
+
+        The default five-second grace is an independent Windows containment
+        proof window; it is not the caller's child-execution timeout.
+        """
 
         with self._lock:
             if self._cleanup_result is not None:
@@ -458,7 +462,14 @@ def spawn_process(
     command: Sequence[str],
     **popen_kwargs: Any,
 ) -> tuple[subprocess.Popen[bytes], WindowsJobGuard | None]:
-    """Spawn a bounded child, attaching it to a kill-on-close Job on Windows."""
+    """Spawn a bounded child with platform-specific containment.
+
+    Windows children are attached to a kill-on-close Job Object.  On POSIX,
+    callers request a new session/process group and cleanup can contain that
+    group only; this is not an operating-system sandbox, and a descendant
+    that deliberately calls ``setsid()`` is outside the portable process-group
+    boundary and cannot be proven gone here.
+    """
 
     if os.name != "nt":
         return subprocess.Popen(command, **popen_kwargs), None
@@ -540,6 +551,14 @@ def _kill(
     process: subprocess.Popen[bytes],
     guard: WindowsJobGuard | None = None,
 ) -> bool:
+    """Request bounded cleanup and report the available containment result.
+
+    POSIX success covers the created process group only, not every descendant
+    that may have escaped with ``setsid()``; this is not an operating-system
+    sandbox or an all-descendant-empty proof.  Windows Job cleanup uses its
+    own bounded five-second proof grace, separate from the caller timeout.
+    """
+
     if os.name == "posix":
         process_pid = getattr(process, "pid", None)
         if process_pid is None:
@@ -608,7 +627,13 @@ def run_bounded_subprocess(
     max_stdout_bytes: int,
     max_stderr_bytes: int,
 ) -> BoundedProcessResult:
-    """Run exact argv while enforcing independent stdout, stderr, and time bounds."""
+    """Run exact argv with bounded output, execution, and cleanup handling.
+
+    POSIX cleanup is process-group containment only and cannot portably prove
+    termination of a descendant that deliberately calls ``setsid()``.  The
+    Windows Job Guard's fixed five-second cleanup/proof grace is independent
+    of ``timeout_seconds`` for the caller's child execution.
+    """
     if (
         not command
         or not 0 <= len(input_bytes) <= 64 * 1024 * 1024

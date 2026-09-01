@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import signal
 import stat
 import subprocess
 from contextlib import contextmanager
@@ -1431,6 +1432,149 @@ def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
                 missing_guard
             ) is False
         assert missing_guard.killed is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_posix_process_tree_cleanup_kills_group_after_leader_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Process:
+        pid = 4323
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def poll(self) -> int:
+            return 0
+
+        def kill(self) -> None:
+            self.killed = True
+
+    process = Process()
+    killpg_calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        runner.os,
+        "killpg",
+        lambda pid, sig: killpg_calls.append((pid, sig)),
+    )
+
+    assert runner._terminate_process_tree(process) is True  # type: ignore[arg-type]
+    assert killpg_calls == [(process.pid, signal.SIGKILL)]
+    assert process.killed is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_posix_process_tree_cleanup_send_failure_is_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Process:
+        pid = 4324
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def poll(self) -> int:
+            return 0
+
+        def kill(self) -> None:
+            self.killed = True
+
+    def fail_group_kill(_pid: int, _signal: int) -> None:
+        raise OSError("synthetic process-group cleanup failure")
+
+    process = Process()
+    monkeypatch.setattr(runner.os, "killpg", fail_group_kill)
+
+    assert runner._terminate_process_tree(process) is False
+    assert process.killed is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_owner_broker_process_group_cleanup_send_failure_is_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Process:
+        pid = 4325
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def kill(self) -> None:
+            self.killed = True
+
+    def fail_group_kill(_pid: int, _signal: int) -> None:
+        raise OSError("synthetic process-group cleanup failure")
+
+    process = Process()
+    monkeypatch.setattr(runner.os, "killpg", fail_group_kill)
+
+    assert runner._terminate_broker_process_group(process) is False  # type: ignore[arg-type]
+    assert process.killed is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_owner_broker_success_fails_closed_when_final_cleanup_is_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class InputStream:
+        def write(self, _payload: bytes) -> int:
+            return 0
+
+        def flush(self) -> None:
+            return
+
+        def close(self) -> None:
+            return
+
+    class OutputStream:
+        def __init__(self, payload: bytes) -> None:
+            self.payload = payload
+
+        def read1(self, _size: int) -> bytes:
+            payload, self.payload = self.payload, b""
+            return payload
+
+        def close(self) -> None:
+            return
+
+    class Process:
+        pid = 4326
+        returncode = 0
+
+        def __init__(self) -> None:
+            self.stdin = InputStream()
+            self.stdout = OutputStream(b"{}")
+            self.stderr = OutputStream(b"")
+            self.killed = False
+
+        def wait(self, *, timeout: float) -> int:
+            del timeout
+            return 0
+
+        def kill(self) -> None:
+            self.killed = True
+
+    process = Process()
+
+    def fake_popen(*_args: object, **_kwargs: object) -> Process:
+        return process
+
+    def fail_group_kill(_pid: int, _signal: int) -> None:
+        raise OSError("synthetic process-group cleanup failure")
+
+    monkeypatch.setattr(runner.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(runner.os, "killpg", fail_group_kill)
+
+    with pytest.raises(
+        runner.QualificationError,
+        match="process-tree cleanup could not be confirmed",
+    ):
+        runner._bounded_broker_control_exchange(
+            Path("/owner-only/broker"),
+            payload=b"{}\n",
+            timeout_seconds=1,
+        )
+    assert process.killed is True
 
 
 def test_bounded_process_timeout_does_not_use_unbounded_communicate(

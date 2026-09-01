@@ -98,6 +98,21 @@ quality suggestions, and documentation errors are normally not security
 vulnerabilities. They may be reported through a public issue only when the
 report contains no private, licensed, or otherwise restricted material.
 
+## Host process containment boundary
+
+The shared bounded-subprocess helper and the benchmark Codex/OpenCode launchers use native
+process containment options. On POSIX, `start_new_session` plus `killpg(SIGKILL)` provides
+best-effort containment of the created session/process group, not an operating-system sandbox. A
+successful group signal, or an already-exited leader, is not proof that every descendant is gone: a
+descendant can deliberately call `setsid()`, and this boundary has no portable all-descendant
+enumeration or proof. Cleanup signal errors therefore remain fail-closed.
+
+On Windows, the launcher attaches the child at creation time to a Job Object. Its cleanup has an
+independent bounded five-second containment/proof grace while checking that the Job Object is
+empty; that grace is not the caller's child-execution timeout. Synthetic or local process tests
+do not establish strict Formal Host evidence. Strict Formal Host evidence remains external and
+fail-closed, with no relaxation of the existing Authority, authentication, or Secret boundaries.
+
 ## Signing-key custody
 
 The single-maintainer catalog-signing key is stored outside the repository at

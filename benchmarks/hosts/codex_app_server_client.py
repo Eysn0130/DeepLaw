@@ -215,7 +215,12 @@ def _windows_child_environment(environment: Mapping[str, str]) -> dict[str, str]
 
 
 def _process_group_popen_options() -> dict[str, Any]:
-    """Return native process-group options or fail closed before spawning."""
+    """Return native group options or fail closed before spawning.
+
+    POSIX ``start_new_session`` provides best-effort session/process-group
+    containment, not an operating-system sandbox or an all-descendant-empty
+    proof.  Windows creation flags pair with the Job Guard cleanup proof.
+    """
 
     if os.name == "nt":
         creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -233,7 +238,14 @@ def _terminate_broker_process_group(
     process: subprocess.Popen[bytes],
     guard: bounded_subprocess.WindowsJobGuard | None = None,
 ) -> bool:
-    """Terminate the isolated process group and report confirmed cleanup."""
+    """Terminate the isolated group and report only the bounded cleanup result.
+
+    POSIX ``killpg`` is best-effort process-group containment, not an
+    operating-system sandbox.  It cannot prove that a descendant which
+    deliberately calls ``setsid()`` has terminated.
+    Windows Job Guard cleanup has an independent bounded five-second proof
+    grace and is not the caller's child-execution timeout.
+    """
 
     if os.name == "nt":
         cleanup_confirmed = False
@@ -245,7 +257,7 @@ def _terminate_broker_process_group(
         with suppress(OSError):
             process.kill()
         return cleanup_confirmed
-    elif os.name == "posix":
+    if os.name == "posix":
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -253,7 +265,9 @@ def _terminate_broker_process_group(
             # cleanup failure merely because the kill raced with exit.
             return True
         except OSError:
-            pass
+            with suppress(OSError):
+                process.kill()
+            return False
         else:
             return True
     with suppress(OSError):
@@ -1311,7 +1325,7 @@ class CodexAppServerClient:
             stale_guard = self._job_guard
             self._process = None
             self._job_guard = None
-            if os.name == "nt" and not _terminate_broker_process_group(
+            if not _terminate_broker_process_group(
                 stale_process,
                 stale_guard,
             ):
@@ -1326,7 +1340,7 @@ class CodexAppServerClient:
                 env=_windows_child_environment(self.environment),
                 bufsize=0,
                 close_fds=True,
-                **(_process_group_popen_options() if os.name == "nt" else {}),
+                **_process_group_popen_options(),
             )
         except (OSError, ValueError, bounded_subprocess.WindowsJobStartError) as exc:
             self._process = None
@@ -1659,23 +1673,9 @@ class CodexAppServerClient:
         guard = self._job_guard
         cleanup_confirmed = True
         try:
-            if os.name == "nt":
-                cleanup_confirmed = _terminate_broker_process_group(process, guard)
-                with suppress(subprocess.TimeoutExpired):
-                    process.wait(timeout=0.5)
-            elif process.poll() is None:
-                if os.name == "nt":
-                    cleanup_confirmed = _terminate_broker_process_group(process, guard)
-                    with suppress(subprocess.TimeoutExpired):
-                        process.wait(timeout=0.5)
-                else:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=0.5)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        with suppress(subprocess.TimeoutExpired):
-                            process.wait(timeout=0.5)
+            cleanup_confirmed = _terminate_broker_process_group(process, guard)
+            with suppress(subprocess.TimeoutExpired):
+                process.wait(timeout=0.5)
             for reader in self._reader_threads:
                 reader.join(timeout=0.2)
             self._drain_available_stderr()
