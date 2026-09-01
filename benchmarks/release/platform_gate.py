@@ -136,13 +136,28 @@ def _validate_manifest_invariants(manifest: dict[str, Any]) -> None:
     }
     if classified["qualification"] & set(map(_case_descriptor_identity, windows_cases)):
         raise PlatformGateError("qualification cases leaked into Platform Core inventory")
+    common_inventory = set(map(_case_descriptor_identity, common_cases))
+    windows_inventory = set(map(_case_descriptor_identity, windows_cases))
     additional = {
         _case_descriptor_identity(case) for case in windows["additional_cases"]
     }
-    if classified["nonapplicable"] != additional:
-        raise PlatformGateError("nonapplicable cases do not match Windows-only inventory")
+    missing_additional = additional - classified["nonapplicable"]
+    if missing_additional:
+        raise PlatformGateError(
+            "Windows additional cases must be classified nonapplicable"
+        )
+    outside_inventory = classified["nonapplicable"] - windows_inventory
+    if outside_inventory:
+        raise PlatformGateError(
+            "nonapplicable cases must belong to the Platform inventory"
+        )
+    extra_nonapplicable = classified["nonapplicable"] - additional
+    if not extra_nonapplicable <= common_inventory:
+        raise PlatformGateError(
+            "additional nonapplicable cases must belong to the common inventory"
+        )
     if not classified["historical_compatibility"].issubset(
-        set(map(_case_descriptor_identity, common_cases))
+        common_inventory
     ):
         raise PlatformGateError("historical compatibility case is outside common inventory")
     if any(

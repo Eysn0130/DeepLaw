@@ -1,6 +1,6 @@
 {
   "name": "deeplaw-knowledge-os",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Explicit-use read-only DeepLaw Knowledge OS and bounded Context Capsule runtime. Native Codex hooks are opt-in and require owner review and trust of the exact current hook hash.",
   "author": {
     "name": "Eysn0130",

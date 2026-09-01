@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator
 
+from benchmarks.hosts import host_preflight_receipt as host_preflight
 from benchmarks.hosts import run_v013_host_task_qualification as host_task_runner
 from benchmarks.hosts.run_v013_host_task_qualification import (
     HostTaskQualificationError,
@@ -40,6 +41,49 @@ WHEEL = "d" * 64
 SDIST = "e" * 64
 RUNNER = {"identity": "runner:v013-host-task", "sha256": "1" * 64}
 SCORER = {"identity": "scorer:v013-derived", "sha256": "2" * 64}
+
+
+def _verified_acl_hardening_report(path: Path, *, kind: str = "file") -> dict[str, Any]:
+    current_sid = "S-1-5-21-1000"
+    verification = {
+        "schema_version": "deeplaw.windows-acl-report/v1",
+        "current_user_sid": current_sid,
+        "entry_count": 1,
+        "owner_sid_verified": True,
+        "users_principal_sid": "S-1-5-32-545",
+        "everyone_principal_sid": "S-1-1-0",
+        "reparse_points_absent": True,
+        "permissions_verified": True,
+        "errors": [],
+        "errors_truncated": False,
+        "entries": [
+            {
+                "path": str(path),
+                "kind": kind,
+                "owner_sid": current_sid,
+                "owner_matches_current_user": True,
+                "reparse_point": False,
+                "acl_inheritance_enabled": False,
+                "inherited_rule_count": 0,
+                "users_rule_count": 0,
+                "everyone_rule_count": 0,
+                "valid": True,
+            }
+        ],
+        "entries_truncated": False,
+        "platform": "nt",
+        "status": "verified",
+        "scan_complete": True,
+        "files_and_directories_checked": 1,
+    }
+    return {
+        "schema_version": "deeplaw.windows-acl-hardening/v1",
+        "platform": "nt",
+        "applied": True,
+        "item_count": 1,
+        "current_user_sid": current_sid,
+        "verification": verification,
+    }
 
 
 def _canonical(value: Any) -> bytes:
@@ -820,6 +864,92 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
         "version": identity["hosts"]["codex"]["binary_version"],
         "sha256": expected_sha256,
     }
+    hardening_path = host_root / "staged-broker"
+    assert host_task_runner._windows_acl_hardening_verified(
+        _verified_acl_hardening_report(hardening_path),
+        expected_path=hardening_path,
+        directory=False,
+    )
+    for invalid_acl_report in (
+        None,
+        {},
+        {"platform": "nt", "applied": True, "verification": {"permissions_verified": True}},
+        {
+            **_verified_acl_hardening_report(hardening_path),
+            "platform": "posix",
+        },
+        {
+            **_verified_acl_hardening_report(hardening_path),
+            "applied": False,
+        },
+        {
+            **_verified_acl_hardening_report(hardening_path),
+            "verification": {
+                **_verified_acl_hardening_report(hardening_path)["verification"],
+                "permissions_verified": False,
+            },
+        },
+    ):
+        assert not host_task_runner._windows_acl_hardening_verified(
+            invalid_acl_report,
+            expected_path=hardening_path,
+            directory=False,
+        )
+
+    original_lstat = Path.lstat
+    original_fstat = os.fstat
+    path_stat = original_lstat(binary)
+    path_snapshot = type(
+        "PathStat",
+        (),
+        {
+            "st_dev": path_stat.st_dev,
+            "st_ino": path_stat.st_ino,
+            "st_size": path_stat.st_size,
+            "st_mode": path_stat.st_mode,
+            "st_uid": path_stat.st_uid,
+            "st_nlink": path_stat.st_nlink,
+            "st_mtime_ns": 100,
+            "st_ctime_ns": 200,
+        },
+    )()
+    fd_snapshot = type(
+        "FdStat",
+        (),
+        {
+            "st_dev": path_stat.st_dev,
+            "st_ino": path_stat.st_ino,
+            "st_size": path_stat.st_size,
+            "st_mode": path_stat.st_mode ^ 0o040,
+            "st_uid": path_stat.st_uid + 1000,
+            "st_nlink": path_stat.st_nlink,
+            "st_mtime_ns": 300,
+            "st_ctime_ns": 400,
+        },
+    )()
+
+    def windows_lstat(path: Path) -> os.stat_result:
+        if Path(path) == binary:
+            return path_snapshot  # type: ignore[return-value]
+        return original_lstat(path)
+
+    def windows_fstat(descriptor: int) -> os.stat_result:
+        if descriptor >= 0:
+            return fd_snapshot  # type: ignore[return-value]
+        return original_fstat(descriptor)
+
+    with monkeypatch.context() as windows:
+        windows.setattr(Path, "lstat", windows_lstat)
+        windows.setattr(os, "fstat", windows_fstat)
+        digest, retained = host_task_runner._read_stable_regular_file(
+            binary,
+            repository=repository,
+            label="candidate sdist",
+            require_external=True,
+            retain_bytes=True,
+        )
+    assert digest == expected_sha256
+    assert retained == b"codex fixture"
 
     linked_host_root = tmp_path / "host-linked-parent"
     linked_host_root.symlink_to(host_root, target_is_directory=True)
@@ -857,11 +987,44 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
     )
 
     broker = host_root / "owner-broker"
-    original_broker_raw = b"#!/bin/sh\nprintf 'verified-original\\n'\n"
+    if os.name == "nt":
+        system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+        assert system_root
+        original_native = Path(system_root) / "System32" / "whoami.exe"
+        replacement_native = Path(system_root) / "System32" / "hostname.exe"
+        assert original_native.is_file()
+        assert replacement_native.is_file()
+        original_broker_raw = original_native.read_bytes()
+        replacement_broker_raw = replacement_native.read_bytes()
+        expected_completed = subprocess.run(
+            [str(original_native)],
+            capture_output=True,
+            check=False,
+            timeout=5,
+            env=host_preflight._host_version_probe_environment(),
+        )
+        assert expected_completed.returncode == 0
+        assert expected_completed.stdout or expected_completed.stderr
+    else:
+        original_broker_raw = b"#!/bin/sh\nprintf 'verified-original\\n'\n"
+        replacement_broker_raw = b"#!/bin/sh\nprintf 'replaced-path\\n'\n"
+        expected_completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=b"verified-original\n",
+            stderr=b"",
+        )
     broker.write_bytes(original_broker_raw)
     broker.chmod(0o700)
+    if os.name == "nt":
+        from deeplaw.windows_acl import harden_windows_private_file
+
+        hardening = harden_windows_private_file(broker)
+        assert hardening["platform"] == "nt"
+        assert hardening["applied"] is True
+        assert hardening["verification"]["permissions_verified"] is True
     replacement = host_root / "owner-broker-replacement"
-    replacement.write_bytes(b"#!/bin/sh\nprintf 'replaced-path\\n'\n")
+    replacement.write_bytes(replacement_broker_raw)
     replacement.chmod(0o700)
     with host_task_runner._stage_exact_broker_executable(
         broker,
@@ -869,17 +1032,22 @@ def test_v013_host_task_schema_and_frozen_catalog_are_closed(
         host_binary=binary,
         expected_sha256=_sha(original_broker_raw),
     ) as staged_broker:
+        assert staged_broker.suffix == (".exe" if os.name == "nt" else "")
         os.replace(replacement, broker)
         completed = subprocess.run(
             [str(staged_broker)],
             capture_output=True,
             check=False,
             timeout=5,
-            env={"PATH": os.defpath, "LC_ALL": "C"},
+            env=host_preflight._host_version_probe_environment(),
         )
+        assert completed.returncode == expected_completed.returncode
+        assert completed.stdout == expected_completed.stdout
+        assert completed.stderr == expected_completed.stderr
         assert completed.returncode == 0
-        assert completed.stdout == b"verified-original\n"
-        assert b"replaced-path" not in completed.stdout
+        assert completed.stdout or completed.stderr
+        if os.name != "nt":
+            assert b"replaced-path" not in completed.stdout
 
     _assert_codex_zero_model_runner_serializes_stop_before_sampling(
         monkeypatch,

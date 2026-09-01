@@ -3,8 +3,8 @@
 The bundle is an inventory and integrity boundary, not a qualification report.
 Every retained file is re-read from the supplied root and bound by byte size and
 SHA-256.  Typed evidence is still validated by the public
-``parse_typed_evidence`` seam; Host preflight and Host process receipts are
-retained as separate artifacts and never count as typed evidence passes.
+``parse_typed_evidence`` seam; Host preflight and Host process receipt sets
+are retained as separate artifacts and never count as typed evidence passes.
 
 This module never reads authentication material, ``.env`` files, model output,
 or network state.
@@ -26,7 +26,11 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from benchmarks.hosts import host_process_receipt_v2
+from benchmarks.hosts import (
+    host_process_receipt_set_v1,
+    host_process_receipt_v2,
+    owner_external_collector,
+)
 from benchmarks.hosts.host_preflight_receipt import (
     HostIdentityValidationError,
     host_binary_identity,
@@ -51,11 +55,18 @@ CLASSIFICATION_RELATIVE_PATH = "benchmarks/release/v013-gate-classification-v9.j
 PROTOCOL_RELATIVE_PATH = "benchmarks/v013/qualification-protocol-v3.json"
 HOST_IDENTITY_RELATIVE_PATH = "candidate-inventory/host-exact-identity.json"
 HOST_EXECUTION_IDENTITY_RELATIVE_PATH = "candidate-inventory/host-execution-identity.json"
+COLLECTOR_IDENTITY_RELATIVE_PATH = (
+    "candidate-inventory/kernel-evidence-collector-identity.json"
+)
+COLLECTOR_SOURCE_RELATIVE_PATH = (
+    "retained-collector-source/kernel-evidence-collector"
+)
 ACTIVE_SCHEMA_FILENAME = "v013-active-qualification.v3.schema.json"
 CLASSIFICATION_SCHEMA_FILENAME = "v013-release-gate-classification.v9.schema.json"
 PROTOCOL_SCHEMA_FILENAME = "v013-qualification-protocol.v3.schema.json"
 HOST_PREFLIGHT_SCHEMA_FILENAME = "host-preflight-receipt.v1.schema.json"
 HOST_PROCESS_SCHEMA_FILENAME = host_process_receipt_v2.SCHEMA_FILENAME
+HOST_PROCESS_SET_SCHEMA_FILENAME = host_process_receipt_set_v1.SCHEMA_FILENAME
 
 TYPED_COUNTS: dict[str, int] = {
     "candidate_full_junit": 1,
@@ -90,6 +101,7 @@ CANDIDATE_WORKFLOW_KINDS = frozenset(
 )
 HOST_NAMES = frozenset({"codex", "opencode"})
 HOST_PROCESS_SCHEMA_VERSION = host_process_receipt_v2.SCHEMA_VERSION
+HOST_PROCESS_SET_SCHEMA_VERSION = host_process_receipt_set_v1.SCHEMA_VERSION
 HOST_IDENTITY_SCHEMA_VERSION = "deeplaw.host-exact-identity/v1"
 MAX_FILE_BYTES = 64 * 1024 * 1024
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
@@ -476,6 +488,8 @@ def _classify_file(
         return "typed_manifest", kind, value
     if value is not None and value.get("schema_version") == "deeplaw.host-preflight-receipt/v1":
         return "host_preflight_receipt", None, value
+    if value is not None and value.get("schema_version") == HOST_PROCESS_SET_SCHEMA_VERSION:
+        return "host_process_receipt", None, value
     if value is not None and value.get("schema_version") == HOST_PROCESS_SCHEMA_VERSION:
         return "host_process_receipt", None, value
     if _BROKER_SOURCE_PATH.fullmatch(relative) is not None:
@@ -770,7 +784,7 @@ def _validate_process_receipt(
             expected_candidate=candidate,
             expected_run_binding={
                 "evidence_run_id": run_ids["evidence_run_id"],
-                "qualification_run_id": run_ids["qualification_run_id"],
+                "qualification_run_id": run_ids["evidence_run_id"],
             },
             expected_host_identity_sha256=expected_host_identity_sha256,
             expected_host_identity_source_sha256=str(host_identity["source_sha256"]),
@@ -794,6 +808,105 @@ def _validate_process_receipt(
         "execution_target_single_link": True,
         "nonce_sha256": str(admitted["nonce_sha256"]),
         "native_event_binding": dict(admitted["native_event_binding"]),
+    }
+
+
+def _validate_process_receipt_set(
+    value: Mapping[str, Any] | None,
+    *,
+    relative: str,
+    host_identity: Mapping[str, Any],
+    candidate: Mapping[str, str],
+    run_ids: Mapping[str, int],
+    seen_nonce_sha256s: set[str],
+) -> dict[str, Any]:
+    """Validate one task-level process set and flatten its control summary."""
+
+    if value is None or value.get("schema_version") != HOST_PROCESS_SET_SCHEMA_VERSION:
+        _fail("Host process receipt slot must use the current v1 set schema")
+    _validate_schema(
+        value,
+        _schema(
+            HOST_PROCESS_SET_SCHEMA_FILENAME,
+            label="Host process receipt set schema",
+        ),
+        label="Host process receipt set",
+    )
+    if value.get("record_sha256") != host_process_receipt_set_v1.record_sha256(value):
+        _fail("Host process receipt set record digest differs")
+    host = _host_from_value(value, relative=relative)
+    if host is None:
+        _fail("Host process receipt set lacks a closed Host identity")
+    path_match = HOST_TOKEN_RE.search(relative.casefold())
+    if path_match is not None and path_match.group(1) != host:
+        _fail("Host process receipt set path and Host identity differ")
+    broker_source = _mapping(
+        value["broker_source"], label="Host process receipt set broker source"
+    )
+    task_native = _mapping(
+        value["task_native_event_binding"],
+        label="Host process receipt set native event binding",
+    )
+    expected_binary = host_binary_identity(host_identity, host)
+    expected_host_identity_sha256 = host_identity_sha256(host_identity["hosts"][host])
+    try:
+        admitted = host_process_receipt_set_v1.validate_receipt_set(
+            value,
+            expected_host=host,
+            expected_task_case=str(value["task_case"]),
+            expected_run_id=str(value["run_id"]),
+            expected_candidate=candidate,
+            expected_run_binding={
+                "evidence_run_id": run_ids["evidence_run_id"],
+                "qualification_run_id": run_ids["evidence_run_id"],
+            },
+            expected_broker_sha256=str(broker_source["sha256"]),
+            expected_host_identity_sha256=expected_host_identity_sha256,
+            expected_host_identity_source_sha256=str(host_identity["source_sha256"]),
+            expected_host_binary=expected_binary,
+            expected_task_native_event_binding=task_native,
+            seen_nonce_sha256s=seen_nonce_sha256s,
+        )
+    except (
+        TypeError,
+        ValueError,
+        host_process_receipt_set_v1.HostProcessReceiptSetV1Error,
+    ) as error:
+        raise KernelQualificationBundleError(
+            "Host process receipt set structural or cross-binding validation failed"
+        ) from error
+    _reject_competitive_fields(value)
+    members = admitted.get("processes")
+    if not isinstance(members, list) or not members:
+        _fail("Host process receipt set contains no members")
+    topology_fields = (
+        "selector_source_symlink",
+        "execution_target_regular",
+        "execution_target_single_link",
+    )
+    topology: dict[str, Any] | None = None
+    for row in members:
+        row_value = _mapping(row, label="Host process receipt set member row")
+        member = _mapping(
+            row_value.get("receipt"), label="Host process receipt set member"
+        )
+        member_topology = {field: member[field] for field in topology_fields}
+        if topology is None:
+            topology = member_topology
+        elif member_topology != topology:
+            _fail("Host process receipt set member topology differs")
+    if topology is None:
+        _fail("Host process receipt set member topology is missing")
+    return {
+        "host": host,
+        "task_case": str(admitted["task_case"]),
+        "run_id": str(admitted["run_id"]),
+        "broker_sha256": str(admitted["broker_source"]["sha256"]),
+        "host_identity_sha256": str(admitted["host_identity_sha256"]),
+        "host_identity_source_sha256": str(admitted["host_identity_source_sha256"]),
+        **topology,
+        "task_native_event_binding": dict(admitted["task_native_event_binding"]),
+        "member_count": len(members),
     }
 
 
@@ -852,6 +965,49 @@ def _validate_broker_source(relative: str, raw: bytes) -> dict[str, str]:
     return {"host": match.group("host"), "sha256": _sha256(raw)}
 
 
+def _validate_collector_binding(
+    files: Mapping[str, tuple[Path, bytes]],
+    *,
+    run_ids: Mapping[str, int],
+) -> dict[str, Any]:
+    source = files.get(COLLECTOR_SOURCE_RELATIVE_PATH)
+    identity = files.get(COLLECTOR_IDENTITY_RELATIVE_PATH)
+    if source is None or identity is None:
+        _fail("bundle must retain the exact Kernel evidence collector and identity")
+    raw = source[1]
+    if (
+        not 1 <= len(raw) <= owner_external_collector.MAX_COLLECTOR_BYTES
+        or b"\x00" in raw
+    ):
+        _fail("retained Kernel evidence collector source is unsafe")
+    try:
+        raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise KernelQualificationBundleError(
+            "retained Kernel evidence collector is not UTF-8 source text"
+        ) from error
+    if _BROKER_SECRET_LITERAL.search(raw):
+        _fail("retained Kernel evidence collector contains a credential literal")
+    value = _json_at(COLLECTOR_IDENTITY_RELATIVE_PATH, files)
+    if value is None:
+        _fail("Kernel evidence collector identity must be strict JSON")
+    try:
+        admitted = owner_external_collector.validate_identity(
+            value,
+            candidate_run_id=run_ids["candidate_run_id"],
+            evidence_run_id=run_ids["evidence_run_id"],
+            frozen_raw=raw,
+        )
+    except (TypeError, ValueError, owner_external_collector.OwnerExternalCollectorError) as error:
+        raise KernelQualificationBundleError(
+            "Kernel evidence collector identity is not cross-bound"
+        ) from error
+    return {
+        "sha256": admitted["frozen_sha256"],
+        "byte_size": admitted["frozen_byte_size"],
+    }
+
+
 def _load_host_identity_binding(
     root: Path,
     files: Mapping[str, tuple[Path, bytes]],
@@ -897,6 +1053,7 @@ def _validate_inventory(
     run_ids: Mapping[str, int],
     host_identity: Mapping[str, Any],
 ) -> dict[str, Any]:
+    collector = _validate_collector_binding(files, run_ids=run_ids)
     typed_paths: dict[str, list[str]] = defaultdict(list)
     typed_values: dict[str, Mapping[str, Any]] = {}
     preflight_receipts: list[dict[str, str]] = []
@@ -937,7 +1094,7 @@ def _validate_inventory(
         elif artifact_kind == "host_process_receipt":
             if evidence_kind is not None or parsed is None:
                 _fail("Host process receipt cannot be typed evidence")
-            process_receipt = _validate_process_receipt(
+            process_receipt = _validate_process_receipt_set(
                 parsed,
                 relative=relative,
                 host_identity=host_identity,
@@ -970,6 +1127,8 @@ def _validate_inventory(
         ACTIVE_RELATIVE_PATH,
         CLASSIFICATION_RELATIVE_PATH,
         PROTOCOL_RELATIVE_PATH,
+        COLLECTOR_IDENTITY_RELATIVE_PATH,
+        COLLECTOR_SOURCE_RELATIVE_PATH,
         *receipt_paths,
         *broker_source_paths,
         *(path for paths in typed_paths.values() for path in paths),
@@ -1122,25 +1281,30 @@ def _validate_inventory(
             (receipt["host"], receipt["task_case"], receipt["run_id"])
         ]
         binding = _mapping(
-            receipt["native_event_binding"],
-            label="Host process native event binding",
+            receipt["task_native_event_binding"],
+            label="Host process task native event binding",
         )
         if any(
             binding[receipt_field] != metrics.get(metric_field)
             for receipt_field, metric_field in metric_fields.items()
         ):
-            _fail("Host process receipt native event digests differ from typed Host evidence")
+            _fail(
+                "Host process receipt set native event digests differ from typed Host evidence"
+            )
     typed_counts = {kind: len(paths) for kind, paths in typed_paths.items()}
     return {
         "typed_counts": typed_counts,
         "typed_evidence_kind_counts": typed_counts,
         "preflight_receipt_count": len(preflight_hosts),
         "process_receipt_count": len(process_hosts),
+        "process_member_count": sum(item["member_count"] for item in process_receipts),
         "process_receipt_runs": [
             {"host": host, "task_case": task_case, "run_id": run_id}
             for host, task_case, run_id in sorted(retained_process_runs)
         ],
         "broker_source_count": len(broker_sources),
+        "collector_source_count": 1,
+        "collector_sha256": collector["sha256"],
         "corpus_roles": sorted(corpus_by_role),
         "candidate": dict(candidate),
         "run_ids": dict(run_ids),

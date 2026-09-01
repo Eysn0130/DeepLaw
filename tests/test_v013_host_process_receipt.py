@@ -4,6 +4,8 @@ import copy
 import hashlib
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -12,8 +14,47 @@ from benchmarks.hosts import host_preflight_receipt as preflight
 from benchmarks.hosts import host_process_receipt as receipt
 
 
+def _verified_acl_report(path: Path, *, kind: str = "file") -> dict[str, object]:
+    current_sid = "S-1-5-21-1000"
+    return {
+        "schema_version": "deeplaw.windows-acl-report/v1",
+        "current_user_sid": current_sid,
+        "entry_count": 1,
+        "owner_sid_verified": True,
+        "users_principal_sid": "S-1-5-32-545",
+        "everyone_principal_sid": "S-1-1-0",
+        "reparse_points_absent": True,
+        "permissions_verified": True,
+        "errors": [],
+        "errors_truncated": False,
+        "entries": [
+            {
+                "path": str(path),
+                "kind": kind,
+                "owner_sid": current_sid,
+                "owner_matches_current_user": True,
+                "reparse_point": False,
+                "acl_inheritance_enabled": False,
+                "inherited_rule_count": 0,
+                "users_rule_count": 0,
+                "everyone_rule_count": 0,
+                "valid": True,
+            }
+        ],
+        "entries_truncated": False,
+        "platform": "nt",
+        "status": "verified",
+        "scan_complete": True,
+        "files_and_directories_checked": 1,
+    }
+
+
 def _identity(
-    *, codex_version: str, codex_sha256: str, opencode_sha256: str
+    *,
+    codex_version: str,
+    codex_sha256: str,
+    opencode_sha256: str,
+    opencode_version: str = "1.18.16",
 ) -> dict[str, object]:
     return {
         "schema_version": preflight.HOST_IDENTITY_SCHEMA_VERSION,
@@ -27,7 +68,7 @@ def _identity(
                 "auth_material_access": "forbidden",
             },
             "opencode": {
-                "version": "1.18.16",
+                "version": opencode_version,
                 "source_commit": "a" * 40,
                 "config_selector": "deepseek/deepseek-v4-flash",
                 "expected_response_model_id": "deepseek-v4-flash",
@@ -48,17 +89,40 @@ def _artifacts(tmp_path: Path, host: str) -> tuple[dict[str, object], Path, Path
     repository.mkdir()
     version = "codex-cli 0.149.0-alpha.4.3" if host == "codex" else "1.18.16"
     binary = tmp_path / f"{host}-binary"
-    binary.write_text(f"#!/bin/sh\nprintf '%s\\n' '{version}'\n", encoding="utf-8")
-    binary.chmod(0o700)
+    if os.name == "nt":
+        binary = Path(sys.executable).resolve(strict=True)
+        completed = subprocess.run(
+            [str(binary), "--version"],
+            capture_output=True,
+            check=True,
+            timeout=30,
+            env=preflight._host_version_probe_environment(),
+        )
+        version = (completed.stdout + completed.stderr).decode("utf-8").strip()
+    else:
+        binary.write_text(
+            f"#!/bin/sh\nprintf '%s\\n' '{version}'\n", encoding="utf-8"
+        )
+    if os.name != "nt":
+        binary.chmod(0o700)
     binary_sha256 = hashlib.sha256(binary.read_bytes()).hexdigest()
     broker = tmp_path / f"{host}-broker"
     broker.write_bytes(b"#!/bin/sh\nexit 0\n")
     broker.chmod(0o700)
+    if os.name == "nt":
+        from deeplaw.windows_acl import harden_windows_private_file
+
+        hardening = harden_windows_private_file(broker)
+        assert hardening["applied"] is True
+        assert hardening["verification"]["permissions_verified"] is True
     identity = _identity(
         codex_version="codex-cli 0.149.0-alpha.4.3",
         codex_sha256=binary_sha256 if host == "codex" else "d" * 64,
         opencode_sha256=binary_sha256 if host == "opencode" else "e" * 64,
+        opencode_version=version if host == "opencode" else "1.18.16",
     )
+    if host == "codex" and os.name == "nt":
+        identity["hosts"]["codex"]["binary_version"] = version
     return identity, repository, binary, broker
 
 
@@ -190,6 +254,22 @@ def test_isolation_and_topology_fail_closed(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("kind", ("symlink", "hardlink", "non_owner_only", "repo_inside"))
 def test_broker_identity_boundaries_fail_closed(tmp_path: Path, kind: str) -> None:
+    expected_acl_path = tmp_path / "reported-broker"
+    assert preflight._windows_acl_report_owner_only(
+        _verified_acl_report(expected_acl_path),
+        expected_path=expected_acl_path,
+    )
+    for invalid_report in (
+        None,
+        {},
+        {"platform": "nt", "permissions_verified": True},
+        {"platform": "posix", "permissions_verified": True},
+        {"platform": "nt", "permissions_verified": False},
+    ):
+        assert not preflight._windows_acl_report_owner_only(
+            invalid_report,
+            expected_path=expected_acl_path,
+        )
     identity, repository, binary, broker = _artifacts(tmp_path, "opencode")
     selected = broker
     if kind == "symlink":
@@ -199,7 +279,23 @@ def test_broker_identity_boundaries_fail_closed(tmp_path: Path, kind: str) -> No
         selected = tmp_path / "broker-hardlink"
         os.link(broker, selected)
     elif kind == "non_owner_only":
-        broker.chmod(0o750)
+        if os.name == "nt":
+            system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+            assert system_root
+            icacls = Path(system_root) / "System32" / "icacls.exe"
+            assert icacls.is_file()
+            subprocess.run(
+                [str(icacls), str(broker), "/grant", "*S-1-1-0:R"],
+                capture_output=True,
+                check=True,
+                timeout=30,
+                env=preflight._host_version_probe_environment(),
+            )
+            from deeplaw.windows_acl import native_windows_path_acl_report
+
+            assert native_windows_path_acl_report(broker)["permissions_verified"] is False
+        else:
+            broker.chmod(0o750)
     elif kind == "repo_inside":
         selected = repository / "broker"
         selected.write_bytes(broker.read_bytes())
@@ -221,6 +317,44 @@ def test_broker_identity_boundaries_fail_closed(tmp_path: Path, kind: str) -> No
                 "raw_output_retained": False,
             },
             expected_broker_sha256=hashlib.sha256(broker.read_bytes()).hexdigest(),
+        )
+
+
+def test_windows_acl_recursive_entry_truncation_matches_native_bound(tmp_path: Path) -> None:
+    root = tmp_path / "staging"
+    report = _verified_acl_report(root, kind="directory")
+    first = report["entries"][0]
+    report["entries"] = [
+        first,
+        *[
+            {
+                **copy.deepcopy(first),
+                "path": str(root / f"entry-{index}"),
+                "kind": "file",
+            }
+            for index in range(1, 1_000)
+        ],
+    ]
+    report["entry_count"] = 1_001
+    report["files_and_directories_checked"] = 1_001
+    report["entries_truncated"] = True
+    assert preflight.validate_windows_acl_report(
+        report,
+        expected_path=root,
+        expected_kind="directory",
+        recursive=True,
+    ) == report
+    assert not preflight._windows_acl_report_owner_only(
+        report,
+        expected_path=root,
+    )
+    report["entries_truncated"] = False
+    with pytest.raises(preflight.ReceiptValidationError):
+        preflight.validate_windows_acl_report(
+            report,
+            expected_path=root,
+            expected_kind="directory",
+            recursive=True,
         )
 
 

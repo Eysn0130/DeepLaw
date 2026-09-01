@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -70,6 +72,138 @@ def test_candidate_windows_shards_are_deterministic_complete_and_disjoint() -> N
     assert {shard["all_test_files_sha256"] for shard in shards} == {
         shards[0]["all_test_files_sha256"]
     }
+    assert {shard["algorithm"] for shard in shards} == {
+        "longest_processing_time_source_bytes_v1"
+    }
+    assert {shard["source_file_sizes_sha256"] for shard in shards} == {
+        shards[0]["source_file_sizes_sha256"]
+    }
+
+
+def test_candidate_windows_source_byte_lpt_handles_inserted_small_file(
+    tmp_path: Path,
+) -> None:
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    heavy_sizes = {
+        "test_a.py": 90,
+        "test_b.py": 80,
+        "test_c.py": 70,
+        "test_e.py": 60,
+        "test_f.py": 50,
+        "test_g.py": 40,
+    }
+    for name, size in heavy_sizes.items():
+        (tests / name).write_bytes(b"x" * size)
+
+    baseline_shards = [
+        build_shard_manifest(repository=tmp_path, shard_count=3, shard_index=index)
+        for index in range(1, 4)
+    ]
+    baseline_assignment = {
+        path: index
+        for index, shard in enumerate(baseline_shards)
+        for path in shard["selected_test_files"]
+    }
+
+    (tests / "test_d.py").write_bytes(b"x")
+    shards = [
+        build_shard_manifest(repository=tmp_path, shard_count=3, shard_index=index)
+        for index in range(1, 4)
+    ]
+    totals = [
+        sum((tmp_path / path).stat().st_size for path in shard["selected_test_files"])
+        for shard in shards
+    ]
+    assert totals == [131, 130, 130]
+    assert {shard["algorithm"] for shard in shards} == {
+        "longest_processing_time_source_bytes_v1"
+    }
+    assert all(
+        baseline_assignment[path] == index
+        for index, shard in enumerate(shards)
+        for path in shard["selected_test_files"]
+        if path != "tests/test_d.py"
+    )
+
+    all_files = sorted(
+        path.relative_to(tmp_path).as_posix() for path in tests.glob("test_*.py")
+    )
+    round_robin_totals = [
+        sum(
+            (tmp_path / path).stat().st_size
+            for offset, path in enumerate(all_files)
+            if offset % 3 == index
+        )
+        for index in range(3)
+    ]
+    assert round_robin_totals != totals
+
+    zero_repository = tmp_path / "zero-repository"
+    zero_tests = zero_repository / "tests"
+    zero_tests.mkdir(parents=True)
+    for name in ("test_a.py", "test_b.py", "test_c.py"):
+        (zero_tests / name).write_bytes(b"")
+    zero_shards = [
+        build_shard_manifest(
+            repository=zero_repository,
+            shard_count=3,
+            shard_index=index,
+        )
+        for index in range(1, 4)
+    ]
+    assert [shard["selected_test_file_count"] for shard in zero_shards] == [1, 1, 1]
+    assert len({shard["source_file_sizes_sha256"] for shard in zero_shards}) == 1
+
+
+def test_candidate_source_size_digest_rebuilds_and_rejects_size_drift(
+    tmp_path: Path,
+) -> None:
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    sizes = {
+        "test_a.py": 90,
+        "test_b.py": 80,
+        "test_c.py": 70,
+        "test_d.py": 1,
+        "test_e.py": 60,
+        "test_f.py": 50,
+        "test_g.py": 40,
+    }
+    for name, size in sizes.items():
+        (tests / name).write_bytes(b"x" * size)
+
+    shards = [
+        build_shard_manifest(repository=tmp_path, shard_count=3, shard_index=index)
+        for index in range(1, 4)
+    ]
+    input_directory = tmp_path / "receipts"
+    for index, shard in enumerate(shards, start=1):
+        directory = input_directory / f"shard-{index}"
+        directory.mkdir(parents=True)
+        (directory / "candidate-test-shard.json").write_text(
+            canonical_json(shard) + "\n",
+            encoding="utf-8",
+        )
+        (directory / "candidate-skip-receipt.json").write_text(
+            canonical_json(_receipt(shard, tests=index)) + "\n",
+            encoding="utf-8",
+        )
+
+    original_digest = shards[0]["source_file_sizes_sha256"]
+    (tests / "test_c.py").write_bytes(b"x" * 71)
+    rebuilt = build_shard_manifest(
+        repository=tmp_path,
+        shard_count=3,
+        shard_index=1,
+    )
+    assert rebuilt["source_file_sizes_sha256"] != original_digest
+    with pytest.raises(RuntimeError, match="does not match the source tree"):
+        aggregate_shard_receipts(
+            repository=tmp_path,
+            input_directory=input_directory,
+            matrix_python="3.12",
+        )
 
 
 def test_candidate_windows_duration_weighted_shards_are_rebuildable() -> None:
@@ -95,6 +229,26 @@ def test_candidate_windows_duration_weighted_shards_are_rebuildable() -> None:
         "longest_processing_time_duration_v1"
     }
     assert len({shard["duration_weights_sha256"] for shard in shards}) == 1
+    assert all("source_file_sizes_sha256" not in shard for shard in shards)
+
+
+def test_candidate_windows_duration_estimate_uses_cross_python_stable_sum() -> None:
+    files = sorted(
+        path.relative_to(REPOSITORY).as_posix()
+        for path in (REPOSITORY / "tests").glob("test_*.py")
+        if path.is_file() and not path.is_symlink()
+    )
+    weights = {path: 0.1 for path in files}
+    shard = build_shard_manifest(
+        repository=REPOSITORY,
+        shard_count=3,
+        shard_index=1,
+        duration_weights=weights,
+    )
+
+    assert shard["selected_estimated_duration_seconds"] == math.fsum(
+        weights[name] for name in shard["selected_test_files"]
+    )
 
 
 def test_candidate_shard_cli_writes_lf_only_paths(tmp_path: Path) -> None:
@@ -153,6 +307,142 @@ def test_candidate_regression_receipt_parses_junit_and_binds_python(
     }
     assert receipt["release_ready"] is False
 
+    matrix_python = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+    def write_skipped_junit(
+        path: Path,
+        cases: list[tuple[str, str]],
+    ) -> None:
+        root = ET.Element("testsuites")
+        suite = ET.SubElement(root, "testsuite", tests=str(len(cases)))
+        for classname, name in cases:
+            testcase = ET.SubElement(
+                suite,
+                "testcase",
+                classname=classname,
+                name=name,
+            )
+            ET.SubElement(testcase, "skipped")
+        ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
+
+    def assert_unclassified(path: Path, matrix_os: str) -> None:
+        with pytest.raises(RuntimeError, match="unclassified candidate skips"):
+            build_regression_receipt(
+                repository=REPOSITORY,
+                junit_path=path,
+                matrix_os=matrix_os,
+                matrix_python=matrix_python,
+            )
+
+    junit = tmp_path / "candidate-windows-skips.xml"
+    skipped_cases = [
+        (
+            "tests.test_v013_owner_external_collector",
+            "test_frozen_collector_survives_ambient_path_replacement",
+        ),
+        (
+            "tests.test_v013_owner_external_collector",
+            "test_tampered_frozen_collector_fails_closed",
+        ),
+        (
+            "tests.test_v013_owner_external_collector",
+            "test_wrong_run_binding_and_identity_tamper_fail_closed",
+        ),
+        (
+            "tests.test_v013_owner_external_collector",
+            "test_source_must_be_owner_only_and_credential_free",
+        ),
+        (
+            "tests.test_v013_host_process_receipt_v2",
+            "test_codex_posix_close_cleans_group_after_leader_exit",
+        ),
+        (
+            "tests.test_v013_host_process_receipt_v2",
+            "test_codex_posix_group_cleanup_send_failure_is_unconfirmed",
+        ),
+        (
+            "tests.test_v013_host_process_receipt_v2",
+            "test_codex_posix_start_cleans_stale_group_after_leader_exit",
+        ),
+        (
+            "tests.test_v013_host_process_receipt_v2",
+            "test_codex_posix_start_uses_new_session_process_group",
+        ),
+        (
+            "tests.test_v013_pass13_opencode_qualification",
+            "test_owner_broker_process_group_cleanup_send_failure_is_unconfirmed",
+        ),
+        (
+            "tests.test_v013_pass13_opencode_qualification",
+            "test_owner_broker_success_fails_closed_when_final_cleanup_is_unconfirmed",
+        ),
+        (
+            "tests.test_v013_pass13_opencode_qualification",
+            "test_posix_process_tree_cleanup_kills_group_after_leader_exit",
+        ),
+        (
+            "tests.test_v013_pass13_opencode_qualification",
+            "test_posix_process_tree_cleanup_send_failure_is_unconfirmed",
+        ),
+    ]
+    write_skipped_junit(junit, skipped_cases)
+
+    receipt = build_regression_receipt(
+        repository=REPOSITORY,
+        junit_path=junit,
+        matrix_os="windows-latest",
+        matrix_python=matrix_python,
+    )
+
+    assert receipt["junit"]["skipped"] == len(skipped_cases)
+    assert receipt["qualification"]["skipped"] == 0
+    assert receipt["nonapplicable"]["skipped"] == len(skipped_cases)
+    assert receipt["historical_compatibility"]["skipped"] == 0
+
+    unknown = tmp_path / "unknown-skip.xml"
+    unknown.write_text(
+        '<testsuites><testsuite tests="1">'
+        '<testcase classname="tests.test_v013_owner_external_collector" '
+        'name="test_unknown_skip">'
+        "<skipped />"
+        "</testcase></testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    assert_unclassified(unknown, "windows-latest")
+
+    windows_native = tmp_path / "windows-native-on-windows.xml"
+    windows_native.write_text(
+        '<testsuites><testsuite tests="1">'
+        '<testcase classname="tests.test_windows_acl" '
+        'name="test_native_windows_vault_acl_is_owner_only_after_real_ingest">'
+        "<skipped />"
+        "</testcase></testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    assert_unclassified(windows_native, "windows-latest")
+
+    posix_only_on_ubuntu = tmp_path / "posix-only-on-ubuntu.xml"
+    posix_only_on_ubuntu.write_text(
+        '<testsuites><testsuite tests="1">'
+        '<testcase classname="tests.test_v013_owner_external_collector" '
+        'name="test_frozen_collector_survives_ambient_path_replacement">'
+        "<skipped />"
+        "</testcase></testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    assert_unclassified(posix_only_on_ubuntu, "ubuntu-latest")
+
+    with pytest.raises(
+        RuntimeError,
+        match="unsupported candidate regression matrix OS",
+    ):
+        build_regression_receipt(
+            repository=REPOSITORY,
+            junit_path=junit,
+            matrix_os="unsupported-latest",
+            matrix_python=matrix_python,
+        )
+
 
 def test_candidate_windows_shard_aggregate_rejects_drift(
     tmp_path: Path,
@@ -194,6 +484,10 @@ def test_candidate_windows_shard_aggregate_rejects_drift(
     }
     assert aggregate["shards"]["complete"] is True
     assert aggregate["shards"]["overlap_absent"] is True
+    assert aggregate["shards"]["source_file_sizes_sha256"] == shard[
+        "source_file_sizes_sha256"
+    ]
+    assert "duration_weights_sha256" not in aggregate["shards"]
 
     merged = tmp_path / "merged.xml"
     merge_shard_junit(

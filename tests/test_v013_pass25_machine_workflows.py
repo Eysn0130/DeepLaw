@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import yaml
@@ -29,6 +33,80 @@ def _job_block(workflow: str, name: str) -> str:
         end = matches[index + 1].start() if index + 1 < len(matches) else len(workflow)
         return workflow[match.start() : end]
     raise AssertionError(f"workflow job {name!r} is missing")
+
+
+def _semantic_gate_script(workflow: str) -> str:
+    block = _job_block(workflow, "semantic_scale_ten_thousand")
+    marker = "          python - <<'PY'\n"
+    script = block.split(marker, maxsplit=1)[1].split("          PY\n", maxsplit=1)[0]
+    return textwrap.dedent(script)
+
+
+def _run_semantic_gate(
+    tmp_path: Path,
+    *,
+    workflow_run_id: object,
+    candidate_commit: str,
+) -> subprocess.CompletedProcess[str]:
+    evidence_root = tmp_path / "scale-10000-evidence"
+    evidence_root.mkdir()
+    (evidence_root / "v013-scale-qualification-v9.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "deeplaw.v013-scale-qualification-report/v9",
+                "status": "executed",
+                "release_gate_passed": True,
+                "hard_failures": [],
+                "run_binding": {"workflow_run_id": workflow_run_id},
+                "candidate_binding": {"commit": candidate_commit},
+            }
+        ),
+        encoding="utf-8",
+    )
+    environment = {
+        "EVIDENCE_ROOT": str(evidence_root),
+        "EXPECTED_WORKFLOW_RUN_ID": "123456789",
+        "EXPECTED_CANDIDATE_HEAD_SHA": "1" * 40,
+    }
+    return subprocess.run(
+        [sys.executable, "-c", _semantic_gate_script(_workflow("candidate-full.yml"))],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_candidate_full_semantic_gate_rejects_wrong_workflow_run_id(tmp_path: Path) -> None:
+    result = _run_semantic_gate(
+        tmp_path,
+        workflow_run_id=999999999,
+        candidate_commit="1" * 40,
+    )
+
+    assert result.returncode != 0
+    assert "semantic 10k gate: workflow run id mismatch" in result.stderr
+
+
+def test_candidate_full_semantic_gate_rejects_wrong_candidate_head(tmp_path: Path) -> None:
+    result = _run_semantic_gate(
+        tmp_path,
+        workflow_run_id=123456789,
+        candidate_commit="0" * 40,
+    )
+
+    assert result.returncode != 0
+    assert "semantic 10k gate: candidate head mismatch" in result.stderr
+
+
+def test_candidate_full_semantic_gate_accepts_exact_run_and_candidate_head(tmp_path: Path) -> None:
+    result = _run_semantic_gate(
+        tmp_path,
+        workflow_run_id=123456789,
+        candidate_commit="1" * 40,
+    )
+
+    assert result.returncode == 0
 
 
 def test_external_has_six_role_domains_and_one_way_security_handoffs() -> None:
@@ -144,6 +222,57 @@ def test_candidate_full_runs_the_exact_10k_public_path_once() -> None:
     aggregate = workflow.split("\n  aggregate-raw-evidence:\n", maxsplit=1)[1]
     assert "needs['scale_ten_thousand'].result == 'success'" in aggregate
     assert "v013-scale-qualification-v9.json" in aggregate
+
+
+def test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate() -> None:
+    workflow = _workflow("candidate-full.yml")
+    parsed = yaml.safe_load(workflow)
+    assert isinstance(parsed, dict)
+    jobs = parsed.get("jobs")
+    assert isinstance(jobs, dict)
+    gate = jobs.get("semantic_scale_ten_thousand")
+    assert isinstance(gate, dict)
+    assert gate["needs"] == "scale_ten_thousand"
+    assert gate["runs-on"] == "ubuntu-latest"
+    assert isinstance(gate["timeout-minutes"], int)
+    assert 1 <= gate["timeout-minutes"] <= 10
+
+    block = workflow.split("\n  semantic_scale_ten_thousand:\n", maxsplit=1)[1].split(
+        "\n  windows-calibration-shards:\n", maxsplit=1
+    )[0]
+    for required in (
+        "actions/download-artifact@",
+        "name: scale-10000-evidence",
+        "import json",
+        "from pathlib import Path",
+        "json.load",
+        'report.get("schema_version")',
+        '"deeplaw.v013-scale-qualification-report/v9"',
+        'report.get("status")',
+        'report.get("release_gate_passed") is not True',
+        'report.get("hard_failures") != []',
+        "EXPECTED_WORKFLOW_RUN_ID",
+        "EXPECTED_CANDIDATE_HEAD_SHA",
+        'run_binding = report.get("run_binding")',
+        'candidate_binding = report.get("candidate_binding")',
+        'candidate_binding.get("commit") != expected_candidate_head_sha',
+        "raise SystemExit",
+    ):
+        assert required in block
+    assert "continue-on-error" not in block
+    assert "print(" not in block
+    assert "metrics" not in block.casefold()
+    assert "uv run" not in block
+    assert "benchmarks" not in block
+
+    aggregate = jobs["aggregate-raw-evidence"]
+    assert isinstance(aggregate, dict)
+    assert "semantic_scale_ten_thousand" not in aggregate["needs"]
+    aggregate_block = workflow.split("\n  aggregate-raw-evidence:\n", maxsplit=1)[1]
+    assert "needs['semantic_scale_ten_thousand'].result" not in aggregate_block
+    assert "needs['scale_ten_thousand'].result == 'success'" in aggregate_block
+    assert "scale-10000-evidence" in aggregate_block
+    assert "v013-scale-qualification-v9.json" in aggregate_block
 
 
 def test_external_dispatch_requires_only_candidate_run_id() -> None:
@@ -435,6 +564,66 @@ def test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding(
     _assert_kernel_workflow_gates_opencode_on_transient_zero_model_broker_preflight()
 
 
+def test_kernel_evidence_freezes_collector_before_ambient_execution() -> None:
+    workflow = _workflow("kernel-qualification-evidence.yml")
+    prerequisite = workflow.split(
+        "      - name: Validate owner-controlled Host prerequisites without reading credentials",
+        1,
+    )[1].split(
+        "      - name: Build and validate the pre-execution Host task handoff", 1
+    )[0]
+    execution = workflow.split(
+        "      - name: Execute Codex x3, OpenCode x3, and deterministic Kernel evidence",
+        1,
+    )[1].split("      - name: Reopen every typed receipt with the repository validator", 1)[0]
+
+    frozen_collector = (
+        "${RUNNER_TEMP}/candidate-inputs/"
+        "frozen-kernel-evidence-collector"
+    )
+    collector_identity = (
+        "${RUNNER_TEMP}/candidate-inputs/"
+        "frozen-kernel-evidence-collector-identity.json"
+    )
+    assert frozen_collector in prerequisite, (
+        "Kernel evidence prerequisite must freeze "
+        "DEEPLAW_KERNEL_EVIDENCE_COLLECTOR bytes under RUNNER_TEMP/candidate-inputs"
+    )
+    collector_lines = "\n".join(
+        line for line in prerequisite.splitlines() if "collector" in line.casefold()
+    )
+    assert "benchmarks.hosts.owner_external_collector freeze" in prerequisite
+    assert "frozen_root.chmod(0o700)" in prerequisite
+    assert "stat.S_IMODE(frozen_root_details.st_mode) != 0o700" in prerequisite
+
+    assert collector_identity in prerequisite, (
+        "Kernel evidence prerequisite must generate a path-free collector identity "
+        "under RUNNER_TEMP/candidate-inputs"
+    )
+    assert re.search(
+        r"(sha256|digest).*?(bytes|size)|(?:bytes|size).*?(sha256|digest)",
+        prerequisite,
+        flags=re.IGNORECASE | re.DOTALL,
+    ), "Frozen collector identity must bind exact bytes without an ambient path"
+
+    assert f'frozen_collector="{frozen_collector}"' in execution
+    assert '"${frozen_collector}" \\\n' in execution, (
+        "Kernel evidence Execute step must invoke only the frozen collector path"
+    )
+    assert '"${DEEPLAW_KERNEL_EVIDENCE_COLLECTOR}" \\\n' not in execution, (
+        "Kernel evidence Execute step must not invoke the ambient collector path"
+    )
+    assert 'cp "${frozen_collector}" \\\n' in execution
+    assert '"${output}/retained-collector-source/kernel-evidence-collector"' in execution
+    assert 'cp "${collector_identity}" \\\n' in execution
+    assert (
+        '"${output}/candidate-inventory/kernel-evidence-collector-identity.json"'
+        in execution
+    )
+    assert "DEEPLAW_OPENCODE_DOTENV" not in collector_lines
+    assert collector_identity in execution or "collector_identity" in execution
+
+
 def test_commercial_qualification_dispatch_and_assembly_use_kernel_v9() -> None:
     workflow = _workflow("commercial-qualification.yml")
     trigger = _trigger(workflow)
@@ -454,6 +643,35 @@ def test_commercial_qualification_dispatch_and_assembly_use_kernel_v9() -> None:
     assert "qualification-protocol-v2.json" not in workflow
     assert "post_build_machine_reference_binding" not in workflow
     assert "candidate_machine_reference" not in workflow
+    staging_identity = (
+        'staging_identity="${staging}/candidate-inventory/'
+        'host-exact-identity.json"'
+    )
+    frozen_identity = (
+        'frozen_identity="${RUNNER_TEMP}/candidate-inputs/'
+        'frozen-host-exact-identity.json"'
+    )
+    assert staging_identity in workflow
+    assert frozen_identity in workflow
+    assert 'test -f "${staging_identity}"' in workflow
+    assert 'test ! -L "${staging_identity}"' in workflow
+    assert 'cp "${staging_identity}" "${frozen_identity}"' in workflow
+    assert 'chmod 600 "${frozen_identity}"' in workflow
+    assert 'test ! -L "${frozen_identity}"' in workflow
+    assert "stat -c '%a' \"${frozen_identity}\"" in workflow
+    assert '--host-identity-input "${frozen_identity}"' in workflow
+    assert '--host-identity-input "${bundle}/' not in workflow
+    assert 'frozen_identity="${bundle}/' not in workflow
+    assert "DEEPLAW_HOST_IDENTITY_INPUT" not in workflow
+    assembly = workflow.split(
+        "      - name: Build the run-bound Kernel bundle and assemble Gate v9", 1
+    )[1].split("      - name: Retain exact v9 commercial release assets", 1)[0]
+    assert assembly.index('test -f "${staging_identity}"') < assembly.index(
+        'cp "${staging_identity}" "${frozen_identity}"'
+    )
+    assert assembly.index('cp "${staging_identity}" "${frozen_identity}"') < assembly.index(
+        '--host-identity-input "${frozen_identity}"'
+    )
     for forbidden in (
         "trusted-human-approver",
         "trusted-human",

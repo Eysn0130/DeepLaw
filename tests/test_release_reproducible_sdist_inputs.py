@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import io
 import subprocess
 import tarfile
@@ -29,7 +30,11 @@ def _git_repository(tmp_path: Path) -> Path:
 
 
 def _tar_gz(path: Path, members: dict[str, bytes]) -> None:
-    with tarfile.open(path, "w:gz") as archive:
+    with (
+        path.open("wb") as output,
+        gzip.GzipFile(fileobj=output, mode="wb", mtime=0) as compressed,
+        tarfile.open(fileobj=compressed, mode="w") as archive,
+    ):
         for name, content in members.items():
             info = tarfile.TarInfo(name)
             info.size = len(content)
@@ -137,7 +142,9 @@ def test_verify_rejects_reproducible_double_build_that_contains_ignored_input(
         output.mkdir(parents=True)
         wheel = output / "deeplaw-0.12.0-py3-none-any.whl"
         with zipfile.ZipFile(wheel, "w") as archive:
-            archive.writestr("deeplaw/contracts/fixture.json", b"{}")
+            info = zipfile.ZipInfo("deeplaw/contracts/fixture.json")
+            info.date_time = (1980, 1, 1, 0, 0, 0)
+            archive.writestr(info, b"{}")
         sdist = output / "deeplaw-0.12.0.tar.gz"
         _tar_gz(
             sdist,

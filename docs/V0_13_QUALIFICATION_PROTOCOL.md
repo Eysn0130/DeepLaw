@@ -10,13 +10,24 @@ Package and main remain `0.12.0 Beta`. The active record is
 protocol does not authorize a `0.13.0` tag/release, RC, GA, Human Gold, legal attestation, or a
 competitive claim.
 
+Current: every active `core_statuses` row is schema-constrained to
+`status=not_executed`, `passed=false`, and `claim=false` in all three pending stages; formal Gate
+results exist only in retained evidence and Commercial-derived outputs and are never backfilled
+into the active record.
+
+Current: formal Host process receipts and receipt sets are produced by the Kernel Evidence
+workflow and bind both `evidence_run_id` and `qualification_run_id` to that current Evidence run.
+The future Commercial run ID cannot be known during collection, so it remains only in
+bundle/report/release run bindings; this does not establish third-party attestation or Authority.
+
 The machine-readable protocol is
 `contracts/v013-qualification-protocol.v3.schema.json`; the frozen bytes are
 `benchmarks/v013/qualification-protocol-v3.json` and its recorded SHA-256. Protocol v1-v2 and Gate
 v1-v8 remain historical compatibility inputs. They are not rewritten or used as current state.
 The frozen Host process receipt v1 remains a historical compatibility record and is
 `invalidated-for-current-qualification`; current Gate v9 control admission requires the sibling
-`deeplaw.host-process-receipt/v2`. Current Host evidence continues to use
+`deeplaw.host-process-receipt/v2` for each observed model-bearing Host process and the bounded
+`deeplaw.host-process-receipt-set/v1` wrapper for each Host/task control slot. Current Host evidence continues to use
 `deeplaw.host-continuity-qualification/v2`.
 
 ## Product and Provider boundary
@@ -210,6 +221,16 @@ values, PID, thread digests, or broker nonces cannot become Host identity or sat
 Duplicate, replayed, expired, future-issued, cross-candidate, cross-run, cross-task, cross-process,
 cross-connection, and cross-session records fail closed.
 
+One Host/task can require more than one model-bearing Host process. The existing
+`host_process_receipt` slot therefore retains one
+`deeplaw.host-process-receipt-set/v1` wrapper rather than pretending that one v2 record observed a
+whole process set. The wrapper is bounded to 32 ordered members, requires declared and observed
+counts to agree with a complete non-empty inventory, and cross-binds every embedded v2 record to
+the same Host, task, run, candidate, broker, Host identity, and binary. Member record digests,
+process identities, broker instances, and nonces are unique. The wrapper separately binds the
+typed task-level native-event aggregate; it cannot create, repair, or confer observation Authority
+on a member receipt.
+
 The bound validation reference time makes an admitted historical bundle reproducible without
 silently disabling expiry checks. Neither control record permits a command, environment, path,
 PID, stdout/stderr, raw identity, Provider body, prompt, transcript, hidden reasoning,
@@ -368,13 +389,14 @@ receipt output.
 Passing either zero-model capability preflight only allows that Host's formal runner to move beyond
 its previous fail-before. It does not admit a Host task, prove the later model-bearing process, or
 close any Core Gate. Both diagnostic modes remain fail-before. Each of the six actual task processes
-must still return its own owner-external v2 receipt in the existing slot.
-The v2, consumer, and Kernel validators establish only closed structure and exact cross-binding to
+must still return its own owner-external v2 receipt inside the existing Host/task slot's receipt
+set. The v2, receipt-set, consumer, and Kernel validators establish only closed structure and exact cross-binding to
 the candidate, run IDs, retained per-Host broker source, Host identity, native-event digests, nonce,
 and time window. They cannot self-attest observation provenance; formal authority additionally
 requires the exact external broker process and formal workflow provenance. The six existing Kernel
 `host_process_receipt` slots remain the only receipt inventory; Kernel and Commercial reopen their
-exact bytes and cross-bindings. No second external receipt directory is created or uploaded.
+exact set bytes, embedded v2 bytes, and cross-bindings. No second external receipt directory is
+created or uploaded.
 Focused contract acceptance is not formal Host evidence, and Codex x3/OpenCode x3 remains
 `not_executed`.
 
@@ -460,9 +482,13 @@ Formal order is:
    required Python/3-OS matrix, SBOM/licenses/OpenVEX/provenance.
 2. Kernel Qualification Evidence: download the same artifact, run isolated
    Host/Evidence/Wiki/Context tasks through the exact owner-controlled external collector, retain
-   the no-Secret broker sources, and upload only sanitized evidence. The collector and both brokers
-   are repository-external, owner-only, exact-hash inputs; their presence is a prerequisite, not
-   product runtime.
+   the no-Secret broker sources, and upload only sanitized evidence. Before execution, the workflow
+   reads the collector through a stable file descriptor, freezes those exact bytes into a private
+   non-writable executable, and uses only that copy. The sanitized bundle retains the exact frozen
+   source plus a path-free candidate/Evidence-run descriptor; Kernel, Commercial, and release
+   validators reopen both. This byte binding does not establish third-party collector attestation
+   or observation Authority. The collector and both brokers are repository-external, owner-only,
+   exact-hash inputs; their presence is a prerequisite, not product runtime.
 3. Commercial Qualification: download the same artifact, reopen every source, and derive all 13
    Core gates plus explicit optional-claim statuses, `assembly_enabled`, `release_ready`, and
    bounded Kernel technical claims.

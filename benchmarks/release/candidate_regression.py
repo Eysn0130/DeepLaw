@@ -16,6 +16,11 @@ RECEIPT_SCHEMA = "deeplaw.platform-candidate-regression-receipt/v1"
 AGGREGATE_SCHEMA = "deeplaw.platform-candidate-regression-aggregate/v1"
 DURATION_SCHEMA = "deeplaw.candidate-duration-weights/v1"
 PLATFORM_MATRIX_SCHEMA = "deeplaw.candidate-platform-matrix-receipt/v1"
+_MATRIX_OS_NONAPPLICABLE_CLASSIFICATION = {
+    "windows-latest": "posix_only_on_windows",
+    "ubuntu-latest": "windows_native",
+    "macos-latest": "windows_native",
+}
 
 
 def _canonical_json(value: Any) -> str:
@@ -60,6 +65,16 @@ def _tracked_test_files(repository: Path) -> list[str]:
     return files
 
 
+def _source_file_sizes(repository: Path, files: list[str]) -> dict[str, int]:
+    sizes: dict[str, int] = {}
+    for relative in files:
+        path = repository / relative
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError("candidate regression source file is not a regular file")
+        sizes[relative] = path.stat().st_size
+    return sizes
+
+
 def build_shard_manifest(
     *,
     repository: Path,
@@ -72,12 +87,9 @@ def build_shard_manifest(
         raise ValueError("candidate regression shard selection is out of bounds")
     all_files = _tracked_test_files(repository)
     if duration_weights is None:
-        selected = [
-            path
-            for offset, path in enumerate(all_files)
-            if offset % shard_count == shard_index - 1
-        ]
-        algorithm = "round_robin_v1"
+        source_file_sizes = _source_file_sizes(repository, all_files)
+        lpt_weights: dict[str, float | int] = source_file_sizes
+        algorithm = "longest_processing_time_source_bytes_v1"
         normalized_weights = None
     else:
         if set(duration_weights) != set(all_files) or any(
@@ -91,14 +103,27 @@ def build_shard_manifest(
         normalized_weights = {
             path: float(duration_weights[path]) for path in all_files
         }
-        assignments: list[list[str]] = [[] for _ in range(shard_count)]
-        totals = [0.0 for _ in range(shard_count)]
-        for path in sorted(all_files, key=lambda item: (-normalized_weights[item], item)):
-            target = min(range(shard_count), key=lambda item: (totals[item], item))
-            assignments[target].append(path)
-            totals[target] += normalized_weights[path]
-        selected = sorted(assignments[shard_index - 1])
+        lpt_weights = normalized_weights
         algorithm = "longest_processing_time_duration_v1"
+        source_file_sizes = None
+    assignments: list[list[str]] = [[] for _ in range(shard_count)]
+    totals: list[int | float]
+    totals = (
+        [0 for _ in range(shard_count)]
+        if source_file_sizes is not None
+        else [0.0 for _ in range(shard_count)]
+    )
+    for path in sorted(all_files, key=lambda item: (-lpt_weights[item], item)):
+        if source_file_sizes is not None:
+            target = min(
+                range(shard_count),
+                key=lambda item: (totals[item], len(assignments[item]), item),
+            )
+        else:
+            target = min(range(shard_count), key=lambda item: (totals[item], item))
+        assignments[target].append(path)
+        totals[target] += lpt_weights[path]
+    selected = sorted(assignments[shard_index - 1])
     if not selected:
         raise RuntimeError("candidate regression shard is empty")
     manifest = {
@@ -112,10 +137,12 @@ def build_shard_manifest(
         "selected_test_files_sha256": _sha256_json(selected),
         "selected_test_files": selected,
     }
-    if normalized_weights is not None:
+    if source_file_sizes is not None:
+        manifest["source_file_sizes_sha256"] = _sha256_json(source_file_sizes)
+    elif normalized_weights is not None:
         manifest["duration_weights"] = normalized_weights
         manifest["duration_weights_sha256"] = _sha256_json(normalized_weights)
-        manifest["selected_estimated_duration_seconds"] = sum(
+        manifest["selected_estimated_duration_seconds"] = math.fsum(
             normalized_weights[path] for path in selected
         )
     return manifest
@@ -199,13 +226,17 @@ def _classified_skip_identities(
         }
 
     classifications = manifest["classifications"]
-    return manifest, {
+    classified = {
         "qualification": identities(classifications["qualification"]["cases"]),
         "nonapplicable": identities(classifications["nonapplicable"]["cases"]),
         "historical_compatibility": identities(
             classifications["historical_compatibility"]["cases"]
         ),
     }
+    windows_native = identities(manifest["inventories"]["windows"]["additional_cases"])
+    classified["windows_native"] = windows_native
+    classified["posix_only_on_windows"] = classified["nonapplicable"] - windows_native
+    return manifest, classified
 
 
 def build_regression_receipt(
@@ -217,6 +248,14 @@ def build_regression_receipt(
     shard_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     repository = repository.resolve(strict=True)
+    try:
+        nonapplicable_classification = _MATRIX_OS_NONAPPLICABLE_CLASSIFICATION[
+            matrix_os
+        ]
+    except KeyError as error:
+        raise RuntimeError(
+            f"unsupported candidate regression matrix OS: {matrix_os!r}"
+        ) from error
     actual_python = f"{sys.version_info.major}.{sys.version_info.minor}"
     if actual_python != matrix_python:
         raise RuntimeError(
@@ -229,7 +268,12 @@ def build_regression_receipt(
         for case in root.findall(".//testcase")
         if case.find("skipped") is not None
     ]
-    classified = set().union(*classifications.values())
+    allowed_nonapplicable = classifications[nonapplicable_classification]
+    classified = (
+        classifications["qualification"]
+        | classifications["historical_compatibility"]
+        | allowed_nonapplicable
+    )
     unclassified = sorted(set(skipped) - classified)
     if unclassified:
         raise RuntimeError(f"unclassified candidate skips: {unclassified[:8]}")
@@ -259,7 +303,7 @@ def build_regression_receipt(
         },
         "nonapplicable": {
             "status": "nonapplicable",
-            "skipped": sum(item in classifications["nonapplicable"] for item in skipped),
+            "skipped": sum(item in allowed_nonapplicable for item in skipped),
         },
         "historical_compatibility": {
             "status": "not_executed",
@@ -339,7 +383,31 @@ def aggregate_shard_receipts(
     duration_digests = {
         item[0].get("duration_weights_sha256") for item in by_index.values()
     }
-    if len(algorithms) != 1 or len(duration_digests) != 1:
+    source_size_digests = {
+        item[0].get("source_file_sizes_sha256") for item in by_index.values()
+    }
+    if len(algorithms) != 1:
+        raise RuntimeError("candidate regression shard algorithms or weights disagree")
+    algorithm = next(iter(algorithms))
+    if algorithm == "longest_processing_time_duration_v1":
+        duration_digest = next(iter(duration_digests), None)
+        if (
+            len(duration_digests) != 1
+            or not isinstance(duration_digest, str)
+            or not duration_digest
+        ):
+            raise RuntimeError("candidate regression shard algorithms or weights disagree")
+        shard_evidence = {"duration_weights_sha256": duration_digest}
+    elif algorithm == "longest_processing_time_source_bytes_v1":
+        source_size_digest = next(iter(source_size_digests), None)
+        if (
+            len(source_size_digests) != 1
+            or not isinstance(source_size_digest, str)
+            or not source_size_digest
+        ):
+            raise RuntimeError("candidate regression shard algorithms or weights disagree")
+        shard_evidence = {"source_file_sizes_sha256": source_size_digest}
+    else:
         raise RuntimeError("candidate regression shard algorithms or weights disagree")
 
     receipts = [by_index[index][1] for index in range(1, shard_count + 1)]
@@ -364,12 +432,12 @@ def aggregate_shard_receipts(
         "test_manifest": receipts[0]["test_manifest"],
         "shards": {
             "count": shard_count,
-            "algorithm": algorithms.pop(),
-            "duration_weights_sha256": duration_digests.pop(),
+            "algorithm": algorithm,
             "all_test_file_count": len(expected_files),
             "all_test_files_sha256": expected_hash,
             "complete": True,
             "overlap_absent": True,
+            **shard_evidence,
         },
         "junit": {
             "tests": total("junit", "tests"),

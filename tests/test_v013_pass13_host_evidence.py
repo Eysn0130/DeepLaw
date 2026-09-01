@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from benchmarks.hosts import pass13_evidence
+from benchmarks.hosts import pass13_evidence, pass13_orchestrator
+from benchmarks.hosts import run_pass13_codex_continuity_qualification as codex_runner
 from benchmarks.hosts.pass13_evidence import (
     EvidenceValidationError,
     analyze_safe_read_calls,
@@ -19,6 +22,7 @@ from benchmarks.hosts.pass13_evidence import (
 from benchmarks.hosts.pass13_evidence import (
     validate_historical_host_report_consistency_v1 as validate_host_report_consistency,
 )
+from deeplaw.knowledge_mcp_server import knowledge_tool_definition
 
 
 def _capsule(marker: str = "NEXT-ACTION-ALPHA") -> dict[str, object]:
@@ -754,3 +758,369 @@ def test_report_consistency_rejects_empty_read_and_self_reported_aggregate() -> 
     report["aggregate"]["provider_bytes"] = 1  # type: ignore[index]
     with pytest.raises(EvidenceValidationError, match="scenario matrix"):
         validate_host_report_consistency(report)
+
+
+def test_current_repository_binding_accepts_exact_v013_and_rejects_unknown_version(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        pass13_orchestrator,
+        "_git",
+        lambda _repository, *arguments: "" if arguments[0] == "status" else "a" * 40,
+    )
+    binding = pass13_orchestrator.repository_binding(
+        Path(__file__).resolve().parents[1]
+    )
+    assert binding["package_version"] == "0.13.0"
+
+    historical_repository = tmp_path / "historical-repository"
+    historical_repository.mkdir()
+    (historical_repository / "pyproject.toml").write_text(
+        '[project]\nname = "deeplaw"\nversion = "0.12.0"\n',
+        encoding="utf-8",
+    )
+    assert pass13_orchestrator.repository_binding(historical_repository)[
+        "package_version"
+    ] == "0.12.0"
+
+    unknown_repository = tmp_path / "unknown-version-repository"
+    unknown_repository.mkdir()
+    (unknown_repository / "pyproject.toml").write_text(
+        '[project]\nname = "deeplaw"\nversion = "9.9.9"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="unsupported package version",
+    ):
+        pass13_orchestrator.repository_binding(unknown_repository)
+
+
+def test_v013_installed_runtime_prepare_and_report_bind_exact_version(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repository = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(
+        pass13_orchestrator,
+        "_git",
+        lambda _repository, *arguments: "" if arguments[0] == "status" else "a" * 40,
+    )
+    package_files = {"__init__.py": b"candidate\n"}
+    wheel = tmp_path / "deeplaw-0.13.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for relative, content in package_files.items():
+            archive.writestr(f"deeplaw/{relative}", content)
+        archive.writestr(
+            "deeplaw-0.13.0.dist-info/METADATA",
+            "Metadata-Version: 2.4\nName: deeplaw\nVersion: 0.13.0\n\n",
+        )
+    executable = tmp_path / "venv" / "bin" / "deeplaw"
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"candidate executable")
+    executable.chmod(0o700)
+    runtime_python = executable.parent / "python"
+    runtime_python.write_bytes(b"candidate python")
+    runtime_python.chmod(0o700)
+
+    source_digests = {
+        name: hashlib.sha256((repository / "contracts" / name).read_bytes()).hexdigest()
+        for name in pass13_orchestrator.RUNTIME_CONTRACT_NAMES
+    }
+    observed = {
+        "version": "0.13.0",
+        "import_path_class": "isolated_site_packages",
+        "contracts": source_digests,
+        "files": {
+            relative: hashlib.sha256(content).hexdigest()
+            for relative, content in package_files.items()
+        },
+    }
+
+    def fake_run(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(returncode=0, stdout=json.dumps(observed))
+
+    monkeypatch.setattr(pass13_orchestrator.subprocess, "run", fake_run)
+    orchestrator = pass13_orchestrator.QualificationOrchestrator(
+        host="opencode",
+        repository=repository,
+        candidate_wheel=wheel,
+        deeplaw_executable=executable,
+        output_dir=tmp_path / "evidence",
+        error_type=pass13_orchestrator.QualificationOrchestrationError,
+        execution_mode="diagnostic",
+    )
+    output, binding, installed = orchestrator.prepare_candidate()
+    assert output == (tmp_path / "evidence").resolve()
+    assert binding["package_version"] == "0.13.0"
+    assert installed["wheel_name"] == wheel.name
+
+    windows_scripts = tmp_path / "windows-venv" / "Scripts"
+    windows_scripts.mkdir(parents=True)
+    windows_executable = windows_scripts / "deeplaw.exe"
+    windows_executable.write_bytes(b"candidate windows executable")
+    windows_python = windows_scripts / "python.exe"
+    windows_python.write_bytes(b"candidate windows python")
+    windows_installed = pass13_orchestrator.installed_runtime_binding(
+        candidate_wheel=wheel,
+        deeplaw_executable=windows_executable,
+        repository=repository,
+        expected_package_version="0.13.0",
+    )
+    assert windows_installed["wheel_name"] == wheel.name
+
+    original_is_symlink = Path.is_symlink
+    with monkeypatch.context() as executable_symlink:
+        executable_symlink.setattr(
+            Path,
+            "is_symlink",
+            lambda path: path == windows_executable or original_is_symlink(path),
+        )
+        with pytest.raises(
+            pass13_orchestrator.QualificationOrchestrationError,
+            match="executable is not regular",
+        ):
+            pass13_orchestrator.installed_runtime_binding(
+                candidate_wheel=wheel,
+                deeplaw_executable=windows_executable,
+                repository=repository,
+                expected_package_version="0.13.0",
+            )
+
+    with monkeypatch.context() as python_symlink:
+        python_symlink.setattr(
+            Path,
+            "is_symlink",
+            lambda path: path == windows_python or original_is_symlink(path),
+        )
+        with pytest.raises(
+            pass13_orchestrator.QualificationOrchestrationError,
+            match="adjacent Python",
+        ):
+            pass13_orchestrator.installed_runtime_binding(
+                candidate_wheel=wheel,
+                deeplaw_executable=windows_executable,
+                repository=repository,
+                expected_package_version="0.13.0",
+            )
+
+    nonregular_runtime = tmp_path / "nonregular-venv" / "Scripts"
+    nonregular_runtime.mkdir(parents=True)
+    nonregular_executable = nonregular_runtime / "deeplaw.exe"
+    nonregular_executable.write_bytes(b"nonregular executable case")
+    (nonregular_runtime / "python.exe").mkdir()
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="adjacent Python",
+    ):
+        pass13_orchestrator.installed_runtime_binding(
+            candidate_wheel=wheel,
+            deeplaw_executable=nonregular_executable,
+            repository=repository,
+            expected_package_version="0.13.0",
+        )
+
+    mixed_runtime = tmp_path / "mixed-venv"
+    mixed_scripts = mixed_runtime / "Scripts"
+    mixed_bin = mixed_runtime / "bin"
+    mixed_scripts.mkdir(parents=True)
+    mixed_bin.mkdir()
+    mixed_executable = mixed_scripts / "deeplaw.exe"
+    mixed_executable.write_bytes(b"mixed windows executable")
+    (mixed_scripts / "python.exe").write_bytes(b"mixed windows python")
+    (mixed_bin / "deeplaw").write_bytes(b"mixed posix executable")
+    (mixed_bin / "python").write_bytes(b"mixed posix python")
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="mixed platform layouts",
+    ):
+        pass13_orchestrator.installed_runtime_binding(
+            candidate_wheel=wheel,
+            deeplaw_executable=mixed_executable,
+            repository=repository,
+            expected_package_version="0.13.0",
+        )
+
+    wrong_layout = tmp_path / "wrong-venv" / "bin" / "deeplaw.exe"
+    wrong_layout.parent.mkdir(parents=True)
+    wrong_layout.write_bytes(b"wrong entrypoint")
+    (wrong_layout.parent / "python").write_bytes(b"wrong python")
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="runtime layout",
+    ):
+        pass13_orchestrator.installed_runtime_binding(
+            candidate_wheel=wheel,
+            deeplaw_executable=wrong_layout,
+            repository=repository,
+            expected_package_version="0.13.0",
+        )
+
+    report = pass13_orchestrator.build_host_report(
+        host="opencode",
+        binding={
+            "package_version": binding["package_version"],
+            "wheel_name": installed["wheel_name"],
+        },
+        environment={},
+        host_attestation={},
+        tool_schema={},
+        runs=[{"status": "failed", "turns": []}],
+        lifecycle={},
+        security={},
+        not_executed=["formal Host"],
+        execution_mode="diagnostic",
+    )
+    assert report["package_version"] == "0.13.0"
+
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="candidate wheel name is invalid",
+    ):
+        pass13_orchestrator.installed_runtime_binding(
+            candidate_wheel=wheel,
+            deeplaw_executable=executable,
+            repository=repository,
+            expected_package_version="0.12.0",
+        )
+
+    observed["version"] = "0.12.0"
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="installed wheel contract identity was incomplete",
+    ):
+        pass13_orchestrator.installed_runtime_binding(
+            candidate_wheel=wheel,
+            deeplaw_executable=executable,
+            repository=repository,
+            expected_package_version="0.13.0",
+        )
+
+
+def test_v2_schema_accepts_supported_versions_and_rejects_unknown_version(
+    tmp_path: Path,
+) -> None:
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "contracts"
+            / "host-continuity-qualification.v2.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    validator = Draft202012Validator(schema["properties"]["package_version"])
+    for version in ("0.12.0", "0.13.0"):
+        assert list(validator.iter_errors(version)) == []
+    assert list(validator.iter_errors("9.9.9"))
+
+    report = _v2_diagnostic_report(tmp_path)
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    assert list(validator.iter_errors(report)) == []
+    for package_version, wheel_name in (
+        ("0.13.0", "deeplaw-0.12.0-py3-none-any.whl"),
+        ("0.12.0", "deeplaw-0.13.0-py3-none-any.whl"),
+    ):
+        report["package_version"] = package_version
+        report["binding"]["wheel_name"] = wheel_name  # type: ignore[index]
+        assert list(validator.iter_errors(report))
+
+
+def _v2_diagnostic_report(tmp_path: Path) -> dict[str, object]:
+    repository = Path(__file__).resolve().parents[1]
+    orchestrator = pass13_orchestrator.QualificationOrchestrator(
+        host="codex",
+        repository=repository,
+        candidate_wheel=tmp_path / "candidate.whl",
+        deeplaw_executable=tmp_path / "deeplaw",
+        output_dir=tmp_path / "evidence",
+        error_type=RuntimeError,
+        execution_mode="diagnostic",
+    )
+    return orchestrator.build_report(
+        binding={
+            "commit": "1" * 40,
+            "tree": "2" * 40,
+            "worktree_clean": True,
+            "wheel_name": "deeplaw-0.13.0-py3-none-any.whl",
+            "wheel_sha256": "3" * 64,
+            "wheel_bytes": 1,
+            "runtime_executable_sha256": "4" * 64,
+            "import_path_class": "isolated_site_packages",
+            "contract_digests": {
+                "host-continuity-qualification.v1.schema.json": "5" * 64,
+                "host-continuity-qualification.v2.schema.json": hashlib.sha256(
+                    (
+                        repository
+                        / "contracts"
+                        / "host-continuity-qualification.v2.schema.json"
+                    ).read_bytes()
+                ).hexdigest(),
+                "host-continuity-development-diagnostic.v1.schema.json": "6" * 64,
+            },
+        },
+        environment={
+            "operating_system": "Darwin",
+            "architecture": "arm64",
+            "python_version": "3.13",
+            "isolation": pass13_evidence.isolation_receipt(host="codex"),
+        },
+        host_attestation=codex_runner._placeholder_attestation(),
+        tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
+            [knowledge_tool_definition(autonomous=True)]
+        ),
+        runs=[
+            codex_runner._placeholder_run(
+                1,
+                "development_diagnostic",
+                task_family="development_diagnostic",
+            )
+        ],
+        lifecycle={
+            "host_owns_threads": True,
+            "common_task_families": ["development_diagnostic"],
+            "transport_seams": [],
+            "requested_operations": [],
+            "methods_observed": [],
+            "deeplaw_session_store_created": False,
+        },
+        security=codex_runner._placeholder_security(),
+        not_executed=["qualification", "Human Gold", "blind scoring"],
+    )
+
+
+def test_current_v2_validator_rejects_package_wheel_cross_version_mismatch(
+    tmp_path: Path,
+) -> None:
+    report = _v2_diagnostic_report(tmp_path)
+    pass13_evidence.validate_host_report_consistency(report)
+
+    for package_version, wheel_name in (
+        ("0.13.0", "deeplaw-0.12.0-py3-none-any.whl"),
+        ("0.12.0", "deeplaw-0.13.0-py3-none-any.whl"),
+    ):
+        report["package_version"] = package_version
+        report["binding"]["wheel_name"] = wheel_name  # type: ignore[index]
+        with pytest.raises(EvidenceValidationError):
+            pass13_evidence.validate_host_report_consistency(report)
+
+
+@pytest.mark.parametrize(
+    "wheel_name",
+    (
+        "deeplaw-0.13.0-.whl",
+        "deeplaw-0.13.0-not-a-wheel-layout.whl",
+    ),
+)
+def test_installed_binding_rejects_noncanonical_wheel_layout(
+    wheel_name: str, tmp_path: Path
+) -> None:
+    wheel = tmp_path / wheel_name
+    wheel.write_bytes(b"not a wheel")
+    with pytest.raises(
+        pass13_orchestrator.QualificationOrchestrationError,
+        match="candidate wheel name or layout is invalid",
+    ):
+        pass13_orchestrator.installed_runtime_binding(
+            candidate_wheel=wheel,
+            deeplaw_executable=tmp_path / "deeplaw",
+            repository=Path(__file__).resolve().parents[1],
+            expected_package_version="0.13.0",
+        )

@@ -71,6 +71,7 @@ jobs:
       - name: Validate owner-controlled Host prerequisites without reading credentials
         env:
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -123,7 +124,6 @@ jobs:
                       raise SystemExit(f"qualification prerequisite hash mismatch: {name}")
               return path
 
-          exact_file("DEEPLAW_KERNEL_EVIDENCE_COLLECTOR", executable=True, owner_only=True)
           exact_file("DEEPLAW_CODEX_CREDENTIAL_BROKER", executable=True, owner_only=True)
           exact_file("DEEPLAW_OPENCODE_CREDENTIAL_BROKER", executable=True, owner_only=True)
           identity_path = exact_file(
@@ -144,6 +144,15 @@ jobs:
           )
           frozen_root = Path(os.environ["RUNNER_TEMP"]) / "candidate-inputs"
           frozen_root.mkdir(parents=True, exist_ok=True)
+          frozen_root.chmod(0o700)
+          frozen_root_details = frozen_root.lstat()
+          if (
+              not stat.S_ISDIR(frozen_root_details.st_mode)
+              or frozen_root.is_symlink()
+              or frozen_root_details.st_uid != os.geteuid()
+              or stat.S_IMODE(frozen_root_details.st_mode) != 0o700
+          ):
+              raise SystemExit("candidate input staging root is unsafe")
           frozen_path = frozen_root / "frozen-host-exact-identity.json"
           frozen_tmp = frozen_root / ".frozen-host-exact-identity.tmp"
           if frozen_path.exists() or frozen_path.is_symlink() or frozen_tmp.exists() or frozen_tmp.is_symlink():
@@ -225,6 +234,20 @@ jobs:
           if hashlib.sha256(package.read_bytes()).hexdigest() != identity["hosts"]["opencode"]["package_sha256"]:
               raise SystemExit("OpenCode package does not match the external frozen identity")
           PY
+          frozen_collector="${RUNNER_TEMP}/candidate-inputs/frozen-kernel-evidence-collector"
+          collector_identity="${RUNNER_TEMP}/candidate-inputs/frozen-kernel-evidence-collector-identity.json"
+          test ! -e "${frozen_collector}"
+          test ! -e "${collector_identity}"
+          uv run --frozen python -m benchmarks.hosts.owner_external_collector freeze \
+            --source "${DEEPLAW_KERNEL_EVIDENCE_COLLECTOR}" \
+            --expected-sha256 "${DEEPLAW_KERNEL_EVIDENCE_COLLECTOR_SHA256}" \
+            --frozen-output "${frozen_collector}" \
+            --identity-output "${collector_identity}" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --repository "${GITHUB_WORKSPACE}"
+          test -x "${frozen_collector}"
+          test -s "${collector_identity}"
           verified="${RUNNER_TEMP}/candidate-inputs/verified-dist"
           raw="${RUNNER_TEMP}/candidate-inputs/candidate-full-raw-evidence"
           uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
@@ -399,13 +422,23 @@ jobs:
           frozen_identity="${RUNNER_TEMP}/candidate-inputs/frozen-host-exact-identity.json"
           execution_identity="${RUNNER_TEMP}/candidate-inputs/host-execution-identity.json"
           host_task_handoff="${RUNNER_TEMP}/candidate-inputs/host-task-handoff.json"
+          frozen_collector="${RUNNER_TEMP}/candidate-inputs/frozen-kernel-evidence-collector"
+          collector_identity="${RUNNER_TEMP}/candidate-inputs/frozen-kernel-evidence-collector-identity.json"
           test -f "${frozen_identity}"
           test -f "${execution_identity}"
           test -f "${host_task_handoff}"
+          test -x "${frozen_collector}"
+          test -s "${collector_identity}"
           export DEEPLAW_FROZEN_HOST_IDENTITY="${frozen_identity}"
           test ! -e "${output}"
           mkdir "${output}"
-          "${DEEPLAW_KERNEL_EVIDENCE_COLLECTOR}" \
+          uv run --frozen python -m benchmarks.hosts.owner_external_collector validate \
+            --frozen-input "${frozen_collector}" \
+            --identity-input "${collector_identity}" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --repository "${GITHUB_WORKSPACE}"
+          "${frozen_collector}" \
             --candidate-input-root "${RUNNER_TEMP}/candidate-inputs" \
             --verified-dist "${RUNNER_TEMP}/candidate-inputs/verified-dist" \
             --candidate-full-raw-root "${RUNNER_TEMP}/candidate-inputs/candidate-full-raw-evidence" \
@@ -426,6 +459,12 @@ jobs:
             --host-task-handoff "${host_task_handoff}" \
             --transport-retry-limit 1 \
             --output "${output}"
+          uv run --frozen python -m benchmarks.hosts.owner_external_collector validate \
+            --frozen-input "${frozen_collector}" \
+            --identity-input "${collector_identity}" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --evidence-run-id "${EVIDENCE_RUN_ID}" \
+            --repository "${GITHUB_WORKSPACE}"
           test ! -e "${output}/.env"
           test ! -e "${output}/auth.json"
           test ! -e "${output}/transcript"
@@ -442,11 +481,16 @@ jobs:
             "${output}/retained-broker-source/codex.launcher-source"
           cp "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \
             "${output}/retained-broker-source/opencode.launcher-source"
+          mkdir "${output}/retained-collector-source"
+          cp "${frozen_collector}" \
+            "${output}/retained-collector-source/kernel-evidence-collector"
           mkdir "${output}/candidate-inventory"
           cp "${frozen_identity}" \
             "${output}/candidate-inventory/host-exact-identity.json"
           cp "${execution_identity}" \
             "${output}/candidate-inventory/host-execution-identity.json"
+          cp "${collector_identity}" \
+            "${output}/candidate-inventory/kernel-evidence-collector-identity.json"
 
       - name: Reopen every typed receipt with the repository validator
         env:
@@ -468,9 +512,9 @@ jobs:
             "${root}/benchmarks/v013/qualification-protocol-v3.json"
           cp benchmarks/release/v013-gate-classification-v9.json \
             "${root}/benchmarks/release/v013-gate-classification-v9.json"
-          # A temporary non-future qualification identity proves that the raw
-          # evidence is already a valid closed bundle. Commercial Qualification
-          # rebuilds the manifest with its actual workflow run id.
+          # This sentinel is only a temporary bundle/Commercial identity. Immutable
+          # Host process receipts stay bound to the current Kernel Evidence run;
+          # Commercial Qualification rebuilds the manifest with its actual run id.
           sentinel=9223372036854775807
           uv run --frozen python -m benchmarks.release.kernel_qualification_bundle_v1 build \
             --root "${root}" \

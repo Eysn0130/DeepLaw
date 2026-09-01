@@ -50,6 +50,7 @@ def _validate_contract(name: str, value: dict[str, object]) -> None:
 
 def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutation(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = _vault(tmp_path)
     with AutonomousKnowledgeStore(root, read_only=False) as store:
@@ -78,6 +79,18 @@ def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutat
         )
         store.rebuild_derived()
         before_head = store.audit_head
+        canonical_reads: dict[str, int] = {}
+        original_get_current = store.get_current
+
+        def counted_get_current(
+            knowledge_id: str, *, include_inactive: bool = False
+        ) -> dict[str, object]:
+            canonical_reads[knowledge_id] = canonical_reads.get(knowledge_id, 0) + 1
+            return original_get_current(
+                knowledge_id, include_inactive=include_inactive
+            )
+
+        monkeypatch.setattr(store, "get_current", counted_get_current)
 
         result = store.recall(
             "这两个日志政策有什么不同，哪里互相冲突?",
@@ -93,6 +106,8 @@ def test_cross_language_query_retrieves_english_compiled_knowledge_without_mutat
         )
         assert result["query_plan"]["query_expansion_term_count"] >= 3
         assert store.audit_head == before_head
+        assert canonical_reads[target["knowledge_id"]] == 1
+        assert all(read_count <= 1 for read_count in canonical_reads.values())
         _validate_contract(
             "autonomous-query-plan.v1.schema.json", result["query_plan"]
         )
@@ -1104,6 +1119,56 @@ def test_identity_lookup_keeps_exact_ambiguity_when_result_limit_is_one(
         assert len(result["candidates"]) == 1
         assert result["candidate_count"] == 2
         assert result["alias_scan_truncated"] is False
+
+
+def test_recall_alias_discovery_filters_candidates_before_resource_bound(
+    tmp_path: Path,
+) -> None:
+    root = _vault(tmp_path)
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = _grant(store)
+        target = store.remember(
+            grant_id=grant_id,
+            idempotency_key="alias-discovery-resource-target",
+            title="Target knowledge",
+            body="The target is discoverable through its short identity alias.",
+            aliases=["needle target"],
+            tags=["alias-target"],
+            confirm_no_case_data=True,
+        )
+        for object_index in range(32):
+            store.remember(
+                grant_id=grant_id,
+                idempotency_key=f"alias-discovery-resource-noise-{object_index:02d}",
+                title=f"Noise object {object_index:02d}",
+                body=(
+                    f"Noise object {object_index:02d} carries unrelated identity aliases."
+                ),
+                aliases=[
+                    (
+                        f"Unrelated Alias {object_index:02d} {alias_index:02d} "
+                        "with padding"
+                    )
+                    for alias_index in range(64)
+                ],
+                tags=["alias-target"],
+                confirm_no_case_data=True,
+            )
+
+        assert store.verify()["valid"] is True
+
+        result = store.recall(
+            "needle target",
+            retrieval_mode="exact",
+            graph_hops=0,
+            kinds=("memory",),
+            required_tags=("alias-target",),
+        )
+
+        assert [item["knowledge_id"] for item in result["results"]] == [
+            target["knowledge_id"]
+        ]
+        assert not any("identity alias discovery" in gap for gap in result["gaps"])
 
 
 def test_retrieval_filters_governance_before_lexical_top_k(

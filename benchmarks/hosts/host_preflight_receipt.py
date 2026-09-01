@@ -122,7 +122,130 @@ _IDENTITY_FORBIDDEN_FILENAME = re.compile(
     r"private[_-]?key|token|prompt|transcript|reasoning)(?:$|[._-])",
     re.IGNORECASE,
 )
-_IDENTITY_STAT_FIELDS = ("st_ino", "st_size", "st_mode", "st_uid", "st_nlink")
+_STAT_MUTATION_FIELDS = (
+    "st_dev",
+    "st_ino",
+    "st_size",
+    "st_mode",
+    "st_uid",
+    "st_nlink",
+)
+_WINDOWS_ACL_SCHEMA = "deeplaw.windows-acl-report/v1"
+_WINDOWS_ACL_HARDENING_SCHEMA = "deeplaw.windows-acl-hardening/v1"
+_WINDOWS_ACL_MAX_PATHS = 100_000
+_WINDOWS_ACL_MAX_RETAINED_ENTRIES = 1_000
+_WINDOWS_EVERYONE_SID = "S-1-1-0"
+_WINDOWS_USERS_SID = "S-1-5-32-545"
+_WINDOWS_SID = re.compile(r"^S-\d+(?:-\d+)+$")
+_WINDOWS_ACL_REPORT_KEYS = frozenset(
+    {
+        "schema_version",
+        "current_user_sid",
+        "entry_count",
+        "owner_sid_verified",
+        "users_principal_sid",
+        "everyone_principal_sid",
+        "reparse_points_absent",
+        "permissions_verified",
+        "errors",
+        "errors_truncated",
+        "entries",
+        "entries_truncated",
+        "platform",
+        "status",
+        "scan_complete",
+        "files_and_directories_checked",
+    }
+)
+_WINDOWS_ACL_ENTRY_KEYS = frozenset(
+    {
+        "path",
+        "kind",
+        "owner_sid",
+        "owner_matches_current_user",
+        "reparse_point",
+        "acl_inheritance_enabled",
+        "inherited_rule_count",
+        "users_rule_count",
+        "everyone_rule_count",
+        "valid",
+    }
+)
+_WINDOWS_ACL_HARDENING_KEYS = frozenset(
+    {
+        "schema_version",
+        "platform",
+        "applied",
+        "item_count",
+        "current_user_sid",
+        "verification",
+    }
+)
+
+
+def portable_file_stat_signature(
+    details: os.stat_result,
+) -> tuple[bool, int | None, int | None, int | None]:
+    """Return the cross-interface file identity that Windows can preserve.
+
+    ``Path.lstat`` and ``os.fstat`` are different observation interfaces.  On
+    Windows their mode, uid, and timestamp representations are not required
+    to be byte-for-byte equal even when they describe the same open file.  A
+    cross-interface comparison therefore binds only regular-file type,
+    non-zero device/inode identity, and size.  Same-interface mutation checks
+    continue to use :func:`stat_mutation_signature` below.
+    """
+
+    mode = getattr(details, "st_mode", None)
+    device = getattr(details, "st_dev", None)
+    inode = getattr(details, "st_ino", None)
+    size = getattr(details, "st_size", None)
+    return (
+        isinstance(mode, int) and stat.S_ISREG(mode),
+        device if type(device) is int and device > 0 else None,
+        inode if type(inode) is int and inode > 0 else None,
+        size if type(size) is int and size >= 0 else None,
+    )
+
+
+def portable_file_stat_matches(
+    left: os.stat_result,
+    right: os.stat_result,
+) -> bool:
+    """Compare lstat/fstat observations without weakening mutation checks."""
+
+    left_signature = portable_file_stat_signature(left)
+    right_signature = portable_file_stat_signature(right)
+    return (
+        left_signature == right_signature
+        and left_signature[0]
+        and left_signature[1] is not None
+        and left_signature[2] is not None
+        and left_signature[3] is not None
+    )
+
+
+def _host_version_probe_environment() -> dict[str, str]:
+    """Return the minimum non-secret environment needed by a Host probe."""
+
+    environment = {"PATH": os.defpath, "LANG": "C", "LC_ALL": "C"}
+    if os.name == "nt":
+        system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+        if not system_root:
+            _identity_fail("Host Windows system root is unavailable")
+        environment["SYSTEMROOT"] = system_root
+        environment["WINDIR"] = system_root
+    return environment
+
+
+def stat_mutation_signature(details: os.stat_result) -> tuple[Any, ...]:
+    """Return the full same-interface mutation signature."""
+
+    return (
+        *(getattr(details, field, None) for field in _STAT_MUTATION_FIELDS),
+        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
+        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
+    )
 
 
 class HostIdentityValidationError(ValueError):
@@ -364,11 +487,7 @@ def _identity_path_has_symlink(path: Path) -> bool:
 def _identity_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
     """Keep mutation-relevant metadata without treating atime as a mutation."""
 
-    return (
-        *(getattr(details, field, None) for field in _IDENTITY_STAT_FIELDS),
-        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
-        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
-    )
+    return stat_mutation_signature(details)
 
 
 def _read_identity_file(
@@ -402,13 +521,17 @@ def _read_identity_file(
             _identity_fail("Host identity input must be repository-external")
         if not 1 <= before.st_size <= HOST_IDENTITY_MAX_BYTES:
             _identity_fail("Host identity input exceeds its byte bound")
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
         if hasattr(os, "O_CLOEXEC"):
             flags |= os.O_CLOEXEC
         descriptor = os.open(selected, flags)
         try:
             fd_before = os.fstat(descriptor)
-            if _identity_stat_signature(fd_before) != _identity_stat_signature(before):
+            if not portable_file_stat_matches(fd_before, before):
                 _identity_fail("Host identity input changed before it was read")
             chunks: list[bytes] = []
             total = 0
@@ -430,6 +553,7 @@ def _read_identity_file(
     if (
         _identity_stat_signature(fd_before) != _identity_stat_signature(fd_after)
         or _identity_stat_signature(before) != _identity_stat_signature(after)
+        or not portable_file_stat_matches(fd_after, after)
         or len(raw) != before.st_size
     ):
         _identity_fail("Host identity input changed while it was read")
@@ -594,7 +718,7 @@ def inspect_host_binary(
             capture_output=True,
             check=False,
             timeout=30,
-            env={"PATH": os.defpath, "LANG": "C", "LC_ALL": "C"},
+            env=_host_version_probe_environment(),
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise HostIdentityValidationError("Host executable version probe failed") from error
@@ -624,17 +748,10 @@ class ReceiptValidationError(ValueError):
     """A preflight receipt is not safe or does not match the strict schema."""
 
 
-_STAT_FIELDS = ("st_ino", "st_size", "st_mode", "st_uid", "st_nlink")
-
-
 def _stat_signature(details: os.stat_result) -> tuple[Any, ...]:
     """Return the platform-available identity and mutation fields."""
 
-    return (
-        *(getattr(details, field, None) for field in _STAT_FIELDS),
-        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
-        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
-    )
+    return stat_mutation_signature(details)
 
 
 def _path_stat_signature(path: Path) -> tuple[Any, ...] | None:
@@ -690,6 +807,259 @@ def _safe_source_defaults(*, expected_sha256: str | None) -> dict[str, Any]:
     }
 
 
+def _windows_acl_path_key(value: object, *, allow_pathlike: bool = False) -> str:
+    if not isinstance(value, str) and not (allow_pathlike and isinstance(value, os.PathLike)):
+        raise ReceiptValidationError("Windows ACL path is invalid")
+    try:
+        selected = os.fspath(value)
+        if isinstance(selected, bytes):
+            selected = os.fsdecode(selected)
+        if not selected or "\x00" in selected:
+            raise ReceiptValidationError("Windows ACL path is invalid")
+        if not os.path.isabs(selected):
+            raise ReceiptValidationError("Windows ACL path is not absolute")
+        return os.path.normcase(os.path.normpath(selected))
+    except (OSError, TypeError, ValueError) as exc:
+        raise ReceiptValidationError("Windows ACL path is invalid") from exc
+
+
+def _windows_acl_sid(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or _WINDOWS_SID.fullmatch(value) is None:
+        raise ReceiptValidationError(f"Windows ACL {label} is invalid")
+    return value
+
+
+def _windows_acl_bool(value: object, *, label: str) -> bool:
+    if type(value) is not bool:
+        raise ReceiptValidationError(f"Windows ACL {label} is invalid")
+    return value
+
+
+def _windows_acl_count(value: object, *, label: str) -> int:
+    if type(value) is not int or not 1 <= value <= _WINDOWS_ACL_MAX_PATHS:
+        raise ReceiptValidationError(f"Windows ACL {label} is invalid")
+    return value
+
+
+def validate_windows_acl_report(
+    report: object,
+    *,
+    expected_path: Path | str | None = None,
+    expected_kind: str | None = None,
+    recursive: bool | None = None,
+) -> dict[str, Any]:
+    """Validate one exact native Windows ACL report before trusting it.
+
+    ``native_windows_path_acl_report`` returns one retained entry, while
+    ``native_windows_acl_report`` returns the root and its recursive children.
+    The native evaluator bounds retained entries at 1,000, so a recursive
+    report may legitimately omit entries after that bound; its full count and
+    ``entries_truncated`` flag must still agree.
+    """
+
+    if not isinstance(report, Mapping) or set(report) != _WINDOWS_ACL_REPORT_KEYS:
+        raise ReceiptValidationError("Windows ACL report shape is invalid")
+    if report.get("schema_version") != _WINDOWS_ACL_SCHEMA:
+        raise ReceiptValidationError("Windows ACL report schema is invalid")
+    if report.get("platform") != "nt" or report.get("status") != "verified":
+        raise ReceiptValidationError("Windows ACL report status is invalid")
+    _windows_acl_bool(report.get("permissions_verified"), label="permission result")
+    if report["permissions_verified"] is not True:
+        raise ReceiptValidationError("Windows ACL permissions are not verified")
+    _windows_acl_bool(report.get("scan_complete"), label="scan completion")
+    if report["scan_complete"] is not True:
+        raise ReceiptValidationError("Windows ACL scan is incomplete")
+
+    current_sid = _windows_acl_sid(report.get("current_user_sid"), label="current SID")
+    if report.get("owner_sid_verified") is not True:
+        raise ReceiptValidationError("Windows ACL owner verification is invalid")
+    if report.get("reparse_points_absent") is not True:
+        raise ReceiptValidationError("Windows ACL reparse verification is invalid")
+    if report.get("users_principal_sid") != _WINDOWS_USERS_SID:
+        raise ReceiptValidationError("Windows ACL Users principal is invalid")
+    if report.get("everyone_principal_sid") != _WINDOWS_EVERYONE_SID:
+        raise ReceiptValidationError("Windows ACL Everyone principal is invalid")
+
+    errors = report.get("errors")
+    if (
+        not isinstance(errors, list)
+        or len(errors) > _WINDOWS_ACL_MAX_RETAINED_ENTRIES
+        or any(not isinstance(error, str) for error in errors)
+        or errors
+    ):
+        raise ReceiptValidationError("Windows ACL errors are not empty")
+    if report.get("errors_truncated") is not False:
+        raise ReceiptValidationError("Windows ACL error truncation is invalid")
+
+    entry_count = _windows_acl_count(report.get("entry_count"), label="entry count")
+    checked_count = _windows_acl_count(
+        report.get("files_and_directories_checked"),
+        label="checked count",
+    )
+    if entry_count != checked_count:
+        raise ReceiptValidationError("Windows ACL counts do not agree")
+    entries = report.get("entries")
+    if not isinstance(entries, list) or not entries:
+        raise ReceiptValidationError("Windows ACL entries are missing")
+    entries_truncated = _windows_acl_bool(
+        report.get("entries_truncated"),
+        label="entry truncation",
+    )
+    if recursive is not None and type(recursive) is not bool:
+        raise ReceiptValidationError("Windows ACL recursion intent is invalid")
+    if recursive is False:
+        if (
+            entry_count != 1
+            or len(entries) != 1
+            or entries_truncated is not False
+        ):
+            raise ReceiptValidationError("Windows ACL single-path cardinality is invalid")
+    elif entry_count <= _WINDOWS_ACL_MAX_RETAINED_ENTRIES:
+        if entries_truncated is not False or len(entries) != entry_count:
+            raise ReceiptValidationError("Windows ACL entry cardinality is invalid")
+    elif (
+        recursive is False
+        or entries_truncated is not True
+        or len(entries) != _WINDOWS_ACL_MAX_RETAINED_ENTRIES
+    ):
+        raise ReceiptValidationError("Windows ACL recursive truncation is invalid")
+
+    expected_key = (
+        _windows_acl_path_key(expected_path, allow_pathlike=True)
+        if expected_path is not None
+        else None
+    )
+    if expected_kind is not None and expected_kind not in {"file", "directory"}:
+        raise ReceiptValidationError("Windows ACL expected kind is invalid")
+    if expected_key is not None and recursive is True:
+        root_seen = False
+    seen_paths: set[str] = set()
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, Mapping) or set(entry) != _WINDOWS_ACL_ENTRY_KEYS:
+            raise ReceiptValidationError("Windows ACL entry shape is invalid")
+        path_key = _windows_acl_path_key(entry.get("path"))
+        if path_key in seen_paths:
+            raise ReceiptValidationError("Windows ACL entry paths are not unique")
+        seen_paths.add(path_key)
+        kind = entry.get("kind")
+        if kind not in {"file", "directory"}:
+            raise ReceiptValidationError("Windows ACL entry kind is invalid")
+        if expected_kind is not None:
+            if expected_kind not in {"file", "directory"}:
+                raise ReceiptValidationError("Windows ACL expected kind is invalid")
+            if (
+                ((recursive is True and index == 0) or recursive is not True)
+                and kind != expected_kind
+            ):
+                raise ReceiptValidationError("Windows ACL entry kind does not match")
+        owner_sid = _windows_acl_sid(entry.get("owner_sid"), label="owner SID")
+        if owner_sid != current_sid:
+            raise ReceiptValidationError("Windows ACL owner SID does not match")
+        if entry.get("owner_matches_current_user") is not True:
+            raise ReceiptValidationError("Windows ACL owner match is invalid")
+        if entry.get("reparse_point") is not False:
+            raise ReceiptValidationError("Windows ACL reparse point is present")
+        if entry.get("acl_inheritance_enabled") is not False:
+            raise ReceiptValidationError("Windows ACL inheritance is enabled")
+        for field in (
+            "inherited_rule_count",
+            "users_rule_count",
+            "everyone_rule_count",
+        ):
+            count = entry.get(field)
+            if type(count) is not int or count < 0 or count > _WINDOWS_ACL_MAX_PATHS:
+                raise ReceiptValidationError("Windows ACL rule count is invalid")
+            if count != 0:
+                raise ReceiptValidationError("Windows ACL broad or inherited rules remain")
+        if entry.get("valid") is not True:
+            raise ReceiptValidationError("Windows ACL entry is not valid")
+
+        if expected_key is not None:
+            if recursive is True:
+                try:
+                    is_root = path_key == expected_key
+                    is_child = os.path.commonpath((expected_key, path_key)) == expected_key
+                except ValueError:
+                    is_root = False
+                    is_child = False
+                if index == 0 and not is_root:
+                    raise ReceiptValidationError("Windows ACL root is not first")
+                if not is_child:
+                    raise ReceiptValidationError("Windows ACL entry escaped expected root")
+                if is_root:
+                    root_seen = True
+                    if kind != "directory":
+                        raise ReceiptValidationError("Windows ACL root kind is invalid")
+            elif path_key != expected_key:
+                raise ReceiptValidationError("Windows ACL entry path does not match")
+        elif recursive is True and index == 0 and kind != "directory":
+            raise ReceiptValidationError("Windows ACL recursive root kind is invalid")
+
+    if expected_key is not None and recursive is True and not root_seen:
+        raise ReceiptValidationError("Windows ACL expected root is missing")
+    if (
+        report.get("owner_sid_verified") is not True
+        or report.get("reparse_points_absent") is not True
+    ):
+        raise ReceiptValidationError("Windows ACL aggregate verification is invalid")
+    return dict(report)
+
+
+def validate_windows_acl_hardening_report(
+    report: object,
+    *,
+    expected_path: Path | str | None = None,
+    expected_kind: str | None = None,
+    recursive: bool | None = None,
+) -> dict[str, Any]:
+    """Validate one native hardening wrapper and its exact verification."""
+
+    if not isinstance(report, Mapping) or set(report) != _WINDOWS_ACL_HARDENING_KEYS:
+        raise ReceiptValidationError("Windows ACL hardening report shape is invalid")
+    if (
+        report.get("schema_version") != _WINDOWS_ACL_HARDENING_SCHEMA
+        or report.get("platform") != "nt"
+        or report.get("applied") is not True
+    ):
+        raise ReceiptValidationError("Windows ACL hardening status is invalid")
+    item_count = _windows_acl_count(report.get("item_count"), label="hardened item count")
+    current_sid = _windows_acl_sid(
+        report.get("current_user_sid"),
+        label="hardening current SID",
+    )
+    verification = validate_windows_acl_report(
+        report.get("verification"),
+        expected_path=expected_path,
+        expected_kind=expected_kind
+        if expected_kind is not None
+        else ("directory" if recursive is True else None),
+        recursive=recursive,
+    )
+    if verification.get("current_user_sid") != current_sid:
+        raise ReceiptValidationError("Windows ACL hardening SID does not match")
+    checked_count = verification.get("files_and_directories_checked")
+    if item_count != checked_count:
+        raise ReceiptValidationError("Windows ACL hardening count does not match")
+    return dict(report)
+
+
+def _windows_acl_report_owner_only(
+    report: object,
+    *,
+    expected_path: Path | str | None = None,
+) -> bool:
+    try:
+        validate_windows_acl_report(
+            report,
+            expected_path=expected_path,
+            expected_kind="file",
+            recursive=False,
+        )
+    except ReceiptValidationError:
+        return False
+    return True
+
+
 def inspect_broker_source(
     path: Path,
     *,
@@ -735,8 +1105,21 @@ def inspect_broker_source(
         return result
 
     mode = stat.S_IMODE(details.st_mode)
-    owner_only = os.name == "nt" or not (mode & 0o077)
-    owner_uid = os.name == "nt" or not hasattr(os, "geteuid") or details.st_uid == os.geteuid()
+    if os.name == "nt":
+        try:
+            from deeplaw.windows_acl import native_windows_path_acl_report
+
+            acl_report = native_windows_path_acl_report(source)
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
+            acl_report = None
+        owner_only = _windows_acl_report_owner_only(
+            acl_report,
+            expected_path=source,
+        )
+        owner_uid = owner_only
+    else:
+        owner_only = not (mode & 0o077)
+        owner_uid = not hasattr(os, "geteuid") or details.st_uid == os.geteuid()
     result["owner_only_mode"] = bool(owner_only and owner_uid)
     if (
         not stat.S_ISREG(details.st_mode)

@@ -5,7 +5,7 @@ import json
 import os
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from .bounded_subprocess import BoundedSubprocessError, run_bounded_subprocess
 from .subprocess_environment import _build_subprocess_environment
@@ -20,6 +20,7 @@ _ADMINISTRATORS_SID = "S-1-5-32-544"
 _USERS_SID = "S-1-5-32-545"
 _MAX_ACL_PATHS = 100_000
 _BATCH_SIZE = 96
+ACLOperation = Literal["query", "harden"]
 
 _ACL_QUERY_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
@@ -76,8 +77,11 @@ $root = [Text.Encoding]::UTF8.GetString(
   [Convert]::FromBase64String($env:DEEPLAW_ACL_ROOT_B64)
 )
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
-$items = @((Get-Item -LiteralPath $root -Force))
-$items += @(Get-ChildItem -LiteralPath $root -Force -Recurse)
+$rootItem = Get-Item -LiteralPath $root -Force
+$items = @($rootItem)
+if ($rootItem.PSIsContainer) {
+  $items += @(Get-ChildItem -LiteralPath $root -Force -Recurse)
+}
 foreach ($item in $items) {
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
     throw "Refusing to harden a reparse point: $($item.FullName)"
@@ -175,7 +179,14 @@ def harden_windows_sqlite_sidecars(
             harden_windows_private_file(sidecar)
 
 
-def _run_encoded_script(script: str, *, environment: dict[str, str]) -> dict[str, Any]:
+def _run_encoded_script(
+    script: str,
+    *,
+    operation: ACLOperation,
+    environment: dict[str, str],
+) -> dict[str, Any]:
+    if operation not in {"query", "harden"}:
+        raise ValueError("native Windows ACL operation is invalid")
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
     if any(
         not isinstance(name, str)
@@ -204,7 +215,9 @@ def _run_encoded_script(script: str, *, environment: dict[str, str]) -> dict[str
             environment=closed_environment,
         )
     except BoundedSubprocessError as error:
-        raise RuntimeError("native Windows ACL command failed closed") from error
+        raise RuntimeError(
+            f"native Windows ACL {operation} command failed closed: {error.kind.value}"
+        ) from error
     if process.returncode != 0:
         error = process.stderr.decode(errors="replace").strip()
         raise RuntimeError(f"native Windows ACL command failed: {error[:1000]}")
@@ -371,6 +384,7 @@ def native_windows_acl_report(root: str | Path) -> dict[str, Any]:
         )
         value = _run_encoded_script(
             _ACL_QUERY_SCRIPT,
+            operation="query",
             environment={"DEEPLAW_ACL_PATHS_B64": encoded_paths},
         )
         if combined["current_user_sid"] is None:
@@ -417,6 +431,7 @@ def native_windows_path_acl_report(path: str | Path) -> dict[str, Any]:
     ).decode("ascii")
     payload = _run_encoded_script(
         _ACL_QUERY_SCRIPT,
+        operation="query",
         environment={"DEEPLAW_ACL_PATHS_B64": encoded_paths},
     )
     entries = payload.get("entries")
@@ -447,6 +462,7 @@ def harden_windows_private_file(path: str | Path) -> dict[str, Any]:
     encoded_root = base64.b64encode(str(selected).encode()).decode("ascii")
     result = _run_encoded_script(
         _ACL_HARDEN_SCRIPT,
+        operation="harden",
         environment={"DEEPLAW_ACL_ROOT_B64": encoded_root},
     )
     verification = native_windows_path_acl_report(selected)
@@ -476,6 +492,7 @@ def harden_windows_vault(root: str | Path) -> dict[str, Any]:
     encoded_root = base64.b64encode(str(vault_root).encode()).decode("ascii")
     result = _run_encoded_script(
         _ACL_HARDEN_SCRIPT,
+        operation="harden",
         environment={"DEEPLAW_ACL_ROOT_B64": encoded_root},
     )
     verification = native_windows_acl_report(vault_root)

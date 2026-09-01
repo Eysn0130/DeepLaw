@@ -315,6 +315,11 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "timeout-minutes: 20" in ci
     assert "Ubuntu Python 3.12" in ci
     assert "windows-sentinel" in ci
+    windows_sentinel = ci.split("  windows-sentinel:", 1)[1]
+    assert windows_sentinel.count(
+        "tests/test_v013_no_model_production_registration.py::"
+        "test_no_model_registration_starts_production_launcher_and_lists_tools"
+    ) == 1
     assert "uv lock --check" in ci
     assert "ruff check ." in ci
     assert "git diff --check" in ci
@@ -334,9 +339,16 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "candidate-skip-receipt.json" in candidate
     assert "windows-duration-weights.json" in candidate
 
-    calibration_shards = candidate.split(
-        "  windows-calibration-shards:", 1
-    )[1].split("  windows-calibration:", 1)[0]
+    windows_shards = candidate.split("  windows-shards:", 1)[1].split(
+        "  windows-aggregate:", 1
+    )[0]
+    assert "    timeout-minutes: 150" in windows_shards
+    assert "--maxfail=1" in windows_shards
+
+    calibration_block = candidate.split("  windows-calibration-shards:", 1)[1].split(
+        "  posix-matrix:", 1
+    )[0]
+    calibration_shards = calibration_block.split("  windows-calibration:", 1)[0]
     assert "Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3" in (
         calibration_shards
     )
@@ -345,14 +357,13 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "--shard-count 3" in calibration_shards
     assert 'if: matrix.shard == 1' in calibration_shards
 
-    calibration = candidate.split("  windows-calibration:", 1)[1].split(
-        "  posix-matrix:", 1
-    )[0]
+    calibration = calibration_block.split("  windows-calibration:", 1)[1]
     assert "needs: windows-calibration-shards" in calibration
     assert "--input-directory" in calibration
     assert "--junit-output" in calibration
     assert "windows-calibration-aggregate.json" in calibration
     assert "windows-duration-weights.json" in calibration
+    assert "--maxfail=1" not in calibration_block
 
     aggregate = candidate.split("  windows-aggregate:", 1)[1]
     assert "setup-uv" not in aggregate

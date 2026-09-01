@@ -36,6 +36,28 @@ def test_candidate_full_retains_raw_platform_and_exact_wheel_evidence() -> None:
     assert "windows-calibration-aggregate.json" in workflow
     assert "windows-aggregate.json" in workflow
     assert "--junit-output" in workflow
+    assert "--output-file candidate-requirements.txt" in workflow
+    assert 'export_dir="$(mktemp -d ' in workflow
+    assert 'UV_PROJECT="${GITHUB_WORKSPACE}" \\' in workflow
+    assert 'test ! -e "${destination}"' in workflow
+    assert 'test ! -L "${destination}"' in workflow
+    assert 'test ! -L "${source}"' in workflow
+    assert 'mv "${source}" "${destination}"' in workflow
+    assert '--output-file "${RUNNER_TEMP}' not in workflow
+    assert "benchmarks.release.candidate_artifact_path_policy" in workflow
+    assert workflow.count("normalize-junit") >= 5
+    assert workflow.count('--checkout-root "${GITHUB_WORKSPACE}"') >= 5
+    assert "--root \"${RUNNER_TEMP}/candidate-full-raw-evidence\"" in workflow
+    assert (
+        '--requirements "${RUNNER_TEMP}/candidate-full-raw-evidence/'
+        'verified-candidate-artifacts/candidate-requirements.txt"'
+        in workflow
+    )
+    assert workflow.index(
+        "Validate retained Candidate Full text and XML before inventory upload"
+    ) < workflow.index(
+        "Write path-independent raw evidence inventory receipt"
+    )
     assert "= 14" in workflow
     assert "candidate_regression platform" in workflow
     assert "platform-matrix-receipt.json" in workflow
@@ -68,6 +90,26 @@ def test_external_qualification_consumes_candidate_full_and_emits_typed_evidence
     assert "python -m build" not in workflow
     assert "uv build" not in workflow
     assert "hatch build" not in workflow
+
+
+def test_legacy_semantic_evidence_is_manual_only_and_stays_pre_v013() -> None:
+    workflow = _workflow("semantic-evidence.yml")
+    parsed = yaml.safe_load(workflow)
+    triggers = parsed.get("on", parsed.get(True))
+
+    assert set(triggers) == {"workflow_dispatch"}
+    inputs = triggers["workflow_dispatch"]["inputs"]
+    assert inputs["mode"]["type"] == "choice"
+    assert inputs["mode"]["options"] == ["deterministic_review", "package_consensus"]
+    assert inputs["mode"]["default"] == "deterministic_review"
+    assert inputs["release_ref"]["required"] is True
+    assert inputs["evidence_ref"]["required"] is False
+    assert "Legacy pre-v0.13 Semantic Living Wiki evidence" in parsed["name"]
+    assert "Gate v6" not in workflow
+    guard = 'if tuple(map(int, version.split("."))) >= (0, 13, 0):'
+    rejection = "v0.13 must use the active qualification and Gate v9 path"
+    assert workflow.count(guard) == 2
+    assert workflow.count(rejection) == 2
 
 
 def test_commercial_qualification_recomputes_current_typed_core_gates() -> None:

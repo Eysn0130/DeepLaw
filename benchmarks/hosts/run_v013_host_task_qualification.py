@@ -36,6 +36,9 @@ from benchmarks.hosts.host_preflight_receipt import (
     host_identity_sha256,
     inspect_broker_source,
     load_host_identity_input,
+    portable_file_stat_matches,
+    stat_mutation_signature,
+    validate_windows_acl_hardening_report,
 )
 from benchmarks.hosts.pass13_orchestrator import (
     QualificationOrchestrationError,
@@ -162,16 +165,6 @@ _ACTIVE_QUALIFICATION_SCHEMA_RELATIVE_PATH = Path(
 )
 _CANDIDATE_MANIFEST_MAX_BYTES = 1024 * 1024
 _BROKER_SOURCE_MAX_BYTES = 256 * 1024
-_STABLE_STAT_FIELDS = (
-    "st_dev",
-    "st_ino",
-    "st_size",
-    "st_mode",
-    "st_uid",
-    "st_nlink",
-)
-
-
 def _validate_catalog_host_constraints(value: Mapping[str, Any]) -> None:
     if set(value) != set(HOSTS):
         raise HostTaskQualificationError("v0.13 Host coordinates are not closed")
@@ -512,11 +505,7 @@ def validate_external_collector_handoff(
 def _stable_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
     """Return identity and mutation fields for one exact file observation."""
 
-    return (
-        *(getattr(details, field, None) for field in _STABLE_STAT_FIELDS),
-        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
-        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
-    )
+    return stat_mutation_signature(details)
 
 
 def _parent_chain_has_symlink(path: Path) -> bool:
@@ -532,6 +521,53 @@ def _parent_chain_has_symlink(path: Path) -> bool:
         except OSError:
             return True
     return False
+
+
+def _windows_acl_hardening_verified(
+    report: object,
+    *,
+    expected_path: Path | str | None = None,
+    directory: bool | None = None,
+) -> bool:
+    try:
+        validate_windows_acl_hardening_report(
+            report,
+            expected_path=expected_path,
+            expected_kind=(
+                "directory" if directory is True else "file" if directory is False else None
+            ),
+            recursive=directory,
+        )
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _harden_windows_broker_path(
+    path: Path,
+    *,
+    directory: bool,
+    error_message: str,
+) -> None:
+    try:
+        from deeplaw.windows_acl import (
+            harden_windows_private_file,
+            harden_windows_vault,
+        )
+
+        report = (
+            harden_windows_vault(path)
+            if directory
+            else harden_windows_private_file(path)
+        )
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise HostTaskQualificationError(error_message) from exc
+    if not _windows_acl_hardening_verified(
+        report,
+        expected_path=path,
+        directory=directory,
+    ):
+        raise HostTaskQualificationError(error_message)
 
 
 def _read_stable_regular_file(
@@ -576,7 +612,11 @@ def _read_stable_regular_file(
     if require_external and inside_repository:
         raise HostTaskQualificationError(f"{label} must be repository-external")
 
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
     descriptor = -1
@@ -586,7 +626,7 @@ def _read_stable_regular_file(
     try:
         descriptor = os.open(selected, flags)
         fd_before = os.fstat(descriptor)
-        if _stable_stat_signature(fd_before) != _stable_stat_signature(before):
+        if not portable_file_stat_matches(fd_before, before):
             raise HostTaskQualificationError(f"{label} changed before it was read")
         while True:
             chunk = os.read(descriptor, 1024 * 1024)
@@ -614,6 +654,7 @@ def _read_stable_regular_file(
         _parent_chain_has_symlink(selected)
         or _stable_stat_signature(fd_before) != _stable_stat_signature(fd_after)
         or _stable_stat_signature(before) != _stable_stat_signature(after)
+        or not portable_file_stat_matches(fd_after, after)
         or total != before.st_size
     ):
         raise HostTaskQualificationError(f"{label} changed while it was read")
@@ -660,14 +701,25 @@ def _stage_exact_broker_executable(
     with tempfile.TemporaryDirectory(prefix="deeplaw-codex-broker-") as raw_directory:
         directory = Path(raw_directory).resolve(strict=True)
         details = directory.lstat()
-        if (
-            not stat.S_ISDIR(details.st_mode)
-            or stat.S_IMODE(details.st_mode) & 0o077
-            or (os.name != "nt" and details.st_uid != os.geteuid())
-        ):
+        if not stat.S_ISDIR(details.st_mode):
             raise HostTaskQualificationError("Codex broker staging directory is unsafe")
-        staged = directory / "broker-executable"
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if os.name == "nt":
+            _harden_windows_broker_path(
+                directory,
+                directory=True,
+                error_message="Codex broker staging directory is unsafe",
+            )
+        elif stat.S_IMODE(details.st_mode) & 0o077 or details.st_uid != os.geteuid():
+            raise HostTaskQualificationError("Codex broker staging directory is unsafe")
+        staged = directory / (
+            "broker-executable.exe" if os.name == "nt" else "broker-executable"
+        )
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_BINARY", 0)
+        )
         if hasattr(os, "O_CLOEXEC"):
             flags |= os.O_CLOEXEC
         descriptor = os.open(staged, flags, 0o700)
@@ -675,11 +727,19 @@ def _stage_exact_broker_executable(
             offset = 0
             while offset < len(raw):
                 offset += os.write(descriptor, raw[offset:])
-            os.fchmod(descriptor, 0o500)
+            if os.name != "nt":
+                os.fchmod(descriptor, 0o500)
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
-        os.chmod(directory, 0o500)
+        if os.name == "nt":
+            _harden_windows_broker_path(
+                staged,
+                directory=False,
+                error_message="staged Codex broker ACL is unsafe",
+            )
+        else:
+            os.chmod(directory, 0o500)
         try:
             staged_sha256, _ = _read_stable_regular_file(
                 staged,
@@ -694,7 +754,8 @@ def _stage_exact_broker_executable(
                 raise HostTaskQualificationError("staged Codex broker bytes differ")
             yield staged
         finally:
-            os.chmod(directory, 0o700)
+            if os.name != "nt":
+                os.chmod(directory, 0o700)
 
 
 def load_exact_candidate_binding(

@@ -9622,6 +9622,26 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if as_of is not None:
             as_of = canonical_timestamp(as_of, field="recall as_of")
         reference_time = as_of or utc_now()
+        canonical_revision_memo: dict[str, dict[str, Any] | None] = {}
+
+        def read_canonical_revision(knowledge_id: str) -> dict[str, Any]:
+            if knowledge_id in canonical_revision_memo:
+                revision = canonical_revision_memo[knowledge_id]
+                if revision is None:
+                    raise KeyError(f"Knowledge Object is unavailable: {knowledge_id}")
+                return revision
+            try:
+                revision = (
+                    self.get_at(knowledge_id, recorded_at=as_of)
+                    if as_of is not None
+                    else self.get_current(knowledge_id, include_inactive=True)
+                )
+            except KeyError:
+                canonical_revision_memo[knowledge_id] = None
+                raise
+            canonical_revision_memo[knowledge_id] = revision
+            return revision
+
         admitted_sensitivities = SENSITIVITY_ORDER[: SENSITIVITY_ORDER.index(max_sensitivity) + 1]
         terms = query_search_terms(query, limit=_MAX_RECALL_TERMS, cover_tail=True)
         expansion_terms = query_expansion_terms(query)
@@ -9667,6 +9687,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if exact_id is None and as_of is None and normalized_query:
             alias_placeholders = ",".join("?" for _ in admitted_sensitivities)
             alias_filters = [
+                "LENGTH(knowledge_aliases_v4.alias_key) >= 3",
+                "instr(?, knowledge_aliases_v4.alias_key) > 0",
                 "knowledge_aliases_v4.retired_at IS NULL",
                 "knowledge_aliases_v4.revision_id = knowledge_revisions_v3.revision_id",
                 "knowledge_revisions_v3.lifecycle = 'active'",
@@ -9680,6 +9702,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 "OR knowledge_revisions_v3.expires_at > ?)",
             ]
             alias_parameters: list[Any] = [
+                normalized_query,
                 scope,
                 *admitted_sensitivities,
                 reference_time,
@@ -9922,7 +9945,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             fallback_ids: list[str] = []
             for row in rows[:500]:
                 try:
-                    current = self.get_current(row["knowledge_id"], include_inactive=True)
+                    current = read_canonical_revision(row["knowledge_id"])
                 except KeyError:
                     continue
                 haystack = compact_text(
@@ -9949,11 +9972,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             graph_seed_ids: list[str] = []
             for candidate_id in candidate_ids[:100]:
                 try:
-                    seed = (
-                        self.get_at(candidate_id, recorded_at=as_of)
-                        if as_of is not None
-                        else self.get_current(candidate_id, include_inactive=True)
-                    )
+                    seed = read_canonical_revision(candidate_id)
                 except KeyError:
                     continue
                 if (
@@ -10025,11 +10044,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         relation["object_knowledge_id"],
                     ):
                         try:
-                            neighbor = (
-                                self.get_at(candidate, recorded_at=as_of)
-                                if as_of is not None
-                                else self.get_current(candidate, include_inactive=True)
-                            )
+                            neighbor = read_canonical_revision(candidate)
                         except KeyError:
                             continue
                         inside_boundary, neighbor_reasons = self._knowledge_admission_reasons(
@@ -10054,11 +10069,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         admitted_revisions: dict[str, dict[str, Any]] = {}
         for candidate_id in candidate_ids:
             try:
-                candidate = (
-                    self.get_at(candidate_id, recorded_at=as_of)
-                    if as_of is not None
-                    else self.get_current(candidate_id, include_inactive=True)
-                )
+                candidate = read_canonical_revision(candidate_id)
             except KeyError:
                 continue
             inside_boundary, reasons = self._knowledge_admission_reasons(

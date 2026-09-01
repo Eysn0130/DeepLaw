@@ -1,6 +1,6 @@
 {
   "schema_version": "deeplaw.product-surface-manifest/v1",
-  "package_version": "0.12.0",
+  "package_version": "0.13.0",
   "lifecycle_status": "source_candidate",
   "release_ready": false,
   "default_product": [
