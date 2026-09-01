@@ -174,3 +174,11 @@ Candidate Full run `33456027141` is consumed failed evidence, not a pass: Window
 completed with a fail-closed `unclassified candidate skips` error after the path-policy test identity
 drifted. All downstream Windows aggregate/raw-evidence jobs were skipped. A fresh Candidate Full run
 is required after this taxonomy correction; no Formal claim is made.
+
+Candidate Full run `33466492019` (job `99727390646`, exact head
+`c67b89d2658244193f28bfaa91b5033bceb04b0d`, tree
+`682f22e3b51eecdbced8fb93cc507ca535971e4b`) is consumed failed evidence, not a pass: Windows
+calibration shard 3 raised `subprocess.TimeoutExpired` in the outer Tolaria integration harness
+test. This candidate-only seam aligns the test outer lifetime/process-tree cleanup with the harness's
+two serial 60-second CLI budgets; it does not claim Windows success. A fresh Candidate Full run is
+required, and Formal remains `not_executed`.
