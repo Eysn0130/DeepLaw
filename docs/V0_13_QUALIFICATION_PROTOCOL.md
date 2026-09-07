@@ -83,6 +83,20 @@ duties remain `not_executed` and cannot be promoted to a passing duty or an acce
 turn/usage collection, installed-wheel execution, and the remaining task journeys are still
 required; these local development records do not satisfy Formal Host evidence.
 
+Current benchmark transport boundary: while a Codex `turn/start` is in flight, the client rejects
+foreign thread/turn notifications before recording text, usage projections, tool output, or
+completion. Non-null identity aliases must be nonempty strings and agree with each other before
+comparison with the active request. The `turn/start` response must also supply one unambiguous turn
+identity and cannot declare a different thread; malformed responses fail before active state is set.
+Turn-bearing notifications received before the response are limited to eight records and 64 KiB;
+they are checked against the returned turn identity before replay. A server tool request
+cannot invoke its handler before that identity is confirmed. The client recognizes the official
+nested `turn.id` completion shape and leaves separate compaction lifecycles outside the active-turn
+capture scope. Thread, turn, and Host session remain different identities; token usage remains keyed
+by the exact thread/turn, with missing usage `unreported`. These are local transport-fixture checks,
+not native Host qualification. The [official App Server reference](https://developers.openai.com/codex/app-server/)
+was checked on 2026-09-07 for wire shapes only; no Host or comparator pin was changed.
+
 ## Why this is not a result
 
 A protocol, validator, local regression, mock, dry-run, source-free diagnostic, caller-authored

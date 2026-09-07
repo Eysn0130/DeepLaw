@@ -64,6 +64,9 @@ OutputLimitError = CodexAppServerOutputLimitError
 DynamicToolHandler: TypeAlias = Callable[..., Mapping[str, Any]]
 BrokerLauncher: TypeAlias = Path | Sequence[str]
 
+_MAX_PENDING_TURN_NOTIFICATIONS = 8
+_MAX_PENDING_TURN_NOTIFICATION_BYTES = 64 * 1024
+
 
 def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
@@ -1009,6 +1012,20 @@ def _thread_or_turn_id(params: Mapping[str, Any], *keys: str) -> str | None:
     return None
 
 
+def _turn_id_from_params(params: Mapping[str, Any]) -> str | None:
+    """Read a notification turn id, including the official nested shape."""
+
+    turn_id = _thread_or_turn_id(params, "turnId", "turn_id")
+    if turn_id is not None:
+        return turn_id
+    turn = params.get("turn")
+    if isinstance(turn, Mapping):
+        candidate = turn.get("id")
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return None
+
+
 def _thread_record_from_response(value: Any) -> Mapping[str, Any] | None:
     """Return the official App Server ``Thread`` object without copying it."""
 
@@ -1067,24 +1084,6 @@ def _validated_thread_identity(
             "thread/fork response omitted the exact forkedFromId lineage"
         )
     return thread_id, session_id, forked_from_id if isinstance(forked_from_id, str) else None
-
-
-def _turn_id_from_response(value: Any) -> str | None:
-    if isinstance(value, Mapping):
-        for key in ("turnId", "turn_id"):
-            candidate = value.get(key)
-            if isinstance(candidate, str) and candidate:
-                return candidate
-        turn = value.get("turn")
-        if isinstance(turn, Mapping):
-            candidate = _turn_id_from_response(turn)
-            if candidate:
-                return candidate
-        # Some fixtures return ``{"id": ..., "status": ...}`` for turn/start.
-        candidate = value.get("id")
-        if isinstance(candidate, str) and candidate:
-            return candidate
-    return None
 
 
 class TurnResult(dict[str, Any]):
@@ -1225,6 +1224,13 @@ class CodexAppServerClient:
         self._latest_usage = _empty_usage()
         self._active_thread_id: str | None = None
         self._active_turn_id: str | None = None
+        self._turn_capture_active = False
+        self._turn_capture_thread_id: str | None = None
+        self._turn_capture_turn_id: str | None = None
+        self._turn_ack_pending = False
+        self._turn_pending_notifications: list[tuple[str, dict[str, Any]]] = []
+        self._turn_pending_notification_bytes = 0
+        self._turn_pending_completion: dict[str, Any] | None = None
         self._persistent_thread_ids: list[str] = []
         self._cleanup_complete = True
         self._final_text_parts: list[str] = []
@@ -1625,8 +1631,15 @@ class CodexAppServerClient:
         if input is not None:
             payload["input"] = input
         thread_value = payload.get("threadId")
-        if isinstance(thread_value, str):
-            self._active_thread_id = thread_value
+        if not isinstance(thread_value, str) or not thread_value:
+            raise ValueError("thread_id must be a non-empty string")
+        # Initialize before enabling active-turn correlation.  Initialization
+        # notifications are lifecycle traffic, not notifications for this
+        # turn, and must retain their existing handling.
+        self.start()
+        if not self._initialized:
+            self.initialize()
+        self._active_thread_id = thread_value
         self._active_turn_id = None
         self._final_text_parts = []
         self._completed_item_text = None
@@ -1634,33 +1647,75 @@ class CodexAppServerClient:
         self._tool_call_observations = []
         event_start = len(self._events)
         started_at = time.monotonic()
-        response = self._request_after_initialize("turn/start", payload)
-        turn_id = _turn_id_from_response(response)
-        if turn_id:
+        self._turn_capture_active = True
+        self._turn_capture_thread_id = thread_value
+        self._turn_capture_turn_id = None
+        self._turn_ack_pending = True
+        self._turn_pending_notifications = []
+        self._turn_pending_notification_bytes = 0
+        self._turn_pending_completion = None
+        try:
+            response = self._request_after_initialize("turn/start", payload)
+            if not isinstance(response, Mapping) or any(
+                field in response and not isinstance(response[field], Mapping)
+                for field in ("turn", "thread")
+            ):
+                self._fail_closed()
+                raise CodexAppServerProtocolError("turn/start identity response is malformed")
+            response_thread_id = self._active_turn_message_identity(response, kind="thread")
+            turn_id = self._active_turn_message_identity(
+                response, kind="turn", include_root_id=True
+            )
+            if turn_id is None or response_thread_id not in (None, thread_value):
+                self._fail_closed()
+                raise CodexAppServerProtocolError("turn/start identity is missing or mismatched")
+            pending_turn_ids = {
+                _turn_id_from_params(params)
+                for _method, params in self._turn_pending_notifications
+            }
+            pending_turn_ids.discard(None)
+            if pending_turn_ids and (
+                not isinstance(turn_id, str) or pending_turn_ids != {turn_id}
+            ):
+                self._fail_closed()
+                raise CodexAppServerProtocolError(
+                    "turn notification did not match the turn/start identity"
+                )
             self._active_turn_id = turn_id
-        completion = self._wait_for_turn_completed(
-            deadline=started_at + self.timeout_seconds,
-            expected_turn_id=turn_id,
-        )
-        self._drain_ready_notifications()
-        # ``item/completed`` carries the canonical full agent message when a
-        # fixture also emitted deltas; prefer it to avoid returning a partial
-        # prefix or duplicating the full text.
-        final_text = self._completed_item_text or "".join(self._final_text_parts)
-        usage = self.usage_for(self._active_thread_id, self._active_turn_id)
-        status = completion.get("turn_status") if isinstance(completion, Mapping) else None
-        result = TurnResult(
-            thread_id=self._active_thread_id,
-            turn_id=self._active_turn_id,
-            status=status or "completed",
-            final_text=final_text,
-            final_agent_text=final_text,
-            tool_outputs=list(self._tool_outputs),
-            tool_call_observations=[dict(item) for item in self._tool_call_observations],
-            usage=usage,
-            events=self.sanitized_events[event_start:],
-        )
-        return result
+            self._turn_capture_turn_id = turn_id
+            self._turn_ack_pending = False
+            self._replay_pending_turn_notifications()
+            completion = self._wait_for_turn_completed(
+                deadline=started_at + self.timeout_seconds,
+                expected_turn_id=turn_id,
+            )
+            self._drain_ready_notifications()
+            # ``item/completed`` carries the canonical full agent message when
+            # a fixture also emitted deltas; prefer it to avoid returning a
+            # partial prefix or duplicating the full text.
+            final_text = self._completed_item_text or "".join(self._final_text_parts)
+            usage = self.usage_for(self._active_thread_id, self._active_turn_id)
+            status = completion.get("turn_status") if isinstance(completion, Mapping) else None
+            result = TurnResult(
+                thread_id=self._active_thread_id,
+                turn_id=self._active_turn_id,
+                status=status or "completed",
+                final_text=final_text,
+                final_agent_text=final_text,
+                tool_outputs=list(self._tool_outputs),
+                tool_call_observations=[dict(item) for item in self._tool_call_observations],
+                usage=usage,
+                events=self.sanitized_events[event_start:],
+            )
+            return result
+        finally:
+            self._turn_capture_active = False
+            self._turn_capture_thread_id = None
+            self._turn_capture_turn_id = None
+            self._turn_ack_pending = False
+            self._turn_pending_notifications = []
+            self._turn_pending_notification_bytes = 0
+            self._turn_pending_completion = None
 
     start_turn = turn_start
 
@@ -1823,6 +1878,18 @@ class CodexAppServerClient:
     def _wait_for_turn_completed(
         self, *, deadline: float, expected_turn_id: str | None
     ) -> dict[str, Any]:
+        pending = self._turn_pending_completion
+        self._turn_pending_completion = None
+        if pending is not None:
+            if (
+                expected_turn_id is None
+                or pending.get("turn_id") == expected_turn_id
+            ):
+                return pending
+            self._fail_closed()
+            raise CodexAppServerProtocolError(
+                "turn completion did not match the turn/start identity"
+            )
         while True:
             message = self._next_message(deadline)
             if "method" in message and "id" not in message:
@@ -2080,6 +2147,141 @@ class CodexAppServerClient:
                 fail_on_limit=False,
             )
 
+    @staticmethod
+    def _turn_notification_requires_identity(
+        method: str, params: Mapping[str, Any]
+    ) -> bool:
+        lowered = method.casefold()
+        if method in {"thread/tokenUsage/updated", "turn/completed"}:
+            return True
+        if lowered.startswith("turn/"):
+            return True
+        item = params.get("item") if isinstance(params.get("item"), Mapping) else None
+        item_type = _find_value(item, "type", "itemType", "item_type")
+        item_type_text = item_type.casefold() if isinstance(item_type, str) else ""
+        return (
+            "agentmessage" in lowered
+            or "agent_message" in lowered
+            or ("agent" in item_type_text and "message" in item_type_text)
+            or "tool" in lowered
+            or "tool" in item_type_text
+        )
+
+    def _active_turn_message_identity(
+        self, params: Mapping[str, Any], *, kind: str, include_root_id: bool = False
+    ) -> str | None:
+        values: list[Any] = []
+        for source in (params, *(params.get(key) for key in ("thread", "turn", "item"))):
+            if isinstance(source, Mapping):
+                for field in (f"{kind}Id", f"{kind}_id"):
+                    if field in source and source[field] is not None:
+                        values.append(source[field])
+        own = params.get(kind)
+        if isinstance(own, Mapping) and own.get("id") is not None:
+            values.append(own["id"])
+        # Legacy turn/start responses may be the Turn object itself. A flat
+        # id is not a thread/turn identity on ordinary item notifications.
+        if include_root_id and params.get("id") is not None:
+            values.append(params["id"])
+        if any(not isinstance(value, str) or not value for value in values):
+            self._fail_closed()
+            raise CodexAppServerProtocolError("turn message identity has an invalid type")
+        if len(set(values)) > 1:
+            self._fail_closed()
+            raise CodexAppServerProtocolError("turn message identity fields conflict")
+        return values[0] if values else None
+
+    def _validate_active_turn_notification(
+        self,
+        method: str,
+        params: Mapping[str, Any],
+        *,
+        allow_defer: bool = True,
+    ) -> bool:
+        """Reject cross-turn traffic before it reaches mutable turn state.
+
+        Notifications which arrive while ``turn/start`` is awaiting its
+        response are retained only within a small bounded queue.  Their
+        explicit turn identity is compared with the response identity before
+        replay, so the first notification cannot silently bind the turn.
+        """
+
+        if not self._turn_capture_active:
+            return False
+        thread_id = self._active_turn_message_identity(params, kind="thread")
+        turn_id = self._active_turn_message_identity(params, kind="turn")
+        expected_thread_id = self._turn_capture_thread_id
+        if (
+            thread_id is not None
+            and expected_thread_id is not None
+            and thread_id != expected_thread_id
+        ):
+            self._fail_closed()
+            raise CodexAppServerProtocolError(
+                "turn notification changed the requested thread identity"
+            )
+        requires_identity = self._turn_notification_requires_identity(method, params)
+        if self._turn_ack_pending:
+            if turn_id is None:
+                if requires_identity:
+                    self._fail_closed()
+                    raise CodexAppServerProtocolError(
+                        "turn notification omitted its pending turn identity"
+                    )
+                return False
+            if not allow_defer:
+                self._fail_closed()
+                raise CodexAppServerProtocolError(
+                    "server request arrived before the turn identity was confirmed"
+                )
+            encoded_size = len(_canonical_bytes(params))
+            if (
+                len(self._turn_pending_notifications)
+                >= _MAX_PENDING_TURN_NOTIFICATIONS
+                or self._turn_pending_notification_bytes + encoded_size
+                > _MAX_PENDING_TURN_NOTIFICATION_BYTES
+            ):
+                self._fail_closed()
+                raise CodexAppServerProtocolError(
+                    "pending turn notifications exceeded their bound"
+                )
+            self._turn_pending_notifications.append((method, dict(params)))
+            self._turn_pending_notification_bytes += encoded_size
+            return True
+        expected_turn_id = self._turn_capture_turn_id
+        if turn_id is None:
+            if requires_identity:
+                self._fail_closed()
+                raise CodexAppServerProtocolError(
+                    "turn notification omitted its active turn identity"
+                )
+            return False
+        if expected_turn_id is None or turn_id != expected_turn_id:
+            self._fail_closed()
+            raise CodexAppServerProtocolError(
+                "turn notification changed the active turn identity"
+            )
+        return False
+
+    def _replay_pending_turn_notifications(self) -> None:
+        pending = self._turn_pending_notifications
+        self._turn_pending_notifications = []
+        self._turn_pending_notification_bytes = 0
+        for method, params in pending:
+            completion = self._handle_notification(
+                {"method": method, "params": params}
+            )
+            if completion is None:
+                continue
+            if completion.get("kind") != "turn/completed":
+                continue
+            if self._turn_pending_completion is not None:
+                self._fail_closed()
+                raise CodexAppServerProtocolError(
+                    "turn emitted multiple completion notifications"
+                )
+            self._turn_pending_completion = completion
+
     def _handle_notification(self, message: Mapping[str, Any]) -> dict[str, Any] | None:
         method = message.get("method")
         if not isinstance(method, str) or not method:
@@ -2088,6 +2290,8 @@ class CodexAppServerClient:
         params = message.get("params")
         if not isinstance(params, Mapping):
             params = {}
+        if self._validate_active_turn_notification(method, params):
+            return None
         completion = self._capture_notification_state(method, params)
         projected = self._project_event(method, params)
         if projected is not None:
@@ -2172,7 +2376,7 @@ class CodexAppServerClient:
                 "turn_id_sha256": turn_hash,
             }
         thread_id = _thread_or_turn_id(params, "threadId", "thread_id")
-        turn_id = _thread_or_turn_id(params, "turnId", "turn_id")
+        turn_id = _turn_id_from_params(params)
         if thread_id is None:
             thread_id = self._active_thread_id
         if turn_id is None:
@@ -2338,7 +2542,7 @@ class CodexAppServerClient:
             return None
         event: dict[str, Any] = {"method": method}
         thread_id = _thread_or_turn_id(params, "threadId", "thread_id")
-        turn_id = _thread_or_turn_id(params, "turnId", "turn_id")
+        turn_id = _turn_id_from_params(params)
         if thread_id is not None:
             # This is the App Server thread identity only.  The current
             # public notification does not expose the Host session identity;
@@ -2560,6 +2764,7 @@ class CodexAppServerClient:
         params = message.get("params")
         if not isinstance(params, Mapping):
             params = {}
+        self._validate_active_turn_notification(method, params, allow_defer=False)
         name, arguments = self._dynamic_call_fields(params)
         response = self._invoke_dynamic_tool(name, arguments, params)
         self._send_message({"id": request_id, "result": response})

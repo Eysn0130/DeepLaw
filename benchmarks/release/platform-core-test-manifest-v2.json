@@ -7846,9 +7846,51 @@
         {
           "junit": {
             "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_nested_foreign_completion_after_ack_is_not_current_turn"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_nested_foreign_completion_after_ack_is_not_current_turn"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
             "name": "test_output_limit_and_timeout_fail_closed"
           },
           "node_id": "tests/test_v013_codex_app_server_client.py::test_output_limit_and_timeout_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_pre_ack_foreign_tool_request_is_rejected_before_handler[foreign-tool]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_pre_ack_foreign_tool_request_is_rejected_before_handler[foreign-tool]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_pre_ack_foreign_tool_request_is_rejected_before_handler[pending-tool]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_pre_ack_foreign_tool_request_is_rejected_before_handler[pending-tool]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_pre_ack_notifications_are_bounded_and_replayed_after_identity[pending-bytes]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_pre_ack_notifications_are_bounded_and_replayed_after_identity[pending-bytes]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_pre_ack_notifications_are_bounded_and_replayed_after_identity[pending-count]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_pre_ack_notifications_are_bounded_and_replayed_after_identity[pending-count]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_pre_ack_notifications_are_bounded_and_replayed_after_identity[pending-match]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_pre_ack_notifications_are_bounded_and_replayed_after_identity[pending-match]"
         },
         {
           "junit": {
@@ -7863,6 +7905,69 @@
             "name": "test_resume_fork_and_compact_use_exact_v2_methods"
           },
           "node_id": "tests/test_v013_codex_app_server_client.py::test_resume_fork_and_compact_use_exact_v2_methods"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_turn_start_ack_identity_is_validated_before_notification_capture[conflicting-ack]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_turn_start_ack_identity_is_validated_before_notification_capture[conflicting-ack]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_turn_start_ack_identity_is_validated_before_notification_capture[foreign-thread-ack]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_turn_start_ack_identity_is_validated_before_notification_capture[foreign-thread-ack]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_turn_start_ack_identity_is_validated_before_notification_capture[invalid-ack]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_turn_start_ack_identity_is_validated_before_notification_capture[invalid-ack]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_turn_start_ack_supports_unambiguous_compatible_identity[flat-ack]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_turn_start_ack_supports_unambiguous_compatible_identity[flat-ack]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_turn_start_ack_supports_unambiguous_compatible_identity[matching-alias-ack]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_turn_start_ack_supports_unambiguous_compatible_identity[matching-alias-ack]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_turn_start_rejects_foreign_thread_wire_notifications"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_turn_start_rejects_foreign_thread_wire_notifications"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_turn_start_rejects_foreign_turn_wire_notifications"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_turn_start_rejects_foreign_turn_wire_notifications"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_turn_wire_identity_is_not_selected_from_conflicting_or_invalid_fields[conflicting-completion]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_turn_wire_identity_is_not_selected_from_conflicting_or_invalid_fields[conflicting-completion]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_codex_app_server_client",
+            "name": "test_turn_wire_identity_is_not_selected_from_conflicting_or_invalid_fields[invalid-thread]"
+          },
+          "node_id": "tests/test_v013_codex_app_server_client.py::test_turn_wire_identity_is_not_selected_from_conflicting_or_invalid_fields[invalid-thread]"
         },
         {
           "junit": {
@@ -11132,6 +11237,13 @@
             "name": "test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls"
           },
           "node_id": "tests/test_v013_pass13_codex_qualification.py::test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_codex_qualification",
+            "name": "test_scenario_turn_result_must_match_requested_thread_before_recording"
+          },
+          "node_id": "tests/test_v013_pass13_codex_qualification.py::test_scenario_turn_result_must_match_requested_thread_before_recording"
         },
         {
           "junit": {
@@ -18540,9 +18652,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2614,
+      "count": 2630,
       "selection": "not qualification and not windows_native",
-      "sha256": "f336866b1a2f7b9e28ab514105579798b37e3b530eef5f101d60fc8a1de34d76"
+      "sha256": "9c19e2507a02c5cdc7f93909992db92038e867a4e01383ec5c15c4b85ddc5741"
     },
     "windows": {
       "additional_cases": [
@@ -18582,13 +18694,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2619,
+      "count": 2635,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "2af9649f3f744101e75440429150599a3c78ad2865ee3c9286420a665cf61694"
+      "sha256": "b08a317abdaa5584e8a89c52a80cee6826c3720aaaaa525bf6752c44e2029d48"
     }
   },
-  "manifest_sha256": "183fe6f411654ec94fd2fecb2e66ab74b1d9fdf27214cfcbacaec8659e00a079",
+  "manifest_sha256": "18968a370394254097d0a435d2c26e41be9d826a6fef64bf431498735a599b56",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
