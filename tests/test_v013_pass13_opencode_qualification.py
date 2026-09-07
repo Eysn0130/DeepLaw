@@ -2625,6 +2625,162 @@ def test_compaction_delivery_adds_one_checkpoint_gap_to_canonical_bytes() -> Non
     assert receipt["event_type"] == "experimental.session.compacting"
 
 
+def _reader_native(event_type: str = "session.created") -> dict[str, object]:
+    return {
+        "schema_version": "deeplaw.opencode-native-event-observation/v1",
+        "event_type": event_type,
+        "session_sha256": "8" * 64,
+        "parent_session_sha256": None,
+        "parent_gap": "parent_absent",
+        "status": "observed",
+        "gap": None,
+    }
+
+
+def _reader_model() -> dict[str, object]:
+    return _model_observation(summary=False, mode="development")
+
+
+def _reader_delivery() -> dict[str, object]:
+    return {
+        "schema_version": "deeplaw.opencode-continuity-delivery-observation/v1",
+        "event_type": "experimental.chat.system.transform",
+        "session_sha256": "8" * 64,
+        "context_sha256": "c" * 64,
+        "context_bytes": 32,
+        "status": "gap",
+        "statement_count": 0,
+        "gap_codes": ["route_forgotten"],
+        "conflict_count": 0,
+    }
+
+
+def test_shared_reader_accepts_interleaved_native_model_delivery_at_actual_offset(
+    tmp_path: Path,
+) -> None:
+    prefix = (json.dumps(_reader_native(), separators=(",", ":")) + "\n").encode()
+    rows = [
+        _reader_native("session.updated"),
+        _reader_model(),
+        _reader_native("session.compacted"),
+        _reader_delivery(),
+        _reader_native("session.created"),
+    ]
+    path = tmp_path / "model-observations.jsonl"
+    path.write_bytes(prefix + b"".join(
+        (json.dumps(row, separators=(",", ":")) + "\n").encode()
+        for row in rows
+    ))
+    path.chmod(0o600)
+
+    model, delivery = runner._read_host_observations(
+        path,
+        offset=len(prefix),
+        forbidden_values=("synthetic-forbidden",),
+    )
+    assert model == [_reader_model()]
+    assert delivery == [_reader_delivery()]
+
+    native_only = tmp_path / "native-only.jsonl"
+    native_only.write_bytes(
+        b"".join(
+            (json.dumps(_reader_native(event), separators=(",", ":")) + "\n").encode()
+            for event in ("session.created", "session.updated", "session.compacted")
+        )
+    )
+    native_only.chmod(0o600)
+    native_models, native_delivery = runner._read_host_observations(
+        native_only,
+        offset=0,
+        forbidden_values=("synthetic-forbidden",),
+    )
+    assert native_models == []
+    assert native_delivery == []
+    with pytest.raises(runner.QualificationError, match="model identity"):
+        runner._response_model_from_observations(
+            native_models,
+            session_id="session-fixture",
+        )
+
+
+def test_shared_reader_rejects_invalid_native_records_fail_closed(
+    tmp_path: Path,
+) -> None:
+    extra = _reader_native()
+    extra["unexpected"] = True
+    missing = _reader_native()
+    del missing["gap"]
+    cases: list[tuple[str, bytes]] = [
+        (
+            "unknown-schema",
+            json.dumps(
+                {**_reader_native(), "schema_version": "unknown"}, separators=(",", ":")
+            ).encode(),
+        ),
+        ("malformed-json", b"{not-json"),
+        ("extra-field", json.dumps(extra, separators=(",", ":")).encode()),
+        ("missing-field", json.dumps(missing, separators=(",", ":")).encode()),
+        (
+            "unsupported-event",
+            json.dumps(
+                {**_reader_native(), "event_type": "message.updated"}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "bad-sha",
+            json.dumps(
+                {**_reader_native(), "session_sha256": "not-a-sha"}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "bad-status",
+            json.dumps({**_reader_native(), "status": "completed"}, separators=(",", ":")).encode(),
+        ),
+        (
+            "bad-gap",
+            json.dumps(
+                {**_reader_native(), "gap": "synthetic-gap"}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "parent-present",
+            json.dumps(
+                {**_reader_native(), "parent_session_sha256": "a" * 64}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "bad-parent-gap",
+            json.dumps(
+                {**_reader_native(), "parent_gap": "parent_unknown"}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "duplicate-key",
+            json.dumps(_reader_native(), separators=(",", ":"))
+            .replace('"status":"observed"', '"status":"observed","status":"observed"', 1)
+            .encode(),
+        ),
+        (
+            "sensitive-value",
+            json.dumps(
+                {**_reader_native(), "parent_gap": "s098-sensitive-marker"},
+                separators=(",", ":"),
+            ).encode(),
+        ),
+        ("deep-nesting", b"[" * 1100 + b"0" + b"]" * 1100),
+    ]
+    for name, raw in cases:
+        path = tmp_path / f"{name}.jsonl"
+        path.write_bytes(raw + b"\n")
+        path.chmod(0o600)
+        with pytest.raises(runner.QualificationError):
+            runner._read_host_observations(
+                path,
+                offset=0,
+                forbidden_values=("s098-sensitive-marker",),
+            )
+
+
 def test_analyzer_rejects_provider_canonical_mismatch_and_unsafe_operation() -> None:
     mismatched = _tool_output()
     mismatched["content"][0]["text"] = json.dumps(_capsule())  # type: ignore[index]

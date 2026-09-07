@@ -58,7 +58,12 @@ from benchmarks.hosts.run_v013_host_task_qualification import (
     HostTaskQualificationError,
     load_zero_model_candidate_binding,
 )
+from benchmarks.hosts.v013_native_event_adapter import (
+    NativeEventAdapterError,
+    validate_opencode_native_observation,
+)
 from deeplaw import bounded_subprocess
+from deeplaw.util import strict_json_loads
 
 MODEL = "deepseek/deepseek-v4-flash"
 VARIANT = "max"
@@ -4593,9 +4598,24 @@ def _read_host_observations(
     model_observations: list[dict[str, Any]] = []
     delivery_observations: list[dict[str, Any]] = []
     for line in raw.splitlines():
-        value = _strict_json(line)
+        try:
+            value = strict_json_loads(line)
+        except (RecursionError, TypeError, UnicodeError, ValueError) as error:
+            raise QualificationError(
+                "OpenCode event is not valid strict JSON"
+            ) from error
         if not isinstance(value, Mapping):
             raise QualificationError("OpenCode Host observation shape is invalid")
+        if value.get("schema_version") == (
+            "deeplaw.opencode-native-event-observation/v1"
+        ):
+            try:
+                validate_opencode_native_observation(value)
+            except NativeEventAdapterError as error:
+                raise QualificationError(
+                    "OpenCode native event observation is invalid"
+                ) from error
+            continue
         if set(value) == _CONTINUITY_DELIVERY_KEYS:
             gap_codes = value.get("gap_codes")
             if (

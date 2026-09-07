@@ -12368,6 +12368,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_shared_reader_accepts_interleaved_native_model_delivery_at_actual_offset"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_shared_reader_accepts_interleaved_native_model_delivery_at_actual_offset"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_shared_reader_rejects_invalid_native_records_fail_closed"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_shared_reader_rejects_invalid_native_records_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
             "name": "test_source_forget_receipt_requires_retention_and_withdrawal"
           },
           "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_source_forget_receipt_requires_retention_and_withdrawal"
@@ -19408,9 +19422,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2738,
+      "count": 2740,
       "selection": "not qualification and not windows_native",
-      "sha256": "eb5b45f58dcfc2398408743664e7d185002a4b1ee82fc92b7410f71ad672d95e"
+      "sha256": "01f952c5bda8ff4f294a1dd17cef0ddfa6adb8d1f8f9f8fe6fb51ed5ae7cbdb7"
     },
     "windows": {
       "additional_cases": [
@@ -19450,13 +19464,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2743,
+      "count": 2745,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "1ca31fd0debb8be7b3161b5a54256889301f022e57542f46b391dc43fe72e1ca"
+      "sha256": "183d552579c94b77042f4018a81af9ba7216c4fcf464b736e6d69eb059c812d4"
     }
   },
-  "manifest_sha256": "9f8976e6b4d8bf4f018b80b028db97d6648d62b8e058aa2d453dc5f2aefbe2a0",
+  "manifest_sha256": "16857b555aa2577b611000165971e3d646f5c7d2e0f315dafe51db3972d81888",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

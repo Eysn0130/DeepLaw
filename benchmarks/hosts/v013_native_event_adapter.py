@@ -356,9 +356,10 @@ def _validate_codex_hook(
     return canonical_name, ["hook/completed"], thread_id_sha256, session_id_sha256
 
 
-def _validate_opencode_observation(
+def validate_opencode_native_observation(
     observation: Mapping[str, Any] | bytes | bytearray | str,
 ) -> tuple[str, str, str]:
+    """Validate one exact plugin data row without Host attestation."""
     selected = _observation_mapping(observation, label="OpenCode plugin observation")
     _closed_fields(selected, _OPENCODE_FIELDS, label="OpenCode plugin observation", exact=True)
     if selected.get("schema_version") != OPENCODE_OBSERVATION_SCHEMA_VERSION:
@@ -598,7 +599,7 @@ def adapt_opencode_plugin_observation(
         parent = None
         methods_observed = ["message.updated"]
     else:
-        source_event, event_type, session_sha256 = _validate_opencode_observation(
+        source_event, event_type, session_sha256 = validate_opencode_native_observation(
             selected
         )
         parent = None
@@ -760,4 +761,5 @@ __all__ = [
     "adapt_native_observation",
     "adapt_opencode_plugin_observation",
     "adapt_opencode_plugin_sequence",
+    "validate_opencode_native_observation",
 ]
