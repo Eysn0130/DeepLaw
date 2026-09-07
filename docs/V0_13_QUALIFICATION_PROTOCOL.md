@@ -517,14 +517,26 @@ are Competitive/Research Claim gates. Missing optional evidence remains `not_exe
 claim false and cannot block Kernel release.
 
 The v0.13 scale gate executes exactly 10,000 active governed Knowledge Objects per Vault. Before
-the measured lane, the public retrieval query and context compile each run exactly one warmup;
-the report retains each warmup's elapsed time, one-sample count, exclusion marker, and Provider
-payload bytes. Warmup values are excluded from exactly 30 measured query/context samples. The
-measured lane reports p50/p95/max and applies hard ceilings of p95 <= 2,000 ms and max <= 5,000 ms
-per surface; the query/context worst case is the typed Gate metric. It also proves RSS, storage,
-file count, build/rebuild duration, full/incremental/no-op equivalence, user-byte protection, and
-the Provider hard bound. More than 10,000 is experimental; 100,000 sharding/bundling belongs to
-v0.14 and is not a v0.13 Core gate.
+the measured lane, the public retrieval query and context compile use their default
+`deeplaw.knowledge-query-plan/v6` path and each run exactly one warmup. For every warmup and all
+30 measured samples, the report retains only the returned plan hash/schema, Provider wrapper
+`deeplaw.provider-knowledge-capsule/v2` and inner
+`deeplaw.knowledge-capsule-projection/v1` schemas, canonical inner Provider byte count/hash,
+source-reference binding and selected semantic-key checks, plus `write_performed=false`. The
+query latency interval includes the public query and its `provider_capsule_from_v6` projection;
+the context latency interval includes `context.compile`, including its Provider projection.
+Observation validation runs outside both latency intervals. Neither interval includes network or
+model work.
+The inner canonical byte count is the Provider delivery count; context additionally binds that count
+to `budget.provider_payload_bytes`. Those query/context byte arrays are cross-bound to the 62
+Provider samples (two warmups plus 30 samples per surface); local traces, raw plans, and payload
+text are not retained. Source compilation metadata does not carry a query-plan version; an old
+v5 observation or an unbound whole local context payload is rejected. Warmup values are excluded
+from exactly 30 measured query/context samples. The measured lane reports p50/p95/max and applies
+hard ceilings of p95 <= 2,000 ms and max <= 5,000 ms per surface; the query/context worst case is
+the typed Gate metric. It also proves RSS, storage, file count, build/rebuild duration,
+full/incremental/no-op equivalence, user-byte protection, and the Provider hard bound. More than
+10,000 is experimental; 100,000 sharding/bundling belongs to v0.14 and is not a v0.13 Core gate.
 
 Formal order is:
 

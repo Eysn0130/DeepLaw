@@ -130,7 +130,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "aa4431766fd915eac4337eda0e45c237ce7339c5b409a526d2ff8b7fa4180dd5"
+    "ff561f98b62544b9c4e237bca5cf7a26432651dc19ca9fe81786bcb725a95911"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -4589,6 +4589,7 @@ def _parse_scale_v9(
         RUNNER_RELATIVE_PATH,
         SOURCE_BATCH_COUNT,
         WARM_SAMPLE_TARGET,
+        _validate_query_context_observation,
         verify_report,
     )
     from benchmarks.v013.scale_qualification_v9 import (
@@ -4615,7 +4616,7 @@ def _parse_scale_v9(
         "active_governed_object_count": ACTIVE_GOVERNED_OBJECT_TARGET,
         "source_file_count": SOURCE_BATCH_COUNT,
         "fragments_per_source": FRAGMENTS_PER_SOURCE,
-        "query_plan_version": "5",
+        "query_plan_version": "6",
         "warm_samples": WARM_SAMPLE_TARGET,
         "provider_hard_limit_bytes": PROVIDER_HARD_LIMIT_BYTES,
         "above_10000_status": "experimental_unqualified",
@@ -4631,6 +4632,7 @@ def _parse_scale_v9(
         errors = verification.get("errors")
         detail = errors[0] if isinstance(errors, list) and errors else "unknown validation error"
         _fail(f"scale v9 observed report is invalid: {detail}")
+    query_context = _validate_query_context_observation(observed["query_context"])
 
     candidate = observed["candidate_binding"]
     envelope_candidate = envelope["candidate_binding"]
@@ -4688,6 +4690,29 @@ def _parse_scale_v9(
         ],
         "query_sample_count": query["sample_count"],
         "context_sample_count": context["sample_count"],
+        "query_context_plan_v6": int(
+            all(
+                version == "deeplaw.knowledge-query-plan/v6"
+                for surface in (query_context["query"], query_context["context"])
+                for version in surface["plan_schema_versions"]
+            )
+        ),
+        "query_context_provider_projection_v2": int(
+            all(
+                version == "deeplaw.provider-knowledge-capsule/v2"
+                for surface in (query_context["query"], query_context["context"])
+                for version in surface["provider_schema_versions"]
+            )
+        ),
+        "query_context_inner_projection_v1": int(
+            all(
+                version == "deeplaw.knowledge-capsule-projection/v1"
+                for surface in (query_context["query"], query_context["context"])
+                for version in surface["provider_inner_schema_versions"]
+            )
+        ),
+        "query_context_sample_count": query_context["query"]["sample_count"]
+        + query_context["context"]["sample_count"],
         "report_sha256": observed["report_sha256"],
     }
     observed_failures = set(observed["hard_failures"])

@@ -16708,6 +16708,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_builder_rejects_warmup_unbound_to_query_context"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_builder_rejects_warmup_unbound_to_query_context"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_default_v6_query_context_observation_binds_actual_provider_projection"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_default_v6_query_context_observation_binds_actual_provider_projection"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
             "name": "test_v9_frozen_40_object_batch_stays_on_public_bounded_path"
           },
           "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_frozen_40_object_batch_stays_on_public_bounded_path"
@@ -16739,6 +16753,20 @@
             "name": "test_v9_public_rebuild_paths_have_real_modes_and_stable_standard_identity"
           },
           "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_public_rebuild_paths_have_real_modes_and_stable_standard_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_query_context_observation_rejects_unbound_plan_or_inner_bytes"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_query_context_observation_rejects_unbound_plan_or_inner_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_query_context_observation_rejects_v5_and_local_trace_metadata"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_query_context_observation_rejects_v5_and_local_trace_metadata"
         },
         {
           "junit": {
@@ -16823,6 +16851,20 @@
             "name": "test_v9_typed_scale_evidence_rejects_run_binding_substitution"
           },
           "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_typed_scale_evidence_rejects_run_binding_substitution"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_verify_binds_provider_warmup_to_query_context_first_samples"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_verify_binds_provider_warmup_to_query_context_first_samples"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_verify_recomputes_provider_summary_from_retained_samples"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_verify_recomputes_provider_summary_from_retained_samples"
         },
         {
           "junit": {
@@ -18652,9 +18694,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2630,
+      "count": 2636,
       "selection": "not qualification and not windows_native",
-      "sha256": "9c19e2507a02c5cdc7f93909992db92038e867a4e01383ec5c15c4b85ddc5741"
+      "sha256": "1262e2c7170f308c4377f9176097a2436880eb3571e964350291ac76660cec24"
     },
     "windows": {
       "additional_cases": [
@@ -18694,13 +18736,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2635,
+      "count": 2641,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "b08a317abdaa5584e8a89c52a80cee6826c3720aaaaa525bf6752c44e2029d48"
+      "sha256": "bb735a69ac4882a933763f6839780411178f4e789d3cd495522864ed4e9b3292"
     }
   },
-  "manifest_sha256": "18968a370394254097d0a435d2c26e41be9d826a6fef64bf431498735a599b56",
+  "manifest_sha256": "cc16289e70ef0e0d4e10ebfa5e350bbc76e975e511a155ac7aaf4cb849cbdc56",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

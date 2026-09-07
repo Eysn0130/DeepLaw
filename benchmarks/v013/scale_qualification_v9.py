@@ -49,6 +49,11 @@ WARM_P95_CEILING_MS = 2_000
 WARM_MAX_CEILING_MS = 5_000
 PROVIDER_HARD_LIMIT_BYTES = 65_536
 DEFERRED_100000 = "v0.14"
+QUERY_CONTEXT_OBSERVATION_SCHEMA = "deeplaw.v013-scale-query-context-observation/v1"
+QUERY_PLAN_SCHEMA_V6 = "deeplaw.knowledge-query-plan/v6"
+PROVIDER_CAPSULE_SCHEMA_V2 = "deeplaw.provider-knowledge-capsule/v2"
+PROVIDER_INNER_SCHEMA_V1 = "deeplaw.knowledge-capsule-projection/v1"
+SCALE_SEMANTIC_KEY = "v013-scale-qualification-v9:00000"
 HARD_FAILURE_IDS = (
     "active_governed_object_count_mismatch",
     "experimental_over_10000_claimed_qualified",
@@ -427,6 +432,355 @@ def _run_binding(value: Mapping[str, Any]) -> dict[str, Any]:
     return dict(value)
 
 
+def _is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _provider_source_binding(
+    inner: Mapping[str, Any], *, expected_semantic_key: str
+) -> tuple[str, int, str]:
+    statements = inner.get("statements")
+    if not isinstance(statements, list) or not statements:
+        raise ScaleQualificationError("Provider projection has no selected statements")
+    selected: list[dict[str, Any]] = []
+    matched = False
+    source_ref_count = 0
+    for statement in statements:
+        if not isinstance(statement, Mapping):
+            raise ScaleQualificationError("Provider projection statement is invalid")
+        summary = statement.get("object_summary")
+        refs = statement.get("source_refs")
+        if not isinstance(summary, Mapping) or not isinstance(refs, list) or not refs:
+            raise ScaleQualificationError("Provider projection statement binding is invalid")
+        semantic_key = summary.get("semantic_key")
+        if not isinstance(semantic_key, str) or not semantic_key:
+            raise ScaleQualificationError("Provider projection semantic identity is invalid")
+        matched = matched or semantic_key == expected_semantic_key
+        normalized_refs: list[dict[str, str]] = []
+        for reference in refs:
+            if not isinstance(reference, Mapping):
+                raise ScaleQualificationError("Provider projection source reference is invalid")
+            source_revision_id = reference.get("source_revision_id")
+            fragment_id = reference.get("fragment_id")
+            locator = reference.get("locator")
+            quote_sha256 = reference.get("quote_sha256")
+            if (
+                not isinstance(source_revision_id, str)
+                or not source_revision_id
+                or not isinstance(fragment_id, str)
+                or not fragment_id
+                or not isinstance(locator, str)
+                or not locator
+                or not _is_sha256(quote_sha256)
+            ):
+                raise ScaleQualificationError("Provider projection source reference is invalid")
+            normalized_refs.append(
+                {
+                    "source_revision_id": source_revision_id,
+                    "fragment_id": fragment_id,
+                    "locator": locator,
+                    "quote_sha256": quote_sha256,
+                }
+            )
+        source_ref_count += len(normalized_refs)
+        selected.append({"semantic_key": semantic_key, "source_refs": normalized_refs})
+    if not matched:
+        raise ScaleQualificationError(
+            "Provider projection did not select the expected scale semantic identity"
+        )
+    binding_digest = _sha256_bytes(_canonical_bytes(selected))
+    return binding_digest, source_ref_count, expected_semantic_key
+
+
+def _observe_query_context_sample(
+    result: Mapping[str, Any],
+    provider: Mapping[str, Any],
+    *,
+    expected_semantic_key: str,
+    surface: str,
+) -> dict[str, Any]:
+    if surface not in {"query", "context"}:
+        raise ScaleQualificationError("query/context observation surface is invalid")
+    expected_result_schema = (
+        "deeplaw.purpose-aware-retrieval/v3"
+        if surface == "query"
+        else "deeplaw.knowledge-capsule/v3"
+    )
+    if result.get("schema_version") != expected_result_schema:
+        raise ScaleQualificationError("query/context result schema is invalid")
+    plan = result.get("query_plan")
+    if not isinstance(plan, Mapping) or plan.get("schema_version") != QUERY_PLAN_SCHEMA_V6:
+        raise ScaleQualificationError("query/context did not return the default v6 plan")
+    observed_plan_sha256 = result.get("query_plan_sha256")
+    computed_plan_sha256 = _sha256_bytes(_canonical_bytes(plan))
+    if observed_plan_sha256 != computed_plan_sha256:
+        raise ScaleQualificationError("query/context plan hash is not bound to canonical bytes")
+    if provider.get("schema_version") != PROVIDER_CAPSULE_SCHEMA_V2:
+        raise ScaleQualificationError("query/context Provider wrapper schema is invalid")
+    inner = provider.get("capsule")
+    delivery = provider.get("delivery")
+    if not isinstance(inner, Mapping) or not isinstance(delivery, Mapping):
+        raise ScaleQualificationError("query/context Provider projection is incomplete")
+    if inner.get("schema_version") != PROVIDER_INNER_SCHEMA_V1:
+        raise ScaleQualificationError("query/context Provider inner schema is invalid")
+    provider_bytes = delivery.get("provider_content_bytes")
+    if (
+        isinstance(provider_bytes, bool)
+        or not isinstance(provider_bytes, int)
+        or not 1 <= provider_bytes <= PROVIDER_HARD_LIMIT_BYTES
+        or delivery.get("hard_limit_bytes") != PROVIDER_HARD_LIMIT_BYTES
+        or delivery.get("write_performed") is not False
+    ):
+        raise ScaleQualificationError("query/context Provider byte receipt is invalid")
+    inner_bytes = len(_canonical_bytes(inner))
+    if inner_bytes != provider_bytes:
+        raise ScaleQualificationError("Provider bytes do not match canonical inner projection")
+    if surface == "context":
+        budget = result.get("budget")
+        if (
+            not isinstance(budget, Mapping)
+            or budget.get("provider_payload_bytes") != provider_bytes
+        ):
+            raise ScaleQualificationError("context budget is not bound to Provider bytes")
+    source_binding_sha256, source_ref_count, selected_semantic_key = _provider_source_binding(
+        inner,
+        expected_semantic_key=expected_semantic_key,
+    )
+    return {
+        "plan_schema_version": QUERY_PLAN_SCHEMA_V6,
+        "query_plan_sha256": computed_plan_sha256,
+        "provider_schema_version": PROVIDER_CAPSULE_SCHEMA_V2,
+        "provider_inner_schema_version": PROVIDER_INNER_SCHEMA_V1,
+        "provider_content_bytes": provider_bytes,
+        "provider_inner_sha256": _sha256_bytes(_canonical_bytes(inner)),
+        "source_binding_sha256": source_binding_sha256,
+        "source_ref_count": source_ref_count,
+        "selected_semantic_key": selected_semantic_key,
+        "write_performed": False,
+    }
+
+
+def _query_context_surface(samples: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    if len(samples) != WARM_SAMPLE_TARGET + 1:
+        raise ScaleQualificationError(
+            "query/context observation must contain one warmup and 30 samples"
+        )
+    return {
+        "sample_count": len(samples),
+        "warmup_count": 1,
+        "measured_sample_count": WARM_SAMPLE_TARGET,
+        "plan_schema_versions": [sample["plan_schema_version"] for sample in samples],
+        "query_plan_sha256": [sample["query_plan_sha256"] for sample in samples],
+        "provider_schema_versions": [sample["provider_schema_version"] for sample in samples],
+        "provider_inner_schema_versions": [
+            sample["provider_inner_schema_version"] for sample in samples
+        ],
+        "provider_content_bytes": [sample["provider_content_bytes"] for sample in samples],
+        "provider_inner_sha256": [sample["provider_inner_sha256"] for sample in samples],
+        "source_binding_sha256": [sample["source_binding_sha256"] for sample in samples],
+        "source_ref_counts": [sample["source_ref_count"] for sample in samples],
+        "selected_semantic_keys": [sample["selected_semantic_key"] for sample in samples],
+        "write_performed": [sample["write_performed"] for sample in samples],
+    }
+
+
+def _validate_query_context_observation(value: Mapping[str, Any]) -> dict[str, Any]:
+    if set(value) != {"schema_version", "query", "context"}:
+        raise ScaleQualificationError("query/context observation keys are not closed")
+    if value["schema_version"] != QUERY_CONTEXT_OBSERVATION_SCHEMA:
+        raise ScaleQualificationError("query/context observation schema is invalid")
+    required_surface = {
+        "sample_count",
+        "warmup_count",
+        "measured_sample_count",
+        "plan_schema_versions",
+        "query_plan_sha256",
+        "provider_schema_versions",
+        "provider_inner_schema_versions",
+        "provider_content_bytes",
+        "provider_inner_sha256",
+        "source_binding_sha256",
+        "source_ref_counts",
+        "selected_semantic_keys",
+        "write_performed",
+    }
+    normalized: dict[str, Any] = {"schema_version": value["schema_version"]}
+    for surface_name in ("query", "context"):
+        surface = value.get(surface_name)
+        if not isinstance(surface, Mapping) or set(surface) != required_surface:
+            raise ScaleQualificationError(f"{surface_name} observation keys are not closed")
+        if (
+            surface["sample_count"] != WARM_SAMPLE_TARGET + 1
+            or surface["warmup_count"] != 1
+            or surface["measured_sample_count"] != WARM_SAMPLE_TARGET
+        ):
+            raise ScaleQualificationError(f"{surface_name} observation counts are invalid")
+        arrays = {
+            field: surface[field]
+            for field in required_surface
+            if field not in {"sample_count", "warmup_count", "measured_sample_count"}
+        }
+        if any(
+            not isinstance(items, list) or len(items) != WARM_SAMPLE_TARGET + 1
+            for items in arrays.values()
+        ):
+            raise ScaleQualificationError(f"{surface_name} observation arrays are invalid")
+        if surface["plan_schema_versions"] != [QUERY_PLAN_SCHEMA_V6] * (WARM_SAMPLE_TARGET + 1):
+            raise ScaleQualificationError(f"{surface_name} observation is not default v6")
+        if surface["provider_schema_versions"] != [PROVIDER_CAPSULE_SCHEMA_V2] * (
+            WARM_SAMPLE_TARGET + 1
+        ) or surface["provider_inner_schema_versions"] != [PROVIDER_INNER_SCHEMA_V1] * (
+            WARM_SAMPLE_TARGET + 1
+        ):
+            raise ScaleQualificationError(f"{surface_name} Provider schemas are invalid")
+        if any(not _is_sha256(item) for item in surface["query_plan_sha256"]):
+            raise ScaleQualificationError(f"{surface_name} plan hashes are invalid")
+        if any(not _is_sha256(item) for item in surface["provider_inner_sha256"]):
+            raise ScaleQualificationError(f"{surface_name} Provider hashes are invalid")
+        if any(not _is_sha256(item) for item in surface["source_binding_sha256"]):
+            raise ScaleQualificationError(f"{surface_name} source bindings are invalid")
+        if any(
+            isinstance(item, bool)
+            or not isinstance(item, int)
+            or item < 1
+            for item in surface["provider_content_bytes"]
+        ):
+            raise ScaleQualificationError(f"{surface_name} Provider byte measurements are invalid")
+        if any(
+            isinstance(item, bool) or not isinstance(item, int) or item < 1
+            for item in surface["source_ref_counts"]
+        ):
+            raise ScaleQualificationError(f"{surface_name} source reference counts are invalid")
+        if any(
+            item != SCALE_SEMANTIC_KEY for item in surface["selected_semantic_keys"]
+        ):
+            raise ScaleQualificationError(f"{surface_name} selected semantic keys are invalid")
+        if surface["write_performed"] != [False] * (WARM_SAMPLE_TARGET + 1):
+            raise ScaleQualificationError(f"{surface_name} observation claims a write")
+        normalized[surface_name] = dict(surface)
+    normalized["query"] = dict(value["query"])
+    normalized["context"] = dict(value["context"])
+    return normalized
+
+
+def _provider_sample_sequence(query_context: Mapping[str, Any]) -> list[int]:
+    query = query_context["query"]
+    context = query_context["context"]
+    return [
+        value
+        for index in range(WARM_SAMPLE_TARGET + 1)
+        for value in (
+            query["provider_content_bytes"][index],
+            context["provider_content_bytes"][index],
+        )
+    ]
+
+
+def _measure_query_context(
+    knowledge_os: Any,
+    *,
+    query_text: str,
+    expected_semantic_key: str,
+) -> dict[str, Any]:
+    """Measure the default v6 query/context surfaces and their Provider projection."""
+
+    from deeplaw.retrieval.capsule import provider_capsule_from_v6
+
+    def measure_query() -> tuple[float, dict[str, Any]]:
+        started = time.perf_counter()
+        result = knowledge_os.retrieval.query(
+            query_text,
+            purpose="answer",
+            scope="project",
+            max_sensitivity="public",
+            limit=8,
+            max_chars=8_000,
+            max_tokens=4_000,
+        )
+        provider = provider_capsule_from_v6(result)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        return elapsed_ms, _observe_query_context_sample(
+            result,
+            provider,
+            expected_semantic_key=expected_semantic_key,
+            surface="query",
+        )
+
+    def measure_context() -> tuple[float, dict[str, Any]]:
+        started = time.perf_counter()
+        result = knowledge_os.context.compile(
+            task=query_text,
+            purpose="answer",
+            scope="project",
+            max_sensitivity="public",
+            limit=8,
+            max_chars=8_000,
+            max_tokens=4_000,
+            confirm_no_case_data=True,
+        )
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        provider = result.get("provider_capsule")
+        if not isinstance(provider, Mapping):
+            raise ScaleQualificationError("context Provider projection is unavailable")
+        return elapsed_ms, _observe_query_context_sample(
+            result,
+            provider,
+            expected_semantic_key=expected_semantic_key,
+            surface="context",
+        )
+
+    query_warmup_ms, query_warmup_sample = measure_query()
+    context_warmup_ms, context_warmup_sample = measure_context()
+    query_samples_ms: list[float] = []
+    context_samples_ms: list[float] = []
+    query_samples = [query_warmup_sample]
+    context_samples = [context_warmup_sample]
+    for _ in range(WARM_SAMPLE_TARGET):
+        query_elapsed_ms, query_sample = measure_query()
+        context_elapsed_ms, context_sample = measure_context()
+        query_samples_ms.append(query_elapsed_ms)
+        context_samples_ms.append(context_elapsed_ms)
+        query_samples.append(query_sample)
+        context_samples.append(context_sample)
+    query_context = _validate_query_context_observation(
+        {
+            "schema_version": QUERY_CONTEXT_OBSERVATION_SCHEMA,
+            "query": _query_context_surface(query_samples),
+            "context": _query_context_surface(context_samples),
+        }
+    )
+    provider_bytes: list[int] = []
+    for index in range(WARM_SAMPLE_TARGET + 1):
+        provider_bytes.extend(
+            [
+                query_context["query"]["provider_content_bytes"][index],
+                query_context["context"]["provider_content_bytes"][index],
+            ]
+        )
+    return {
+        "query_samples_ms": query_samples_ms,
+        "context_samples_ms": context_samples_ms,
+        "query_warmup": {
+            "elapsed_ms": query_warmup_ms,
+            "sample_count": 1,
+            "excluded_from_measured_samples": True,
+            "provider_payload_bytes": query_context["query"]["provider_content_bytes"][0],
+        },
+        "context_warmup": {
+            "elapsed_ms": context_warmup_ms,
+            "sample_count": 1,
+            "excluded_from_measured_samples": True,
+            "provider_payload_bytes": query_context["context"]["provider_content_bytes"][0],
+        },
+        "provider_bytes": provider_bytes,
+        "query_context": query_context,
+    }
+
+
 def _failure_ids(report: Mapping[str, Any]) -> list[str]:
     failures: list[str] = []
     vault = report["vault"]
@@ -497,7 +851,6 @@ def _failure_ids(report: Mapping[str, Any]) -> list[str]:
     if (
         source_compile["source_file_count"] != SOURCE_BATCH_COUNT
         or source_compile["fragments_per_source"] != FRAGMENTS_PER_SOURCE
-        or source_compile["query_plan_version"] != "5"
         or source_compile["asset_count"] != ACTIVE_GOVERNED_OBJECT_TARGET
         or source_compile["unique_asset_count"] != ACTIVE_GOVERNED_OBJECT_TARGET
         or source_compile["expected_asset_count"] != ACTIVE_GOVERNED_OBJECT_TARGET
@@ -557,6 +910,7 @@ def build_scale_qualification_report(
     equivalence: Mapping[str, Any],
     rebuild: Mapping[str, Any],
     source_compile: Mapping[str, Any],
+    query_context: Mapping[str, Any],
     semantic_batches: Sequence[Mapping[str, Any]],
     user_files: Sequence[Mapping[str, Any]],
     provider_sample_bytes: Sequence[int],
@@ -629,7 +983,7 @@ def build_scale_qualification_report(
     ):
         raise ScaleQualificationError("provider samples are required")
     if any(
-        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        isinstance(value, bool) or not isinstance(value, int) or value < 1
         for value in provider_sample_bytes
     ):
         raise ScaleQualificationError("provider sample bytes are invalid")
@@ -655,6 +1009,18 @@ def build_scale_qualification_report(
         raise ScaleQualificationError("semantic batch measurements are invalid")
     normalized_rebuild = {key: dict(value) for key, value in rebuild.items()}
     normalized_source_compile = dict(source_compile)
+    normalized_query_context = _validate_query_context_observation(query_context)
+    expected_warmup_payload_bytes = {
+        "query": normalized_query_context["query"]["provider_content_bytes"][0],
+        "context": normalized_query_context["context"]["provider_content_bytes"][0],
+    }
+    if {
+        "query": normalized_query_warmup["provider_payload_bytes"],
+        "context": normalized_context_warmup["provider_payload_bytes"],
+    } != expected_warmup_payload_bytes:
+        raise ScaleQualificationError(
+            "warmup Provider bytes are not bound to query/context observations"
+        )
     normalized_batches = [dict(value) for value in semantic_batches]
     if not _semantic_batches_valid(
         normalized_batches,
@@ -671,7 +1037,6 @@ def build_scale_qualification_report(
     if (
         normalized_source_compile.get("source_file_count") != SOURCE_BATCH_COUNT
         or normalized_source_compile.get("fragments_per_source") != FRAGMENTS_PER_SOURCE
-        or normalized_source_compile.get("query_plan_version") != "5"
         or normalized_source_compile.get("asset_count") != ACTIVE_GOVERNED_OBJECT_TARGET
         or normalized_source_compile.get("unique_asset_count")
         != ACTIVE_GOVERNED_OBJECT_TARGET
@@ -680,6 +1045,11 @@ def build_scale_qualification_report(
         or normalized_source_compile.get("exact") is not True
     ):
         raise ScaleQualificationError("source assets do not cover the exact 10k target")
+    expected_provider_samples = _provider_sample_sequence(normalized_query_context)
+    if list(provider_sample_bytes) != expected_provider_samples:
+        raise ScaleQualificationError(
+            "provider samples are not bound to query/context observations"
+        )
     max_provider_bytes = max(provider_sample_bytes)
     report: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -710,6 +1080,7 @@ def build_scale_qualification_report(
         "equivalence": normalized_equivalence,
         "rebuild": normalized_rebuild,
         "source_compile": normalized_source_compile,
+        "query_context": normalized_query_context,
         "semantic_batches": normalized_batches,
         "user_bytes": {
             "file_count": len(normalized_user_files),
@@ -719,6 +1090,7 @@ def build_scale_qualification_report(
         "provider": {
             "hard_limit_bytes": PROVIDER_HARD_LIMIT_BYTES,
             "sample_count": len(provider_sample_bytes),
+            "sample_bytes": list(provider_sample_bytes),
             "max_bytes": max_provider_bytes,
             "violation_count": sum(
                 value > PROVIDER_HARD_LIMIT_BYTES for value in provider_sample_bytes
@@ -791,12 +1163,38 @@ def verify_report(report: Mapping[str, Any]) -> dict[str, Any]:
         )
         if report["provider"]["sample_count"] != expected_provider_sample_count:
             errors.append("provider sample count does not include both warmup payloads")
+        query_context = _validate_query_context_observation(report["query_context"])
+        expected_query_context_warmup = {
+            kind: query_context[kind]["provider_content_bytes"][0]
+            for kind in ("query", "context")
+        }
         expected_warmup_payload_bytes = {
             kind: report["warm_samples"][kind]["warmup"]["provider_payload_bytes"]
             for kind in ("query", "context")
         }
-        if report["provider"]["warmup_payload_bytes"] != expected_warmup_payload_bytes:
-            errors.append("provider warmup payload bytes are not bound to warmup observations")
+        if expected_warmup_payload_bytes != expected_query_context_warmup:
+            errors.append("warmup payload bytes are not bound to query/context observations")
+        if report["provider"]["warmup_payload_bytes"] != expected_query_context_warmup:
+            errors.append(
+                "provider warmup payload bytes are not bound to query/context observations"
+            )
+        expected_provider_samples = _provider_sample_sequence(query_context)
+        if report["provider"]["sample_bytes"] != expected_provider_samples:
+            errors.append("provider samples are not bound to query/context observations")
+        provider_sample_bytes = report["provider"]["sample_bytes"]
+        if report["provider"]["sample_count"] != len(provider_sample_bytes):
+            errors.append("provider sample count does not match retained sample bytes")
+        expected_provider_max = max(provider_sample_bytes)
+        expected_provider_violation_count = sum(
+            value > PROVIDER_HARD_LIMIT_BYTES for value in provider_sample_bytes
+        )
+        expected_provider_violation = expected_provider_max > PROVIDER_HARD_LIMIT_BYTES
+        if report["provider"]["max_bytes"] != expected_provider_max:
+            errors.append("provider max bytes do not match retained sample bytes")
+        if report["provider"]["violation_count"] != expected_provider_violation_count:
+            errors.append("provider violation count does not match retained sample bytes")
+        if report["provider"]["violation"] is not expected_provider_violation:
+            errors.append("provider violation does not match retained sample bytes")
         try:
             started = datetime.fromisoformat(
                 report["run_binding"]["started_at_utc"].replace("Z", "+00:00")
@@ -1008,6 +1406,7 @@ def _public_semantic_compile(
     from deeplaw.api.knowledge_os import KnowledgeOS
     from deeplaw.compilation.models import SEMANTIC_COMPILER_GRANT_OPERATIONS
     from deeplaw.compilation.semantic import SemanticCompilationService
+    from deeplaw.evidence import build_input_set_sha256, statement_sha256
     from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
 
     identity = source_result.get("identity")
@@ -1042,6 +1441,7 @@ def _public_semantic_compile(
         with AutonomousKnowledgeStore(vault, read_only=False) as store:
             grant_id = store.enable_grant(
                 writer_id=f"v013-scale-qualification-v9:batch:{batch_index:03d}",
+                max_sensitivity="public",
                 operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
                 max_request_bytes=MAX_COMPILATION_REQUEST_BYTES,
                 max_mutations_per_minute=120,
@@ -1064,6 +1464,7 @@ def _public_semantic_compile(
             confirm_no_case_data=True,
         )
         packet_plans: list[dict[str, Any]] = []
+        statement_plans: list[dict[str, Any]] = []
         dispositions: list[dict[str, Any]] = []
         observed_count = 0
         while packet := run.next_packet():
@@ -1182,6 +1583,48 @@ def _public_semantic_compile(
                     "warnings": [],
                 }
             )
+            for action_ordinal, action in enumerate(object_actions, start=1):
+                statement_text = action["body"]
+                source_refs = action["source_refs"]
+                statement_type = "factual"
+                support_status = "supported"
+                limitation = None
+                gaps: list[dict[str, str]] = []
+                statement_plans.append(
+                    {
+                        "packet_id": packet["packet_id"],
+                        "object_action_ordinal": action_ordinal,
+                        "statements": [
+                            {
+                                "ordinal": 1,
+                                "char_start": 0,
+                                "char_end": len(statement_text),
+                                "statement_text": statement_text,
+                                "statement_sha256": statement_sha256(statement_text),
+                                "statement_type": statement_type,
+                                "support_status": support_status,
+                                "source_refs": source_refs,
+                                "knowledge_revision_refs": [],
+                                "relation_revision_refs": [],
+                                "valid_from": None,
+                                "valid_to": None,
+                                "limitation": limitation,
+                                "gaps": gaps,
+                                "input_set_sha256": build_input_set_sha256(
+                                    source_refs=source_refs,
+                                    knowledge_revision_refs=[],
+                                    relation_revision_refs=[],
+                                    valid_from=None,
+                                    valid_to=None,
+                                    statement_type=statement_type,
+                                    support_status=support_status,
+                                    limitation=limitation,
+                                    gaps=gaps,
+                                ),
+                            }
+                        ],
+                    }
+                )
         if observed_count != target:
             raise ScaleQualificationError(
                 f"Source IR emitted {observed_count} objects; expected {target}"
@@ -1234,7 +1677,7 @@ def _public_semantic_compile(
             "applicability_policy_sha256": finalization["applicability_policy_sha256"],
             "applicability_digest": finalization["applicability_digest"],
             "packet_plans": packet_plans,
-            "statement_plans": [],
+            "statement_plans": statement_plans,
             "observation_dispositions": dispositions,
             "duty_reports": duty_reports,
             "semantic_status": "partial",
@@ -1472,141 +1915,17 @@ def run_scale_qualification(
         noop_duration_ms = (time.perf_counter() - noop_start) * 1000
         rss_samples.append(_rss_bytes())
         with KnowledgeOS.open(vault) as knowledge_os:
-            query_text = "Bounded scale evidence 000-000"
-            warmup_query_start = time.perf_counter()
-            warmup_query_result = knowledge_os.retrieval.query(
-                query_text,
-                query_plan_version="5",
-                purpose="answer",
-                scope="project",
-                max_sensitivity="public",
-                limit=8,
-                max_chars=8_000,
-                max_tokens=4_000,
+            measurement = _measure_query_context(
+                knowledge_os,
+                query_text="Bounded scale evidence 000-000",
+                expected_semantic_key=SCALE_SEMANTIC_KEY,
             )
-            warmup_query_elapsed_ms = (time.perf_counter() - warmup_query_start) * 1000
-            warmup_query_compiled = warmup_query_result.get("compiled")
-            if (
-                not isinstance(warmup_query_compiled, list)
-                or not warmup_query_compiled
-                or not any(
-                    item.get("semantic_key") == "v013-scale-qualification-v9:00000"
-                    for item in warmup_query_compiled
-                    if isinstance(item, Mapping)
-                )
-            ):
-                raise ScaleQualificationError(
-                    "warmup public query did not select the exact scale identity"
-                )
-            warmup_query_provider_bytes = warmup_query_result.get("metrics", {}).get(
-                "provider_payload_bytes"
-            )
-            if (
-                isinstance(warmup_query_provider_bytes, bool)
-                or not isinstance(warmup_query_provider_bytes, int)
-                or not 1 <= warmup_query_provider_bytes <= PROVIDER_HARD_LIMIT_BYTES
-                or warmup_query_result.get("delivery", {}).get("provider_visible_bytes")
-                != warmup_query_provider_bytes
-            ):
-                raise ScaleQualificationError(
-                    "warmup public query Provider byte receipt is invalid"
-                )
-            query_warmup = {
-                "elapsed_ms": warmup_query_elapsed_ms,
-                "sample_count": 1,
-                "excluded_from_measured_samples": True,
-                "provider_payload_bytes": warmup_query_provider_bytes,
-            }
-            provider_bytes.append(warmup_query_provider_bytes)
-
-            warmup_context_start = time.perf_counter()
-            warmup_context = knowledge_os.context.compile(
-                task=query_text,
-                query_plan_version="5",
-                purpose="answer",
-                scope="project",
-                max_sensitivity="public",
-                limit=8,
-                max_chars=8_000,
-                max_tokens=4_000,
-                confirm_no_case_data=True,
-            )
-            warmup_context_elapsed_ms = (time.perf_counter() - warmup_context_start) * 1000
-            if warmup_context.get("budget", {}).get("selected_items", 0) < 1:
-                raise ScaleQualificationError(
-                    "warmup public context did not select governed knowledge"
-                )
-            warmup_context_provider_bytes = len(canonical_json(warmup_context).encode("utf-8"))
-            if not 1 <= warmup_context_provider_bytes <= PROVIDER_HARD_LIMIT_BYTES:
-                raise ScaleQualificationError(
-                    "warmup public context Provider bytes exceed the bound"
-                )
-            context_warmup = {
-                "elapsed_ms": warmup_context_elapsed_ms,
-                "sample_count": 1,
-                "excluded_from_measured_samples": True,
-                "provider_payload_bytes": warmup_context_provider_bytes,
-            }
-            provider_bytes.append(warmup_context_provider_bytes)
-            for _ in range(WARM_SAMPLE_TARGET):
-                start = time.perf_counter()
-                result = knowledge_os.retrieval.query(
-                    query_text,
-                    query_plan_version="5",
-                    purpose="answer",
-                    scope="project",
-                    max_sensitivity="public",
-                    limit=8,
-                    max_chars=8_000,
-                    max_tokens=4_000,
-                )
-                query_times.append((time.perf_counter() - start) * 1000)
-                compiled = result.get("compiled")
-                if (
-                    not isinstance(compiled, list)
-                    or not compiled
-                    or not any(
-                        item.get("semantic_key")
-                        == "v013-scale-qualification-v9:00000"
-                        for item in compiled
-                        if isinstance(item, Mapping)
-                    )
-                ):
-                    raise ScaleQualificationError(
-                        "warm public query did not select the exact scale identity"
-                    )
-                query_provider_bytes = result.get("metrics", {}).get(
-                    "provider_payload_bytes"
-                )
-                if (
-                    isinstance(query_provider_bytes, bool)
-                    or not isinstance(query_provider_bytes, int)
-                    or query_provider_bytes < 1
-                    or result.get("delivery", {}).get("provider_visible_bytes")
-                    != query_provider_bytes
-                ):
-                    raise ScaleQualificationError(
-                        "warm public query Provider byte receipt is invalid"
-                    )
-                provider_bytes.append(query_provider_bytes)
-                start = time.perf_counter()
-                context = knowledge_os.context.compile(
-                    task=query_text,
-                    query_plan_version="5",
-                    purpose="answer",
-                    scope="project",
-                    max_sensitivity="public",
-                    limit=8,
-                    max_chars=8_000,
-                    max_tokens=4_000,
-                    confirm_no_case_data=True,
-                )
-                context_times.append((time.perf_counter() - start) * 1000)
-                if context.get("budget", {}).get("selected_items", 0) < 1:
-                    raise ScaleQualificationError(
-                        "warm public context did not select governed knowledge"
-                    )
-                provider_bytes.append(len(canonical_json(context).encode("utf-8")))
+            query_times = measurement["query_samples_ms"]
+            context_times = measurement["context_samples_ms"]
+            query_warmup = measurement["query_warmup"]
+            context_warmup = measurement["context_warmup"]
+            provider_bytes = measurement["provider_bytes"]
+            query_context = measurement["query_context"]
         rss_samples.append(_rss_bytes())
         # Rebuild receipts include timestamps and read-snapshot bytes.  The
         # stable identity digest compares only derived-state inputs/outputs,
@@ -1648,7 +1967,6 @@ def run_scale_qualification(
         source_compile = {
             "source_file_count": len(source_files),
             "fragments_per_source": FRAGMENTS_PER_SOURCE,
-            "query_plan_version": "5",
             "expected_asset_count": ACTIVE_GOVERNED_OBJECT_TARGET,
             "asset_count": len(asset_ids),
             "unique_asset_count": len(set(asset_ids)),
@@ -1696,6 +2014,7 @@ def run_scale_qualification(
         },
         rebuild=rebuild_modes,
         source_compile=source_compile,
+        query_context=query_context,
         semantic_batches=semantic_batches,
         user_files=[user_receipt],
         provider_sample_bytes=provider_bytes,
