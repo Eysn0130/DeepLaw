@@ -408,6 +408,19 @@ that kit. It performs one non-executing stable-FD identity/hash rebind after sou
 again after the broker context exits; this is best-effort and does not claim atomic `fexecve`,
 import-closure binding, or protection against an arbitrary same-owner swap-and-restore race.
 
+When the staged broker needs non-stdlib imports, the three runtime controls are also one closed
+group: `--codex-broker-runtime-root`, `--codex-broker-runtime-manifest`, and
+`--expected-codex-broker-runtime-manifest-sha256`; they are accepted only together with the
+pinned interpreter group. The manifest is `deeplaw.broker-runtime-input/v1`: it contains a bounded
+relative file list with exact size/SHA-256 entries and separate declared wheel/lock digests. The
+runtime root and manifest are repository-external, owner-controlled, non-writable, and free of
+symlinks/hardlinks; missing, extra, changed, or unlisted files fail closed. The fixed stdlib
+bootstrap runs with `-I -S`, disables bytecode writes, adds only the explicit `source`,
+`site-packages` roots (never the runtime root itself), and invokes the staged source with `runpy`; `.pth`,
+`sitecustomize`, and ambient `PYTHONPATH` are not used. Runtime binding is development/preflight
+only: declared artifact digests do not prove installation provenance, and Python stdlib or OS
+dynamic-library closure remains unbound.
+
 The OpenCode runner now has the parallel path-free
 `deeplaw.opencode-owner-external-broker-control/v2` consumer. Its exact owner-only external broker,
 not the repository runner, exclusively starts and supervises the pinned OpenCode 1.18.16 Host,

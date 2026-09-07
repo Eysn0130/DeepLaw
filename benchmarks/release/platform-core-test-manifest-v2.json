@@ -7383,6 +7383,118 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_existing_staged_source_lacks_nonstdlib_imports"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_existing_staged_source_lacks_nonstdlib_imports"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_explicit_runtime_bootstrap_imports_without_cwd_or_pythonpath"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_explicit_runtime_bootstrap_imports_without_cwd_or_pythonpath"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_control_group_requires_interpreter_and_all_fields"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_control_group_requires_interpreter_and_all_fields"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_manifest_allows_reordered_entries_and_zero_byte_files"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_manifest_allows_reordered_entries_and_zero_byte_files"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_manifest_matches_contract_schema"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_manifest_matches_contract_schema"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_manifest_rejects_duplicate_and_unsafe_paths"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_manifest_rejects_duplicate_and_unsafe_paths"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_replacement_after_staging_fails_closed_even_on_consumer_error"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_replacement_after_staging_fails_closed_even_on_consumer_error"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_tree_rejects_manifest_or_file_mutation[empty_dir]"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_tree_rejects_manifest_or_file_mutation[empty_dir]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_tree_rejects_manifest_or_file_mutation[extra]"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_tree_rejects_manifest_or_file_mutation[extra]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_tree_rejects_manifest_or_file_mutation[hardlink]"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_tree_rejects_manifest_or_file_mutation[hardlink]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_tree_rejects_manifest_or_file_mutation[manifest_writable]"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_tree_rejects_manifest_or_file_mutation[manifest_writable]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_tree_rejects_manifest_or_file_mutation[missing]"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_tree_rejects_manifest_or_file_mutation[missing]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_tree_rejects_manifest_or_file_mutation[root_writable]"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_tree_rejects_manifest_or_file_mutation[root_writable]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_tree_rejects_manifest_or_file_mutation[symlink]"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_tree_rejects_manifest_or_file_mutation[symlink]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_tree_rejects_manifest_or_file_mutation[writable]"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_tree_rejects_manifest_or_file_mutation[writable]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_runtime_input",
+            "name": "test_runtime_tree_rejects_manifest_or_file_mutation[wrong_hash]"
+          },
+          "node_id": "tests/test_v013_broker_runtime_input.py::test_runtime_tree_rejects_manifest_or_file_mutation[wrong_hash]"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_candidate_artifact_path_policy",
             "name": "test_final_validator_allows_identity_fixtures_and_skips_structured_or_binary_artifacts"
           },
@@ -18764,9 +18876,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2646,
+      "count": 2662,
       "selection": "not qualification and not windows_native",
-      "sha256": "6c48f2b405107d00288f61b68c5e0eefb0fb45d653a36e13c1617433d5ff5da6"
+      "sha256": "e3940a5a04961651cb9fdaa04aa9edc1f4515095f49117a5a27ba2cb6c90b778"
     },
     "windows": {
       "additional_cases": [
@@ -18806,13 +18918,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2651,
+      "count": 2667,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "5522f124b2eb288b0b26661b1abf1fd9c1720f7638ec612593952594084e32ff"
+      "sha256": "bfe7a804912a76a71b0c972460c85b72f0239369129508636e03e18fa63fc01a"
     }
   },
-  "manifest_sha256": "0307e3beb96031b9dc7681152bb4585b01f9331e1f36878c53215d46775c3146",
+  "manifest_sha256": "f76e972c101989ba8eb2b864692f396f07ece23648f203ca02a5dc8cb5df0401",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
