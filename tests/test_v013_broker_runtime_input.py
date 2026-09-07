@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -19,6 +18,7 @@ from benchmarks.hosts.broker_runtime_input import (
 from benchmarks.hosts.run_v013_host_task_qualification import (
     HostTaskQualificationError,
 )
+from tests.helpers import build_private_broker_interpreter
 
 
 def _sha256(path: Path) -> str:
@@ -113,16 +113,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str]:
     host_binary = tmp_path / "host-binary"
     host_binary.write_bytes(b"different-host-binary")
     host_binary.chmod(0o700)
-    interpreter = Path(sys.executable).resolve(strict=True)
-    version_probe = subprocess.run(
-        [str(interpreter), "--version"],
-        capture_output=True,
-        check=False,
-        timeout=5,
-        env={"PATH": os.defpath, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
-    )
-    version = (version_probe.stdout + version_probe.stderr).decode().strip()
-    assert version_probe.returncode == 0
+    interpreter, version = build_private_broker_interpreter(tmp_path)
     manifest = tmp_path / "runtime-manifest.json"
     manifest_sha256 = _write_manifest(runtime, manifest)
     return {

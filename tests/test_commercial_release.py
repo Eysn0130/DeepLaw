@@ -297,7 +297,7 @@ def test_pull_request_gates_check_out_the_exact_head_commit() -> None:
     exact_ci_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
     assert commercial.count(exact_commercial_ref) == 7
     assert "ref: ${{ inputs.release_ref || github.sha }}" not in commercial
-    assert ci.count(exact_ci_ref) == 2
+    assert ci.count(exact_ci_ref) == 3
     assert "  pull_request:" not in commercial
     assert "qualification and not windows_native" in commercial
     assert 'marker: not qualification' in commercial
@@ -315,6 +315,15 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "timeout-minutes: 20" in ci
     assert "Ubuntu Python 3.12" in ci
     assert "windows-sentinel" in ci
+    macos_inputs = ci.split("  macos-broker-inputs:", 1)[1].split(
+        "  windows-sentinel:", 1
+    )[0]
+    assert "runs-on: macos-latest" in macos_inputs
+    assert "fail-fast: false" in macos_inputs
+    assert 'python: ["3.11", "3.12", "3.13"]' in macos_inputs
+    assert "python-version: ${{ matrix.python }}" in macos_inputs
+    assert "tests/test_v013_broker_interpreter_binding.py" in macos_inputs
+    assert "tests/test_v013_broker_runtime_input.py" in macos_inputs
     windows_sentinel = ci.split("  windows-sentinel:", 1)[1]
     assert windows_sentinel.count(
         "tests/test_v013_no_model_production_registration.py::"

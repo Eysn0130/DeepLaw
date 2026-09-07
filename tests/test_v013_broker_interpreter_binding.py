@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +14,7 @@ from benchmarks.hosts import run_v013_host_task_qualification as host_task_runne
 from benchmarks.hosts.run_v013_host_task_qualification import (
     HostTaskQualificationError,
 )
+from tests.helpers import build_private_broker_interpreter
 
 
 def _sha256(path: Path) -> str:
@@ -54,21 +57,61 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, str, Path, Path]:
         newline="\n",
     )
     broker.chmod(0o700)
-    interpreter = Path(sys.executable).resolve(strict=True)
-    version_probe = subprocess.run(
-        [str(interpreter), "--version"],
-        capture_output=True,
-        check=False,
-        timeout=5,
-        env={"PATH": os.defpath, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
-    )
-    version = (version_probe.stdout + version_probe.stderr).decode().strip()
-    assert version_probe.returncode == 0
-    assert version.startswith("Python ")
+    interpreter, version = build_private_broker_interpreter(tmp_path)
     host_binary = tmp_path / "host-binary"
     host_binary.write_bytes(b"different-host-binary")
     host_binary.chmod(0o700)
     return broker, interpreter, version, repository, host_binary
+
+
+def test_private_interpreter_fixture_rehomes_writable_ambient_and_preserves_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    if os.name == "nt":
+        _assert_pinned_interpreter_is_posix_only(tmp_path)
+        return
+    ambient = Path(sys.executable).resolve(strict=True)
+    noncompliant = tmp_path / "ambient-python-copy"
+    shutil.copyfile(ambient, noncompliant)
+    noncompliant.chmod(0o775)
+    ambient_hash = _sha256(noncompliant)
+    monkeypatch.setattr(sys, "executable", str(noncompliant))
+    broker, interpreter, version, repository, host_binary = _fixture(tmp_path)
+
+    assert interpreter != noncompliant
+    details = interpreter.lstat()
+    assert stat.S_ISREG(details.st_mode)
+    assert details.st_nlink == 1
+    assert stat.S_IMODE(details.st_mode) == 0o500
+    assert details.st_uid == os.geteuid()
+    assert _sha256(interpreter) == ambient_hash
+    assert _sha256(noncompliant) == ambient_hash
+    assert stat.S_IMODE(noncompliant.lstat().st_mode) == 0o775
+    with _stage(broker, interpreter, version, repository, host_binary) as launcher:
+        completed = subprocess.run(
+            list(launcher),
+            capture_output=True,
+            check=False,
+            timeout=5,
+            env={"PATH": os.defpath, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+        )
+    assert completed.returncode == 0
+    assert completed.stdout == (
+        f'FIXED_BROKER_IDENTITY:{version.removeprefix("Python ")}\n'.encode()
+    )
+    with (
+        pytest.raises(HostTaskQualificationError, match="writable"),
+        _stage(
+            broker,
+            noncompliant,
+            version,
+            repository,
+            host_binary,
+            expected_broker_interpreter_sha256=ambient_hash,
+        ),
+    ):
+        pass
 
 
 def _stage(
