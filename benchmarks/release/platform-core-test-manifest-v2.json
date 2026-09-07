@@ -7313,6 +7313,76 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_cli_forwards_complete_pinned_interpreter_controls"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_cli_forwards_complete_pinned_interpreter_controls"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_interpreter_binding_rejects_wrong_hash_version_links_and_writability"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_interpreter_binding_rejects_wrong_hash_version_links_and_writability"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_interpreter_binding_requires_all_control_fields[broker_interpreter]"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_interpreter_binding_requires_all_control_fields[broker_interpreter]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_interpreter_binding_requires_all_control_fields[expected_broker_interpreter_sha256]"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_interpreter_binding_requires_all_control_fields[expected_broker_interpreter_sha256]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_interpreter_binding_requires_all_control_fields[expected_broker_interpreter_version]"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_interpreter_binding_requires_all_control_fields[expected_broker_interpreter_version]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_interpreter_replacement_after_staging_fails_closed"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_interpreter_replacement_after_staging_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_interpreter_replacement_after_version_probe_fails_closed"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_interpreter_replacement_after_version_probe_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_interpreter_version_probe_uses_closed_environment"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_interpreter_version_probe_uses_closed_environment"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_preflight_passes_pinned_interpreter_sequence_to_broker_consumer"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_preflight_passes_pinned_interpreter_sequence_to_broker_consumer"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_broker_interpreter_binding",
+            "name": "test_source_only_stage_cannot_run_python_source_but_pinned_interpreter_can"
+          },
+          "node_id": "tests/test_v013_broker_interpreter_binding.py::test_source_only_stage_cannot_run_python_source_but_pinned_interpreter_can"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_candidate_artifact_path_policy",
             "name": "test_final_validator_allows_identity_fixtures_and_skips_structured_or_binary_artifacts"
           },
@@ -18694,9 +18764,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2636,
+      "count": 2646,
       "selection": "not qualification and not windows_native",
-      "sha256": "1262e2c7170f308c4377f9176097a2436880eb3571e964350291ac76660cec24"
+      "sha256": "6c48f2b405107d00288f61b68c5e0eefb0fb45d653a36e13c1617433d5ff5da6"
     },
     "windows": {
       "additional_cases": [
@@ -18736,13 +18806,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2641,
+      "count": 2651,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "bb735a69ac4882a933763f6839780411178f4e789d3cd495522864ed4e9b3292"
+      "sha256": "5522f124b2eb288b0b26661b1abf1fd9c1720f7638ec612593952594084e32ff"
     }
   },
-  "manifest_sha256": "cc16289e70ef0e0d4e10ebfa5e350bbc76e975e511a155ac7aaf4cb849cbdc56",
+  "manifest_sha256": "0307e3beb96031b9dc7681152bb4585b01f9331e1f36878c53215d46775c3146",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

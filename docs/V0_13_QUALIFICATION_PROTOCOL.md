@@ -395,10 +395,18 @@ binding can never be reused as a formal receipt.
 
 If the external broker source is interpreter-backed, the construction kit must also pin and
 reopen the exact interpreter bytes, version, ownership, writability, link topology, and executable
-identity before parsing the control request. An ambient `python3` selected only by `PATH` is not an
-exact execution binding. The current POSIX construction kit records this interpreter dependency in
-its control-only installation receipt; Windows interpreter/ACL execution remains literal
-`not_executed` and unsupported fail-closed for that kit.
+identity before parsing the control request. The CLI accepts the three interpreter controls as one
+closed group: `--codex-broker-interpreter`,
+`--expected-codex-broker-interpreter-sha256`, and
+`--expected-codex-broker-interpreter-version`. The broker is launched as
+`[interpreter, -I, -S, staged_source]`; an ambient `python3` selected only by `PATH` is not an
+exact execution binding. The path-free control summary exposes only the interpreter identity,
+version, and SHA-256, and explicitly does not bind the Python import closure. The current POSIX
+construction kit records this interpreter dependency in its control-only installation receipt;
+Windows interpreter/ACL execution remains literal `not_executed` and unsupported fail-closed for
+that kit. It performs one non-executing stable-FD identity/hash rebind after source staging and
+again after the broker context exits; this is best-effort and does not claim atomic `fexecve`,
+import-closure binding, or protection against an arbitrary same-owner swap-and-restore race.
 
 The OpenCode runner now has the parallel path-free
 `deeplaw.opencode-owner-external-broker-control/v2` consumer. Its exact owner-only external broker,
