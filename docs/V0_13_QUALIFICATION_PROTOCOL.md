@@ -346,6 +346,32 @@ it neither reads nor forwards ambient OpenAI authentication. The broker may repo
 Thread creation alone, a diagnostic sidecar, login state, or a fixture is not formal Host task
 evidence; the `thread_id_sha256` field is never renamed to `session_sha256`.
 
+**Current development measurement boundary:** `benchmarks/hosts/codex_transport_observer.py`
+is a thin observer of the existing App Server client's transport, not a v4 broker producer or a
+second JSONL engine. Its closed `deeplaw.codex-transport-observation/v1` output separately counts
+successfully sent public `model/list` and `turn/start` messages. These are RPC observations, not
+internal model inventory, invocation, or sampling measurements. Each of those three internal
+counters is explicitly `status=not_executed, value=null`; neither absence of `model/list`, lack of
+token-usage notifications, a stopped Hook, nor zero loopback connections may convert it into a
+measured integer zero. The output always has `formal_admission=false` and `claim_eligible=false`.
+The existing v4 consumer rejects this development output and retains all seven activity checks.
+
+The observer separately hashes the actual validated `thread/start` response's `thread.id` and
+`thread.sessionId`. Its session digest aggregates the ordered observed session hashes; it is not
+a renamed thread hash, a Hook identity, a complete Formal task/session aggregate, or process/stdio
+attestation. Empty or incomplete observations cannot manufacture an identity or observation
+Authority. Bounded wire digests and explicit EOF/wait results remain local diagnostics; graceful
+parent exit is not proof that every descendant exited or that all Host activity was observed.
+
+The installed-version source audit at OpenAI Codex
+[`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/core/src/session/turn.rs#L155)
+also shows client-session creation and pre-turn compaction checks before the stopped Hook
+branch, with the ordinary sampling loop later in the function. This is a source/control-flow
+observation, not an executed internal counter; it does not rotate the lifecycle reference above.
+Closing the unavailable measurements requires an independently auditable runtime observation
+source. Development instrumentation must continue to expose the gap until such a source exists,
+without weakening the formal zero-activity requirements.
+
 The v2 receipt shape remains unchanged, but its existing native digests must bind the v4
 observation rather than arbitrary broker labels. `native_event_binding.event_sequence_sha256` is
 the SHA-256 of canonical UTF-8 JSON (sorted keys, compact separators, no NaN) over

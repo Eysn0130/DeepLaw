@@ -130,7 +130,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "c3ffcbd6c69ff5eefc8205a75feb2f2ecf055526c54dbbe5f14b0dedbf7ea878"
+    "53d85ca7ab6f362645651808733535adb2ecc65599817f5da05d1c29cff1fbbe"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
