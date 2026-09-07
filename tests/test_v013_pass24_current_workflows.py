@@ -13,6 +13,39 @@ def _workflow(name: str) -> str:
 
 def test_candidate_full_retains_raw_platform_and_exact_wheel_evidence() -> None:
     workflow = _workflow("candidate-full.yml")
+    jobs = yaml.safe_load(workflow)["jobs"]
+    assert jobs["verified-artifact"]["needs"] == "historical-migration-fixture"
+    fixture = jobs["historical-migration-fixture"]["steps"]
+    assert any("historical_migration_fixture build" in step.get("run", "") for step in fixture)
+    assert fixture[-1]["with"]["name"] == "historical-migration-fixture"
+    for job in ("windows-calibration-shards", "posix-matrix", "windows-shards"):
+        steps = jobs[job]["steps"]
+        admitted = next(
+            index for index, step in enumerate(steps)
+            if "historical_migration_fixture verify" in step.get("run", "")
+        )
+        executed = next(
+            index for index, step in enumerate(steps)
+            if "pytest --strict-markers" in step.get("run", "")
+        )
+        assert admitted < executed
+        assert '--github-env "${GITHUB_ENV}"' in steps[admitted]["run"]
+        assert any(
+            step.get("with", {}).get("name") == "historical-migration-fixture"
+            for step in steps[:admitted]
+        )
+    aggregate = jobs["aggregate-raw-evidence"]["steps"]
+    assert any(step.get("run") == "uv sync --frozen --extra dev" for step in aggregate)
+    assert "uv run --frozen python -m benchmarks.release.candidate_regression platform" in workflow
+    commercial = yaml.safe_load(_workflow("commercial-gates.yml"))["jobs"]
+    historical = next(
+        step["run"] for step in commercial["platform-gates"]["steps"]
+        if step.get("name") == "Build exact historical v0.6.0 migration and upgrade fixture"
+    )
+    assert "historical_migration_fixture build" in historical
+    assert "historical_migration_fixture verify" in historical
+    assert '--github-env "${GITHUB_ENV}"' in historical
+    assert "git worktree" not in historical
 
     assert (
         "uv export --frozen --no-dev --no-emit-project --no-emit-local"

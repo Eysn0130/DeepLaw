@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -269,9 +270,10 @@ def build_regression_receipt(
         if case.find("skipped") is not None
     ]
     allowed_nonapplicable = classifications[nonapplicable_classification]
+    if set(skipped) & classifications["historical_compatibility"]:
+        raise RuntimeError("required historical migration fixture was skipped")
     classified = (
         classifications["qualification"]
-        | classifications["historical_compatibility"]
         | allowed_nonapplicable
     )
     unclassified = sorted(set(skipped) - classified)
@@ -417,6 +419,8 @@ def aggregate_shard_receipts(
 
     if total("junit", "failures") or total("junit", "errors"):
         raise RuntimeError("candidate regression shards contain test failures")
+    if total("historical_compatibility", "skipped"):
+        raise RuntimeError("required historical migration fixture was skipped")
     test_manifests = {_canonical_json(receipt["test_manifest"]) for receipt in receipts}
     if len(test_manifests) != 1:
         raise RuntimeError("candidate regression shards use different test manifests")
@@ -636,10 +640,12 @@ def build_platform_matrix_receipt(
         ]
     )
     rows = []
+    cell_bytes = []
     for platform_name, python_version, source in cells:
         raw = source.read_bytes()
         if not raw:
             raise RuntimeError("Candidate Platform JUnit cell is empty")
+        cell_bytes.append((platform_name, python_version, raw))
         rows.append(
             {
                 "platform": platform_name,
@@ -648,7 +654,7 @@ def build_platform_matrix_receipt(
                 "junit_source_sha256": hashlib.sha256(raw).hexdigest(),
             }
         )
-    return {
+    receipt = {
         "receipt": {
             "candidate": candidate,
             "run": run,
@@ -658,6 +664,68 @@ def build_platform_matrix_receipt(
         },
         "rows": rows,
     }
+    # Admit these exact bytes through the same public consumer as Kernel and
+    # Commercial qualification. Producing a receipt alone does not pass a gate.
+    from benchmarks.release.typed_qualification_evidence import parse_typed_evidence
+
+    with tempfile.TemporaryDirectory(prefix="candidate-platform-admission-") as staging:
+        root = Path(staging)
+
+        def stage(name: str, raw: bytes, media_type: str) -> dict[str, Any]:
+            (root / name).write_bytes(raw)
+            return {
+                "relative_path": name,
+                "byte_size": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "media_type": media_type,
+            }
+
+        payload = {
+            "source": stage(
+                "platform.json", _canonical_json(receipt).encode("utf-8"),
+                "application/json",
+            ),
+            "platform_manifest_source": stage(
+                "manifest.json",
+                (repository / "benchmarks/release/platform-core-test-manifest-v2.json")
+                .read_bytes(),
+                "application/json",
+            ),
+            "junit_sources": [
+                {
+                    "platform": platform_name,
+                    "python_version": version,
+                    "source": stage(f"{platform_name}-{version}.xml", raw, "application/xml"),
+                }
+                for platform_name, version, raw in cell_bytes
+            ],
+        }
+        envelope = {
+            "schema_version": "deeplaw.typed-qualification-evidence/v1",
+            "kind": "candidate_platform_receipt",
+            "candidate_binding": candidate,
+            "run_binding": run,
+            "corpus": corpus,
+            "runner": runner,
+            "scorer": scorer,
+            "payload": payload,
+        }
+        envelope["record_sha256"] = _sha256_json(envelope)
+        path = root / "typed.json"
+        _write_json(path, envelope)
+        derived = parse_typed_evidence(
+            path,
+            expected_candidate=candidate,
+            expected_workflow_run_id=candidate_run_id,
+            expected_runner=runner,
+            expected_scorer=scorer,
+        )
+        if derived["status"] != "passed":
+            raise RuntimeError(
+                "Candidate Platform admission failed: "
+                + _canonical_json(derived["hard_failure_counts"])
+            )
+    return receipt
 
 
 def _parser() -> argparse.ArgumentParser:

@@ -93,6 +93,16 @@ Candidate Full produces exactly one reproducible wheel and one sdist and binds:
 - SBOM, installed licenses, OpenVEX, and provenance;
 - exact workflow/run identity.
 
+The required v0.6.0 migration fixture is built from pinned historical commit
+`e0f1fe3ff01d3026df12673d57c69014c2c4dca4` and retained as a separate fixture artifact,
+outside the candidate wheel/sdist directory. Every matrix cell verifies its source/tree,
+version and wheel bytes before tests; missing or mismatched configured fixtures fail before
+test execution. Historical migration/rollback is required, never OS-nonapplicable. The final
+Candidate Platform aggregation invokes the same typed platform admission used downstream,
+including all nine identity sets and mandatory skips. CI success without this admission is
+not qualification evidence; run `33561475032` is a historical example with nine required
+historical-fixture skips and remains qualification-ineligible.
+
 Kernel Qualification Evidence and Commercial Qualification download those same artifacts and never
 rebuild them. A
 change to behavior code, dependency, documentation contract, commit/tree, wheel/sdist bytes, or an

@@ -365,7 +365,9 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "windows-duration-weights.json" in calibration
     assert "--maxfail=1" not in calibration_block
 
-    aggregate = candidate.split("  windows-aggregate:", 1)[1]
+    aggregate = candidate.split("  windows-aggregate:", 1)[1].split(
+        "  aggregate-raw-evidence:", 1
+    )[0]
     assert "setup-uv" not in aggregate
     assert "python -m benchmarks.release.candidate_regression" in aggregate
     assert "--require-eligible" not in candidate

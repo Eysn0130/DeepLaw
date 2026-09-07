@@ -8587,6 +8587,76 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_build_discards_uv_gitignore_marker_before_retaining_fixture"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_build_discards_uv_gitignore_marker_before_retaining_fixture"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_source_preflight_rejects_unpinned_build_constraints"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_source_preflight_rejects_unpinned_build_constraints"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_verify_rejects_closed_fixture_failures_without_writing_env[digest]"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_verify_rejects_closed_fixture_failures_without_writing_env[digest]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_verify_rejects_closed_fixture_failures_without_writing_env[extra]"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_verify_rejects_closed_fixture_failures_without_writing_env[extra]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_verify_rejects_closed_fixture_failures_without_writing_env[missing]"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_verify_rejects_closed_fixture_failures_without_writing_env[missing]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_verify_rejects_closed_fixture_failures_without_writing_env[record]"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_verify_rejects_closed_fixture_failures_without_writing_env[record]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_verify_rejects_closed_fixture_failures_without_writing_env[source]"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_verify_rejects_closed_fixture_failures_without_writing_env[source]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_verify_rejects_closed_fixture_failures_without_writing_env[symlink]"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_verify_rejects_closed_fixture_failures_without_writing_env[symlink]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_verify_rejects_closed_fixture_failures_without_writing_env[symlink_unavailable]"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_verify_rejects_closed_fixture_failures_without_writing_env[symlink_unavailable]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_historical_migration_fixture",
+            "name": "test_verify_synthetic_fixture_writes_env_only_after_full_validation"
+          },
+          "node_id": "tests/test_v013_historical_migration_fixture.py::test_verify_synthetic_fixture_writes_env_only_after_full_validation"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_host_environment_isolation",
             "name": "test_closed_environment_defaults_to_no_ambient_or_provider_secret"
           },
@@ -18176,9 +18246,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2562,
+      "count": 2572,
       "selection": "not qualification and not windows_native",
-      "sha256": "5cfb4f0e2cd416356cc2f9c9cafd8e29a2ff885bb687eda1531eb7030960bfbb"
+      "sha256": "b4910aa07ab6c97fea6447a09299c0275916c3c06b50d29034aa51c38446cc2f"
     },
     "windows": {
       "additional_cases": [
@@ -18218,13 +18288,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2567,
+      "count": 2577,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "f2d02de02a76d36170231e67f83cc5475d0ec3cbc7d15db7371592538bf02870"
+      "sha256": "230d7faa61c17d35a8dce12b991b549c505143954be1673ef3542bea71f55898"
     }
   },
-  "manifest_sha256": "42621afc1f09eb814967f3c188f4051c89a2bd312b489a8100d84e8cf5b72f69",
+  "manifest_sha256": "365c69e7cca04e569a735298d0ec1d477da4c0e4ea6c60d5f1ac9f16a2eaa29f",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

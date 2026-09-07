@@ -489,6 +489,19 @@ def test_candidate_windows_shard_aggregate_rejects_drift(
     ]
     assert "duration_weights_sha256" not in aggregate["shards"]
 
+    historical_path = tmp_path / "shard-1/candidate-skip-receipt.json"
+    original = historical_path.read_bytes()
+    historical_skip = json.loads(original)
+    historical_skip["historical_compatibility"]["skipped"] = 1
+    historical_path.write_text(canonical_json(historical_skip), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="required historical migration fixture"):
+        aggregate_shard_receipts(
+            repository=REPOSITORY,
+            input_directory=tmp_path,
+            matrix_python="3.12",
+        )
+    historical_path.write_bytes(original)
+
     merged = tmp_path / "merged.xml"
     merge_shard_junit(
         input_directory=tmp_path,
@@ -515,29 +528,43 @@ def test_candidate_platform_receipt_binds_exact_nine_raw_junit_cells(
 ) -> None:
     artifacts = tmp_path / "platform"
     calibration = tmp_path / "calibration"
+    manifest = json.loads(
+        (REPOSITORY / "benchmarks/release/platform-core-test-manifest-v2.json").read_bytes()
+    )
+
+    def junit_bytes(platform: str, version: str) -> bytes:
+        common = manifest["inventories"]["common"]["cases"]
+        cases = list(common)
+        nonapplicable = set()
+        if platform == "windows":
+            additional = manifest["inventories"]["windows"]["additional_cases"]
+            cases += additional
+            native = {(c["junit"]["classname"], c["junit"]["name"]) for c in additional}
+            nonapplicable = {
+                (c["junit"]["classname"], c["junit"]["name"])
+                for c in manifest["classifications"]["nonapplicable"]["cases"]
+            } - native
+        root = ET.Element("testsuites")
+        suite = ET.SubElement(
+            root, "testsuite", tests=str(len(cases)), name=f"{platform}-{version}"
+        )
+        for case in cases:
+            node = ET.SubElement(suite, "testcase", **case["junit"])
+            if (node.get("classname"), node.get("name")) in nonapplicable:
+                ET.SubElement(node, "skipped", message="POSIX-only process semantics")
+        return ET.tostring(root)
+
     for artifact_name in ("ubuntu-latest", "macos-latest"):
         for version in ("3.11", "3.12", "3.13"):
             path = artifacts / f"candidate-full-{artifact_name}-{version}/candidate-tests.xml"
             path.parent.mkdir(parents=True)
-            path.write_text(
-                f'<testsuites><testsuite><testcase classname="tests.{artifact_name}" '
-                f'name="test_{version}" /></testsuite></testsuites>',
-                encoding="utf-8",
-            )
+            path.write_bytes(junit_bytes(artifact_name, version))
     for version in ("3.11", "3.13"):
         path = artifacts / f"candidate-full-windows-{version}-aggregate/candidate-tests.xml"
         path.parent.mkdir(parents=True)
-        path.write_text(
-            f'<testsuites><testsuite><testcase classname="tests.windows" '
-            f'name="test_{version}" /></testsuite></testsuites>',
-            encoding="utf-8",
-        )
+        path.write_bytes(junit_bytes("windows", version))
     calibration.mkdir()
-    (calibration / "windows-calibration.xml").write_text(
-        '<testsuites><testsuite><testcase classname="tests.windows" '
-        'name="test_3.12" /></testsuite></testsuites>',
-        encoding="utf-8",
-    )
+    (calibration / "windows-calibration.xml").write_bytes(junit_bytes("windows", "3.12"))
     active = tmp_path / "active.json"
     active.write_text(
         canonical_json(
@@ -576,3 +603,30 @@ def test_candidate_platform_receipt_binds_exact_nine_raw_junit_cells(
     identities = _load_candidate_provenance_identities()["candidate_platform_receipt"]
     assert receipt["receipt"]["runner"] == identities["runner"]
     assert receipt["receipt"]["scorer"] == identities["scorer"]
+
+    # The exact mandatory identity and skip observed in retained run 33561475032.
+    selected = calibration / "windows-calibration.xml"
+    root = ET.fromstring(selected.read_bytes())
+    historical = next(
+        node for node in root.iter("testcase")
+        if node.get("classname") == "tests.test_identity_migration_v060"
+        and node.get("name")
+        == "test_real_v060_wheel_additive_migration_verification_and_rollback"
+    )
+    ET.SubElement(historical, "skipped", message="exact historical v0.6 wheel unavailable")
+    selected.write_bytes(ET.tostring(root))
+    with pytest.raises(RuntimeError, match="Candidate Platform admission failed"):
+        build_platform_matrix_receipt(
+            repository=REPOSITORY,
+            active_qualification=active,
+            platform_artifacts=artifacts,
+            windows_calibration=calibration,
+            candidate_run_id=123,
+        )
+    with pytest.raises(RuntimeError, match="required historical migration fixture"):
+        build_regression_receipt(
+            repository=REPOSITORY,
+            junit_path=selected,
+            matrix_os="windows-latest",
+            matrix_python=f"{sys.version_info.major}.{sys.version_info.minor}",
+        )
