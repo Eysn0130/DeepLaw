@@ -24,17 +24,20 @@ from benchmarks.hosts.codex_transport_observer import (
 )
 
 
-def _fixture_command(mode: str = "eof") -> list[str]:
+def _fixture_command(mode: str = "eof", *, newline: bytes = b"\n") -> list[str]:
     script = r'''
 import json
 import sys
 import time
 
 MODE = __MODE__
+NEWLINE = __NEWLINE__
 
 def emit(value):
-    sys.stdout.write(json.dumps(value, separators=(",", ":")) + "\n")
-    sys.stdout.flush()
+    sys.stdout.buffer.write(
+        json.dumps(value, separators=(",", ":")).encode("utf-8") + NEWLINE
+    )
+    sys.stdout.buffer.flush()
 
 for raw_line in sys.stdin.buffer:
     message = json.loads(raw_line)
@@ -68,13 +71,19 @@ if MODE == "timeout":
     time.sleep(10)
 elif MODE == "nonzero":
     raise SystemExit(7)
-'''.replace("__MODE__", repr(mode))
+'''.replace("__MODE__", repr(mode)).replace("__NEWLINE__", repr(newline))
     return [sys.executable, "-u", "-c", script]
 
 
-def _client(tmp_path: Path, *, mode: str = "eof", timeout_seconds: float = 2.0):
+def _client(
+    tmp_path: Path,
+    *,
+    mode: str = "eof",
+    newline: bytes = b"\n",
+    timeout_seconds: float = 2.0,
+):
     return ObservedCodexClient(
-        _fixture_command(mode),
+        _fixture_command(mode, newline=newline),
         environment={"PATH": os.defpath, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
         cwd=tmp_path,
         timeout_seconds=timeout_seconds,
@@ -94,10 +103,10 @@ def _schema() -> dict[str, object]:
     )
 
 
-def test_actual_wire_roundtrip_has_bounded_observation_and_identity_scope(
-    tmp_path: Path,
+def _assert_actual_wire_roundtrip(
+    tmp_path: Path, *, inbound_newline: bytes
 ) -> None:
-    client = _client(tmp_path)
+    client = _client(tmp_path, newline=inbound_newline)
     client.start()
     try:
         assert client.initialize() == {"ready": True}
@@ -166,7 +175,10 @@ def test_actual_wire_roundtrip_has_bounded_observation_and_identity_scope(
         "bytes": len(expected_initialize_wire),
         "sha256": hashlib.sha256(expected_initialize_wire).hexdigest(),
     }
-    expected_idle_wire = b'{"method":"thread/status/changed","params":{"status":"idle"}}\n'
+    expected_idle_wire = (
+        b'{"method":"thread/status/changed","params":{"status":"idle"}}'
+        + inbound_newline
+    )
     idle_record = next(
         record
         for record in observation["inbound"]
@@ -195,6 +207,13 @@ def test_actual_wire_roundtrip_has_bounded_observation_and_identity_scope(
     for forbidden in ("thread-1", "session-1", "private-prompt-marker", str(tmp_path)):
         assert forbidden not in serialized
     Draft202012Validator(_schema()).validate(observation)
+
+
+def test_actual_wire_roundtrip_has_bounded_observation_and_identity_scope(
+    tmp_path: Path,
+) -> None:
+    for inbound_newline in (b"\n", b"\r\n"):
+        _assert_actual_wire_roundtrip(tmp_path, inbound_newline=inbound_newline)
 
 
 def test_before_start_has_no_identity_or_internal_zero_claim(tmp_path: Path) -> None:

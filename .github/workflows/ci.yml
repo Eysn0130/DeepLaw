@@ -123,6 +123,7 @@ jobs:
           uv run --frozen pytest --strict-markers -q
           tests/test_windows_acl.py
           tests/test_v013_pass21_windows_acl_environment.py
+          tests/test_v013_codex_transport_observer.py::test_actual_wire_roundtrip_has_bounded_observation_and_identity_scope
           tests/test_v013_no_model_production_registration.py::test_no_model_registration_starts_production_launcher_and_lists_tools
           tests/test_closed_mcp_launcher.py
           tests/test_v013_task_continuity_driver.py
