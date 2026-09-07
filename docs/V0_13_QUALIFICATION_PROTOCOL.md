@@ -599,7 +599,10 @@ The inner canonical byte count is the Provider delivery count; context additiona
 to `budget.provider_payload_bytes`. Those query/context byte arrays are cross-bound to the 62
 Provider samples (two warmups plus 30 samples per surface); local traces, raw plans, and payload
 text are not retained. Source compilation metadata does not carry a query-plan version; an old
-v5 observation or an unbound whole local context payload is rejected. Warmup values are excluded
+v5 observation or an unbound whole local context payload is rejected. Plan, Provider-inner, and
+source-binding observation digests must not be all-zero placeholders. This check does not establish
+the authenticity of arbitrary nonzero digests; exact-run producer and retained-byte bindings remain
+required. Warmup values are excluded
 from exactly 30 measured query/context samples. The measured lane reports p50/p95/max and applies
 hard ceilings of p95 <= 2,000 ms and max <= 5,000 ms per surface; the query/context worst case is
 the typed Gate metric. It also proves RSS, storage, file count, build/rebuild duration,

@@ -409,6 +409,48 @@ def test_v9_scale_schema_is_strict_and_valid_report_has_exact_10k_contract() -> 
     assert "warmup" in report["warm_samples"]["query"]
 
 
+@pytest.mark.parametrize("surface", ("query", "context"))
+@pytest.mark.parametrize(
+    "field",
+    ("query_plan_sha256", "provider_inner_sha256", "source_binding_sha256"),
+)
+@pytest.mark.parametrize("position", (0, WARM_SAMPLE_TARGET))
+def test_v9_rejects_all_zero_observation_digest_placeholders(
+    surface: str, field: str, position: int
+) -> None:
+    schema = json.loads((ROOT / SCHEMA_RELATIVE_PATH).read_text(encoding="utf-8"))
+    report = _report()
+    report["query_context"][surface][field][position] = "0" * 64
+    _redigest(report)
+
+    schema_errors = list(
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(report)
+    )
+    assert schema_errors
+    assert verify_report(report)["valid"] is False
+
+
+def test_v9_typed_scale_evidence_rejects_redigested_zero_observation_digest(
+    tmp_path: Path,
+) -> None:
+    report = _report()
+    report["query_context"]["context"]["source_binding_sha256"][WARM_SAMPLE_TARGET] = (
+        "0" * 64
+    )
+    _redigest(report)
+    manifest = _typed_scale_manifest(tmp_path, report=report)
+    envelope = json.loads(manifest.read_text())
+
+    with pytest.raises(
+        TypedQualificationEvidenceError,
+        match="scale v9 observed report is invalid",
+    ):
+        parse_typed_evidence(
+            manifest,
+            expected_corpus_sha256=envelope["corpus"]["sha256"],
+        )
+
+
 def test_v9_scale_count_must_be_exactly_10k_and_over_10k_is_not_qualified() -> None:
     for count in (9_999, 10_001, 100_000):
         report = _report(count=count)

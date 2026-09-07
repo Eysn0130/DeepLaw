@@ -17331,6 +17331,90 @@
         {
           "junit": {
             "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[0-provider_inner_sha256-context]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[0-provider_inner_sha256-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[0-provider_inner_sha256-query]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[0-provider_inner_sha256-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[0-query_plan_sha256-context]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[0-query_plan_sha256-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[0-query_plan_sha256-query]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[0-query_plan_sha256-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[0-source_binding_sha256-context]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[0-source_binding_sha256-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[0-source_binding_sha256-query]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[0-source_binding_sha256-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[30-provider_inner_sha256-context]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[30-provider_inner_sha256-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[30-provider_inner_sha256-query]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[30-provider_inner_sha256-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[30-query_plan_sha256-context]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[30-query_plan_sha256-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[30-query_plan_sha256-query]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[30-query_plan_sha256-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[30-source_binding_sha256-context]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[30-source_binding_sha256-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_rejects_all_zero_observation_digest_placeholders[30-source_binding_sha256-query]"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_rejects_all_zero_observation_digest_placeholders[30-source_binding_sha256-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
             "name": "test_v9_repeated_40_object_batches_keep_finalization_provider_bounded"
           },
           "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_repeated_40_object_batches_keep_finalization_provider_bounded"
@@ -17404,6 +17488,13 @@
             "name": "test_v9_typed_scale_evidence_preserves_failed_report_as_failed"
           },
           "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_typed_scale_evidence_preserves_failed_report_as_failed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v9",
+            "name": "test_v9_typed_scale_evidence_rejects_redigested_zero_observation_digest"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v9.py::test_v9_typed_scale_evidence_rejects_redigested_zero_observation_digest"
         },
         {
           "junit": {
@@ -19254,9 +19345,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2716,
+      "count": 2729,
       "selection": "not qualification and not windows_native",
-      "sha256": "fe1d39ef1200ac68544e0d30b8da387a3391bfc33da1304c28a5a28744dc3420"
+      "sha256": "2606c105106c8290aaf00c55597dfbfade5753b84ef6a7d1b581565f77a6e1e3"
     },
     "windows": {
       "additional_cases": [
@@ -19296,13 +19387,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2721,
+      "count": 2734,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "99a3c6af3861a06e1b192792c5aab25151447d96a17405caa7e6729f074d2592"
+      "sha256": "ae7f188fe4680f497732457315f3822a86f031341c3905d819d5a18d50632b76"
     }
   },
-  "manifest_sha256": "4ac31eb4d058d5e7f31e4ce9a723d965789fe018b54bbfa7d476e1062791ebda",
+  "manifest_sha256": "85079e1c93dc2ded2a5a219d1e66d92e93e2a77aa6e71a617d4591cf0e4ac234",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
