@@ -3,7 +3,8 @@
 Status: **v3 Kernel-release protocol frozen; exact candidate binding pending**
 Reviewed: **2026-08-21**
 
-Package and main remain `0.12.0 Beta`. The active record is
+Released main remains `0.12.0 Beta`. A prepared qualification candidate carries
+`0.13.0` as specified below; that candidate version is not a release disposition. The active record is
 [`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json):
 `status=machine_evaluation_pending`, `profile=kernel_release_core`,
 `release_ready=false`, and `claim_eligible=false`. The current classification is Gate v9. This
@@ -56,6 +57,14 @@ The current Provider advertisement is knowledge-support input v7/output v6 with 
 must not contain paths, session hashes, internal selection identity, raw logs, transcript,
 reasoning, Secret material, or unadmitted content. Ordinary reads must not append the canonical
 Ledger.
+
+Current development-only seam: `benchmarks/hosts/v013_task_domain_driver.py` exercises bounded
+Source/Wiki reads and closed v7 MCP reads against a pre-frozen source-bound seed. Its caller is the
+task-domain driver, not a native Host. Local service response projections, Provider Capsule bytes,
+Query Trace, and Ledger observations remain distinct; unexecuted catalog duties stay explicit.
+The driver does not establish an installed-wheel, native Host, model-usage, holdout, or Formal
+qualification result. A collector must still bind actual execution and retained evidence before
+any of these observations can contribute to a formal task result.
 
 ## Why this is not a result
 

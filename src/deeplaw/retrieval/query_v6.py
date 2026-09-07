@@ -1987,8 +1987,13 @@ def execute_v6(
         target.get(field) is not None
         for field in ("semantic_key", "knowledge_id", "revision_id", "kind")
     )
+    exact_identity_target = any(
+        target.get(field) is not None
+        for field in ("semantic_key", "knowledge_id", "revision_id")
+    )
+    admitted_target_candidates = candidates if exact_identity_target else selected
     source_discovery_allowed = purpose != "legal" and (
-        not identity_target or bool(selected)
+        not identity_target or bool(admitted_target_candidates)
     )
     if (
         evidence_first
@@ -2026,7 +2031,7 @@ def execute_v6(
         if identity_target:
             initial_refs = [
                 reference
-                for item in selected
+                for item in admitted_target_candidates
                 for reference in item.get("source_refs", [])
                 if isinstance(reference, dict)
             ]

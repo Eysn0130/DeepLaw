@@ -10,7 +10,10 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from benchmarks.hosts.deterministic_fake_agent import compile_with_fake_agent
+from benchmarks.hosts.deterministic_fake_agent import (
+    compile_with_fake_agent,
+    compile_with_fake_mcp_agent,
+)
 from benchmarks.living_wiki.run_quality_gate import _score_case
 from deeplaw.api import (
     KnowledgeOS,
@@ -3346,6 +3349,180 @@ def test_historical_evidence_first_uses_exact_admitted_immutable_fragment(
         gap["code"] == "historical_evidence_unavailable"
         for gap in result["gaps"]
     )
+
+
+def test_identity_target_evidence_survives_single_item_provider_budget(
+    tmp_path: Path,
+) -> None:
+    root, compiled, _compiler_grant_id = _ready_source(tmp_path, section_count=1)
+    with KnowledgeVault(root, read_only=False) as vault:
+        manifest = vault.source_review_manifest(compiled["source"]["source_id"])
+        vault.approve_source_assets(
+            compiled["source"]["source_id"],
+            confirm_reviewed=True,
+            review_manifest_sha256=manifest["review_manifest_sha256"],
+            reviewer_id="identity-target-evidence-test",
+            review_reason="Admit exact source evidence for the identity target budget regression.",
+        )
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        grant_id = store.enable_grant(
+            writer_id="identity-target-evidence-test-agent",
+            operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
+        )["grant_id"]
+    report = compile_with_fake_mcp_agent(
+        vault=root,
+        grant_id=grant_id,
+        source_revision_id=compiled["identity"]["source_revision_id"],
+        packet_max_fragments=1,
+    )
+    assert report["status"] == "succeeded"
+
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        target = store.connection.execute(
+            """
+            SELECT knowledge_id
+            FROM knowledge_revisions_v3
+            WHERE kind = 'claim'
+            ORDER BY revision_id
+            LIMIT 1
+            """,
+        ).fetchone()
+        fragment = store.connection.execute(
+            """
+            SELECT fragments.fragment_id, fragments.locator, fragments.text_sha256
+            FROM source_fragments AS fragments
+            JOIN legacy_fragment_bindings_v2 AS bindings
+              ON bindings.fragment_id = fragments.fragment_id
+            JOIN source_revision_bindings_v2 AS source_binding
+              ON source_binding.legacy_source_id = bindings.legacy_source_id
+            WHERE source_binding.source_revision_id = ?
+            ORDER BY fragments.ordinal
+            LIMIT 1
+            """,
+            (compiled["identity"]["source_revision_id"],),
+        ).fetchone()
+    assert target is not None
+    assert fragment is not None
+
+    wide_response = handle_knowledge_support(
+        operation="query",
+        query="Durable source statement 1",
+        purpose="quote",
+        policy="evidence-first-v1",
+        limit=8,
+        max_chars=1_000,
+        max_tokens=1_000,
+        max_sources=1,
+        query_plan_version="6",
+        query_target={"knowledge_id": target["knowledge_id"]},
+        vault_path=root,
+    )
+    wide_capsule = wide_response["result"]["capsule"]
+    assert wide_capsule["selected_statement_count"] == 1
+    assert wide_capsule["selected_source_count"] == 1
+
+    response = handle_knowledge_support(
+        operation="query",
+        query="Durable source statement 1",
+        purpose="quote",
+        policy="evidence-first-v1",
+        limit=1,
+        max_chars=1_000,
+        max_tokens=1_000,
+        max_sources=1,
+        query_plan_version="6",
+        query_target={"knowledge_id": target["knowledge_id"]},
+        vault_path=root,
+    )
+    result = response["result"]
+
+    capsule = result["capsule"]
+    assert capsule["selected_statement_count"] == 0
+    assert capsule["selected_source_count"] == 1
+    assert (
+        capsule["selected_statement_count"] + capsule["selected_source_count"]
+    ) <= 1
+    assert sum(
+        len(item.get("statement_text", "")) for item in capsule["statements"]
+    ) + sum(len(item.get("excerpt", "")) for item in capsule["evidence"]) <= 1_000
+    assert result["delivery"]["provider_content_bytes"] <= 65_536
+
+    assert capsule["evidence"]
+    evidence = capsule["evidence"][0]
+    assert evidence["source_revision_id"] == compiled["identity"]["source_revision_id"]
+    assert evidence["fragment_id"] == fragment["fragment_id"]
+    assert evidence["content_sha256"] == fragment["text_sha256"]
+    assert evidence["source_refs"] == [
+        {
+            "source_revision_id": compiled["identity"]["source_revision_id"],
+            "fragment_id": fragment["fragment_id"],
+            "locator": fragment["locator"],
+            "quote_sha256": fragment["text_sha256"],
+        }
+    ]
+
+    wrong_target = PurposeAwareRetrievalService(root).query(
+        "Durable source statement 1",
+        purpose="quote",
+        policy="evidence-first-v1",
+        limit=1,
+        max_chars=1_000,
+        max_tokens=1_000,
+        max_sources=1,
+        query_target={
+            "knowledge_id": target["knowledge_id"],
+            "revision_id": report["source_summary_revision_id"],
+        },
+    )
+    assert wrong_target["statements"] == []
+    assert wrong_target["evidence"] == []
+    assert any(
+        item["reason"] == "query_target_mismatch"
+        for item in wrong_target["local_audit"]["rejections"]
+    )
+
+    with AutonomousKnowledgeStore(root, read_only=True) as store:
+        claim_revision = store.connection.execute(
+            """
+            SELECT revision_id
+            FROM knowledge_revisions_v3
+            WHERE knowledge_id = ?
+            """,
+            (target["knowledge_id"],),
+        ).fetchone()
+    assert claim_revision is not None
+    with AutonomousKnowledgeStore(root, read_only=False) as store:
+        dependency = store.connection.execute(
+            """
+            SELECT dependency_id
+            FROM knowledge_dependencies_v1
+            WHERE consumer_revision_id = ?
+            """,
+            (claim_revision["revision_id"],),
+        ).fetchone()
+        assert dependency is not None
+        store.connection.execute(
+            """
+            UPDATE knowledge_dependencies_v1
+            SET freshness = 'stale'
+            WHERE consumer_revision_id = ?
+            """,
+            (claim_revision["revision_id"],),
+        )
+        store.connection.commit()
+    stale_target = PurposeAwareRetrievalService(root).query(
+        "Durable source statement 1",
+        purpose="quote",
+        policy="evidence-first-v1",
+        limit=1,
+        max_chars=1_000,
+        max_tokens=1_000,
+        max_sources=1,
+        query_target={"knowledge_id": target["knowledge_id"]},
+    )
+    assert stale_target["statements"] == []
+    assert stale_target["evidence"] == []
+    assert stale_target["metrics"]["stale_selection_prevented_count"] >= 1
 
 
 @pytest.mark.parametrize(

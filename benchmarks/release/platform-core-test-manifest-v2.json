@@ -6019,6 +6019,13 @@
         {
           "junit": {
             "classname": "tests.test_source_compilation",
+            "name": "test_identity_target_evidence_survives_single_item_provider_budget"
+          },
+          "node_id": "tests/test_source_compilation.py::test_identity_target_evidence_survives_single_item_provider_budget"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_source_compilation",
             "name": "test_knowledge_cli_failure_is_stable_and_does_not_leak_paths"
           },
           "node_id": "tests/test_source_compilation.py::test_knowledge_cli_failure_is_stable_and_does_not_leak_paths"
@@ -17015,6 +17022,62 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_exact_quote_is_recomputed_from_returned_text"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_exact_quote_is_recomputed_from_returned_text"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_internal_trace_is_rejected"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_internal_trace_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_collect_records_bounded_call_facts_and_rejects_ledger_change"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_collect_records_bounded_call_facts_and_rejects_ledger_change"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_provider_content_must_match_structured_capsule"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_provider_content_must_match_structured_capsule"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_public_api_is_bounded_and_seed_is_development_only"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_public_api_is_bounded_and_seed_is_development_only"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_real_closed_stdio_positive_and_explicit_not_executed"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_real_closed_stdio_positive_and_explicit_not_executed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_seed_file_has_a_bounded_read"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_seed_file_has_a_bounded_read"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_wrong_seed_scope_and_quote_fail_closed"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_wrong_seed_scope_and_quote_fail_closed"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_tolaria_workspace_interop",
             "name": "test_dirty_tracked_checkout_is_rejected_but_untracked_node_modules_are_irrelevant"
           },
@@ -18246,9 +18309,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2572,
+      "count": 2581,
       "selection": "not qualification and not windows_native",
-      "sha256": "b4910aa07ab6c97fea6447a09299c0275916c3c06b50d29034aa51c38446cc2f"
+      "sha256": "856ffa7b558ecbc30f2945aa0cf76bdace030c0f7361f5c59ab69bb3388b6302"
     },
     "windows": {
       "additional_cases": [
@@ -18288,13 +18351,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2577,
+      "count": 2586,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "230d7faa61c17d35a8dce12b991b549c505143954be1673ef3542bea71f55898"
+      "sha256": "955dc2acd49acf37ee501d5b572c583ce156a4967e21cb040f5d711dca066b68"
     }
   },
-  "manifest_sha256": "365c69e7cca04e569a735298d0ec1d477da4c0e4ea6c60d5f1ac9f16a2eaa29f",
+  "manifest_sha256": "6625edc29c3c4f8778a7b7e88b04576da6a213e44bc801914501ce15af383666",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
