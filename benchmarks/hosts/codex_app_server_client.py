@@ -1160,6 +1160,7 @@ class CodexAppServerClient:
         dynamic_tool_handler: DynamicToolHandler | Mapping[str, Callable[..., Any]] | None = None,
         tool_handler: DynamicToolHandler | Mapping[str, Callable[..., Any]] | None = None,
         forbidden_output_values: Sequence[str] = (),
+        discard_payload_projection: bool = False,
     ) -> None:
         if not command or any(
             not isinstance(argument, str) or not argument for argument in command
@@ -1175,6 +1176,8 @@ class CodexAppServerClient:
             raise ValueError("max_stderr_bytes must be positive")
         if dynamic_tool_handler is not None and tool_handler is not None:
             raise ValueError("provide only one dynamic tool handler")
+        if type(discard_payload_projection) is not bool:
+            raise ValueError("discard_payload_projection must be a boolean")
         self.command = tuple(command)
         self.environment = dict(environment or {})
         if any(
@@ -1190,6 +1193,7 @@ class CodexAppServerClient:
         self.client_name = client_name
         self.client_title = client_title
         self.client_version = client_version
+        self.discard_payload_projection = discard_payload_projection
         self.dynamic_tools = dynamic_tools
         self.dynamic_tool_handler = (
             dynamic_tool_handler if dynamic_tool_handler is not None else tool_handler
@@ -1217,7 +1221,12 @@ class CodexAppServerClient:
         self._next_request_id = 1
         self._stdout_buffer = bytearray()
         self._stdout_bytes = 0
-        self._stderr_digest = hashlib.sha256()
+        # A metadata-only caller must not even instantiate a payload digest:
+        # its stderr bytes remain bounded and leak-scanned, but are never
+        # retained in a hash state.
+        self._stderr_digest = (
+            hashlib.sha256() if not self.discard_payload_projection else None
+        )
         self._stderr_bytes = 0
         self._events: list[dict[str, Any]] = []
         self._usage_by_key: dict[tuple[str | None, str | None], dict[str, Any]] = {}
@@ -1273,7 +1282,14 @@ class CodexAppServerClient:
     @property
     def stderr_metadata(self) -> dict[str, Any]:
         self._drain_available_stderr()
-        return {"sha256": self._stderr_digest.hexdigest(), "bytes": self._stderr_bytes}
+        return {
+            "sha256": (
+                self._stderr_digest.hexdigest()
+                if self._stderr_digest is not None
+                else None
+            ),
+            "bytes": self._stderr_bytes,
+        }
 
     @property
     def stderr(self) -> dict[str, Any]:
@@ -2014,7 +2030,8 @@ class CodexAppServerClient:
             )
         else:
             self._stderr_bytes += len(chunk)
-            self._stderr_digest.update(chunk)
+            if self._stderr_digest is not None:
+                self._stderr_digest.update(chunk)
             limit_exceeded = (
                 self._stderr_bytes > self.max_stderr_bytes
                 or self._stdout_bytes + self._stderr_bytes > self.max_output_bytes
@@ -2290,6 +2307,11 @@ class CodexAppServerClient:
         params = message.get("params")
         if not isinstance(params, Mapping):
             params = {}
+        if self.discard_payload_projection:
+            # Metadata-only probes may still need to drain protocol
+            # notifications while waiting for a response, but must not retain,
+            # inspect, or hash their payloads.
+            return None
         if self._validate_active_turn_notification(method, params):
             return None
         completion = self._capture_notification_state(method, params)
@@ -2538,6 +2560,8 @@ class CodexAppServerClient:
     def _project_event(
         self, method: str, params: Mapping[str, Any]
     ) -> dict[str, Any] | None:
+        if self.discard_payload_projection:
+            return None
         if method.startswith(("account/", "remoteControl/")):
             return None
         event: dict[str, Any] = {"method": method}

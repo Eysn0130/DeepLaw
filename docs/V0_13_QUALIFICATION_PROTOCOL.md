@@ -372,6 +372,27 @@ Closing the unavailable measurements requires an independently auditable runtime
 source. Development instrumentation must continue to expose the gap until such a source exists,
 without weakening the formal zero-activity requirements.
 
+**Current development account-readiness boundary:**
+`benchmarks/hosts/codex_account_readiness.py` reuses the bounded App Server transport with
+payload projections and raw-output hashes disabled. Its outbound surface is only `initialize`,
+`initialized`, and public `account/read` with literal `refreshToken=false`; incoming tool or auth
+requests are rejected. It returns only a closed account-type/auth-required projection, not email,
+plan, account identifiers, credentials, raw frames, or their hashes. Existing diagnostic clients
+retain their previous behavior; the wire-hashing transport observer above must not be substituted
+for this account-readiness client. Byte limits and fail-closed cleanup still apply.
+
+The installed-version public account handler uses cached auth, but its config reload and App
+Server startup also load managed cloud policy, whose normal Host-owned auth path may refresh.
+This distinction is visible in pinned
+[`account_processor.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/app-server/src/request_processors/account_processor.rs#L1108)
+and [`cloud-config/service.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/cloud-config/src/service.rs#L178).
+Do not claim process-wide zero authentication or background network activity from
+`refreshToken=false`, disable managed requirements, or copy credentials into an isolated home.
+A public static model catalog and disabled plugin/telemetry startup are development controls,
+not measured internal counters. Readiness remains `formal_admission=false` and
+`claim_eligible=false`; it does not prove Desktop account equality, any thread/session identity,
+model invocation, six-slot execution, or any Formal gate.
+
 The v2 receipt shape remains unchanged, but its existing native digests must bind the v4
 observation rather than arbitrary broker labels. `native_event_binding.event_sequence_sha256` is
 the SHA-256 of canonical UTF-8 JSON (sorted keys, compact separators, no NaN) over
