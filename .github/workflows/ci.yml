@@ -57,6 +57,11 @@ jobs:
           tests/test_v013_commercial_release_gate.py
           tests/test_v013_platform_core_manifest.py
           tests/test_release_engineering.py
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_stops_live_output_overflow_before_child_completion
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_accepts_exact_output_boundary
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_preserves_observed_overflow
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_terminates_live_child_on_timeout
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_does_not_use_unbounded_communicate
 
   windows-sentinel:
     name: Windows launcher, native ACL, environment, and continuity sentinel
@@ -97,6 +102,11 @@ jobs:
           tests/test_v013_host_task_executor.py::test_symlink_and_hardlink_are_rejected
           tests/test_bounded_subprocess.py::test_bounded_subprocess_kills_descendants_that_inherit_output_pipes
           tests/test_bounded_subprocess.py::test_bounded_subprocess_reports_unavailable_pipes
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_stops_live_output_overflow_before_child_completion
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_accepts_exact_output_boundary
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_preserves_observed_overflow
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_terminates_live_child_on_timeout
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_does_not_use_unbounded_communicate
           tests/test_v013_host_process_receipt_v2.py::test_production_seams_reject_unattested_codex_connection_and_synthetic_opencode_fork
           tests/test_v013_pass13_codex_qualification.py::test_codex_login_receipt_hashes_status_without_reading_auth_file
           tests/test_v013_pass13_codex_qualification.py::test_owner_broker_launcher_is_external_owner_only_and_process_separated

@@ -468,6 +468,13 @@ bootstrap runs with `-I -S`, disables bytecode writes, adds only the explicit `s
 only: declared artifact digests do not prove installation provenance, and Python stdlib or OS
 dynamic-library closure remains unbound.
 
+OpenCode development/continuity subprocess capture reuses the shared bounded subprocess runner:
+each stdout/stderr buffer has a 4 MiB limit during execution, with the existing per-call timeout.
+Observed overflow clears both returned streams, including when truncation accompanies a timeout;
+unconfirmed cleanup fails closed. Windows uses the shared Job Guard, while POSIX containment covers
+the created process group only, not a descendant that escapes it. These local capture bounds do not
+replace the separate Provider Capsule limit or establish Formal Host evidence.
+
 The OpenCode runner now has the parallel path-free
 `deeplaw.opencode-owner-external-broker-control/v2` consumer. Its exact owner-only external broker,
 not the repository runner, exclusively starts and supervises the pinned OpenCode 1.18.16 Host,

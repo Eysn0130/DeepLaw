@@ -778,62 +778,54 @@ def _run_bounded_process(
         raise QualificationError("bounded process argv is empty")
     started = time.monotonic()
     try:
-        process, guard = bounded_subprocess.spawn_process(
+        bounded_environment = _windows_child_environment(environment)
+        process_creation_options()
+        result = bounded_subprocess.run_bounded_subprocess(
             [str(item) for item in argv],
+            input_bytes=input_bytes,
+            environment=bounded_environment,
             cwd=str(cwd),
-            env=_windows_child_environment(environment),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            **process_creation_options(),
+            timeout_seconds=timeout,
+            max_stdout_bytes=MAX_OUTPUT_BYTES,
+            max_stderr_bytes=MAX_OUTPUT_BYTES,
         )
-    except (OSError, ValueError, bounded_subprocess.WindowsJobStartError) as exc:
-        raise QualificationError("bounded process failed to start") from exc
-    timed_out = False
-    cleanup_confirmed = True
-    try:
-        stdout, stderr = process.communicate(input=input_bytes, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        cleanup_confirmed = _terminate_process_tree(process, guard)
-        try:
-            stdout, stderr = process.communicate(
-                timeout=_PROCESS_TERMINATION_WAIT_SECONDS
-            )
-        except subprocess.TimeoutExpired:
-            cleanup_confirmed = False
-            with suppress(OSError):
-                process.kill()
-            try:
-                stdout, stderr = process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
-            except (OSError, subprocess.SubprocessError, ValueError):
-                cleanup_confirmed = False
-                stdout, stderr = b"", b""
-        except (OSError, subprocess.SubprocessError, ValueError):
-            cleanup_confirmed = False
-            stdout, stderr = b"", b""
-    if not timed_out:
-        cleanup_confirmed = _terminate_process_tree(process, guard)
-    if not cleanup_confirmed:
-        _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
-    elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
-    if len(stdout) > MAX_OUTPUT_BYTES or len(stderr) > MAX_OUTPUT_BYTES:
-        if not _terminate_process_tree(process, guard):
+    except bounded_subprocess.BoundedSubprocessError as exc:
+        elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
+        if exc.kind is bounded_subprocess.BoundedSubprocessFailureKind.START_FAILED:
+            raise QualificationError("bounded process failed to start") from exc
+        if (
+            exc.kind
+            is bounded_subprocess.BoundedSubprocessFailureKind.CLEANUP_UNCONFIRMED
+        ):
             _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
+        if exc.kind is bounded_subprocess.BoundedSubprocessFailureKind.PIPES_UNAVAILABLE:
+            raise QualificationError("bounded process pipes are unavailable") from exc
+        timed_out = exc.kind is bounded_subprocess.BoundedSubprocessFailureKind.TIMEOUT
+        output_overflow = (
+            exc.kind in {
+                bounded_subprocess.BoundedSubprocessFailureKind.STDOUT_LIMIT,
+                bounded_subprocess.BoundedSubprocessFailureKind.STDERR_LIMIT,
+            }
+            or exc.stdout_truncated
+            or exc.stderr_truncated
+        )
+        if not timed_out and not output_overflow:
+            raise QualificationError("bounded process failed") from exc
         return {
-            "returncode": process.returncode,
-            "stdout": b"",
-            "stderr": b"",
+            "returncode": exc.returncode,
+            "stdout": b"" if output_overflow else exc.stdout,
+            "stderr": b"" if output_overflow else exc.stderr,
             "elapsed_ms": elapsed_ms,
             "timed_out": timed_out,
-            "output_overflow": True,
+            "output_overflow": output_overflow,
         }
+    elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
     return {
-        "returncode": process.returncode,
-        "stdout": stdout,
-        "stderr": stderr,
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
         "elapsed_ms": elapsed_ms,
-        "timed_out": timed_out,
+        "timed_out": False,
         "output_overflow": False,
     }
 

@@ -6,6 +6,7 @@ import os
 import signal
 import stat
 import subprocess
+import sys
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -1624,53 +1625,178 @@ def test_bounded_process_timeout_does_not_use_unbounded_communicate(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    class FakeProcess:
-        pid = 4316
-        returncode = -9
+    calls: list[dict[str, object]] = []
 
-        def __init__(self) -> None:
-            self.timeouts: list[float | None] = []
+    def fake_run(*args: object, **kwargs: object) -> None:
+        calls.append({"args": args, **kwargs})
+        raise runner.bounded_subprocess.BoundedSubprocessError(
+            "bounded subprocess timed out",
+            kind=runner.bounded_subprocess.BoundedSubprocessFailureKind.TIMEOUT,
+        )
 
-        def communicate(
-            self, *, input: bytes = b"", timeout: float | None = None
-        ) -> tuple[bytes, bytes]:
-            del input
-            self.timeouts.append(timeout)
-            if timeout is not None and len(self.timeouts) == 1:
-                raise runner.subprocess.TimeoutExpired("fake", timeout)
-            if timeout is None:
-                raise AssertionError("unbounded communicate")
-            return b"", b""
-
-        def poll(self) -> None:
-            return None
-
-    fake = FakeProcess()
-    guard = object()
-    terminated: list[tuple[object, object | None]] = []
     monkeypatch.setattr(
         runner.bounded_subprocess,
-        "spawn_process",
-        lambda *args, **kwargs: (fake, guard),
-    )
-    monkeypatch.setattr(
-        runner,
-        "_terminate_process_tree",
-        lambda process, selected_guard=None: terminated.append(
-            (process, selected_guard)
-        )
-        or True,
+        "run_bounded_subprocess",
+        fake_run,
     )
     result = runner._run_bounded_process(
-        ["fake-opencode"],
+        ["fake-opencode", "--flag"],
         environment={"PATH": os.defpath},
         cwd=tmp_path,
+        input_bytes=b"input",
         timeout=0.01,
     )
     assert result["timed_out"] is True
-    assert fake.timeouts[0] == 0.01
-    assert fake.timeouts[1] is not None
-    assert terminated == [(fake, guard)]
+    assert result["output_overflow"] is False
+    assert calls == [
+        {
+            "args": (["fake-opencode", "--flag"],),
+            "input_bytes": b"input",
+            "environment": runner._windows_child_environment({"PATH": os.defpath}),
+            "cwd": str(tmp_path),
+            "timeout_seconds": 0.01,
+            "max_stdout_bytes": runner.MAX_OUTPUT_BYTES,
+            "max_stderr_bytes": runner.MAX_OUTPUT_BYTES,
+        }
+    ]
+
+
+@pytest.mark.parametrize("stream", ("stdout", "stderr"))
+def test_bounded_process_timeout_preserves_observed_overflow(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    stream: str,
+) -> None:
+    def fail_timeout(*_args: object, **_kwargs: object) -> None:
+        raise runner.bounded_subprocess.BoundedSubprocessError(
+            "bounded subprocess timed out",
+            kind=runner.bounded_subprocess.BoundedSubprocessFailureKind.TIMEOUT,
+            stdout=b"synthetic limited stdout",
+            stderr=b"synthetic limited stderr",
+            stdout_truncated=stream == "stdout",
+            stderr_truncated=stream == "stderr",
+        )
+
+    monkeypatch.setattr(runner.bounded_subprocess, "run_bounded_subprocess", fail_timeout)
+    result = runner._run_bounded_process(
+        ["fake-opencode"], environment={"PATH": os.defpath}, cwd=tmp_path, timeout=1,
+    )
+    assert result["timed_out"] is True
+    assert result["output_overflow"] is True
+    assert result["stdout"] == b""
+    assert result["stderr"] == b""
+
+
+@pytest.mark.parametrize("stream", ("stdout", "stderr"))
+def test_bounded_process_stops_live_output_overflow_before_child_completion(
+    tmp_path: Path,
+    stream: str,
+) -> None:
+    marker = tmp_path / f"{stream}-completed"
+    script = tmp_path / f"{stream}-overflow.py"
+    script.write_text(
+        "import pathlib, sys, time\n"
+        f"sys.{stream}.buffer.write(b'x' * {runner.MAX_OUTPUT_BYTES * 2})\n"
+        f"sys.{stream}.buffer.flush()\n"
+        "time.sleep(2)\n"
+        f"pathlib.Path({str(marker)!r}).write_text('completed', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    result = runner._run_bounded_process(
+        [sys.executable, str(script)],
+        environment={"PATH": os.defpath},
+        cwd=tmp_path,
+        timeout=5,
+    )
+
+    assert result["output_overflow"] is True
+    assert result["stdout"] == b""
+    assert result["stderr"] == b""
+    assert not marker.exists()
+
+
+def test_bounded_process_accepts_exact_output_boundary(tmp_path: Path) -> None:
+    script = tmp_path / "exact-output.py"
+    script.write_text(
+        "import sys\n"
+        f"sys.stdout.buffer.write(b'o' * {runner.MAX_OUTPUT_BYTES})\n"
+        f"sys.stderr.buffer.write(b'e' * {runner.MAX_OUTPUT_BYTES})\n"
+        "sys.stdout.buffer.flush()\n"
+        "sys.stderr.buffer.flush()\n",
+        encoding="utf-8",
+    )
+
+    result = runner._run_bounded_process(
+        [sys.executable, str(script)],
+        environment={"PATH": os.defpath},
+        cwd=tmp_path,
+        timeout=5,
+    )
+
+    assert result["returncode"] == 0
+    assert len(result["stdout"]) == runner.MAX_OUTPUT_BYTES
+    assert len(result["stderr"]) == runner.MAX_OUTPUT_BYTES
+    assert result["output_overflow"] is False
+
+
+def test_bounded_process_terminates_live_child_on_timeout(tmp_path: Path) -> None:
+    marker = tmp_path / "timeout-completed"
+    script = tmp_path / "timeout.py"
+    script.write_text(
+        "import pathlib, time\n"
+        "time.sleep(2)\n"
+        f"pathlib.Path({str(marker)!r}).write_text('completed', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    result = runner._run_bounded_process(
+        [sys.executable, str(script)],
+        environment={"PATH": os.defpath},
+        cwd=tmp_path,
+        timeout=0.05,
+    )
+
+    assert result["timed_out"] is True
+    assert result["output_overflow"] is False
+    assert not marker.exists()
+
+
+def test_bounded_process_maps_start_failure(tmp_path: Path) -> None:
+    with pytest.raises(runner.QualificationError, match="bounded process failed to start"):
+        runner._run_bounded_process(
+            [str(tmp_path / "missing-opencode")],
+            environment={"PATH": os.defpath},
+            cwd=tmp_path,
+            timeout=1,
+        )
+
+
+def test_bounded_process_maps_cleanup_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fail_cleanup(*_args: object, **_kwargs: object) -> None:
+        raise runner.bounded_subprocess.BoundedSubprocessError(
+            "bounded subprocess cleanup could not be confirmed",
+            kind=runner.bounded_subprocess.BoundedSubprocessFailureKind.CLEANUP_UNCONFIRMED,
+        )
+
+    monkeypatch.setattr(
+        runner.bounded_subprocess,
+        "run_bounded_subprocess",
+        fail_cleanup,
+    )
+    with pytest.raises(
+        runner.QualificationError,
+        match="OpenCode process-tree cleanup could not be confirmed",
+    ):
+        runner._run_bounded_process(
+            ["fake-opencode"],
+            environment={"PATH": os.defpath},
+            cwd=tmp_path,
+            timeout=1,
+        )
 
 
 def test_local_server_stop_does_not_use_unbounded_communicate(
@@ -1908,42 +2034,26 @@ def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path
 def test_timeout_terminates_the_created_process_group(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    class FakeProcess:
-        pid = 123
-        returncode = -9
+    calls: list[dict[str, object]] = []
 
-        def communicate(
-            self, *, input: bytes = b"", timeout: float | None = None
-        ) -> tuple[bytes, bytes]:
-            del input
-            if timeout is not None and timeout <= 0.01:
-                raise runner.subprocess.TimeoutExpired("fake", timeout)
-            return b"", b""
+    def fail_timeout(*args: object, **kwargs: object) -> None:
+        calls.append({"args": args, **kwargs})
+        raise runner.bounded_subprocess.BoundedSubprocessError(
+            "bounded subprocess timed out",
+            kind=runner.bounded_subprocess.BoundedSubprocessFailureKind.TIMEOUT,
+        )
 
-        def poll(self) -> None:
-            return None
-
-    fake = FakeProcess()
-    guard = object()
-    killed: list[tuple[object, object | None]] = []
     monkeypatch.setattr(
         runner.bounded_subprocess,
-        "spawn_process",
-        lambda *args, **kwargs: (fake, guard),
-    )
-    monkeypatch.setattr(
-        runner,
-        "_terminate_process_tree",
-        lambda process, selected_guard=None: killed.append(
-            (process, selected_guard)
-        )
-        or True,
+        "run_bounded_subprocess",
+        fail_timeout,
     )
     result = runner._run_bounded_process(
         ["fake-opencode"], environment={"PATH": os.defpath}, cwd=tmp_path, timeout=0.01
     )
     assert result["timed_out"] is True
-    assert killed == [(fake, guard)]
+    assert result["output_overflow"] is False
+    assert calls[0]["timeout_seconds"] == 0.01
 
 
 def test_mcp_receipt_proves_provider_and_auth_are_absent() -> None:

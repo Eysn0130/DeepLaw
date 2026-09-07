@@ -12018,9 +12018,65 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_bounded_process_accepts_exact_output_boundary"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_accepts_exact_output_boundary"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_bounded_process_maps_cleanup_failure"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_maps_cleanup_failure"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_bounded_process_maps_start_failure"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_maps_start_failure"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_bounded_process_stops_live_output_overflow_before_child_completion[stderr]"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_stops_live_output_overflow_before_child_completion[stderr]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_bounded_process_stops_live_output_overflow_before_child_completion[stdout]"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_stops_live_output_overflow_before_child_completion[stdout]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_bounded_process_terminates_live_child_on_timeout"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_terminates_live_child_on_timeout"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
             "name": "test_bounded_process_timeout_does_not_use_unbounded_communicate"
           },
           "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_does_not_use_unbounded_communicate"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_bounded_process_timeout_preserves_observed_overflow[stderr]"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_preserves_observed_overflow[stderr]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass13_opencode_qualification",
+            "name": "test_bounded_process_timeout_preserves_observed_overflow[stdout]"
+          },
+          "node_id": "tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_preserves_observed_overflow[stdout]"
         },
         {
           "junit": {
@@ -19345,9 +19401,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2729,
+      "count": 2737,
       "selection": "not qualification and not windows_native",
-      "sha256": "2606c105106c8290aaf00c55597dfbfade5753b84ef6a7d1b581565f77a6e1e3"
+      "sha256": "3cd2dc4b18bde400a622e307be3c8bd89d5f8f43d1811ca73d56ab6c064ac316"
     },
     "windows": {
       "additional_cases": [
@@ -19387,13 +19443,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2734,
+      "count": 2742,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "ae7f188fe4680f497732457315f3822a86f031341c3905d819d5a18d50632b76"
+      "sha256": "6e1ac34eb6fcc23d7f14b64d78ef32142ef4eca79ddb299f81d6135e78621b1d"
     }
   },
-  "manifest_sha256": "85079e1c93dc2ded2a5a219d1e66d92e93e2a77aa6e71a617d4591cf0e4ac234",
+  "manifest_sha256": "c83855d61d3e1597d5e5b99342592b05e359936bc010556c5bb73e47bd64c7c7",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
