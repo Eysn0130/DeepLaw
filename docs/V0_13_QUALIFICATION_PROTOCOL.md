@@ -66,6 +66,23 @@ The driver does not establish an installed-wheel, native Host, model-usage, hold
 qualification result. A collector must still bind actual execution and retained evidence before
 any of these observations can contribute to a formal task result.
 
+Current development-only retention: `v013_task_service_observation.py` invokes that driver and
+associates its bounded Source/Wiki/query/context calls with one validated native-v3 message event,
+candidate, run, session, and route. A source-backed `deeplaw.v013-host-task-result/v2` retains a
+digest-bound `service_source` inside the existing task-result reference; the outer six-reference
+contract is unchanged. Intake, executor closure, and bundle retention reopen those exact bytes.
+Current source-backed evidence (a v2 task result or any native-v3 event) requires an entirely
+native-v3 event sequence and validated service calls; mixing old events cannot bypass this check.
+Entirely historical native-v2 events with a v1 task result remain compatibility inputs only.
+Raw driver-call and retained projection sizes/hashes are separate and bounded; caller overrides
+cannot replace the observed raw-call binding. Source identities and admission policy must match
+the frozen seed. Provider token/byte totals and event indices reject boolean numeric values.
+The retained association explicitly has `host_consumption_proven=false`, `formal_admission=false`,
+and `claim_eligible=false`. It does not prove a Host consumed the driver output. Unexecuted task
+duties remain `not_executed` and cannot be promoted to a passing duty or an acceptable Gap. Native
+turn/usage collection, installed-wheel execution, and the remaining task journeys are still
+required; these local development records do not satisfy Formal Host evidence.
+
 ## Why this is not a result
 
 A protocol, validator, local regression, mock, dry-run, source-free diagnostic, caller-authored

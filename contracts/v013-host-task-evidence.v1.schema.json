@@ -10,7 +10,8 @@
     {"$ref": "#/$defs/usageReceipt"},
     {"$ref": "#/$defs/expectedTask"},
     {"$ref": "#/$defs/taskResult"},
-    {"$ref": "#/$defs/isolationReceipt"}
+    {"$ref": "#/$defs/isolationReceipt"},
+    {"$ref": "#/$defs/taskServiceObservation"}
   ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -302,6 +303,22 @@
         "gap_code": {"type": ["string", "null"], "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"}
       }
     },
+    "dutyV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duty", "status", "gap_code"],
+      "properties": {
+        "duty": {"$ref": "#/$defs/identifier"},
+        "status": {"enum": ["observed", "gap", "not_executed"]},
+        "gap_code": {"type": ["string", "null"], "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "not_executed"}}, "required": ["status"]},
+          "then": {"properties": {"gap_code": {"const": null}}}
+        }
+      ]
+    },
     "identitySelection": {
       "type": "object",
       "additionalProperties": false,
@@ -330,13 +347,136 @@
         "receipt_sha256": {"$ref": "#/$defs/nullableSha256"}
       }
     },
+    "taskServiceSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "byte_size", "sha256", "media_type"],
+      "properties": {
+        "relative_path": {"type": "string", "minLength": 1},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "media_type": {"const": "application/json"}
+      }
+    },
+    "taskServiceCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "action", "seam", "caller", "request", "request_byte_size", "request_sha256", "projection", "projection_byte_size", "projection_sha256", "observed_request_byte_size", "observed_request_sha256", "observed_projection_byte_size", "observed_projection_sha256"],
+      "properties": {
+        "operation": {"enum": ["SourceReadService", "WikiReadService", "knowledge_support"]},
+        "action": {"enum": ["get", "fragment", "page", "query", "context"]},
+        "seam": {"enum": ["source_read", "fragment_read", "wiki_read", "query_context"]},
+        "caller": {"const": "task_domain_driver"},
+        "request": {"type": "object"},
+        "request_byte_size": {"type": "integer", "minimum": 1, "maximum": 24576},
+        "request_sha256": {"$ref": "#/$defs/sha256"},
+        "projection": {"type": "object"},
+        "projection_byte_size": {"type": "integer", "minimum": 1, "maximum": 24576},
+        "projection_sha256": {"$ref": "#/$defs/sha256"},
+        "observed_request_byte_size": {"type": "integer", "minimum": 1, "maximum": 24576},
+        "observed_request_sha256": {"$ref": "#/$defs/sha256"},
+        "observed_projection_byte_size": {"type": "integer", "minimum": 1, "maximum": 24576},
+        "observed_projection_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "taskServiceObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "status", "formal_admission", "claim_eligible", "caller", "driver_kind", "task_case", "seed", "executed_operations", "executed_duties", "not_executed_duties", "observed_public_seams", "service_calls", "audit_head_facts", "native_event_binding"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.v013-task-service-observation/v1"},
+        "status": {"const": "executed"},
+        "formal_admission": {"const": false},
+        "claim_eligible": {"const": false},
+        "caller": {"const": "task_domain_driver"},
+        "driver_kind": {"const": "task_domain_driver"},
+        "task_case": {"enum": ["living_wiki", "professional_evidence"]},
+        "seed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["task_case", "scope", "max_sensitivity", "include", "duties"],
+          "properties": {
+            "task_case": {"enum": ["living_wiki", "professional_evidence"]},
+            "scope": {"enum": ["personal", "project", "domain"]},
+            "max_sensitivity": {"enum": ["public", "internal", "private"]},
+            "include": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["knowledge_id", "knowledge_revision_id", "source_id", "source_revision_id", "fragment_id", "locator", "quote_sha256", "content_sha256", "authority", "legal_authority", "verification"],
+              "properties": {
+                "knowledge_id": {"$ref": "#/$defs/identifier"},
+                "knowledge_revision_id": {"$ref": "#/$defs/identifier"},
+                "source_id": {"$ref": "#/$defs/identifier"},
+                "source_revision_id": {"$ref": "#/$defs/identifier"},
+                "fragment_id": {"$ref": "#/$defs/identifier"},
+                "locator": {"type": "string", "minLength": 1, "maxLength": 500},
+                "quote_sha256": {"$ref": "#/$defs/sha256"},
+                "content_sha256": {"$ref": "#/$defs/sha256"},
+                "authority": {"const": "agent_derived"},
+                "legal_authority": {"const": false},
+                "verification": {"const": "source_bound"}
+              }
+            },
+            "duties": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}}
+          }
+        },
+        "executed_operations": {"type": "array", "uniqueItems": true, "items": {"enum": ["source_read", "fragment_read", "wiki_read", "query_context"]}},
+        "executed_duties": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "not_executed_duties": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "observed_public_seams": {"type": "array", "uniqueItems": true, "items": {"enum": ["source_read", "fragment_read", "wiki_read", "query_context"]}},
+        "service_calls": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/taskServiceCall"}},
+        "audit_head_facts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["before_audit_head", "after_audit_head", "before_legacy_audit_head", "after_legacy_audit_head", "unchanged"],
+          "properties": {
+            "before_audit_head": {"$ref": "#/$defs/sha256"},
+            "after_audit_head": {"$ref": "#/$defs/sha256"},
+            "before_legacy_audit_head": {"$ref": "#/$defs/sha256"},
+            "after_legacy_audit_head": {"$ref": "#/$defs/sha256"},
+            "unchanged": {"const": true}
+          }
+        },
+        "native_event_binding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["run_id", "workflow_run_id", "candidate_binding", "host", "task_case", "event_index", "event_sha256", "session_sha256", "route", "host_identity_sha256", "host_consumption_proven"],
+          "properties": {
+            "run_id": {"$ref": "#/$defs/identifier"},
+            "workflow_run_id": {"type": "integer", "minimum": 1},
+            "candidate_binding": {"$ref": "#/$defs/candidateBinding"},
+            "host": {"$ref": "#/$defs/host"},
+            "task_case": {"enum": ["living_wiki", "professional_evidence"]},
+            "event_index": {"type": "integer", "minimum": 0},
+            "event_sha256": {"$ref": "#/$defs/sha256"},
+            "session_sha256": {"$ref": "#/$defs/sha256"},
+            "route": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "binding_sha256", "task_handle_sha256", "project_sha256", "repository_sha256", "worktree_sha256"],
+              "properties": {
+                "status": {"const": "exact"},
+                "binding_sha256": {"$ref": "#/$defs/sha256"},
+                "task_handle_sha256": {"$ref": "#/$defs/sha256"},
+                "project_sha256": {"$ref": "#/$defs/sha256"},
+                "repository_sha256": {"$ref": "#/$defs/sha256"},
+                "worktree_sha256": {"$ref": "#/$defs/sha256"}
+              }
+            },
+            "host_identity_sha256": {"$ref": "#/$defs/sha256"},
+            "host_consumption_proven": {"const": false}
+          }
+        }
+      }
+    },
     "taskResult": {
+      "description": "Current source-backed v2 results require a retained service source and an entirely native-v3 event sequence; the cross-artifact parser enforces this binding. Historical all-v2 events plus v1 results remain compatibility-only inputs.",
       "type": "object",
       "additionalProperties": false,
       "required": ["artifact_kind", "schema_version", "run_id", "workflow_run_id", "task_case", "host", "first_correct_action", "decision_preservation", "wrong_state_admission", "duties", "provider", "selected_identities", "duplicate_distractor", "no_hidden_mutation", "query_trace", "ledger", "lifecycle_steps", "observed_public_seams", "claim_eligible"],
       "properties": {
         "artifact_kind": {"const": "task_result"},
-        "schema_version": {"const": "deeplaw.v013-host-task-evidence/v1"},
+        "schema_version": {"enum": ["deeplaw.v013-host-task-evidence/v1", "deeplaw.v013-host-task-result/v2"]},
         "run_id": {"$ref": "#/$defs/identifier"},
         "workflow_run_id": {"type": "integer", "minimum": 1},
         "task_case": {"$ref": "#/$defs/taskCase"},
@@ -344,7 +484,7 @@
         "first_correct_action": {"type": "object", "additionalProperties": false, "required": ["observed", "event_index", "seam"], "properties": {"observed": {"type": "boolean"}, "event_index": {"type": "integer", "minimum": 0}, "seam": {"enum": ["knowledge_support", "native_capsule", "source_read", "wiki_read"]}}},
         "decision_preservation": {"type": "object", "additionalProperties": false, "required": ["observed", "identity_sha256"], "properties": {"observed": {"type": "boolean"}, "identity_sha256": {"$ref": "#/$defs/sha256"}}},
         "wrong_state_admission": {"$ref": "#/$defs/stateRows"},
-        "duties": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/duty"}},
+        "duties": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/dutyV2"}},
         "provider": {"type": "object", "additionalProperties": false, "required": ["capsule_sha256", "provider_bytes", "input_tokens", "output_tokens", "cache_tokens", "reasoning_tokens"], "properties": {"capsule_sha256": {"$ref": "#/$defs/sha256"}, "provider_bytes": {"type": "integer", "minimum": 1, "maximum": 65536}, "input_tokens": {"type": "integer", "minimum": 0}, "output_tokens": {"type": "integer", "minimum": 0}, "cache_tokens": {"type": "integer", "minimum": 0}, "reasoning_tokens": {"type": "integer", "minimum": 0}}},
         "selected_identities": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/identitySelection"}},
         "duplicate_distractor": {"$ref": "#/$defs/stateRows"},
@@ -353,8 +493,28 @@
         "ledger": {"$ref": "#/$defs/auditProjection"},
         "lifecycle_steps": {"type": "array", "maxItems": 16, "items": {"type": "object", "additionalProperties": false, "required": ["step", "observed", "gap_code"], "properties": {"step": {"$ref": "#/$defs/identifier"}, "observed": {"type": "boolean"}, "gap_code": {"type": ["string", "null"], "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"}}}},
         "observed_public_seams": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"enum": ["knowledge_support", "native_capsule", "source_read", "fragment_read", "wiki_read", "query_context"]}},
-        "claim_eligible": {"const": false}
-      }
+        "claim_eligible": {"const": false},
+        "service_source": {"$ref": "#/$defs/taskServiceSource"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"schema_version": {"const": "deeplaw.v013-host-task-result/v2"}}, "required": ["schema_version"]},
+          "then": {
+            "required": ["service_source"],
+            "properties": {
+              "task_case": {"enum": ["living_wiki", "professional_evidence"]},
+              "duties": {"items": {"$ref": "#/$defs/dutyV2"}}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"schema_version": {"const": "deeplaw.v013-host-task-evidence/v1"}}, "required": ["schema_version"]},
+          "then": {
+            "not": {"required": ["service_source"]},
+            "properties": {"duties": {"items": {"$ref": "#/$defs/duty"}}}
+          }
+        }
+      ]
     },
     "expectedRow": {
       "type": "object",

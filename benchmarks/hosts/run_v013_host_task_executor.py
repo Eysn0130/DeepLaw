@@ -20,7 +20,7 @@ import stat
 import sys
 import tempfile
 from collections.abc import Mapping
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from benchmarks.hosts import host_preflight_receipt, host_process_receipt_set_v1
@@ -491,7 +491,8 @@ def _validate_slot_topology(slot: Path, envelope: Mapping[str, Any]) -> None:
             or not relative
             or "\\" in relative
             or PurePosixPath(relative).is_absolute()
-            or any(part in {"", ".", ".."} for part in PurePosixPath(relative).parts)
+            or PureWindowsPath(relative).drive
+            or any(part in {"", ".", ".."} for part in relative.split("/"))
         ):
             _fail("Host task typed manifest source path is unsafe")
         expected_files.add(PurePosixPath(relative).as_posix())
@@ -511,6 +512,27 @@ def _validate_slot_topology(slot: Path, envelope: Mapping[str, Any]) -> None:
         raise
     except OSError as error:
         raise HostTaskExecutorError("Host task slot topology is unavailable") from error
+    from benchmarks.hosts.v013_task_service_observation import task_result_service_source
+
+    task_result = _strict_object(
+        slot / payload["continuity_source"]["relative_path"], label="Host task result"
+    )
+    try:
+        service_ref = task_result_service_source(task_result)
+    except ValueError as error:
+        raise HostTaskExecutorError("Host task service reference is invalid") from error
+    if service_ref is not None:
+        relative = service_ref["relative_path"]
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or "\\" in relative
+            or PurePosixPath(relative).is_absolute()
+            or PureWindowsPath(relative).drive
+            or any(part in {"", ".", ".."} for part in relative.split("/"))
+        ):
+            _fail("Host task service source path is unsafe")
+        expected_files.add(PurePosixPath(relative).as_posix())
     expected_directories = {
         parent.as_posix()
         for relative in expected_files

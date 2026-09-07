@@ -685,6 +685,7 @@ def _typed_source_paths(
     value: Mapping[str, Any],
     *,
     manifest_relative: str,
+    files: Mapping[str, tuple[Path, bytes]],
 ) -> set[str]:
     parent = PurePosixPath(manifest_relative).parent
     paths: set[str] = set()
@@ -704,6 +705,26 @@ def _typed_source_paths(
                 walk(nested)
 
     walk(value.get("payload"))
+    payload = value.get("payload")
+    if (
+        value.get("kind") == "host_event_sequence"
+        and isinstance(payload, Mapping)
+        and "continuity_source" in payload
+    ):
+        from benchmarks.hosts.v013_task_service_observation import task_result_service_source
+
+        result_ref = _mapping(payload.get("continuity_source"), label="Host task result reference")
+        result_name = _safe_relative(result_ref.get("relative_path"), label="Host task result path")
+        result_path = PurePosixPath(parent, result_name).as_posix()
+        task_result = _json_at(result_path, files)
+        try:
+            service_ref = task_result_service_source(task_result)
+        except ValueError as error:
+            raise KernelQualificationBundleError(
+                "Host task service reference is invalid"
+            ) from error
+        if service_ref is not None:
+            walk(service_ref)
     return paths
 
 
@@ -1082,7 +1103,7 @@ def _validate_inventory(
             typed_paths[evidence_kind].append(relative)
             typed_values[relative] = parsed
             referenced_source_paths.update(
-                _typed_source_paths(parsed, manifest_relative=relative)
+                _typed_source_paths(parsed, manifest_relative=relative, files=files)
             )
         elif artifact_kind == "host_preflight_receipt":
             if evidence_kind is not None or parsed is None:

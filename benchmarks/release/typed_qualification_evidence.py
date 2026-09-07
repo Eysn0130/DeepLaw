@@ -130,7 +130,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "f89fbde3d138972a813ec30d5321d5e1071ac24593ae2809f355bc5fc69fbffa"
+    "3638592ac367aeb3d4f5954155465a8ef976717f41a240a8770fba47409be0fa"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -5501,6 +5501,23 @@ def parse_typed_evidence(
         for index, ref in enumerate(refs)
     ]
     referenced_paths = [item.path for item in sources]
+    if kind == "host_event_sequence":
+        from benchmarks.hosts.v013_task_service_observation import task_result_service_source
+
+        task_result = _strict_json(sources[4].raw, label="Host task result")
+        try:
+            service_ref = task_result_service_source(task_result)
+        except ValueError as exc:
+            raise TypedQualificationEvidenceError("Host task service reference is invalid") from exc
+        if service_ref is not None:
+            referenced_paths.append(
+                _source_data(
+                    service_ref,
+                    root=evidence_root,
+                    label="Host task service observation",
+                    media_type="application/json",
+                ).path
+            )
     if kind in {"legal_rows", "professional_evidence_rows"}:
         original_refs = envelope_value["payload"]["original_source_refs"]
         if not isinstance(original_refs, list):

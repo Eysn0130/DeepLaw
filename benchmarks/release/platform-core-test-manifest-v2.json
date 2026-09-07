@@ -16917,6 +16917,48 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_service_source_closure",
+            "name": "test_bundle_inventory_preserves_generic_refs_without_admitting_payload"
+          },
+          "node_id": "tests/test_v013_service_source_closure.py::test_bundle_inventory_preserves_generic_refs_without_admitting_payload"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_service_source_closure",
+            "name": "test_bundle_inventory_uses_typed_root_for_nested_service_reference"
+          },
+          "node_id": "tests/test_v013_service_source_closure.py::test_bundle_inventory_uses_typed_root_for_nested_service_reference"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_service_source_closure",
+            "name": "test_executor_inventory_retains_only_versioned_service_source"
+          },
+          "node_id": "tests/test_v013_service_source_closure.py::test_executor_inventory_retains_only_versioned_service_source"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_service_source_closure",
+            "name": "test_executor_rejects_drive_path_before_reopening_result[C:/outside.json]"
+          },
+          "node_id": "tests/test_v013_service_source_closure.py::test_executor_rejects_drive_path_before_reopening_result[C:/outside.json]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_service_source_closure",
+            "name": "test_executor_rejects_drive_path_before_reopening_result[C:outside.json]"
+          },
+          "node_id": "tests/test_v013_service_source_closure.py::test_executor_rejects_drive_path_before_reopening_result[C:outside.json]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_service_source_closure",
+            "name": "test_typed_inventory_reopens_nested_service_bytes_before_parser"
+          },
+          "node_id": "tests/test_v013_service_source_closure.py::test_typed_inventory_reopens_nested_service_bytes_before_parser"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_split_skills",
             "name": "test_legacy_skill_is_explicitly_deprecated_and_routes_replacements"
           },
@@ -17075,6 +17117,195 @@
             "name": "test_wrong_seed_scope_and_quote_fail_closed"
           },
           "node_id": "tests/test_v013_task_domain_driver.py::test_wrong_seed_scope_and_quote_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_actual_s075_service_projection_reopens_and_remains_partial"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_actual_s075_service_projection_reopens_and_remains_partial"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_bounded_call_rejects_forged_observed_bytes[forged_small-projection]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_bounded_call_rejects_forged_observed_bytes[forged_small-projection]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_bounded_call_rejects_forged_observed_bytes[forged_small-request]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_bounded_call_rejects_forged_observed_bytes[forged_small-request]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_bounded_call_rejects_forged_observed_bytes[oversized-projection]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_bounded_call_rejects_forged_observed_bytes[oversized-projection]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_bounded_call_rejects_forged_observed_bytes[oversized-request]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_bounded_call_rejects_forged_observed_bytes[oversized-request]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_bounded_call_rejects_forged_observed_bytes[oversized_forged-projection]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_bounded_call_rejects_forged_observed_bytes[oversized_forged-projection]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_bounded_call_rejects_forged_observed_bytes[oversized_forged-request]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_bounded_call_rejects_forged_observed_bytes[oversized_forged-request]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_current_native_v3_source_task_without_service_observation_fails"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_current_native_v3_source_task_without_service_observation_fails"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_rehashed_wrong_source_identity_fails_closed"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_rehashed_wrong_source_identity_fails_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_source_service_gate_rejects_native_schema_downgrade[all_events_v2_result_v2]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_source_service_gate_rejects_native_schema_downgrade[all_events_v2_result_v2]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_source_service_gate_rejects_native_schema_downgrade[message_only]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_source_service_gate_rejects_native_schema_downgrade[message_only]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_tampered_native_binding_fails_closed[candidate_binding]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_tampered_native_binding_fails_closed[candidate_binding]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_tampered_native_binding_fails_closed[event_index]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_tampered_native_binding_fails_closed[event_index]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_tampered_native_binding_fails_closed[host_identity_sha256]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_tampered_native_binding_fails_closed[host_identity_sha256]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_tampered_native_binding_fails_closed[route]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_tampered_native_binding_fails_closed[route]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_tampered_native_binding_fails_closed[run_id]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_tampered_native_binding_fails_closed[run_id]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_tampered_native_binding_fails_closed[session_sha256]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_tampered_native_binding_fails_closed[session_sha256]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_tampered_native_binding_fails_closed[workflow_run_id]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_tampered_native_binding_fails_closed[workflow_run_id]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_tampered_service_bytes_fail_before_parser"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_tampered_service_bytes_fail_before_parser"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_task_result_rejects_boolean_numeric_evidence[cache_tokens]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_task_result_rejects_boolean_numeric_evidence[cache_tokens]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_task_result_rejects_boolean_numeric_evidence[event_index]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_task_result_rejects_boolean_numeric_evidence[event_index]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_task_result_rejects_boolean_numeric_evidence[input_tokens]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_task_result_rejects_boolean_numeric_evidence[input_tokens]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_task_result_rejects_boolean_numeric_evidence[output_tokens]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_task_result_rejects_boolean_numeric_evidence[output_tokens]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_task_result_rejects_boolean_numeric_evidence[provider_bytes]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_task_result_rejects_boolean_numeric_evidence[provider_bytes]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_task_result_rejects_boolean_numeric_evidence[reasoning_tokens]"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_task_result_rejects_boolean_numeric_evidence[reasoning_tokens]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_task_result_service_source_helper_is_closed_and_compatible"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_task_result_service_source_helper_is_closed_and_compatible"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_service_observation",
+            "name": "test_v2_partial_duties_cannot_be_promoted_from_gap_rows"
+          },
+          "node_id": "tests/test_v013_task_service_observation.py::test_v2_partial_duties_cannot_be_promoted_from_gap_rows"
         },
         {
           "junit": {
@@ -18309,9 +18540,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2581,
+      "count": 2614,
       "selection": "not qualification and not windows_native",
-      "sha256": "856ffa7b558ecbc30f2945aa0cf76bdace030c0f7361f5c59ab69bb3388b6302"
+      "sha256": "f336866b1a2f7b9e28ab514105579798b37e3b530eef5f101d60fc8a1de34d76"
     },
     "windows": {
       "additional_cases": [
@@ -18351,13 +18582,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2586,
+      "count": 2619,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "955dc2acd49acf37ee501d5b572c583ce156a4967e21cb040f5d711dca066b68"
+      "sha256": "2af9649f3f744101e75440429150599a3c78ad2865ee3c9286420a665cf61694"
     }
   },
-  "manifest_sha256": "6625edc29c3c4f8778a7b7e88b04576da6a213e44bc801914501ce15af383666",
+  "manifest_sha256": "183fe6f411654ec94fd2fecb2e66ab74b1d9fdf27214cfcbacaec8659e00a079",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
