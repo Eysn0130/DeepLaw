@@ -351,13 +351,14 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     windows_shards = candidate.split("  windows-shards:", 1)[1].split(
         "  windows-aggregate:", 1
     )[0]
-    assert "    timeout-minutes: 150" in windows_shards
+    assert "    timeout-minutes: 240" in windows_shards
     assert "--maxfail=1" in windows_shards
 
     calibration_block = candidate.split("  windows-calibration-shards:", 1)[1].split(
         "  posix-matrix:", 1
     )[0]
     calibration_shards = calibration_block.split("  windows-calibration:", 1)[0]
+    assert "    timeout-minutes: 240" in calibration_shards
     assert "Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3" in (
         calibration_shards
     )
@@ -365,6 +366,12 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "--duration-weights" not in calibration_shards
     assert "--shard-count 3" in calibration_shards
     assert 'if: matrix.shard == 1' in calibration_shards
+    for windows_run in (calibration_shards, windows_shards):
+        assert "pytest --strict-markers -vv" in windows_run
+        assert '-m "not qualification"' in windows_run
+        assert "--junitxml=" in windows_run
+        assert '"${test_files[@]}"' in windows_run
+        assert " -s" not in windows_run
 
     calibration = calibration_block.split("  windows-calibration:", 1)[1]
     assert "needs: windows-calibration-shards" in calibration

@@ -373,7 +373,7 @@ jobs:
     name: Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3
     needs: verified-artifact
     runs-on: windows-latest
-    timeout-minutes: 150
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -435,7 +435,7 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t test_files < "${RUNNER_TEMP}/candidate-test-files.txt"
-          uv run --frozen pytest --strict-markers \
+          uv run --frozen pytest --strict-markers -vv \
             -m "not qualification" \
             --junitxml="${RUNNER_TEMP}/candidate-tests.xml" \
             "${test_files[@]}"
@@ -614,7 +614,7 @@ jobs:
       - verified-artifact
       - windows-calibration
     runs-on: windows-latest
-    timeout-minutes: 150
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -684,7 +684,7 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t test_files < "${RUNNER_TEMP}/candidate-test-files.txt"
-          uv run --frozen pytest --strict-markers \
+          uv run --frozen pytest --strict-markers -vv \
             --maxfail=1 \
             -m "not qualification" \
             --junitxml="${RUNNER_TEMP}/candidate-tests.xml" \

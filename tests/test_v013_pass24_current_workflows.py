@@ -34,6 +34,21 @@ def test_candidate_full_retains_raw_platform_and_exact_wheel_evidence() -> None:
             step.get("with", {}).get("name") == "historical-migration-fixture"
             for step in steps[:admitted]
         )
+    assert jobs["posix-matrix"]["timeout-minutes"] == 100
+    assert jobs["scale_ten_thousand"]["timeout-minutes"] == 180
+    for job in ("windows-calibration-shards", "windows-shards"):
+        assert jobs[job]["timeout-minutes"] == 240
+        assert jobs[job]["strategy"]["matrix"]["shard"] == [1, 2, 3]
+        pytest_run = next(
+            step["run"]
+            for step in jobs[job]["steps"]
+            if "pytest --strict-markers" in step.get("run", "")
+        )
+        assert "pytest --strict-markers -vv" in pytest_run
+        assert '-m "not qualification"' in pytest_run
+        assert "--junitxml=" in pytest_run
+        assert '"${test_files[@]}"' in pytest_run
+        assert " -s" not in pytest_run
     aggregate = jobs["aggregate-raw-evidence"]["steps"]
     assert any(step.get("run") == "uv sync --frozen --extra dev" for step in aggregate)
     assert "uv run --frozen python -m benchmarks.release.candidate_regression platform" in workflow
