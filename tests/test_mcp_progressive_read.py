@@ -48,6 +48,7 @@ def test_initialize_recommendations_are_advertised(case):
             listed = await session.list_tools()
             assert [tool.name for tool in listed.tools] == ["knowledge_support"]
             schema = listed.tools[0].inputSchema
+            assert schema.get("type") == "object"
             operations = {
                 item["properties"]["operation"]["const"]
                 for item in schema["$defs"].values()
@@ -663,3 +664,47 @@ def test_registered_knowledge_lineage_is_readable_and_rechecked(tmp_path, change
             assert (await session.call_tool("knowledge_support", request)).isError
 
     anyio.run(exercise)
+
+
+def _canonical_input_schema():
+    return json.loads((Path(__file__).resolve().parents[1]
+                       / "contracts/knowledge-support.input.v8.schema.json").read_text())
+
+
+def test_v8_root_properties_exactly_cover_existing_operation_fields():
+    schema = _canonical_input_schema()
+    names = {name for operation in ("query", "context", "explain", "read")
+             for name in schema["$defs"][operation]["properties"]}
+    assert schema.get("type") == "object"
+    assert schema.get("properties") == {name: {} for name in names}
+
+
+@pytest.mark.parametrize("arguments,wrong_field,other_field", [
+    ({"operation": "query", "query": "Public procedure"}, "query", "receipt_id"),
+    ({"operation": "context", "task": "Public procedure", "confirm_no_case_data": True},
+     "task", "target"),
+    ({"operation": "explain", "receipt_id": "queryreceipt_" + "a" * 24}, "receipt_id", "query"),
+    ({"operation": "read", "target": {"kind": "knowledge", "knowledge_id": "knowledge_" + "a" * 24,
+                                      "revision_id": "knowledgerev_" + "b" * 24},
+      "scope": "project", "max_sensitivity": "public"}, "target", "task"),
+])
+def test_v8_exact_opencode_conversion_preserves_branch_constraints(
+    arguments, wrong_field, other_field,
+):
+    from copy import deepcopy
+
+    from jsonschema import Draft202012Validator
+
+    schema = _canonical_input_schema()
+    previous = deepcopy(schema)
+    previous.pop("type", None)
+    previous.pop("properties", None)
+    # a3647 McpCatalog.convertTool keeps the root properties and closes extras.
+    converted = {**schema, "type": "object", "properties": schema.get("properties", {}),
+                 "additionalProperties": False}
+    validators = [Draft202012Validator(value) for value in (previous, schema, converted)]
+    for validator in validators:
+        validator.validate(arguments)
+        assert not validator.is_valid({**arguments, "unrelated_field": True})
+        assert not validator.is_valid({**arguments, wrong_field: []})
+        assert not validator.is_valid({**arguments, other_field: "not_for_this_operation"})

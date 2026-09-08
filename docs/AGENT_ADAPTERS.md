@@ -79,7 +79,12 @@ For a Vault with the autonomous core installed, the current public advertisement
 `contracts/knowledge-support.input.v8.schema.json` plus
 `contracts/knowledge-support.output.v7.schema.json`. It exposes only the read operations `query`,
 `context`, `explain`, and `read`. Input v7 remains unchanged and closed; v8 adds only the new read
-branch. Output v7 is the advertised schema accepting the existing response versions for
+branch. The v8 input root explicitly declares `type: object` so strict MCP clients can
+validate `tools/list`. Root `properties` lists the union of the four operation branches, allowing
+clients that close root additional properties to preserve valid arguments. Those root entries add no
+constraints; the unchanged closed `oneOf` branches enforce every argument type, operation-specific
+field, permission input, and bound. These compatibility declarations do not change accepted values,
+persistence, or permissions, and require no data migration. Output v7 is the advertised schema accepting the existing response versions for
 query/context/explain and output/v7 for read. Older broad operation inventories are not current
 Provider tools. Provider bytes contain only bounded admitted context and safe authority,
 provenance, freshness and Gap fields. Paths, session/task hashes, internal receipt or selection
