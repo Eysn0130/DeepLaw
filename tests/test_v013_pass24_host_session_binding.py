@@ -789,3 +789,61 @@ def test_provider_host_route_recomputes_binding_or_returns_gap(tmp_path: Path) -
         "gaps": [{"code": "route_unbound"}],
     }
     assert "session_sha256" not in json.dumps(missing_gap, sort_keys=True)
+
+
+def _projection_source(content):
+    return {"statement_text": content, "authority": "agent_derived", "legal_authority": False,
+            "valid_from": None, "valid_to": None, "source_refs": [{"locator": "checkpoint"}]}
+
+
+@pytest.mark.parametrize(
+    "content", ["a" * 579, "a" * 300 + "\n" + "b" * 278, "x" * 500 + "中文" * 40],
+    ids=["579-ascii", "579-newline", "utf8-lossless"],
+)
+def test_continuity_projection_lossless_single_checkpoint_segments(content):
+    from deeplaw.task_continuity import _host_continuity_projection
+
+    result = _host_continuity_projection({"capsule": {
+        "statements": [_projection_source(content)], "gaps": [],
+    }})
+    _validate_continuity_capsule(result)
+    assert result["status"] == "admitted"
+    assert len(result["statements"]) == 2
+    joined = "".join(item["content"] for item in result["statements"])
+    assert joined == content and joined.encode("utf-8") == content.encode("utf-8")
+    assert all(item["authority"] == "agent_derived" and item["legal_authority"] is False
+               and item["valid_from"] is None and item["valid_to"] is None
+               for item in result["statements"])
+    assert all(len(item["content"]) <= 512 for item in result["statements"])
+    assert all(item["citations"] == [{"locator": "checkpoint"}] for item in result["statements"])
+    if "\n" in content:
+        assert result["statements"][0]["content"].endswith("\n")
+
+
+@pytest.mark.parametrize("contents,code", [
+    (["中" * 579], "continuity_capsule_bound"),
+    (["a" * 1025], "continuity_capsule_bound"),
+    (["a" * 513, "second"], "continuity_statement_overflow"),
+    (["first", "second", "third"], "continuity_statement_overflow"),
+    ([None], "continuity_capsule_invalid"),
+    (["x" * 500 + " Authorization: secret-material-value."], "sensitive_content_blocked"),
+    (["x" * 500 + " " + "a" * 64], "internal_identity_blocked"),
+])
+def test_continuity_projection_rejects_whole_unprojectable_checkpoint(contents, code):
+    from deeplaw.task_continuity import _host_continuity_projection
+
+    result = _host_continuity_projection({"capsule": {
+        "statements": [_projection_source(content) for content in contents], "gaps": [],
+    }})
+    _validate_continuity_capsule(result)
+    assert result["statements"] == []
+    assert result["gaps"] == [{"code": code}]
+
+
+def test_continuity_projection_preserves_two_independent_statements():
+    from deeplaw.task_continuity import _host_continuity_projection
+
+    result = _host_continuity_projection({"capsule": {
+        "statements": [_projection_source("first"), _projection_source("second")], "gaps": [],
+    }})
+    assert [item["content"] for item in result["statements"]] == ["first", "second"]

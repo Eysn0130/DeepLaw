@@ -11,6 +11,7 @@
     "schema_version": {"const": "deeplaw.host-continuity-capsule/v1"},
     "status": {"enum": ["admitted", "gap"]},
     "statements": {
+      "description": "Up to two source statements, or ordered lossless contiguous segments of one source statement. Segments preserve the full original text and inherit its authority, valid time and citations; they are not independent decision or next-action fields.",
       "type": "array",
       "maxItems": 2,
       "items": {"$ref": "#/$defs/statement"}

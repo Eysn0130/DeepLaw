@@ -889,3 +889,357 @@ def test_reopen_rejects_fork_binding_tampering(tmp_path, monkeypatch, mutation):
         fork["parent_session_sha256"] = fork["session_sha256"]
     with pytest.raises(producer.ProducerError, match=r"fork (run|binary|identity|sessions)"):
         original(value, **kwargs)
+
+
+def _guard_handler(monkeypatch, guard, opener, body=None):
+    import io
+    from unittest.mock import Mock
+
+    captured = {}
+
+    def server(address, handler):
+        captured["handler"] = handler
+        return Mock(server_address=("127.0.0.1", 12345))
+
+    monkeypatch.setattr("http.server.ThreadingHTTPServer", server)
+    monkeypatch.setattr(producer.threading, "Thread", Mock())
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *args: opener)
+    guard.start()
+    handler = object.__new__(captured["handler"])
+    raw = _guard_body() if body is None else body
+    handler.headers = {"Content-Length": str(len(raw)), "Authorization": "Bearer synthetic-nonce"}
+    handler.path = "/chat/completions"
+    handler.rfile = io.BytesIO(raw)
+    handler.wfile = io.BytesIO()
+    handler.send_response = Mock()
+    handler.send_header = Mock()
+    handler.end_headers = Mock()
+    return handler
+
+
+@pytest.mark.parametrize("kind", ["inspect", "http", "network", "timeout", "write"])
+def test_guard_failure_retains_fixed_stage_without_exception_payload(monkeypatch, kind):
+    import urllib.error
+    from unittest.mock import MagicMock
+
+    canary = "private-test-key synthetic-nonce /private/secret prompt reasoning"
+    opener = MagicMock()
+    response = opener.open.return_value.__enter__.return_value
+    response.read.return_value = b"{}"
+    response.headers = {}
+    if kind == "http":
+        opener.open.side_effect = urllib.error.HTTPError(canary, 429, canary, {}, None)
+    elif kind == "network":
+        opener.open.side_effect = urllib.error.URLError(canary)
+    elif kind == "timeout":
+        opener.open.side_effect = TimeoutError(canary)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = kind != "inspect"
+    handler = _guard_handler(monkeypatch, guard, opener)
+    if kind == "write":
+        handler.wfile = MagicMock()
+        handler.wfile.write.side_effect = BrokenPipeError(canary)
+    handler.do_POST()
+    receipt = guard.snapshot()
+    assert receipt["rejected"] == 1
+    expected = {
+        "inspect": ("inspect", "inactive_turn"), "http": ("provider_open", "http_error"),
+        "network": ("provider_open", "network_error"),
+        "timeout": ("provider_open", "timeout"), "write": ("client_write", "io_error"),
+    }
+    assert (receipt["first_failure"]["stage"], receipt["first_failure"]["code"]) == expected[kind]
+    assert receipt["first_failure"].get("http_status") == (429 if kind == "http" else None)
+    assert canary not in producer.canonical_json(receipt)
+    assert len(receipt["requests"]) == (0 if kind == "inspect" else 1)
+
+
+def test_failure_cleanup_preserves_first_and_persists_after_all_attempts(tmp_path):
+    events = []
+    failure = producer.FailureEvidence()
+    failure.capture(TimeoutError("secret body"), "host_turn")
+
+    def bad():
+        events.append("failed_cleanup")
+        raise ValueError("key nonce /private/path")
+
+    failure.cleanup("sampler_cleanup", bad)
+    failure.cleanup("guard_cleanup", lambda: events.append("guard_cleanup"))
+    failure.persist(tmp_path, guard=None, binding_sha256="a" * 64)
+    receipt = json.loads((tmp_path / "failure.json").read_text())
+    assert events == ["failed_cleanup", "guard_cleanup"]
+    assert receipt["first_failure"] == {"stage": "host_turn", "code": "timeout"}
+    assert receipt["cleanup_failures"] == [{"stage": "sampler_cleanup", "code": "internal_error"}]
+    assert receipt["cleanup_confirmed"] is False
+    assert receipt["formal_admission"] is False
+    with pytest.raises(producer.ProducerError, match="host_turn:timeout"):
+        failure.raise_if_failed()
+    assert "secret" not in producer.canonical_json(receipt)
+
+
+def test_external_guard_keeps_rejection_and_marks_failed_ipc_stale(monkeypatch):
+    from pathlib import Path
+    from unittest.mock import Mock
+
+    guard = producer.ExternalGuard(Path("unused"))
+    guard.process = Mock()
+    snapshot = producer.RequestGuard(key="synthetic", nonce="synthetic").snapshot()
+    snapshot.update(rejected=1, first_failure={"stage": "inspect", "code": "request_shape"})
+    monkeypatch.setattr(guard, "_response", Mock(side_effect=[snapshot, TimeoutError("secret")]))
+    with pytest.raises(producer.DiagnosticError, match="inspect:request_shape"):
+        guard.active(False)
+    assert guard.receipt == snapshot and guard.receipt_current
+    with pytest.raises(producer.DiagnosticError, match="guard_protocol:timeout"):
+        guard.active(False)
+    assert guard.receipt == snapshot and not guard.receipt_current
+
+
+@pytest.mark.parametrize("mutation", ["payload", "requests", "status", "unknown_code"])
+def test_guard_snapshot_rejects_unbounded_or_untrusted_fields(mutation):
+    snapshot = producer.RequestGuard(key="synthetic", nonce="synthetic").snapshot()
+    if mutation == "payload":
+        snapshot["body"] = "secret"
+    elif mutation == "requests":
+        snapshot["requests"] = [{"sha256": "a" * 64, "bytes": 2}] * 7
+    else:
+        snapshot["first_failure"] = {"stage": "provider_open", "code": "http_error"}
+        if mutation == "status":
+            snapshot["first_failure"]["http_status"] = "secret"
+        else:
+            snapshot["first_failure"]["code"] = "secret"
+    with pytest.raises(producer.ProducerError):
+        producer.validate_guard_snapshot(snapshot)
+
+
+def test_external_guard_cleanup_failure_does_not_erase_snapshot(monkeypatch):
+    from pathlib import Path
+    from unittest.mock import Mock
+
+    guard = producer.ExternalGuard(Path("unused"))
+    guard.process = Mock(returncode=1)
+    guard.process.poll.return_value = None
+    guard.process.kill.side_effect = OSError("secret kill path")
+    snapshot = producer.RequestGuard(key="synthetic", nonce="synthetic").snapshot(
+        cleanup_confirmed=False,
+        cleanup_failure={"stage": "guard_cleanup", "code": "timeout"},
+    )
+    monkeypatch.setattr(guard, "_response", lambda: snapshot)
+    with pytest.raises(producer.DiagnosticError, match="guard_cleanup:timeout"):
+        guard.stop()
+    assert guard.receipt == snapshot
+    assert guard.cleanup_failures == [{"stage": "guard_cleanup", "code": "io_error"}]
+    guard.process.stdin.close.assert_called_once()
+    guard.process.stdout.close.assert_called_once()
+
+
+def test_run_failure_receipt_survives_all_cleanup_failures(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+
+    from benchmarks.hosts import run_pass13_opencode_continuity_qualification as legacy
+
+    root = tmp_path / "task"
+    repository = root / "repo"
+    for relative in (".opencode/plugins/deeplaw-native.ts",
+                     ".opencode/supervised-source/deeplaw-native.ts"):
+        path = repository / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"synthetic")
+    prepared = {
+        "root": str(root), "repository": str(repository), "deeplaw": "unused",
+        "opencode": "unused", "deployment_sha256": "a" * 64,
+        "mcp_launch_prefix_sha256": producer.digest({"argv": [], "files": []}),
+        "host_identity": {"executable_sha256": "a" * 64},
+        "host_identity_source_sha256": "a" * 64,
+        "privacy": {key: producer.digest(b"synthetic") for key in (
+            "privacy_wrapper_sha256", "original_plugin_sha256")},
+        "run_id": "synthetic", "workflow_run_id": 1,
+        "candidate_binding": _control()["candidate_binding"],
+        "runtime_entry_hashes": {"deeplaw": "a" * 64}, "key_file": "unused",
+        "environment": {"OPENCODE_CONFIG": str(root / "config.json"),
+                        "DEEPLAW_OPENCODE_MODEL_RECEIPT": str(root / "native.jsonl")},
+        "selector_source_symlink": False, "fixture": {"task_handle": "x", "grant_id": "y"},
+        "primary_binding": {key: "a" * 64 for key in (
+            "project_sha256", "repository_sha256", "worktree_sha256")},
+    }
+    config = {"provider": {"deepseek": {"options": {}}}, "agent": {"qualification": {}},
+              "mcp": {"deeplaw_knowledge": {}}}
+    monkeypatch.setattr(producer, "read_json", lambda path: config if path.name == "config.json"
+                        else prepared)
+    monkeypatch.setattr(producer, "verify_deployment", lambda: {"source_closure_sha256": "a" * 64})
+    monkeypatch.setattr(producer, "validate_runtime_entries", lambda value: None)
+    monkeypatch.setattr(producer, "validate_control", lambda value: None)
+    monkeypatch.setattr(producer, "exact_file", lambda path, sha: path)
+    monkeypatch.setattr(producer, "json_lines", lambda path: [])
+    monkeypatch.setattr(legacy, "_bind_public_host_session", lambda *args, **kwargs: None)
+    monkeypatch.setattr(legacy, "_ledger_head", lambda *args, **kwargs: "a" * 64)
+    monkeypatch.setattr("deeplaw.task_continuity.resolve_host_session", lambda **kwargs: {
+        "status": "exact", "binding_sha256": "a" * 64, "task_handle_sha256": "a" * 64,
+    })
+    events = []
+
+    def fail_cleanup(name):
+        events.append(name)
+        raise OSError("secret nonce /private/path")
+
+    guard = producer.ExternalGuard(root / "unused")
+    guard.url = "http://127.0.0.1:12345"
+    guard.start = lambda: None
+    guard.stop = lambda: fail_cleanup("guard")
+    guard.active = lambda enabled: None if enabled else fail_cleanup("deactivate")
+    monkeypatch.setattr(producer, "ExternalGuard", lambda config: guard)
+    server = Mock()
+    server.process.pid = 42
+    server.stop.side_effect = lambda: fail_cleanup("host")
+    monkeypatch.setattr(legacy, "_OpenCodeLocalServer", lambda **kwargs: server)
+    sampler = Mock()
+    sampler.stop.side_effect = lambda: fail_cleanup("sampler")
+    monkeypatch.setattr(producer, "RssSampler", lambda pid: sampler)
+
+    def state(path, value):
+        if path.name == "turn-state.json" and not value["active"] and "api" in events:
+            fail_cleanup("state")
+
+    monkeypatch.setattr(producer, "replace_state", state)
+
+    def api(server, method, route, body=None):
+        if route == "/session":
+            return {"id": "session-one", "title": body["title"]}, b"{}"
+        if method == "GET":
+            return [], b"[]"
+        events.append("api")
+        raise TimeoutError("secret prompt reasoning")
+
+    monkeypatch.setattr(producer, "api", api)
+    with pytest.raises(producer.DiagnosticError, match="host_turn:timeout"):
+        producer.run(root / "prepared.json")
+    receipt = json.loads((root / "failure.json").read_text())
+    assert events == ["api", "sampler", "state", "deactivate", "host", "guard"]
+    assert receipt["first_failure"] == {"stage": "host_turn", "code": "timeout"}
+    assert len(receipt["cleanup_failures"]) == 5
+    assert receipt["cleanup_confirmed"] is False
+    text = producer.canonical_json(receipt)
+    for forbidden in ("secret", "nonce", "/private/path", "prompt", "reasoning"):
+        assert forbidden not in text
+
+
+def test_guard_process_emits_failed_cleanup_receipt(tmp_path, monkeypatch, capsys):
+    import io
+    from unittest.mock import Mock
+
+    task = tmp_path / "task"
+    task.mkdir()
+    key = tmp_path / "synthetic-key"
+    key.write_text("synthetic-key-for-test-only")
+    key.chmod(0o600)
+    monkeypatch.setattr(producer, "read_json", lambda path: {
+        "key_file": str(key), "nonce": "synthetic-nonce",
+    })
+    guard = producer.RequestGuard(key="synthetic", nonce="synthetic")
+    guard.start = lambda: "http://127.0.0.1:12345"
+    guard.stop = Mock(side_effect=TimeoutError("secret cleanup prompt"))
+    monkeypatch.setattr(producer, "RequestGuard", lambda **kwargs: guard)
+    monkeypatch.setattr(producer.sys, "stdin", io.StringIO('{"stop":true}\n'))
+    with pytest.raises(producer.DiagnosticError, match="guard_cleanup:timeout"):
+        producer.guard_process(task / "unused")
+    lines = capsys.readouterr().out.splitlines()
+    snapshot = producer.validate_guard_snapshot(json.loads(lines[-1]))
+    assert snapshot["cleanup_confirmed"] is False
+    assert snapshot["cleanup_failure"] == {"stage": "guard_cleanup", "code": "timeout"}
+    assert "secret" not in lines[-1]
+    guard.stop.assert_called_once()
+
+
+@pytest.mark.parametrize("kind", ["invalid_json", "shape", "privacy", "budget", "oversize"])
+def test_guard_inspection_and_response_bound_codes_remain_fail_closed(monkeypatch, kind):
+    from unittest.mock import MagicMock
+
+    opener = MagicMock()
+    response = opener.open.return_value.__enter__.return_value
+    response.read.return_value = b"x" * (producer.MAX_BYTES + 1) if kind == "oversize" else b"{}"
+    response.headers = {}
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    body = _guard_body()
+    if kind == "invalid_json":
+        body = b"{"
+    elif kind == "shape":
+        body = b'{"unknown":true}'
+    elif kind == "privacy":
+        body = _guard_body("Working directory: /Users/synthetic/project")
+    elif kind == "budget":
+        guard.requests = [{"sha256": "a" * 64, "bytes": 2}] * 6
+    handler = _guard_handler(monkeypatch, guard, opener, body)
+    handler.do_POST()
+    snapshot = guard.snapshot()
+    expected = {
+        "invalid_json": ("inspect", "invalid_json"), "shape": ("inspect", "request_shape"),
+        "privacy": ("inspect", "privacy_rejected"), "budget": ("admission", "request_budget"),
+        "oversize": ("provider_read", "response_bound"),
+    }
+    assert (snapshot["first_failure"]["stage"], snapshot["first_failure"]["code"]) == expected[kind]
+    assert snapshot["rejected"] == 1
+    assert len(snapshot["requests"]) <= 6
+    if kind != "oversize":
+        opener.open.assert_not_called()
+    handler.send_response.assert_called_once_with(403)
+    # A subsequent rejection increments the total without replacing the first cause.
+    guard.reject(RuntimeError("do not retain this"), "ingress")
+    assert guard.snapshot()["rejected"] == 2
+    assert guard.snapshot()["first_failure"] == snapshot["first_failure"]
+
+
+def test_failure_receipt_write_error_does_not_replace_primary(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+
+    failure = producer.FailureEvidence()
+    failure.capture(TimeoutError("secret"), "host_turn")
+    monkeypatch.setattr(producer, "write_json", Mock(side_effect=OSError("private path")))
+    failure.persist(tmp_path, guard=None, binding_sha256="a" * 64)
+    with pytest.raises(producer.DiagnosticError, match="host_turn:timeout"):
+        failure.raise_if_failed()
+
+
+@pytest.mark.parametrize("rejected", [0, 1])
+def test_guard_stop_observes_late_rejection_without_repeating_cleanup(monkeypatch, rejected):
+    from pathlib import Path
+    from unittest.mock import Mock
+
+    guard = producer.ExternalGuard(Path("unused"))
+    guard.process = Mock(returncode=0)
+    guard.process.poll.return_value = 0
+    snapshot = producer.RequestGuard(key="synthetic", nonce="synthetic").snapshot(
+        cleanup_confirmed=True,
+    )
+    if rejected:
+        snapshot.update(rejected=1, first_failure={"stage": "inspect", "code": "request_shape"})
+    response = Mock(return_value=snapshot)
+    monkeypatch.setattr(guard, "_response", response)
+    if rejected:
+        with pytest.raises(producer.DiagnosticError, match="inspect:request_shape"):
+            guard.stop()
+    else:
+        guard.stop()
+        guard.stop()
+    assert guard.receipt == snapshot
+    response.assert_called_once()
+    guard.process.kill.assert_not_called()
+
+
+def test_guard_unknown_inspection_failure_is_not_claimed_as_privacy_rejection(monkeypatch):
+    from unittest.mock import MagicMock, Mock
+
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    handler = _guard_handler(monkeypatch, guard, MagicMock())
+    monkeypatch.setattr(producer, "safe", Mock(side_effect=RuntimeError("private secret")))
+    handler.do_POST()
+    assert guard.snapshot()["first_failure"] == {"stage": "inspect", "code": "internal_error"}
+    assert guard.snapshot()["in_flight"] == 0
+
+
+def test_guard_does_not_confirm_cleanup_with_inflight_request():
+    guard = producer.RequestGuard(key="synthetic", nonce="synthetic")
+    guard.in_flight = 1
+    with pytest.raises(producer.DiagnosticError, match="guard_cleanup:cleanup_unconfirmed"):
+        guard.stop()
+    with pytest.raises(producer.ProducerError):
+        producer.validate_guard_snapshot(guard.snapshot(cleanup_confirmed=True))

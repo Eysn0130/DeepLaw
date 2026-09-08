@@ -976,25 +976,41 @@ def _host_continuity_gap(*codes: str) -> dict[str, Any]:
     }
 
 
-def _provider_safe_continuity_text(value: Any, *, maximum: int) -> str | None:
-    if not isinstance(value, str) or not value or len(value) > maximum:
-        return None
-    selected = value
+class _HostContinuityProjectionError(ValueError):
+    """A fixed, provider-safe projection gap code."""
+
+
+def _provider_safe_continuity_text(
+    value: Any, *, maximum: int, bound_code: str = "continuity_capsule_bound"
+) -> str:
+    if not isinstance(value, str) or not value:
+        raise _HostContinuityProjectionError("continuity_capsule_invalid")
+    # Check the complete original text before any segmentation or length rejection.
     try:
-        assert_provider_output_safe(selected, interface="Host continuity capsule")
+        assert_provider_output_safe(value, interface="Host continuity capsule")
     except PermissionError:
-        return None
+        raise _HostContinuityProjectionError("sensitive_content_blocked") from None
+    if _HOST_CONTINUITY_SHA256_TEXT.search(value):
+        raise _HostContinuityProjectionError("internal_identity_blocked")
     if (
-        _HOST_CONTINUITY_SHA256_TEXT.search(selected)
-        or _HOST_CONTINUITY_ABSOLUTE_PATH.search(selected)
-        or _HOST_CONTINUITY_WINDOWS_PATH.search(selected)
-        or _HOST_CONTINUITY_SECRET_TEXT.search(selected)
+        _HOST_CONTINUITY_ABSOLUTE_PATH.search(value)
+        or _HOST_CONTINUITY_WINDOWS_PATH.search(value)
+        or _HOST_CONTINUITY_SECRET_TEXT.search(value)
     ):
-        return None
-    return selected
+        raise _HostContinuityProjectionError("sensitive_content_blocked")
+    if len(value) > maximum:
+        raise _HostContinuityProjectionError(bound_code)
+    return value
 
 
 def _host_continuity_projection(provider: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return _project_host_continuity(provider)
+    except _HostContinuityProjectionError as error:
+        return _host_continuity_gap(str(error))
+
+
+def _project_host_continuity(provider: dict[str, Any]) -> dict[str, Any]:
     capsule = provider.get("capsule")
     if not isinstance(capsule, dict):
         return _host_continuity_gap("continuity_capsule_invalid")
@@ -1006,105 +1022,90 @@ def _host_continuity_projection(provider: dict[str, Any]) -> dict[str, Any]:
         for value in (source_statements, source_gaps, source_conflicts)
     ):
         return _host_continuity_gap("continuity_capsule_invalid")
+    if len(source_statements) > 2:
+        return _host_continuity_gap("continuity_statement_overflow")
+    single_statement = len(source_statements) == 1
     projected_statements: list[dict[str, Any]] = []
-    projection_blocked = False
     for item in source_statements:
         if not isinstance(item, dict):
-            projection_blocked = True
-            break
+            return _host_continuity_gap("continuity_capsule_invalid")
         content = _provider_safe_continuity_text(
-            item.get("statement_text"), maximum=_HOST_CONTINUITY_TEXT_MAX_CHARS
+            item.get("statement_text"),
+            maximum=_HOST_CONTINUITY_TEXT_MAX_CHARS * (2 if single_statement else 1),
+            bound_code=("continuity_capsule_bound" if single_statement
+                        else "continuity_statement_overflow"),
         )
         authority = _provider_safe_continuity_text(item.get("authority"), maximum=100)
-        legal_authority = item.get("legal_authority")
-        if content is None or authority is None or legal_authority is not False:
-            projection_blocked = True
-            break
+        if item.get("legal_authority") is not False:
+            return _host_continuity_gap("continuity_capsule_invalid")
         valid_from_value = item.get("valid_from")
         valid_to_value = item.get("valid_to")
         valid_from = (
-            None
-            if valid_from_value is None
+            None if valid_from_value is None
             else _provider_safe_continuity_text(valid_from_value, maximum=100)
         )
         valid_to = (
-            None
-            if valid_to_value is None
+            None if valid_to_value is None
             else _provider_safe_continuity_text(valid_to_value, maximum=100)
         )
-        if (valid_from_value is not None and valid_from is None) or (
-            valid_to_value is not None and valid_to is None
-        ):
-            projection_blocked = True
-            break
         citations: list[dict[str, str]] = []
         source_refs = item.get("source_refs", [])
         if not isinstance(source_refs, list):
-            projection_blocked = True
-            break
-        for reference in source_refs[:2]:
+            return _host_continuity_gap("continuity_capsule_invalid")
+        if len(source_refs) > 2:
+            return _host_continuity_gap("continuity_capsule_bound")
+        for reference in source_refs:
             if not isinstance(reference, dict):
-                projection_blocked = True
-                break
-            locator = _provider_safe_continuity_text(
-                reference.get("locator"), maximum=200
-            )
-            if locator is None:
-                projection_blocked = True
-                break
+                return _host_continuity_gap("continuity_capsule_invalid")
+            locator = _provider_safe_continuity_text(reference.get("locator"), maximum=200)
             citations.append({"locator": locator})
-        if projection_blocked:
-            break
-        projected_statements.append(
-            {
-                "content": content,
+        segments = [content]
+        if len(content) > _HOST_CONTINUITY_TEXT_MAX_CHARS:
+            # Prefer a newline only when both complete, contiguous pieces fit.
+            maximum = _HOST_CONTINUITY_TEXT_MAX_CHARS
+            newline_cut = content.rfind("\n", len(content) - maximum - 1, maximum) + 1
+            cut = newline_cut if newline_cut else maximum
+            segments = [content[:cut], content[cut:]]
+        for segment in segments:
+            projected_statements.append({
+                "content": segment,
                 "authority": authority,
                 "legal_authority": False,
                 "valid_from": valid_from,
                 "valid_to": valid_to,
                 "citations": citations,
-            }
-        )
-        if len(projected_statements) == 2:
-            break
+            })
 
     projected_gaps: list[dict[str, str]] = []
-    for item in source_gaps:
+    for item in source_gaps[:8]:
         if not isinstance(item, dict):
-            projection_blocked = True
-            break
+            return _host_continuity_gap("continuity_capsule_invalid")
         code = _provider_safe_continuity_text(item.get("code"), maximum=100)
-        if code is None or _HOST_CONTINUITY_GAP_CODE.fullmatch(code) is None:
-            projection_blocked = True
-            break
+        if _HOST_CONTINUITY_GAP_CODE.fullmatch(code) is None:
+            return _host_continuity_gap("continuity_capsule_invalid")
         projected: dict[str, str] = {"code": code}
-        message = _provider_safe_continuity_text(
-            item.get("message"), maximum=_HOST_CONTINUITY_MESSAGE_MAX_CHARS
-        )
+        # Gap messages remain optional; preserve the existing omission of unsafe
+        # or oversized explanatory text without discarding the bounded gap code.
+        try:
+            message = _provider_safe_continuity_text(
+                item.get("message"), maximum=_HOST_CONTINUITY_MESSAGE_MAX_CHARS
+            )
+        except _HostContinuityProjectionError:
+            message = None
         if message is not None:
             projected["message"] = message
         projected_gaps.append(projected)
-        if len(projected_gaps) == 8:
-            break
 
     projected_conflicts: list[dict[str, str]] = []
-    for item in source_conflicts:
+    for item in source_conflicts[:4]:
         if not isinstance(item, dict):
-            projection_blocked = True
-            break
+            return _host_continuity_gap("continuity_capsule_invalid")
         summary = _provider_safe_continuity_text(
             item.get("summary") or item.get("message"),
             maximum=_HOST_CONTINUITY_MESSAGE_MAX_CHARS,
         )
-        if summary is None:
-            projection_blocked = True
-            break
         projected_conflicts.append({"summary": summary})
-        if len(projected_conflicts) == 4:
-            break
 
-    if projection_blocked:
-        return _host_continuity_gap("sensitive_content_blocked")
     result = {
         "schema_version": HOST_CONTINUITY_CAPSULE_SCHEMA_VERSION,
         "status": "admitted" if projected_statements else "gap",

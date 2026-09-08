@@ -460,6 +460,17 @@ deeplaw knowledge host connect --host claude-code --vault ./vault
 deeplaw knowledge host connect --host opencode --vault ./vault
 ```
 
+Current Host continuity projection preserves a single admitted checkpoint statement as at most two
+ordered, contiguous text segments when it exceeds 512 characters. The complete original text passes
+privacy and internal-identity checks before segmentation; concatenating the segments reproduces it
+exactly. A fitting existing newline is preferred. Each segment inherits the statement's Authority,
+valid time and citations; segments do not constitute separate decision or next-action fields.
+Multiple source statements remain separate: more than two, or any requiring segmentation, produce
+`continuity_statement_overflow` without returning a partial checkpoint. Each content remains bounded
+at 512 characters and the complete capsule at 1400 UTF-8 bytes. Content that cannot fit returns empty
+statements with `continuity_capsule_bound`; malformed input, sensitive content and internal identity
+use distinct gaps. Projection remains read-only and preserves route and scope admission.
+
 Static Host configuration is task-neutral. For task continuity, DeepLaw normalizes the chosen
 project/task labels, derives only digests for project, task lineage, repository and worktree, and
 recomputes the base revision and bounded dirty snapshot from the explicitly selected Git worktree.

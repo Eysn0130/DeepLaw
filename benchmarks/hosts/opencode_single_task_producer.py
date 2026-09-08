@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager, suppress
@@ -39,6 +40,144 @@ TOOL = "deeplaw_knowledge_knowledge_support"
 
 class ProducerError(ValueError):
     """A bounded producer observation could not be established."""
+
+
+# Owner-local diagnostics only: never retain exception text or transport payloads.
+DIAGNOSTIC_STAGES = frozenset({
+    "ingress", "inspect", "admission", "provider_open", "provider_read", "client_write",
+    "guard_protocol", "guard_start", "host_start", "host_turn", "host_collect",
+    "evidence_write", "sampler_cleanup", "state_cleanup", "guard_deactivate",
+    "host_cleanup", "guard_cleanup", "run",
+})
+DIAGNOSTIC_CODES = frozenset({
+    "internal_error", "validation_rejected", "timeout", "network_error", "http_error",
+    "io_error", "redirect_forbidden", "body_length", "inactive_turn", "route_forbidden",
+    "association_mismatch", "body_bound", "invalid_json", "request_object", "request_shape",
+    "model_mismatch", "messages_missing", "message_count", "tool_inventory", "tool_shape",
+    "tool_name", "tool_schema", "tool_schema_bound", "privacy_rejected", "canary_in_body",
+    "message_invalid", "message_shape", "message_role", "multimodal_forbidden",
+    "call_shape", "call_name", "request_budget", "forward_disabled", "response_bound",
+    "method_forbidden", "receipt_invalid", "pipe_eof", "cleanup_unconfirmed", "interrupted",
+})
+
+
+class DiagnosticError(ProducerError):
+    def __init__(self, stage: str, code: str, http_status: int | None = None) -> None:
+        self.record = {"stage": stage, "code": code}
+        if http_status is not None:
+            self.record["http_status"] = http_status
+        validate_diagnostic(self.record)
+        super().__init__(f"{stage}:{code}")
+
+
+def validate_diagnostic(value: Any) -> None:
+    require(isinstance(value, dict) and set(value) <= {"stage", "code", "http_status"},
+            "diagnostic shape differs")
+    require(value.get("stage") in DIAGNOSTIC_STAGES
+            and value.get("code") in DIAGNOSTIC_CODES, "diagnostic enum differs")
+    if "http_status" in value:
+        require(value["code"] == "http_error" and type(value["http_status"]) is int
+                and 100 <= value["http_status"] <= 599, "diagnostic HTTP status differs")
+
+
+def diagnostic(error: BaseException, stage: str) -> dict[str, Any]:
+    if isinstance(error, DiagnosticError):
+        return dict(error.record)
+    status = None
+    if isinstance(error, urllib.error.HTTPError):
+        code = "http_error"
+        if type(error.code) is int and 100 <= error.code <= 599:
+            status = error.code
+    elif isinstance(error, TimeoutError) or (
+        isinstance(error, urllib.error.URLError) and isinstance(error.reason, TimeoutError)
+    ):
+        code = "timeout"
+    elif isinstance(error, urllib.error.URLError):
+        code = "network_error"
+    elif isinstance(error, OSError):
+        code = "io_error"
+    elif isinstance(error, ProducerError):
+        code = "validation_rejected"
+    elif isinstance(error, (KeyboardInterrupt, SystemExit)):
+        code = "interrupted"
+    else:
+        code = "internal_error"
+    return DiagnosticError(stage, code, status).record
+
+
+class FailureEvidence:
+    """Keep the first failure while attempting every applicable cleanup once."""
+
+    def __init__(self) -> None:
+        self.first: dict[str, Any] | None = None
+        self.cleanup_failures: list[dict[str, Any]] = []
+        self.cleanup_results: dict[str, str] = {}
+
+    def capture(self, error: BaseException, stage: str) -> None:
+        if self.first is None:
+            self.first = diagnostic(error, stage)
+
+    def cleanup(self, stage: str, action: Any) -> Any:
+        try:
+            result = action()
+        except BaseException as error:
+            record = diagnostic(error, stage)
+            self.capture(error, stage)
+            if len(self.cleanup_failures) < 8:
+                self.cleanup_failures.append(record)
+            self.cleanup_results[stage] = "failed"
+            return None
+        self.cleanup_results[stage] = "succeeded"
+        return result
+
+    def raise_if_failed(self) -> None:
+        if self.first is not None:
+            raise DiagnosticError(**self.first) from None
+
+    def persist(self, root: Path, *, guard: Any, binding_sha256: str) -> None:
+        if self.first is None:
+            return
+        value = {
+            "schema_version": "deeplaw.owner-run-failure/v1",
+            "binding_sha256": binding_sha256,
+            "first_failure": self.first,
+            "cleanup_failures": self.cleanup_failures,
+            "cleanup_results": self.cleanup_results,
+            "cleanup_confirmed": not self.cleanup_failures
+                and all(self.cleanup_results.get(stage) == "succeeded"
+                        for stage in ("host_cleanup", "guard_cleanup")),
+            "guard": guard.receipt if guard is not None and guard.receipt else None,
+            "guard_receipt_current": guard.receipt_current if guard is not None else False,
+            "guard_cleanup_failures": guard.cleanup_failures if guard is not None else [],
+            "formal_admission": False,
+        }
+        # Disk failure must not replace the observed primary failure.
+        with suppress(Exception):
+            write_json(root / "failure.json", value)
+        with suppress(Exception):
+            write_json(root / "stop.json", {
+                "status": "STOP", "formal_admission": False,
+                "reason": "supervised_observation_incomplete",
+            })
+
+
+def guard_require(condition: bool, code: str) -> None:
+    if not condition:
+        raise DiagnosticError("inspect", code)
+
+
+def guard_json(raw: str) -> Any:
+    try:
+        return strict_json_loads(raw)
+    except (ValueError, TypeError):
+        raise DiagnosticError("inspect", "invalid_json") from None
+
+
+def guard_safe(value: Any) -> None:
+    try:
+        safe(value)
+    except PermissionError:
+        raise DiagnosticError("inspect", "privacy_rejected") from None
 
 
 def encoded(value: Any) -> bytes:
@@ -504,18 +643,23 @@ class RequestGuard:
         self.active = False
         self.requests: list[dict[str, Any]] = []
         self.rejected = 0
+        self.in_flight = 0
+        self.first_failure: dict[str, Any] | None = None
         self.lock = threading.Lock()
         self.server: Any = None
         self.thread: threading.Thread | None = None
 
     def inspect(self, body: bytes, *, path: str, authorization: str) -> dict[str, Any]:
-        require(self.active, "Provider request outside an authorized turn")
-        require(path == "/chat/completions", "Provider route is forbidden")
-        require(authorization == "Bearer " + self.nonce, "Provider guard association differs")
-        require(0 < len(body) <= 262144, "Provider request exceeds bound")
-        value = strict_json_loads(body.decode("utf-8"))
-        require(isinstance(value, dict), "Provider request is not an object")
-        require(
+        guard_require(self.active, "inactive_turn")
+        guard_require(path == "/chat/completions", "route_forbidden")
+        guard_require(authorization == "Bearer " + self.nonce, "association_mismatch")
+        guard_require(0 < len(body) <= 262144, "body_bound")
+        try:
+            value = guard_json(body.decode("utf-8"))
+        except UnicodeError:
+            raise DiagnosticError("inspect", "invalid_json") from None
+        guard_require(isinstance(value, dict), "request_object")
+        guard_require(
             set(value)
             <= {
                 "model",
@@ -534,38 +678,40 @@ class RequestGuard:
                 "stop",
                 "response_format",
             },
-            "Provider request shape is unknown",
+            "request_shape",
         )
-        require(value.get("model") == "deepseek-v4-flash", "Provider model differs")
-        require(isinstance(value.get("messages"), list), "Provider messages are unavailable")
-        require(1 <= len(value["messages"]) <= 32, "Provider message count exceeds bound")
+        guard_require(value.get("model") == "deepseek-v4-flash", "model_mismatch")
+        guard_require(isinstance(value.get("messages"), list), "messages_missing")
+        guard_require(1 <= len(value["messages"]) <= 32, "message_count")
         if "tools" in value:
-            require(
+            guard_require(
                 isinstance(value["tools"], list) and len(value["tools"]) == 1,
-                "Provider tool inventory differs",
+                "tool_inventory",
             )
             tool = value["tools"][0]
-            require(
+            guard_require(
                 isinstance(tool, dict)
                 and set(tool) == {"type", "function"}
                 and tool["type"] == "function",
-                "Provider tool shape differs",
+                "tool_shape",
             )
             function = tool["function"]
-            require(
+            guard_require(
                 isinstance(function, dict)
                 and set(function) <= {"name", "description", "parameters", "strict"}
                 and function.get("name") == TOOL,
-                "Provider tool name differs",
+                "tool_name",
             )
-            require(isinstance(function.get("parameters"), dict), "Provider tool schema missing")
-            require(len(encoded(tool)) <= 16384, "Provider tool schema exceeds bound")
-        safe(value)  # Full request, including Host environment/system/tool content.
+            guard_require(isinstance(function.get("parameters"), dict), "tool_schema")
+            guard_require(len(encoded(tool)) <= 16384, "tool_schema_bound")
+        guard_safe(value)  # Full request, including Host environment/system/tool content.
         decoded_body = canonical_json(value)
-        require(self.key not in decoded_body and self.nonce not in decoded_body, "canary in body")
+        guard_require(
+            self.key not in decoded_body and self.nonce not in decoded_body, "canary_in_body"
+        )
         for message in value["messages"]:
-            require(isinstance(message, dict), "Provider message is invalid")
-            require(
+            guard_require(isinstance(message, dict), "message_invalid")
+            guard_require(
                 set(message)
                 <= {
                     "role",
@@ -575,30 +721,48 @@ class RequestGuard:
                     "reasoning_content",
                     "name",
                 },
-                "Provider message shape is unknown",
+                "message_shape",
             )
-            require(
+            guard_require(
                 message.get("role") in {"system", "user", "assistant", "tool"},
-                "message role differs",
+                "message_role",
             )
-            require(
+            guard_require(
                 message.get("content") is None or isinstance(message.get("content"), str),
-                "Provider multimodal message is forbidden",
+                "multimodal_forbidden",
             )
             for call in message.get("tool_calls", []):
-                require(
+                guard_require(
                     isinstance(call, dict)
                     and set(call) == {"id", "type", "function"}
                     and call["type"] == "function",
-                    "Provider call shape differs",
+                    "call_shape",
                 )
-                require(
+                guard_require(
                     set(call["function"]) == {"name", "arguments"}
                     and call["function"]["name"] == TOOL,
-                    "Provider call name differs",
+                    "call_name",
                 )
-                safe(strict_json_loads(call["function"]["arguments"]))
+                guard_safe(guard_json(call["function"]["arguments"]))
         return value
+
+    def snapshot(self, *, cleanup_confirmed: bool | None = None,
+                 cleanup_failure: dict[str, Any] | None = None) -> dict[str, Any]:
+        with self.lock:
+            return {
+                "requests": [dict(item) for item in self.requests],
+                "rejected": self.rejected,
+                "in_flight": self.in_flight,
+                "first_failure": dict(self.first_failure) if self.first_failure else None,
+                "cleanup_confirmed": cleanup_confirmed,
+                "cleanup_failure": cleanup_failure,
+            }
+
+    def reject(self, error: BaseException, stage: str) -> None:
+        with self.lock:
+            self.rejected += 1
+            if self.first_failure is None:
+                self.first_failure = diagnostic(error, stage)
 
     def start(self) -> str:
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -607,7 +771,7 @@ class RequestGuard:
 
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args: Any, **kwargs: Any) -> None:
-                raise ProducerError("Provider redirect is forbidden")
+                raise DiagnosticError("provider_open", "redirect_forbidden")
 
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
 
@@ -616,19 +780,31 @@ class RequestGuard:
                 return
 
             def do_POST(self) -> None:
+                stage = "ingress"
+                with guard.lock:
+                    guard.in_flight += 1
                 try:
-                    length = int(self.headers.get("Content-Length", "0"))
-                    require(0 < length <= 262144, "Provider body length differs")
+                    try:
+                        length = int(self.headers.get("Content-Length", "0"))
+                    except ValueError:
+                        raise DiagnosticError(stage, "body_length") from None
+                    if not 0 < length <= 262144:
+                        raise DiagnosticError(stage, "body_length")
                     body = self.rfile.read(length)
+                    stage = "inspect"
                     with guard.lock:
                         guard.inspect(
                             body,
                             path=self.path,
                             authorization=self.headers.get("Authorization", ""),
                         )
-                        require(len(guard.requests) < 6, "guard request budget exhausted")
-                        require(guard.forward, "real Provider forwarding not enabled")
+                        stage = "admission"
+                        if len(guard.requests) >= 6:
+                            raise DiagnosticError(stage, "request_budget")
+                        if not guard.forward:
+                            raise DiagnosticError(stage, "forward_disabled")
                         guard.requests.append({"sha256": digest(body), "bytes": len(body)})
+                    stage = "provider_open"
                     request = urllib.request.Request(
                         "https://api.deepseek.com/chat/completions",
                         data=body,
@@ -638,24 +814,32 @@ class RequestGuard:
                         },
                     )
                     with opener.open(request, timeout=300) as response:
+                        stage = "provider_read"
                         data = response.read(MAX_BYTES + 1)
-                        require(len(data) <= MAX_BYTES, "Provider response exceeds bound")
+                        if len(data) > MAX_BYTES:
+                            raise DiagnosticError(stage, "response_bound")
                         content_type = response.headers.get("Content-Type", "application/json")
+                    stage = "client_write"
                     self.send_response(200)
                     self.send_header("Content-Type", content_type)
                     self.send_header("Content-Length", str(len(data)))
                     self.end_headers()
                     self.wfile.write(data)
-                except Exception:
-                    guard.rejected += 1
-                    self.send_response(403)
-                    self.end_headers()
-                    self.wfile.write(b'{"error":"supervised_provider_request_rejected"}')
+                except Exception as error:
+                    guard.reject(error, stage)
+                    with suppress(Exception):
+                        self.send_response(403)
+                        self.end_headers()
+                        self.wfile.write(b'{"error":"supervised_provider_request_rejected"}')
+                finally:
+                    with guard.lock:
+                        guard.in_flight -= 1
 
             def do_GET(self) -> None:
-                guard.rejected += 1
-                self.send_response(403)
-                self.end_headers()
+                guard.reject(DiagnosticError("ingress", "method_forbidden"), "ingress")
+                with suppress(Exception):
+                    self.send_response(403)
+                    self.end_headers()
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.server.daemon_threads = True
@@ -671,6 +855,9 @@ class RequestGuard:
         if self.thread is not None:
             self.thread.join(timeout=2)
             require(not self.thread.is_alive(), "Provider guard cleanup unconfirmed")
+        with self.lock:
+            if self.in_flight:
+                raise DiagnosticError("guard_cleanup", "cleanup_unconfirmed")
 
 
 def validate_host_observation(
@@ -897,8 +1084,11 @@ def guard_process(config_path: Path) -> None:
     key = key_file.read_text().strip()
     require(bool(re.fullmatch(r"[A-Za-z0-9_-]{16,256}", key)), "guard key syntax differs")
     guard = RequestGuard(key=key, nonce=config["nonce"], forward=True)
+    failure = FailureEvidence()
+    stage = "guard_start"
     try:
         print(canonical_json({"url": guard.start(), "pid": os.getpid()}), flush=True)
+        stage = "guard_protocol"
         for raw in sys.stdin:
             require(len(raw) <= 1024, "guard command exceeds bound")
             command = strict_json_loads(raw)
@@ -908,18 +1098,53 @@ def guard_process(config_path: Path) -> None:
             )
             if command == {"stop": True}:
                 break
-            guard.active = command["active"]
-            print(
-                canonical_json({"requests": guard.requests, "rejected": guard.rejected}), flush=True
-            )
+            with guard.lock:
+                guard.active = command["active"]
+            print(canonical_json(guard.snapshot()), flush=True)
+    except BaseException as error:
+        failure.capture(error, stage)
     finally:
-        guard.stop()
-    print(
-        canonical_json(
-            {"requests": guard.requests, "rejected": guard.rejected, "cleanup_confirmed": True}
-        ),
-        flush=True,
-    )
+        failure.cleanup("guard_cleanup", guard.stop)
+        cleanup_failure = next(iter(failure.cleanup_failures), None)
+        snapshot = guard.snapshot(
+            cleanup_confirmed=cleanup_failure is None, cleanup_failure=cleanup_failure,
+        )
+        if snapshot["first_failure"] is None:
+            snapshot["first_failure"] = failure.first
+        # Even a failed shutdown emits a bounded final receipt when its pipe survives.
+        with suppress(Exception):
+            print(canonical_json(snapshot), flush=True)
+    failure.raise_if_failed()
+
+
+def validate_guard_snapshot(value: Any) -> dict[str, Any]:
+    require(isinstance(value, dict) and set(value) == {
+        "requests", "rejected", "in_flight", "first_failure",
+        "cleanup_confirmed", "cleanup_failure",
+    }, "guard snapshot fields differ")
+    require(isinstance(value["requests"], list) and len(value["requests"]) <= 6,
+            "guard snapshot request bound differs")
+    for item in value["requests"]:
+        require(isinstance(item, dict) and set(item) == {"sha256", "bytes"}
+                and isinstance(item["sha256"], str)
+                and re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) is not None
+                and type(item["bytes"]) is int and 0 < item["bytes"] <= 262144,
+                "guard snapshot request differs")
+    require(type(value["in_flight"]) is int and value["in_flight"] >= 0
+            and (value["cleanup_confirmed"] is not True or value["in_flight"] == 0),
+            "guard snapshot active request count differs")
+    require(type(value["rejected"]) is int and value["rejected"] >= 0,
+            "guard snapshot rejected count differs")
+    require(value["cleanup_confirmed"] is None or type(value["cleanup_confirmed"]) is bool,
+            "guard snapshot cleanup state differs")
+    for key in ("first_failure", "cleanup_failure"):
+        if value[key] is not None:
+            validate_diagnostic(value[key])
+    require(value["rejected"] == 0 or value["first_failure"] is not None,
+            "guard snapshot rejection cause missing")
+    require(value["cleanup_failure"] is None or value["cleanup_confirmed"] is False,
+            "guard snapshot cleanup contradiction")
+    return json.loads(canonical_json(value))
 
 
 class ExternalGuard:
@@ -928,6 +1153,9 @@ class ExternalGuard:
         self.process: subprocess.Popen[str] | None = None
         self.url = ""
         self.receipt: dict[str, Any] = {}
+        self.receipt_current = False
+        self.stop_attempted = False
+        self.cleanup_failures: list[dict[str, Any]] = []
 
     def start(self) -> None:
         self.process = subprocess.Popen(
@@ -946,8 +1174,8 @@ class ExternalGuard:
             stderr=subprocess.DEVNULL,
             text=True,
         )
-        self.receipt = self._response()
-        self.url = self.receipt["url"]
+        startup = self._response()
+        self.url = startup["url"]
         require(
             re.fullmatch(r"http://127\.0\.0\.1:[0-9]+", self.url) is not None,
             "external guard route differs",
@@ -959,39 +1187,78 @@ class ExternalGuard:
         require(self.process is not None and self.process.stdout is not None, "guard pipe missing")
         with selectors.DefaultSelector() as selector:
             selector.register(self.process.stdout, selectors.EVENT_READ)
-            require(bool(selector.select(timeout=10)), "guard response timeout")
-        value = strict_json_loads(self.process.stdout.readline(4097))
-        require(isinstance(value, dict), "guard response differs")
+            if not selector.select(timeout=10):
+                raise DiagnosticError("guard_protocol", "timeout")
+        raw = self.process.stdout.readline(4097)
+        if not raw:
+            raise DiagnosticError("guard_protocol", "pipe_eof")
+        if len(raw) > 4096 or not raw.endswith("\n"):
+            raise DiagnosticError("guard_protocol", "receipt_invalid")
+        try:
+            value = strict_json_loads(raw)
+            require(isinstance(value, dict), "guard response differs")
+        except (ValueError, TypeError):
+            raise DiagnosticError("guard_protocol", "receipt_invalid") from None
         return value
 
+    def _snapshot(self) -> None:
+        self.receipt_current = False
+        try:
+            value = validate_guard_snapshot(self._response())
+        except BaseException as error:
+            record = diagnostic(error, "guard_protocol")
+            raise DiagnosticError(**record) from None
+        self.receipt = value
+        self.receipt_current = True
+
     def active(self, enabled: bool) -> None:
+        self.receipt_current = False
         require(self.process is not None and self.process.stdin is not None, "guard not started")
         self.process.stdin.write(canonical_json({"active": enabled}) + "\n")
         self.process.stdin.flush()
-        self.receipt = self._response()
-        require(self.receipt.get("rejected") == 0, "guard has rejected a request")
+        self._snapshot()
+        if self.receipt["first_failure"] is not None:
+            raise DiagnosticError(**self.receipt["first_failure"])
+        require(self.receipt["rejected"] == 0, "guard has rejected a request")
 
     def stop(self) -> None:
         if self.process is None:
             return
+        if self.stop_attempted:
+            require(self.receipt_current and self.receipt.get("cleanup_confirmed") is True
+                    and self.process.returncode == 0, "guard cleanup unconfirmed")
+            return
+        self.stop_attempted = True
+        failure = FailureEvidence()
+        self.receipt_current = False
         try:
             require(self.process.stdin is not None, "guard input unavailable")
             self.process.stdin.write('{"stop":true}\n')
             self.process.stdin.flush()
-            self.receipt = self._response()
+            self._snapshot()
             self.process.wait(timeout=10)
+            if self.receipt["cleanup_failure"] is not None:
+                raise DiagnosticError(**self.receipt["cleanup_failure"])
             require(
                 self.process.returncode == 0 and self.receipt.get("cleanup_confirmed") is True,
                 "guard cleanup unconfirmed",
             )
+            if self.receipt["first_failure"] is not None:
+                raise DiagnosticError(**self.receipt["first_failure"])
+        except BaseException as error:
+            failure.capture(error, "guard_cleanup")
         finally:
-            if self.process.poll() is None:
-                self.process.kill()
-                self.process.wait(timeout=5)
-            if self.process.stdin:
-                self.process.stdin.close()
-            if self.process.stdout:
-                self.process.stdout.close()
+            def finish() -> None:
+                if self.process.poll() is None:
+                    self.process.kill()
+                    self.process.wait(timeout=5)
+
+            failure.cleanup("guard_cleanup", finish)
+            for pipe in (self.process.stdin, self.process.stdout):
+                if pipe is not None:
+                    failure.cleanup("guard_cleanup", pipe.close)
+            self.cleanup_failures = failure.cleanup_failures
+        failure.raise_if_failed()
 
 
 def deployment_sources() -> list[Path]:
@@ -1446,7 +1713,10 @@ def run(prepared_path: Path) -> None:
     guard = ExternalGuard(guard_config)
     server = None
     turns, events, lifecycle, fork_receipts = [], [], [], []
-    stopped = False
+    failure = FailureEvidence()
+    host_cleanup_attempted = False
+    guard_cleanup_attempted = False
+    stage = "guard_start"
     try:
         guard.start()
         environment = prepared["environment"]
@@ -1469,6 +1739,7 @@ def run(prepared_path: Path) -> None:
         server = legacy._OpenCodeLocalServer(
             binary=binary, environment=environment, cwd=repository, root=root
         )
+        stage = "host_start"
         server.start()
         require(server.process is not None, "Host process missing")
         process_identity = digest(
@@ -1496,6 +1767,7 @@ def run(prepared_path: Path) -> None:
         log_path = Path(environment["DEEPLAW_OPENCODE_MODEL_RECEIPT"])
         parent = None
         for index in (1, 2):
+            stage = "host_collect"
             validate_control(control)
             fork_raw = None
             fork_started = datetime.now(UTC)
@@ -1556,14 +1828,16 @@ def run(prepared_path: Path) -> None:
             before_messages, _ = api(server, "GET", f"/session/{session}/message")
             old_ids = {message["info"]["id"] for message in before_messages}
             before = legacy._ledger_head(deeplaw, vault, environment=environment, cwd=repository)
-            replace_state(
-                state, {"turn": str(index), "active": True, "nonce_sha256": control["nonce_sha256"]}
-            )
-            guard.active(True)
-            sampler = RssSampler(server.process.pid)
-            sampler.thread.start()
+            stage = "host_turn"
+            sampler = None
             start = time.monotonic()
             try:
+                replace_state(state, {
+                    "turn": str(index), "active": True, "nonce_sha256": control["nonce_sha256"],
+                })
+                guard.active(True)
+                sampler = RssSampler(server.process.pid)
+                sampler.thread.start()
                 api(
                     server,
                     "POST",
@@ -1592,14 +1866,19 @@ def run(prepared_path: Path) -> None:
                         ],
                     },
                 )
+            except BaseException as error:
+                failure.capture(error, "host_turn")
             finally:
                 elapsed = (time.monotonic() - start) * 1000
-                rss = sampler.stop()
-                replace_state(
+                rss = (failure.cleanup("sampler_cleanup", sampler.stop)
+                       if sampler is not None else None)
+                failure.cleanup("state_cleanup", lambda index=index: replace_state(
                     state,
                     {"turn": str(index), "active": False, "nonce_sha256": control["nonce_sha256"]},
-                )
-                guard.active(False)
+                ))
+                failure.cleanup("guard_deactivate", lambda: guard.active(False))
+            failure.raise_if_failed()
+            stage = "host_collect"
             after = legacy._ledger_head(deeplaw, vault, environment=environment, cwd=repository)
             require(before == after, "measured Host turn changed Ledger")
             messages, _ = api(server, "GET", f"/session/{session}/message")
@@ -1682,12 +1961,15 @@ def run(prepared_path: Path) -> None:
                 }
             )
         host_process = server.process
-        server.stop()
-        guard.stop()
+        host_cleanup_attempted = True
+        failure.cleanup("host_cleanup", server.stop)
+        guard_cleanup_attempted = True
+        failure.cleanup("guard_cleanup", guard.stop)
+        failure.raise_if_failed()
         require(
             host_process is not None and host_process.poll() is not None, "Host exit unavailable"
         )
-        stopped = True
+        stage = "evidence_write"
         advertisements = [
             item["advertisement"]
             for item in json_lines(root / "proxy.jsonl")
@@ -1719,23 +2001,15 @@ def run(prepared_path: Path) -> None:
         }
         contract("host-mcp-observation.v1.schema.json", observation)
         write_sources(root / "evidence", prepared, observation, events, lifecycle, fork_receipts)
-    except Exception:
-        write_json(
-            root / "stop.json",
-            {
-                "status": "STOP",
-                "formal_admission": False,
-                "reason": "supervised_observation_incomplete",
-            },
-        )
-        raise
+    except BaseException as error:
+        failure.capture(error, stage)
     finally:
-        if not stopped:
-            try:
-                if server is not None:
-                    server.stop()
-            finally:
-                guard.stop()
+        if not host_cleanup_attempted and server is not None:
+            failure.cleanup("host_cleanup", server.stop)
+        if not guard_cleanup_attempted:
+            failure.cleanup("guard_cleanup", guard.stop)
+        failure.persist(root, guard=guard, binding_sha256=digest(control))
+    failure.raise_if_failed()
 
 
 def public_fork_event(
