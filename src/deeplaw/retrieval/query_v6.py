@@ -472,7 +472,18 @@ def _applicable_duties(
     )
     exception = any(
         token in normalized or token in query
-        for token in ("exception", "exclude", "limitation", "例外", "限制", "排除")
+        for token in (
+            "exception",
+            "exclude",
+            "limitation",
+            "例外",
+            "限制",
+            "排除",
+            "但书",
+            "除外",
+            "除非",
+            "proviso",
+        )
     )
     contradiction = purpose == "verify" or any(
         token in normalized or token in query
@@ -1524,11 +1535,6 @@ def _duty_reports(
         and isinstance(item.get("fragment_id"), str)
     )
     source_ids = list(dict.fromkeys(source_ids))
-    contested_ids = [
-        str(item["statement_id"])
-        for item in statements
-        if item.get("support_status") == "contested"
-    ]
     applicability_ids = [
         str(item["statement_id"])
         for item in statements
@@ -1557,7 +1563,10 @@ def _duty_reports(
         elif duty == "procedure":
             refs = procedure_ids
         elif duty == "exception":
-            refs = [*limitation_ids, *contested_ids]
+            # v3 has no task-bound exception/proviso witness.  A generic
+            # limitation or contested statement cannot prove coverage of the
+            # requested exception; derived statements do not replace evidence.
+            refs = []
         elif duty == "contradiction":
             refs = [str(item["statement_id"]) for item in contradictions]
         elif duty == "applicability":
@@ -1582,6 +1591,14 @@ def _duty_reports(
         elif refs:
             status = "satisfied"
             reason = "Selected statement or exact source references cover this duty."
+        elif duty == "exception":
+            reason = (
+                "Exact source evidence was selected, but current v3 has no task-bound "
+                "exception witness; coverage remains unresolved."
+                if evidence
+                else "Current v3 has no task-bound exception witness; coverage remains unresolved."
+            )
+            status = "unresolved"
         else:
             status = "unresolved"
             reason = "No admitted selected statement or exact source reference covers this duty."
@@ -1758,6 +1775,10 @@ def execute_v6(
         purpose=purpose,
         requested=applicable_duties,
     )
+    if "exception" in applicable:
+        # A required source-first duty takes precedence over a compiled-only
+        # partition (which reserves zero evidence). Report the effective policy.
+        policy = "evidence-first-v1"
     effective_task_binding = normalized_task_binding
     route_revision_ids: tuple[str, ...] = ()
     route_status: str | None = None
@@ -1982,7 +2003,7 @@ def execute_v6(
     evidence: list[dict[str, Any]] = []
     evidence_item_limit = min(max_sources, evidence_budget["items"])
     evidence_character_limit = evidence_budget["characters"]
-    evidence_first = purpose in {"verify", "quote", "historical"}
+    evidence_first = purpose in {"verify", "quote", "historical"} or "exception" in applicable
     identity_target = any(
         target.get(field) is not None
         for field in ("semantic_key", "knowledge_id", "revision_id", "kind")
@@ -2463,8 +2484,12 @@ def execute_v6(
                     "code": "duty_unresolved",
                     "duty": report["duty"],
                     "message": (
-                        "No admitted statement or exact source evidence covers "
-                        f"{report['duty']}."
+                        report["reason"]
+                        if report["duty"] == "exception"
+                        else (
+                            "No admitted statement or exact source evidence covers "
+                            f"{report['duty']}."
+                        )
                     ),
                 }
             )

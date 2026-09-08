@@ -17036,6 +17036,90 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_explicit_exception_request_returns_admitted_source_passage[cli-context]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_explicit_exception_request_returns_admitted_source_passage[cli-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_explicit_exception_request_returns_admitted_source_passage[cli-query]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_explicit_exception_request_returns_admitted_source_passage[cli-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_explicit_exception_request_returns_admitted_source_passage[mcp-context]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_explicit_exception_request_returns_admitted_source_passage[mcp-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_explicit_exception_request_returns_admitted_source_passage[mcp-query]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_explicit_exception_request_returns_admitted_source_passage[mcp-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_limitation_only_does_not_satisfy_exception_duty[cli-context]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_limitation_only_does_not_satisfy_exception_duty[cli-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_limitation_only_does_not_satisfy_exception_duty[cli-query]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_limitation_only_does_not_satisfy_exception_duty[cli-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_limitation_only_does_not_satisfy_exception_duty[mcp-context]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_limitation_only_does_not_satisfy_exception_duty[mcp-context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_limitation_only_does_not_satisfy_exception_duty[mcp-query]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_limitation_only_does_not_satisfy_exception_duty[mcp-query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_proviso_terms_request_source_first_exception_duty[\\u4f46\\u4e66]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_proviso_terms_request_source_first_exception_duty[\\u4f46\\u4e66]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_proviso_terms_request_source_first_exception_duty[\\u9664\\u5916]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_proviso_terms_request_source_first_exception_duty[\\u9664\\u5916]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_proviso_terms_request_source_first_exception_duty[\\u9664\\u975e]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_proviso_terms_request_source_first_exception_duty[\\u9664\\u975e]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6_exception_duty",
+            "name": "test_proviso_terms_request_source_first_exception_duty[proviso]"
+          },
+          "node_id": "tests/test_v013_query_v6_exception_duty.py::test_proviso_terms_request_source_first_exception_duty[proviso]"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_query_v6_expression_invariance",
             "name": "test_v6_case_punctuation_quotes_and_cjk_preserve_required_identities"
           },
@@ -19688,9 +19772,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2778,
+      "count": 2790,
       "selection": "not qualification and not windows_native",
-      "sha256": "e2b36c685bda934010178d7e113b7e5e5594f55a353f23d718a807b490cdc311"
+      "sha256": "5d7f78b046ced6907a590e412c524411bf39fac99d9bd76b30a7fe98eb3a624c"
     },
     "windows": {
       "additional_cases": [
@@ -19730,13 +19814,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2783,
+      "count": 2795,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "fb94e676b9e0ab01cebd375224550cf796d17174fcaa0b1a93fb317411797f59"
+      "sha256": "c65b645c3200e40a64ab7147524e51b470b98ba56c4ec349263572eac548b56c"
     }
   },
-  "manifest_sha256": "6f34ca9f9e3e2be047e2b01ff4be09e2e0b354b6651c9e1b18d355ef46e43476",
+  "manifest_sha256": "cc43f10bd256e4b8ee55b6e9cbae01121eef7de3b71d5dbbe809bf8dbe806f73",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

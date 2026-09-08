@@ -193,6 +193,15 @@ task intent and duties
   -> Provider-safe projection to a thin Host driver
 ```
 
+Current planner `duty_coverage` is a structural selection metric, not an independent measurement of
+task Duty Coverage. Current v3 does not establish task-bound exception/proviso coverage from generic
+limitation or contested Statements. These duties remain unresolved with an explicit Gap, while the
+existing bounded source-first path returns admitted exact passages when available, including under
+`answer` and `compiled-first-v1`. Returning a passage does not itself resolve the semantic duty.
+An applicable exception duty selects the existing `evidence-first-v1` budget partition within the
+caller's total bounds; Query Plan `policy_id` reports this effective policy, rather than silently
+retaining the requested compiled-only partition's zero evidence budget.
+
 Discovery proposes candidates only. Selection cannot upgrade Authority or bypass a Gap. A fallback
 from compiled knowledge to raw Fragments remains bounded and visible in the plan, explanation,
 receipt, or Gap. Missing or unverifiable evidence is not replaced with model memory, unrelated Web
