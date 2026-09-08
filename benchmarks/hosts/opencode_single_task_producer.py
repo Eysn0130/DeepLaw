@@ -1118,7 +1118,8 @@ export default {{ id: "deeplaw-native-supervised", server: async input => {{
   if (typeof original !== "function") throw new Error("native system hook missing");
   return {{ ...hooks, "experimental.chat.system.transform": async (input, output) => {{
     await original(input, output);
-    output.system = transform(output.system);
+    const sanitized = transform(output.system);
+    output.system.splice(0, output.system.length, ...sanitized);
   }} }};
 }} }};
 """

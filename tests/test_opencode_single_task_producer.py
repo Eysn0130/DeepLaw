@@ -381,8 +381,12 @@ def test_generated_privacy_wrapper_preserves_native_hooks_and_rejects_unknown_en
     script = (
         "import p, {transform} from " + json.dumps(wrapper.as_uri()) + ";"
         "const block = " + json.dumps(block) + ";"
-        'const hooks = await p.server({}); const output={system:["before\\n"+block+"\\nafter"]};'
+        'const hooks = await p.server({}); const system=["before\\n"+block+"\\nafter"];'
+        'const output={system};'
         'await hooks["experimental.chat.system.transform"]({},output);'
+        'const messages=system.map(content=>({role:"system",content}));'
+        'if(output.system!==system || messages[0].content.includes("/synthetic/") || '
+        'messages[1].content!=="native governed capsule") throw new Error("caller alias failed");'
         'if(hooks.event()!==42 || output.system[1]!=="native governed capsule" || '
         'output.system[0].includes("/synthetic/") || !output.system[0].endsWith("after")) '
         'throw new Error("preservation failed");'
