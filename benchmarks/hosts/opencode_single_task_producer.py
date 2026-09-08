@@ -28,7 +28,14 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from deeplaw.util import assert_provider_output_safe, canonical_json, strict_json_loads
+from deeplaw.util import (
+    _INVISIBLE_OR_BIDI,
+    _LOCAL_PATH_PATTERNS,
+    _SECRET_PATTERNS,
+    assert_provider_output_safe,
+    canonical_json,
+    strict_json_loads,
+)
 
 CONTROL = "deeplaw.opencode-supervised-task-control/v1"
 OBSERVATION = "deeplaw.host-mcp-observation/v1"
@@ -63,22 +70,42 @@ DIAGNOSTIC_CODES = frozenset({
 
 
 class DiagnosticError(ProducerError):
-    def __init__(self, stage: str, code: str, http_status: int | None = None) -> None:
+    def __init__(self, stage: str, code: str, http_status: int | None = None,
+                 privacy: dict[str, Any] | None = None) -> None:
         self.record = {"stage": stage, "code": code}
         if http_status is not None:
             self.record["http_status"] = http_status
+        if privacy is not None:
+            self.record["privacy"] = dict(privacy)
         validate_diagnostic(self.record)
         super().__init__(f"{stage}:{code}")
 
 
 def validate_diagnostic(value: Any) -> None:
-    require(isinstance(value, dict) and set(value) <= {"stage", "code", "http_status"},
+    require(isinstance(value, dict) and set(value) <= {"stage", "code", "http_status", "privacy"},
             "diagnostic shape differs")
     require(value.get("stage") in DIAGNOSTIC_STAGES
             and value.get("code") in DIAGNOSTIC_CODES, "diagnostic enum differs")
     if "http_status" in value:
         require(value["code"] == "http_error" and type(value["http_status"]) is int
                 and 100 <= value["http_status"] <= 599, "diagnostic HTTP status differs")
+
+    if "privacy" in value:
+        privacy = value["privacy"]
+        require(value["code"] == "privacy_rejected" and isinstance(privacy, dict)
+                and set(privacy) in ({"category", "location"},
+                                     {"category", "location", "message_index"}),
+                "privacy diagnostic shape differs")
+        require(isinstance(privacy["category"], str)
+                and privacy["category"] in {"path", "secret", "unicode"}
+                and isinstance(privacy["location"], str)
+                and privacy["location"] in {
+                    "system", "user", "assistant", "tool", "tool_schema", "other",
+                }, "privacy diagnostic enum differs")
+        if "message_index" in privacy:
+            require(type(privacy["message_index"]) is int
+                    and 0 <= privacy["message_index"] <= 31
+                    and privacy["location"] != "tool_schema", "privacy diagnostic index differs")
 
 
 def diagnostic(error: BaseException, stage: str) -> dict[str, Any]:
@@ -174,11 +201,65 @@ def guard_json(raw: str) -> Any:
         raise DiagnosticError("inspect", "invalid_json") from None
 
 
-def guard_safe(value: Any) -> None:
+def _privacy_location(message: Any) -> str:
+    role = message.get("role") if isinstance(message, dict) else None
+    if isinstance(role, str) and role in {"system", "user", "assistant", "tool"}:
+        return role
+    return "other"
+
+
+def _privacy_match(
+    value: Any, *, request: bool, location: str, message_index: int | None,
+) -> dict[str, Any] | None:
+    # Match the exact LIFO value traversal and per-string rule priority of safe().
+    pending = [(value, location, message_index)]
+    while pending:
+        item, where, index = pending.pop()
+        if isinstance(item, dict):
+            if request and item is value:
+                for key, child in item.items():
+                    if key == "messages" and isinstance(child, list):
+                        pending.extend((message, _privacy_location(message), i if i <= 31 else None)
+                                       for i, message in enumerate(child))
+                    else:
+                        pending.append((child, "tool_schema" if key == "tools" else "other", None))
+            else:
+                pending.extend((child, where, index) for child in item.values())
+            continue
+        if isinstance(item, (list, tuple)):
+            pending.extend((child, where, index) for child in item)
+            continue
+        if not isinstance(item, str):
+            continue
+        category = None
+        if any(pattern.search(item) for pattern in _LOCAL_PATH_PATTERNS):
+            category = "path"
+        elif any(pattern.search(item) for pattern in _SECRET_PATTERNS):
+            category = "secret"
+        elif _INVISIBLE_OR_BIDI.search(item):
+            category = "unicode"
+        if category is not None:
+            result = {"category": category, "location": where}
+            if index is not None:
+                result["message_index"] = index
+            return result
+    return None
+
+
+def guard_safe(
+    value: Any, *, request: bool = False, location: str = "other",
+    message_index: int | None = None,
+) -> None:
     try:
         safe(value)
     except PermissionError:
-        raise DiagnosticError("inspect", "privacy_rejected") from None
+        privacy = None
+        # Classification is diagnostic only; even its own failure cannot admit input.
+        with suppress(Exception):
+            privacy = _privacy_match(
+                value, request=request, location=location, message_index=message_index,
+            )
+        raise DiagnosticError("inspect", "privacy_rejected", privacy=privacy) from None
 
 
 def encoded(value: Any) -> bytes:
@@ -708,12 +789,12 @@ class RequestGuard:
             )
             guard_require(isinstance(function.get("parameters"), dict), "tool_schema")
             guard_require(len(encoded(tool)) <= 16384, "tool_schema_bound")
-        guard_safe(value)  # Full request, including Host environment/system/tool content.
+        guard_safe(value, request=True)  # Full request, including Host/system/tool content.
         decoded_body = canonical_json(value)
         guard_require(
             self.key not in decoded_body and self.nonce not in decoded_body, "canary_in_body"
         )
-        for message in value["messages"]:
+        for message_index, message in enumerate(value["messages"]):
             guard_require(isinstance(message, dict), "message_invalid")
             guard_require(
                 set(message)
@@ -747,7 +828,10 @@ class RequestGuard:
                     and call["function"]["name"] == TOOL,
                     "call_name",
                 )
-                guard_safe(guard_json(call["function"]["arguments"]))
+                guard_safe(
+                    guard_json(call["function"]["arguments"]),
+                    location=_privacy_location(message), message_index=message_index,
+                )
         return value
 
     def snapshot(self, *, cleanup_confirmed: bool | None = None,

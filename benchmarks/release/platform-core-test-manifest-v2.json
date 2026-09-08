@@ -4157,6 +4157,244 @@
         {
           "junit": {
             "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_decoded_tool_arguments_keep_assistant_position"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_decoded_tool_arguments_keep_assistant_position"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[assistant-path-Read /tmp/public-example.txt.]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[assistant-path-Read /tmp/public-example.txt.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[assistant-secret-password: example-only-value]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[assistant-secret-password: example-only-value]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[assistant-unicode-public\\u200bexample]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[assistant-unicode-public\\u200bexample]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[other-path-Read /tmp/public-example.txt.]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[other-path-Read /tmp/public-example.txt.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[other-secret-password: example-only-value]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[other-secret-password: example-only-value]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[other-unicode-public\\u200bexample]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[other-unicode-public\\u200bexample]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[system-path-Read /tmp/public-example.txt.]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[system-path-Read /tmp/public-example.txt.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[system-secret-password: example-only-value]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[system-secret-password: example-only-value]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[system-unicode-public\\u200bexample]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[system-unicode-public\\u200bexample]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[tool-path-Read /tmp/public-example.txt.]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[tool-path-Read /tmp/public-example.txt.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[tool-secret-password: example-only-value]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[tool-secret-password: example-only-value]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[tool-unicode-public\\u200bexample]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[tool-unicode-public\\u200bexample]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[tool_schema-path-Read /tmp/public-example.txt.]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[tool_schema-path-Read /tmp/public-example.txt.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[tool_schema-secret-password: example-only-value]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[tool_schema-secret-password: example-only-value]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[tool_schema-unicode-public\\u200bexample]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[tool_schema-unicode-public\\u200bexample]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[user-path-Read /tmp/public-example.txt.]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[user-path-Read /tmp/public-example.txt.]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[user-secret-password: example-only-value]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[user-secret-password: example-only-value]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_diagnostic_classifies_only_fixed_metadata[user-unicode-public\\u200bexample]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_diagnostic_classifies_only_fixed_metadata[user-unicode-public\\u200bexample]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_ipc_metadata_is_closed[bool]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_ipc_metadata_is_closed[bool]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_ipc_metadata_is_closed[category]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_ipc_metadata_is_closed[category]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_ipc_metadata_is_closed[extra]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_ipc_metadata_is_closed[extra]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_ipc_metadata_is_closed[large]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_ipc_metadata_is_closed[large]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_ipc_metadata_is_closed[location]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_ipc_metadata_is_closed[location]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_ipc_metadata_is_closed[negative]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_ipc_metadata_is_closed[negative]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_ipc_metadata_is_closed[schema_index]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_ipc_metadata_is_closed[schema_index]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_ipc_metadata_is_closed[wrong_code]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_ipc_metadata_is_closed[wrong_code]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_metadata_matches_safe_lifo_traversal[False]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_metadata_matches_safe_lifo_traversal[False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_metadata_matches_safe_lifo_traversal[True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_metadata_matches_safe_lifo_traversal[True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_metadata_survives_primary_cleanup_and_guard_ipc"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_metadata_survives_primary_cleanup_and_guard_ipc"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_success_does_not_classify"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_success_does_not_classify"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_unclassified_rejection_stays_unknown[False]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_unclassified_rejection_stays_unknown[False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_unclassified_rejection_stays_unknown[True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_unclassified_rejection_stays_unknown[True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_privacy_unknown_role_and_last_index_are_bounded"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_privacy_unknown_role_and_last_index_are_bounded"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
             "name": "test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[eof-False]"
           },
           "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[eof-False]"
@@ -20745,9 +20983,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2929,
+      "count": 2963,
       "selection": "not qualification and not windows_native",
-      "sha256": "84274925b4cb7916acdde8231c84fbe778b2fd32d841d53f79f8fbba6ca0c698"
+      "sha256": "86e1e91286e112a61c9a7b1d3dc14d3fe7fd026c7471aff718c4b25b49637bf6"
     },
     "windows": {
       "additional_cases": [
@@ -20787,13 +21025,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2934,
+      "count": 2968,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "1505d3a6cb7be9740310d0eeb573d0eee1d3d2106ba8fac75df8d07175791f00"
+      "sha256": "22244f54fff334e8f3287e8588983bacf22082e2e42b75394ad83a24e897ba8d"
     }
   },
-  "manifest_sha256": "c1e4e669bc57261174c2f310b387800a57e40944dffe9da37bdd48a2041e8878",
+  "manifest_sha256": "954b202802601e2292fa7753f5007b07c4300285ded5ded9f670ce34008bdc29",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

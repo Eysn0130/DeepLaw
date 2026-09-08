@@ -1307,3 +1307,159 @@ def test_supervised_agent_overrides_only_prompt_and_steps():
     assert config == expected
     assert legacy.build_opencode_config() == original
     assert "do not invoke any tool" in original["agent"]["qualification"]["prompt"]
+
+
+@pytest.mark.parametrize("category,text", [
+    ("path", "Read /tmp/public-example.txt."),
+    ("secret", "password: example-only-value"),
+    ("unicode", "public\u200bexample"),
+])
+@pytest.mark.parametrize(
+    "location", ["system", "user", "assistant", "tool", "tool_schema", "other"]
+)
+def test_privacy_diagnostic_classifies_only_fixed_metadata(monkeypatch, category, text, location):
+    from unittest.mock import MagicMock
+
+    body = json.loads(_guard_body())
+    if location in {"system", "user", "assistant", "tool"}:
+        body["messages"] = [{"role": location, "content": text}]
+    elif location == "tool_schema":
+        body["tools"] = [{"type": "function", "function": {
+            "name": producer.TOOL, "parameters": {"type": "object", "description": text},
+        }}]
+    else:
+        body["stop"] = text
+    opener = MagicMock()
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    handler = _guard_handler(monkeypatch, guard, opener, producer.encoded(body))
+    handler.do_POST()
+    receipt = producer.validate_guard_snapshot(guard.snapshot())
+    expected = {"category": category, "location": location}
+    if location in {"system", "user", "assistant", "tool"}:
+        expected["message_index"] = 0
+    assert receipt["first_failure"] == {
+        "stage": "inspect", "code": "privacy_rejected", "privacy": expected,
+    }
+    assert receipt["rejected"] == 1
+    opener.open.assert_not_called()
+    assert text not in producer.canonical_json(receipt)
+
+
+@pytest.mark.parametrize("with_stop", [False, True])
+def test_privacy_metadata_matches_safe_lifo_traversal(with_stop):
+    body = {"messages": [
+        {"role": "system", "content": "/tmp/public-example.txt"},
+        {"role": "user", "content": "public\u200bexample"},
+    ]}
+    if with_stop:
+        body["stop"] = "password: example-only-value"
+    with pytest.raises(producer.DiagnosticError) as caught:
+        producer.guard_safe(body, request=True)
+    expected = ({"category": "secret", "location": "other"} if with_stop else
+                {"category": "unicode", "location": "user", "message_index": 1})
+    assert caught.value.record["privacy"] == expected
+    with pytest.raises(producer.DiagnosticError) as caught:
+        producer.guard_safe("/tmp/example.txt password: example-only-value\u200b")
+    assert caught.value.record["privacy"]["category"] == "path"
+
+
+def test_privacy_unknown_role_and_last_index_are_bounded():
+    body = {"messages": [{"role": "user", "content": "public"}] * 31 + [
+        {"role": "untrusted-role-marker", "content": "/tmp/public-example.txt"},
+    ]}
+    with pytest.raises(producer.DiagnosticError) as caught:
+        producer.guard_safe(body, request=True)
+    assert caught.value.record["privacy"] == {
+        "category": "path", "location": "other", "message_index": 31,
+    }
+    assert "untrusted-role-marker" not in producer.canonical_json(caught.value.record)
+
+
+def test_privacy_decoded_tool_arguments_keep_assistant_position():
+    body = json.loads(_guard_body())
+    body["messages"] = [{"role": "assistant", "content": None, "tool_calls": [{
+        "id": "synthetic-call", "type": "function", "function": {
+            "name": producer.TOOL, "arguments": json.dumps({"public": "public\u200bexample"}),
+        },
+    }]}]
+    producer.safe(body)  # Escaped Unicode is not yet the decoded arguments value.
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce")
+    guard.active = True
+    with pytest.raises(producer.DiagnosticError) as caught:
+        guard.inspect(producer.encoded(body), path="/chat/completions",
+                      authorization="Bearer synthetic-nonce")
+    assert caught.value.record["privacy"] == {
+        "category": "unicode", "location": "assistant", "message_index": 0,
+    }
+
+
+@pytest.mark.parametrize("classifier_error", [False, True])
+def test_privacy_unclassified_rejection_stays_unknown(monkeypatch, classifier_error):
+    from unittest.mock import Mock
+
+    monkeypatch.setattr(producer, "safe", Mock(side_effect=PermissionError("private exception")))
+    if classifier_error:
+        monkeypatch.setattr(producer, "_privacy_match", Mock(side_effect=RuntimeError("private")))
+    with pytest.raises(producer.DiagnosticError) as caught:
+        producer.guard_safe("public")
+    assert caught.value.record == {"stage": "inspect", "code": "privacy_rejected"}
+
+
+def test_privacy_success_does_not_classify(monkeypatch):
+    from unittest.mock import Mock
+
+    classify = Mock(side_effect=AssertionError("successful input was scanned twice"))
+    monkeypatch.setattr(producer, "_privacy_match", classify)
+    producer.guard_safe({"messages": [{"role": "user", "content": "public"}]}, request=True)
+    classify.assert_not_called()
+
+
+@pytest.mark.parametrize("change", ["category", "location", "negative", "large", "bool",
+                                    "extra", "wrong_code", "schema_index"])
+def test_privacy_ipc_metadata_is_closed(change):
+    record = {"stage": "inspect", "code": "privacy_rejected", "privacy": {
+        "category": "path", "location": "user", "message_index": 0,
+    }}
+    if change in {"category", "location"}:
+        record["privacy"][change] = "private-untrusted-value"
+    elif change in {"negative", "large", "bool"}:
+        record["privacy"]["message_index"] = {"negative": -1, "large": 32, "bool": True}[change]
+    elif change == "extra":
+        record["privacy"]["text"] = "private"
+    elif change == "wrong_code":
+        record["code"] = "internal_error"
+    else:
+        record["privacy"]["location"] = "tool_schema"
+    snapshot = producer.RequestGuard(key="synthetic", nonce="synthetic").snapshot()
+    for field in ("first_failure", "cleanup_failure"):
+        candidate = {**snapshot, field: record, "cleanup_confirmed": False}
+        with pytest.raises(producer.ProducerError):
+            producer.validate_guard_snapshot(candidate)
+
+
+def test_privacy_metadata_survives_primary_cleanup_and_guard_ipc(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unittest.mock import Mock
+
+    error = producer.DiagnosticError("inspect", "privacy_rejected", privacy={
+        "category": "path", "location": "system", "message_index": 0,
+    })
+    guard = producer.ExternalGuard(Path("unused"))
+    guard.process = Mock()
+    snapshot = producer.RequestGuard(key="synthetic", nonce="synthetic").snapshot()
+    snapshot.update(rejected=1, first_failure=error.record)
+    monkeypatch.setattr(guard, "_response", lambda: snapshot)
+    failure = producer.FailureEvidence()
+    with pytest.raises(producer.DiagnosticError) as caught:
+        guard.active(False)
+    failure.capture(caught.value, "guard_deactivate")
+    failure.cleanup("guard_deactivate", lambda: guard.active(False))
+    failure.persist(tmp_path, guard=guard, binding_sha256="a" * 64)
+    receipt = json.loads((tmp_path / "failure.json").read_text())
+    assert receipt["first_failure"] == error.record
+    assert receipt["cleanup_failures"] == [error.record]
+    assert receipt["guard"]["first_failure"] == error.record
+    with pytest.raises(producer.DiagnosticError) as propagated:
+        failure.raise_if_failed()
+    assert propagated.value.record == error.record
