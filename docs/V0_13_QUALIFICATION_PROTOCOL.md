@@ -87,6 +87,28 @@ duties remain `not_executed` and cannot be promoted to a passing duty or an acce
 turn/usage collection, installed-wheel execution, and the remaining task journeys are still
 required; these local development records do not satisfy Formal Host evidence.
 
+The working-tree `opencode_single_task_producer.py` is a separate supervised development
+producer under review. Its `v013-host-task-result/v3` retains a `host-mcp-observation/v1`
+source within the same six-reference envelope. Unlike the service-driver association above,
+this path requires actual completed native tool parts correlated with the MCP proxy's request
+and response bytes. Synthetic producer tests establish neither that execution occurred nor that
+a Host consumed the output. The owner must execute and retain a fresh exact-candidate run.
+
+The bounded scenario covers one OpenCode continuity/fork journey with two supervised turns.
+Missing catalog duties and the other formal slots remain unexecuted. Its credential mode is
+`owner_external_guard_host_nonce_mcp_no_key`: an external owner process holds the Provider key;
+the Host receives a nonce and MCP receives neither. This does not satisfy the older formal
+Secret-only Host topology by renaming it. Closed environments and process-group cleanup also
+do not establish OS-enforced file or network isolation. Native message inspection in this
+development collector must remain declared in its isolation evidence.
+
+`candidate_binding.wheel_sha256` is an owner-supplied expected identity, not proof of the
+installed runtime. Before real execution the owner must independently bind and verify the exact
+wheel, installed files, interpreter and launch paths; a console entrypoint hash alone does not
+cover the installed package or dependencies. Producer-source closure and runtime closure are
+separate bindings. These development records keep `formal_admission=false` and cannot replace
+the six required Host slots, Core gates, or exact-candidate release qualification.
+
 Current benchmark transport boundary: while a Codex `turn/start` is in flight, the client rejects
 foreign thread/turn notifications before recording text, usage projections, tool output, or
 completion. Non-null identity aliases must be nonempty strings and agree with each other before
@@ -127,6 +149,14 @@ construction state required by Candidate Full. Candidate preparation supports dr
 closed; it does not accept a dirty tree, wrong integration commit, main-branch apply, or a
 Secret-bearing input. Competitive/research external inputs are not candidate-preparation
 prerequisites.
+
+`benchmarks/release/prepare_v013_candidate.py` is an explicit owner preparation utility; current
+Candidate Full invokes the candidate freezer directly and does not call this utility. The owner
+must refresh and verify `origin/main` before preparation: it must still equal the explicit frozen
+main commit, while the prospective integration merge has that commit as its first parent. The
+utility checks the local remote-tracking reference without fetching or advancing main. The owner
+must recheck these identities before formal freezing and advance main only after qualification of
+that exact candidate. Source regression success alone does not perform these integration checks.
 
 Candidate Full produces exactly one reproducible wheel and one sdist and binds:
 

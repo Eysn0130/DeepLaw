@@ -1,0 +1,1075 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.host-mcp-observation/v1"
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.opencode-supervised-task-control/v1"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "workflow_run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "host": {
+          "const": "opencode"
+        },
+        "task_case": {
+          "const": "continuity"
+        },
+        "candidate_binding": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "commit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "tree": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "lock_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "wheel_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "sdist_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "commit",
+            "tree",
+            "lock_sha256",
+            "wheel_sha256",
+            "sdist_sha256"
+          ]
+        },
+        "host_identity_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "host_identity_source_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "broker_source_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "nonce_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "issued_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "max_turns": {
+          "const": 2
+        },
+        "max_calls_per_turn": {
+          "const": 2
+        },
+        "max_read_chars": {
+          "const": 4000
+        },
+        "max_guard_requests": {
+          "const": 6
+        },
+        "formal_admission": {
+          "const": false
+        },
+        "credential_delivery_mode": {
+          "const": "owner_external_guard_host_nonce_mcp_no_key"
+        },
+        "formal_gaps": {
+          "const": [
+            "os_isolation_unobserved",
+            "global_network_and_cost_unobserved",
+            "six_slot_formal_qualification_not_executed"
+          ]
+        },
+        "deployment_source_closure_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "mcp_launch_prefix_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "original_plugin_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "privacy_wrapper_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "workflow_run_id",
+        "host",
+        "task_case",
+        "candidate_binding",
+        "host_identity_sha256",
+        "host_identity_source_sha256",
+        "broker_source_sha256",
+        "nonce_sha256",
+        "issued_at",
+        "expires_at",
+        "max_turns",
+        "max_calls_per_turn",
+        "max_read_chars",
+        "max_guard_requests",
+        "formal_admission",
+        "credential_delivery_mode",
+        "formal_gaps",
+        "deployment_source_closure_sha256",
+        "mcp_launch_prefix_sha256",
+        "original_plugin_sha256",
+        "privacy_wrapper_sha256"
+      ],
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://deeplaw.dev/contracts/opencode-supervised-task-control.v1.schema.json"
+    },
+    "host": {
+      "const": "opencode"
+    },
+    "task_case": {
+      "const": "continuity"
+    },
+    "advertisement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input_schema_version": {
+          "const": "v8"
+        },
+        "output_schema_version": {
+          "const": "v7"
+        },
+        "operations": {
+          "const": [
+            "context",
+            "explain",
+            "query",
+            "read"
+          ]
+        },
+        "input_schema_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12288
+        },
+        "input_schema_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "tool_definition_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12288
+        },
+        "tool_definition_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "input_schema_version",
+        "output_schema_version",
+        "operations",
+        "input_schema_bytes",
+        "input_schema_sha256",
+        "tool_definition_bytes",
+        "tool_definition_sha256"
+      ]
+    },
+    "turns": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "event_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "session_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "message_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "calls": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "turn": {
+                  "enum": [
+                    "1",
+                    "2"
+                  ]
+                },
+                "operation": {
+                  "enum": [
+                    "query",
+                    "context",
+                    "read"
+                  ]
+                },
+                "arguments_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "arguments_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 24576
+                },
+                "target": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "const": "knowledge"
+                        },
+                        "knowledge_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "revision_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "knowledge_id",
+                        "revision_id"
+                      ]
+                    }
+                  ]
+                },
+                "content_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "content_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65536
+                },
+                "structured_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "structured_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65536
+                },
+                "targets": {
+                  "type": "array",
+                  "maxItems": 32,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "knowledge"
+                      },
+                      "knowledge_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      "revision_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "knowledge_id",
+                      "revision_id"
+                    ]
+                  }
+                },
+                "call_id_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "message_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "session_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "native_part_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "correlation": {
+                  "const": "opencode_completed_tool_part_and_mcp_proxy"
+                },
+                "result_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "result_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 197632
+                },
+                "response_target": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "const": "knowledge"
+                        },
+                        "knowledge_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "revision_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "knowledge_id",
+                        "revision_id"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "turn",
+                "operation",
+                "arguments_sha256",
+                "arguments_bytes",
+                "target",
+                "content_sha256",
+                "content_bytes",
+                "structured_sha256",
+                "structured_bytes",
+                "targets",
+                "call_id_sha256",
+                "message_sha256",
+                "session_sha256",
+                "native_part_sha256",
+                "correlation",
+                "result_sha256",
+                "result_bytes",
+                "response_target"
+              ]
+            }
+          },
+          "next_action_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "next_action_matches": {
+            "type": "boolean"
+          },
+          "decision_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "decision_matches": {
+            "type": "boolean"
+          },
+          "ledger_before": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "ledger_after": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "elapsed_ms": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 300000
+          },
+          "rss_peak_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "usage": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "input_tokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "output_tokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cache_tokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "reasoning_tokens": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "input_tokens",
+              "output_tokens",
+              "cache_tokens",
+              "reasoning_tokens"
+            ]
+          },
+          "native_context_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "native_context_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2048
+          }
+        },
+        "required": [
+          "index",
+          "event_index",
+          "session_sha256",
+          "message_sha256",
+          "calls",
+          "next_action_sha256",
+          "next_action_matches",
+          "decision_sha256",
+          "decision_matches",
+          "ledger_before",
+          "ledger_after",
+          "elapsed_ms",
+          "rss_peak_bytes",
+          "usage",
+          "native_context_sha256",
+          "native_context_bytes"
+        ]
+      }
+    },
+    "guard_requests": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 262144
+          }
+        },
+        "required": [
+          "sha256",
+          "bytes"
+        ]
+      }
+    },
+    "guard_rejected": {
+      "const": 0
+    },
+    "cleanup_confirmed": {
+      "const": true
+    },
+    "measurement_scope": {
+      "const": "host_turn_visible_process_tree_sampled_rss_guard_route_only"
+    },
+    "claim_eligible": {
+      "const": false
+    },
+    "public_fork_receipts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "deeplaw.opencode-public-fork-proof/v1"
+          },
+          "route_observation_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "request_body_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "response_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "parent_session_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "child_session_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "child_plugin_event_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "event_barrier": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "const": "satisfied"
+              },
+              "response_release": {
+                "const": "after_child_plugin_event"
+              },
+              "timed_out": {
+                "const": false
+              },
+              "child_plugin_event_count": {
+                "const": 1
+              },
+              "event_type": {
+                "const": "session.created"
+              },
+              "timeout_seconds": {
+                "const": 30
+              },
+              "elapsed_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 30000
+              },
+              "parent_source": {
+                "const": "actual_ingress_route"
+              }
+            },
+            "required": [
+              "status",
+              "response_release",
+              "timed_out",
+              "child_plugin_event_count",
+              "event_type",
+              "timeout_seconds",
+              "elapsed_ms",
+              "parent_source"
+            ]
+          },
+          "process_binding": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "task_case": {
+                "const": "continuity"
+              },
+              "run_id": {
+                "$ref": "#/$defs/identifier"
+              },
+              "candidate_binding": {
+                "$ref": "#/$defs/candidateBinding"
+              },
+              "run_binding": {
+                "$ref": "#/$defs/runBinding"
+              },
+              "host_binary": {
+                "$ref": "#/$defs/hostBinary"
+              },
+              "broker_source": {
+                "$ref": "#/$defs/brokerSource"
+              },
+              "host_identity_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "host_identity_source_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "process_identity_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "broker_instance_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "nonce_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "issued_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "expires_at": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "validation_reference_time": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "selector_source_symlink": {
+                "type": "boolean"
+              },
+              "execution_target_regular": {
+                "const": true
+              },
+              "execution_target_single_link": {
+                "const": true
+              },
+              "status": {
+                "const": "running"
+              },
+              "exit_code": {
+                "type": "null"
+              },
+              "isolation": {
+                "$ref": "#/$defs/isolation"
+              }
+            },
+            "required": [
+              "task_case",
+              "run_id",
+              "candidate_binding",
+              "run_binding",
+              "host_binary",
+              "broker_source",
+              "host_identity_sha256",
+              "host_identity_source_sha256",
+              "process_identity_sha256",
+              "broker_instance_sha256",
+              "nonce_sha256",
+              "issued_at",
+              "expires_at",
+              "validation_reference_time",
+              "selector_source_symlink",
+              "execution_target_regular",
+              "execution_target_single_link",
+              "status",
+              "exit_code",
+              "isolation"
+            ]
+          },
+          "process_proof": {
+            "$ref": "#/$defs/opencodeProof"
+          }
+        },
+        "required": [
+          "schema_version",
+          "route_observation_sha256",
+          "request_body_sha256",
+          "response_sha256",
+          "parent_session_sha256",
+          "child_session_sha256",
+          "child_plugin_event_sha256",
+          "event_barrier",
+          "process_binding",
+          "process_proof"
+        ]
+      }
+    },
+    "session_create": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "response_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "title": {
+          "const": "DeepLaw supervised continuity"
+        },
+        "observed": {
+          "const": true
+        }
+      },
+      "required": [
+        "request_sha256",
+        "response_sha256",
+        "title",
+        "observed"
+      ]
+    },
+    "process_exit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host_exit_code": {
+          "type": "integer"
+        },
+        "guard_exit_code": {
+          "const": 0
+        },
+        "formal_v2_eligible": {
+          "const": false
+        }
+      },
+      "required": [
+        "host_exit_code",
+        "guard_exit_code",
+        "formal_v2_eligible"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "control",
+    "host",
+    "task_case",
+    "advertisement",
+    "turns",
+    "guard_requests",
+    "guard_rejected",
+    "cleanup_confirmed",
+    "measurement_scope",
+    "claim_eligible",
+    "public_fork_receipts",
+    "session_create",
+    "process_exit"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-mcp-observation.v1.schema.json",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "lock_sha256",
+        "wheel_sha256",
+        "sdist_sha256"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/git"
+        },
+        "tree": {
+          "$ref": "#/$defs/git"
+        },
+        "lock_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "wheel_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sdist_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "runBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_run_id",
+        "qualification_run_id"
+      ],
+      "properties": {
+        "evidence_run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "qualification_run_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "hostBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "sha256"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "brokerSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_external",
+        "owner_only_mode",
+        "sha256"
+      ],
+      "properties": {
+        "repository_external": {
+          "const": true
+        },
+        "owner_only_mode": {
+          "const": true
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner_received_secret",
+        "mcp_received_secret",
+        "ambient_auth_forwarded_to_mcp",
+        "raw_output_retained"
+      ],
+      "properties": {
+        "runner_received_secret": {
+          "const": false
+        },
+        "mcp_received_secret": {
+          "const": false
+        },
+        "ambient_auth_forwarded_to_mcp": {
+          "const": false
+        },
+        "raw_output_retained": {
+          "const": false
+        }
+      }
+    },
+    "nativeEventBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_sequence_sha256",
+        "session_identity_sha256",
+        "lifecycle_record_sha256"
+      ],
+      "properties": {
+        "event_sequence_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "session_identity_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "lifecycle_record_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "codexProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proof_kind",
+        "process_identity_sha256",
+        "connection_sha256",
+        "connection_correlation_sha256",
+        "initialize_request_sha256",
+        "initialized_notification_sha256",
+        "initialized_connection_count",
+        "hook_session_sha256",
+        "hook_event_sha256",
+        "native_event_sequence_sha256",
+        "native_session_identity_sha256",
+        "native_lifecycle_record_sha256",
+        "same_process",
+        "same_connection"
+      ],
+      "properties": {
+        "proof_kind": {
+          "const": "codex_stdio_hook_correlation"
+        },
+        "process_identity_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "connection_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "connection_correlation_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "initialize_request_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "initialized_notification_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "initialized_connection_count": {
+          "const": 1
+        },
+        "hook_session_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "hook_event_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "native_event_sequence_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "native_session_identity_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "native_lifecycle_record_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "same_process": {
+          "const": true
+        },
+        "same_connection": {
+          "const": true
+        }
+      }
+    },
+    "opencodeProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proof_kind",
+        "process_identity_sha256",
+        "request_method",
+        "route_observation_sha256",
+        "route_correlation_sha256",
+        "request_body_sha256",
+        "response_sha256",
+        "parent_session_sha256",
+        "child_session_sha256",
+        "child_plugin_event_sha256",
+        "child_plugin_session_sha256",
+        "native_event_sequence_sha256",
+        "native_session_identity_sha256",
+        "native_lifecycle_record_sha256",
+        "same_process",
+        "actual_route_observed"
+      ],
+      "properties": {
+        "proof_kind": {
+          "const": "opencode_public_fork_route_correlation"
+        },
+        "process_identity_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "request_method": {
+          "const": "POST"
+        },
+        "route_observation_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "route_correlation_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "request_body_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "response_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "parent_session_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "child_session_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "child_plugin_event_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "child_plugin_session_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "native_event_sequence_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "native_session_identity_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "native_lifecycle_record_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "same_process": {
+          "const": true
+        },
+        "actual_route_observed": {
+          "const": true
+        }
+      }
+    }
+  }
+}

@@ -20,7 +20,9 @@ from deeplaw.util import canonical_json
 
 SERVICE_SCHEMA_VERSION = "deeplaw.v013-task-service-observation/v1"
 TASK_RESULT_SCHEMA_VERSION = "deeplaw.v013-host-task-result/v2"
+TASK_RESULT_V3_SCHEMA_VERSION = "deeplaw.v013-host-task-result/v3"
 TASK_CASES = frozenset({"living_wiki", "professional_evidence"})
+_V3_TASK_CASE = "continuity"
 _MESSAGE_EVENTS = {"codex": "UserPromptSubmit", "opencode": "chat.message"}
 _CALLER = "task_domain_driver"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -135,25 +137,34 @@ def _safe_relative_reference(value: Any) -> dict[str, Any]:
 
 
 def task_result_service_source(value: Any) -> Mapping[str, Any] | None:
-    """Return only the closed nested service ref for the current subartifact.
+    """Return only the closed nested source ref for the current subartifact.
 
     Historical task-result-v1 and non-source task results intentionally return
-    ``None``.  This helper does not follow nested refs or inspect their bytes;
-    callers that admit a matching ref must reopen it through their own bounded,
-    path-safe source reader.
+    ``None``.  v2 retains the service-source behavior.  v3 continuity returns
+    its root-produced Host observation source.  This helper does not follow
+    nested refs or inspect their bytes; callers that admit a matching ref must
+    reopen it through their own bounded, path-safe source reader.
     """
 
     if not isinstance(value, Mapping):
         return None
-    if (
-        value.get("artifact_kind") != "task_result"
-        or value.get("schema_version") != TASK_RESULT_SCHEMA_VERSION
-        or value.get("task_case") not in TASK_CASES
-    ):
+    if value.get("artifact_kind") != "task_result":
         return None
-    if "service_source" not in value:
-        _fail("current source-backed task result omits service_source")
-    return _safe_relative_reference(value["service_source"])
+    if value.get("schema_version") == TASK_RESULT_SCHEMA_VERSION:
+        if value.get("task_case") not in TASK_CASES:
+            return None
+        if "service_source" not in value:
+            _fail("current source-backed task result omits service_source")
+        return _safe_relative_reference(value["service_source"])
+    if value.get("schema_version") == TASK_RESULT_V3_SCHEMA_VERSION:
+        if value.get("task_case") != _V3_TASK_CASE:
+            if "host_observation_source" in value:
+                _fail("v3 Host observation source is only valid for continuity")
+            return None
+        if "host_observation_source" not in value:
+            _fail("v3 continuity task result omits host_observation_source")
+        return _safe_relative_reference(value["host_observation_source"])
+    return None
 
 
 def _copy_without_fields(value: Any, *, drop: frozenset[str], label: str) -> Any:
@@ -486,6 +497,7 @@ def collect_task_service_observation(
 __all__ = [
     "SERVICE_SCHEMA_VERSION",
     "TASK_RESULT_SCHEMA_VERSION",
+    "TASK_RESULT_V3_SCHEMA_VERSION",
     "TaskServiceObservationError",
     "collect_task_service_observation",
     "task_result_service_source",

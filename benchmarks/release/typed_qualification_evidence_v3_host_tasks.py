@@ -30,6 +30,7 @@ from deeplaw.native_host import (
 
 SCHEMA_VERSION = "deeplaw.v013-host-task-evidence/v1"
 TASK_RESULT_V2_SCHEMA_VERSION = "deeplaw.v013-host-task-result/v2"
+TASK_RESULT_V3_SCHEMA_VERSION = "deeplaw.v013-host-task-result/v3"
 SERVICE_OBSERVATION_SCHEMA_VERSION = "deeplaw.v013-task-service-observation/v1"
 TASK_CASES = ("continuity", "living_wiki", "professional_evidence")
 SOURCE_TASK_CASES = frozenset({"living_wiki", "professional_evidence"})
@@ -299,6 +300,11 @@ HARD_FAILURE_IDS = (
     "ledger_read_mutation",
     "provider_disclosure",
 )
+V3_HARD_FAILURE_IDS = (
+    *HARD_FAILURE_IDS,
+    "wrong_state_observation_gap",
+    "duplicate_distractor_observation_gap",
+)
 
 
 class HostTaskEvidenceError(ValueError):
@@ -450,7 +456,9 @@ def _metadata(value: Mapping[str, Any], *, artifact: str) -> tuple[str, int, str
         _fail(f"{artifact} metadata is incomplete")
     allowed_schemas = {SCHEMA_VERSION}
     if artifact == "task_result":
-        allowed_schemas.add(TASK_RESULT_V2_SCHEMA_VERSION)
+        allowed_schemas.update(
+            {TASK_RESULT_V2_SCHEMA_VERSION, TASK_RESULT_V3_SCHEMA_VERSION}
+        )
     if value["artifact_kind"] != artifact or value["schema_version"] not in allowed_schemas:
         _fail(f"{artifact} schema version is unsupported")
     run_id = _identifier(value["run_id"], label=f"{artifact}.run_id")
@@ -667,25 +675,44 @@ def _identity_list(value: Any) -> list[Mapping[str, Any]]:
 
 
 def _state_rows(
-    value: Any, *, label: str, expected_states: Sequence[str]
+    value: Any,
+    *,
+    label: str,
+    expected_states: Sequence[str],
+    allow_unknown: bool = False,
 ) -> tuple[list[Mapping[str, Any]], int]:
     if not isinstance(value, list) or len(value) > 256:
         _fail(f"{label} is invalid")
     rows: list[Mapping[str, Any]] = []
-    observed: dict[str, bool] = {}
+    observed: dict[str, bool | None] = {}
     for index, item in enumerate(value):
-        row = _closed(item, {"state", "admitted"}, label=f"{label}[{index}]")
+        row = _closed(
+            item,
+            {"state", "observed", "admitted"} if allow_unknown else {"state", "admitted"},
+            label=f"{label}[{index}]",
+        )
         state = _identifier(row["state"], label=f"{label}[{index}].state")
         if state in observed:
             _fail(f"{label} contains duplicate state")
-        if not isinstance(row["admitted"], bool):
-            _fail(f"{label}[{index}].admitted is invalid")
-        observed[state] = row["admitted"]
+        if allow_unknown:
+            if not isinstance(row["observed"], bool):
+                _fail(f"{label}[{index}].observed is invalid")
+            admitted = row["admitted"]
+            if row["observed"]:
+                if not isinstance(admitted, bool):
+                    _fail(f"{label}[{index}].admitted is invalid")
+            elif admitted is not None:
+                _fail(f"{label}[{index}].unknown admitted value is invalid")
+            observed[state] = admitted if row["observed"] else None
+        else:
+            if not isinstance(row["admitted"], bool):
+                _fail(f"{label}[{index}].admitted is invalid")
+            observed[state] = row["admitted"]
         rows.append(row)
     missing = set(expected_states) - set(observed)
     if missing:
         _fail(f"{label} omits required states: {sorted(missing)}")
-    return rows, sum(1 for value in observed.values() if value)
+    return rows, sum(1 for value in observed.values() if value is True)
 
 
 def _duties(
@@ -738,10 +765,13 @@ def _task_result(value: Mapping[str, Any], *, envelope: Mapping[str, Any]) -> Ma
         "observed_public_seams",
         "claim_eligible",
     }
-    if value.get("schema_version") == TASK_RESULT_V2_SCHEMA_VERSION:
+    schema_version = value.get("schema_version")
+    if schema_version == TASK_RESULT_V2_SCHEMA_VERSION:
         required.add("service_source")
+    elif schema_version == TASK_RESULT_V3_SCHEMA_VERSION and value.get("task_case") == "continuity":
+        required.add("host_observation_source")
     _closed(value, required, label="task result")
-    if value.get("schema_version") == TASK_RESULT_V2_SCHEMA_VERSION:
+    if schema_version == TASK_RESULT_V2_SCHEMA_VERSION:
         from benchmarks.hosts.v013_task_service_observation import task_result_service_source
 
         try:
@@ -750,6 +780,21 @@ def _task_result(value: Mapping[str, Any], *, envelope: Mapping[str, Any]) -> Ma
             raise HostTaskEvidenceError("task result service source is invalid") from error
         if service_ref is None:
             _fail("current source-backed task result service source is unavailable")
+    elif schema_version == TASK_RESULT_V3_SCHEMA_VERSION:
+        if value.get("task_case") != "continuity":
+            if "host_observation_source" in value:
+                _fail("v3 host observation source is only valid for continuity")
+        else:
+            from benchmarks.hosts.v013_task_service_observation import task_result_service_source
+
+            try:
+                observation_ref = task_result_service_source(value)
+            except ValueError as error:
+                raise HostTaskEvidenceError(
+                    "task result Host observation source is invalid"
+                ) from error
+            if observation_ref is None:
+                _fail("v3 continuity task result Host observation source is unavailable")
     metadata = _metadata(value, artifact="task_result")
     if value["claim_eligible"] is not False:
         _fail("task result cannot claim qualification eligibility")
@@ -1587,6 +1632,44 @@ def parse_host_task_evidence(
     result = result_value
     from benchmarks.hosts.v013_task_service_observation import task_result_service_source
 
+    if result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION:
+        if task_case != "continuity":
+            _fail("v3 Host observation is only supported for continuity")
+        try:
+            host_observation_ref = task_result_service_source(result)
+        except ValueError as error:
+            raise HostTaskEvidenceError(
+                "v3 Host observation source is invalid"
+            ) from error
+        if host_observation_ref is None:
+            _fail("v3 continuity Host observation source is unavailable")
+        host_observation = _json_source(
+            host_observation_ref,
+            root=root,
+            label="v0.13 Host observation",
+        )
+        try:
+            from benchmarks.hosts.opencode_single_task_producer import (
+                validate_host_observation,
+            )
+        except ImportError as error:
+            raise HostTaskEvidenceError(
+                "v3 Host observation validator is unavailable"
+            ) from error
+        try:
+            validation_result = validate_host_observation(
+                host_observation,
+                result=result,
+                envelope=bound_envelope,
+                events=events,
+            )
+        except ValueError as error:
+            raise HostTaskEvidenceError(
+                "v3 Host observation failed strict validation"
+            ) from error
+        if validation_result is not None:
+            _fail("v3 Host observation validator must return None")
+
     service_ref = task_result_service_source(result)
     service_not_executed_duties: set[str] = set()
     message_events = [
@@ -1646,6 +1729,11 @@ def parse_host_task_evidence(
         failures["first_correct_action_missing"] += 1
     if task_case == "continuity" and first["seam"] not in {"knowledge_support", "native_capsule"}:
         failures["first_correct_action_missing"] += 1
+    if (
+        result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION
+        and first["seam"] != "knowledge_support"
+    ):
+        failures["first_correct_action_missing"] += 1
     if task_case == "living_wiki" and first["seam"] not in {
         "knowledge_support",
         "wiki_read",
@@ -1668,25 +1756,38 @@ def parse_host_task_evidence(
     ):
         failures["decision_preservation_missing"] += 1
 
-    _, wrong_admissions = _state_rows(
+    wrong_state_rows, wrong_admissions = _state_rows(
         result["wrong_state_admission"],
         label="wrong-state admission",
         expected_states=TASK_WRONG_STATES[task_case],
+        allow_unknown=result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION,
+    )
+    wrong_state_unknown = sum(
+        1 for row in wrong_state_rows if row.get("observed") is False
     )
     if wrong_admissions:
         failures["wrong_state_admission"] += wrong_admissions
-    _, duplicate_admissions = _state_rows(
+    if wrong_state_unknown:
+        failures["wrong_state_observation_gap"] += wrong_state_unknown
+    duplicate_rows, duplicate_admissions = _state_rows(
         result["duplicate_distractor"],
         label="duplicate/distractor admission",
         expected_states=("duplicate", "distractor"),
+        allow_unknown=result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION,
+    )
+    duplicate_unknown = sum(
+        1 for row in duplicate_rows if row.get("observed") is False
     )
     if duplicate_admissions:
         failures["duplicate_distractor_admission"] += duplicate_admissions
+    if duplicate_unknown:
+        failures["duplicate_distractor_observation_gap"] += duplicate_unknown
 
     duty_rows, _observed_duty_hits = _duties(
         result["duties"],
         task_case=task_case,
-        allow_not_executed=result["schema_version"] == TASK_RESULT_V2_SCHEMA_VERSION,
+        allow_not_executed=result["schema_version"]
+        in {TASK_RESULT_V2_SCHEMA_VERSION, TASK_RESULT_V3_SCHEMA_VERSION},
     )
     expected_statuses = {item["duty"]: item for item in expected_value["duty_expectations"]}
     duty_hits = 0
@@ -1855,7 +1956,11 @@ def parse_host_task_evidence(
     process = isolation["process_boundary"]
     write = isolation["write_observation"]
     secret_boundary_failure = (
-        secret["child_secret_present"]
+        (
+            result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION
+            and not secret["parent_secret_present"]
+        )
+        or secret["child_secret_present"]
         or secret["auth_read"]
         or secret["transcript_read"]
         or secret["prompt_read"]
@@ -1914,7 +2019,12 @@ def parse_host_task_evidence(
             failures["query_trace_in_capsule"] + failures["ledger_in_capsule"]
         )
 
-    normalized = {failure: int(failures.get(failure, 0)) for failure in HARD_FAILURE_IDS}
+    failure_ids = (
+        V3_HARD_FAILURE_IDS
+        if result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION
+        else HARD_FAILURE_IDS
+    )
+    normalized = {failure: int(failures.get(failure, 0)) for failure in failure_ids}
     model_task_failures = sum(normalized.values())
 
     metrics = {
@@ -1933,8 +2043,12 @@ def parse_host_task_evidence(
         "observed_gap_codes": sorted(observed_gaps),
         "first_correct_action_rate": 1.0 if not failures["first_correct_action_missing"] else 0.0,
         "decision_preservation_rate": 1.0 if not failures["decision_preservation_missing"] else 0.0,
-        "wrong_state_admission_count": wrong_admissions,
-        "duplicate_distractor_admission_count": duplicate_admissions,
+        "wrong_state_admission_count": (
+            None if wrong_state_unknown else wrong_admissions
+        ),
+        "duplicate_distractor_admission_count": (
+            None if duplicate_unknown else duplicate_admissions
+        ),
         "required_duty_count": len(TASK_DUTIES[task_case]),
         "required_duty_observed_count": duty_hits,
         "required_duty_rate": duty_hits / len(TASK_DUTIES[task_case]),
@@ -1970,7 +2084,11 @@ def parse_host_task_evidence(
             )
             else 0.0
         ),
-        "forgotten_state_admission_count": failures["forgotten_state_admission"],
+        "forgotten_state_admission_count": (
+            None
+            if wrong_state_unknown
+            else failures["forgotten_state_admission"]
+        ),
         "unrelated_state_preservation": (
             1.0 if not failures["unrelated_state_loss"] else 0.0
         ),
@@ -1979,6 +2097,18 @@ def parse_host_task_evidence(
         ),
         "scenario_count": 3 if task_case == "continuity" else 0,
     }
+    if result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION:
+        metrics.update(
+            {
+                "wrong_state_observation_unknown_count": wrong_state_unknown,
+                "duplicate_distractor_observation_unknown_count": duplicate_unknown,
+            }
+        )
+        if task_case == "continuity":
+            # The supervised v3 source observes one fork scenario, not the
+            # three-scenario denominator retained in expected_task.
+            metrics["scenario_count"] = 1
+            metrics["unrelated_state_preservation"] = None
     return {
         "schema_version": "deeplaw.typed-qualification-derived/v3",
         "kind": "host_event_sequence",
@@ -2008,7 +2138,10 @@ __all__ = [
     "TASK_CASES",
     "TASK_DUTIES",
     "TASK_OPERATIONS",
+    "TASK_RESULT_V2_SCHEMA_VERSION",
+    "TASK_RESULT_V3_SCHEMA_VERSION",
     "TASK_WRONG_STATES",
+    "V3_HARD_FAILURE_IDS",
     "HostTaskEvidenceError",
     "is_v013_host_task_event_source",
     "parse_host_task_evidence",

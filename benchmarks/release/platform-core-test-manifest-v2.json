@@ -3715,6 +3715,370 @@
         },
         {
           "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_budget_rejects_scope_revision_and_extra_calls[offset]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_budget_rejects_scope_revision_and_extra_calls[offset]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_budget_rejects_scope_revision_and_extra_calls[scope]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_budget_rejects_scope_revision_and_extra_calls[scope]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_budget_rejects_scope_revision_and_extra_calls[sensitivity]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_budget_rejects_scope_revision_and_extra_calls[sensitivity]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_budget_rejects_scope_revision_and_extra_calls[target]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_budget_rejects_scope_revision_and_extra_calls[target]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_budget_rejects_scope_revision_and_extra_calls[third]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_budget_rejects_scope_revision_and_extra_calls[third]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_complete_call_tool_result_is_bounded_before_transport[0]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_complete_call_tool_result_is_bounded_before_transport[0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_complete_call_tool_result_is_bounded_before_transport[210000]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_complete_call_tool_result_is_bounded_before_transport[210000]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_control_rejects_expiry_unknown_fields_and_widened_budget"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_control_rejects_expiry_unknown_fields_and_widened_budget"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_external_install_closure_is_hash_checked_and_importable"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_external_install_closure_is_hash_checked_and_importable"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_fork_cloned_messages_do_not_count_as_new_usage"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_fork_cloned_messages_do_not_count_as_new_usage"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_generated_privacy_wrapper_preserves_native_hooks_and_rejects_unknown_env"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_generated_privacy_wrapper_preserves_native_hooks_and_rejects_unknown_env"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_actual_outbound_paths_and_canary[Working directory: /Users/synthetic/project]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_actual_outbound_paths_and_canary[Working directory: /Users/synthetic/project]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_actual_outbound_paths_and_canary[private-test-key]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_actual_outbound_paths_and_canary[private-test-key]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_key_inside_runtime_or_repository_before_loading[deployment]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_key_inside_runtime_or_repository_before_loading[deployment]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_key_inside_runtime_or_repository_before_loading[repository]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_key_inside_runtime_or_repository_before_loading[repository]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_key_inside_runtime_or_repository_before_loading[task]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_key_inside_runtime_or_repository_before_loading[task]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_unknown_structure_and_oversize"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_unknown_structure_and_oversize"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_requires_active_exact_route_and_does_not_infer_global_zero"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_requires_active_exact_route_and_does_not_infer_global_zero"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_install_rejects_symlink_ancestor_before_directory_creation"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_install_rejects_symlink_ancestor_before_directory_creation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_launch_prefix_requires_exact_executable_and_resource_hashes"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_launch_prefix_requires_exact_executable_and_resource_hashes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_live_tool_definition_is_v8_and_old_schema_remains_rejected"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_live_tool_definition_is_v8_and_old_schema_remains_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_missing_usage_is_not_observed_zero"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_missing_usage_is_not_observed_zero"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_native_tool_part_is_bound_to_observed_mcp_bytes[None]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_native_tool_part_is_bound_to_observed_mcp_bytes[None]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_native_tool_part_is_bound_to_observed_mcp_bytes[call_id]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_native_tool_part_is_bound_to_observed_mcp_bytes[call_id]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_native_tool_part_is_bound_to_observed_mcp_bytes[input]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_native_tool_part_is_bound_to_observed_mcp_bytes[input]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_native_tool_part_is_bound_to_observed_mcp_bytes[output]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_native_tool_part_is_bound_to_observed_mcp_bytes[output]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_native_tool_part_is_bound_to_observed_mcp_bytes[session]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_native_tool_part_is_bound_to_observed_mcp_bytes[session]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_native_tool_part_is_bound_to_observed_mcp_bytes[status]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_native_tool_part_is_bound_to_observed_mcp_bytes[status]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[eof-False]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[eof-False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[eof-True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[eof-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[error-True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[error-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[response_error-True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[response_error-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[sigint-True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[sigint-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[sigterm-True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[sigterm-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[wait_timeout-True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_cleanup_on_eof_error_signal_and_unconfirmed_cleanup[wait_timeout-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_reconnection_cannot_reset_budget"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_reconnection_cannot_reset_budget"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_rejects_drift_against_owner_frozen_launch_before_child[closure]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_rejects_drift_against_owner_frozen_launch_before_child[closure]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_rejects_drift_against_owner_frozen_launch_before_child[entry]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_rejects_drift_against_owner_frozen_launch_before_child[entry]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_proxy_rejects_drift_against_owner_frozen_launch_before_child[prefix]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_proxy_rejects_drift_against_owner_frozen_launch_before_child[prefix]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_read_response_must_equal_requested_target_not_another_discovered_target[False]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_read_response_must_equal_requested_target_not_another_discovered_target[False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_read_response_must_equal_requested_target_not_another_discovered_target[True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_read_response_must_equal_requested_target_not_another_discovered_target[True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_reopen_rejects_fork_binding_tampering[host_binary]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_reopen_rejects_fork_binding_tampering[host_binary]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_reopen_rejects_fork_binding_tampering[host_identity]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_reopen_rejects_fork_binding_tampering[host_identity]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_reopen_rejects_fork_binding_tampering[run_binding]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_reopen_rejects_fork_binding_tampering[run_binding]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_reopen_rejects_fork_binding_tampering[same_session]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_reopen_rejects_fork_binding_tampering[same_session]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_rss_sampler_fails_closed_without_thread_exception_output[first_failure]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_rss_sampler_fails_closed_without_thread_exception_output[first_failure]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_rss_sampler_fails_closed_without_thread_exception_output[later_failure]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_rss_sampler_fails_closed_without_thread_exception_output[later_failure]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_rss_sampler_fails_closed_without_thread_exception_output[success]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_rss_sampler_fails_closed_without_thread_exception_output[success]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_run_rechecks_prepared_entry_bytes_before_guard_or_host[deeplaw]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_run_rechecks_prepared_entry_bytes_before_guard_or_host[deeplaw]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_run_rechecks_prepared_entry_bytes_before_guard_or_host[node]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_run_rechecks_prepared_entry_bytes_before_guard_or_host[node]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_synthetic_two_turn_sources_reopen_without_formal_promotion[False]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_synthetic_two_turn_sources_reopen_without_formal_promotion[False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_synthetic_two_turn_sources_reopen_without_formal_promotion[True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_synthetic_two_turn_sources_reopen_without_formal_promotion[True]"
+        },
+        {
+          "junit": {
             "classname": "tests.test_operator_workbench",
             "name": "test_curses_workbench_starts_and_quits_on_local_vault"
           },
@@ -7804,6 +8168,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_rejects_advanced_or_missing_frozen_main[advanced]"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_advanced_or_missing_frozen_main[advanced]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
+            "name": "test_cli_rejects_advanced_or_missing_frozen_main[missing]"
+          },
+          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_advanced_or_missing_frozen_main[missing]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_candidate_prep",
             "name": "test_cli_rejects_non_merge_or_parentless_integration_commit[no-parent]"
           },
           "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_non_merge_or_parentless_integration_commit[no-parent]"
@@ -7814,20 +8192,6 @@
             "name": "test_cli_rejects_non_merge_or_parentless_integration_commit[non-merge]"
           },
           "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_non_merge_or_parentless_integration_commit[non-merge]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_candidate_prep",
-            "name": "test_cli_rejects_stale_or_missing_integrated_main[missing]"
-          },
-          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_stale_or_missing_integrated_main[missing]"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_candidate_prep",
-            "name": "test_cli_rejects_stale_or_missing_integrated_main[stale]"
-          },
-          "node_id": "tests/test_v013_candidate_prep.py::test_cli_rejects_stale_or_missing_integrated_main[stale]"
         },
         {
           "junit": {
@@ -10274,6 +10638,27 @@
         },
         {
           "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v3_continuity_uses_root_host_observation_and_keeps_unknown_nonzero"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v3_continuity_uses_root_host_observation_and_keeps_unknown_nonzero"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v3_missing_parent_secret_is_failed_but_still_emits_metrics"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v3_missing_parent_secret_is_failed_but_still_emits_metrics"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_v3_task_result_schema_accepts_host_source_and_unknown_state_rows"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_v3_task_result_schema_accepts_host_source_and_unknown_state_rows"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_host_task_executor",
             "name": "test_admits_exact_six_slot_tree_transactionally"
           },
@@ -10898,6 +11283,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_legacy_fork_rejects_same_session_receipt"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_legacy_fork_rejects_same_session_receipt"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
             "name": "test_missing_identity_topology_and_route_are_fail_closed"
           },
           "node_id": "tests/test_v013_native_event_adapter.py::test_missing_identity_topology_and_route_are_fail_closed"
@@ -11045,6 +11437,76 @@
         {
           "junit": {
             "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_adds_v2_receipt_only_after_clean_exit"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_adds_v2_receipt_only_after_clean_exit"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_binds_actual_route_body_response_plugin_and_process"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_binds_actual_route_body_response_plugin_and_process"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_dispatch_rejects_the_legacy_synthetic_shape"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_dispatch_rejects_the_legacy_synthetic_shape"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_dispatch_requires_the_same_child_plugin_bytes"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_dispatch_requires_the_same_child_plugin_bytes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>0]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>1]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>2]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>2]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>3]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>3]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>4]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>4]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>5]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_public_fork_rejects_unbound_actual_observations[<lambda>5]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
             "name": "test_opencode_rejects_legacy_v2_and_unknown_fields"
           },
           "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_rejects_legacy_v2_and_unknown_fields"
@@ -11055,6 +11517,69 @@
             "name": "test_opencode_sequence_rejects_parent_mismatch"
           },
           "node_id": "tests/test_v013_native_event_adapter.py::test_opencode_sequence_rejects_parent_mismatch"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_public_fork_dispatch_consumes_nonce_once[exited]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_public_fork_dispatch_consumes_nonce_once[exited]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_public_fork_dispatch_consumes_nonce_once[running]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_public_fork_dispatch_consumes_nonce_once[running]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_public_fork_dispatch_requires_complete_independent_binding[None]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_public_fork_dispatch_requires_complete_independent_binding[None]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_public_fork_dispatch_requires_complete_independent_binding[binding1]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_public_fork_dispatch_requires_complete_independent_binding[binding1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_public_fork_dispatch_requires_complete_independent_binding[immutable_nonce]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_public_fork_dispatch_requires_complete_independent_binding[immutable_nonce]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_public_fork_dispatch_requires_complete_independent_binding[missing_nonce]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_public_fork_dispatch_requires_complete_independent_binding[missing_nonce]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_public_fork_dispatch_requires_complete_independent_binding[omitted]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_public_fork_dispatch_requires_complete_independent_binding[omitted]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_public_fork_dispatch_requires_complete_independent_binding[wrong_candidate]"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_public_fork_dispatch_requires_complete_independent_binding[wrong_candidate]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_native_event_adapter",
+            "name": "test_public_fork_rejects_same_session_response"
+          },
+          "node_id": "tests/test_v013_native_event_adapter.py::test_public_fork_rejects_same_session_response"
         },
         {
           "junit": {
@@ -19884,9 +20409,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2806,
+      "count": 2881,
       "selection": "not qualification and not windows_native",
-      "sha256": "1d9e5d2df7c126b3cc54b7883e9bb1adeee67a4b3144b976bf4a926bdebb12f4"
+      "sha256": "d06eb76580da62efef4ec20cb64856876731c35ed89256659e3816008dc5b332"
     },
     "windows": {
       "additional_cases": [
@@ -19926,13 +20451,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2811,
+      "count": 2886,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "410bd387360a3d150a5aa359a69615d1a5a02d69b56efd0199e2b4ad1b655b92"
+      "sha256": "ea65f765bbea975dfdfcf2b40c8bcdce53c6798a9f11a961eb456ba713450e6e"
     }
   },
-  "manifest_sha256": "edfb6440a9528d427d7655d1fe377906c9cd8d32c63cd93acab244bcf76f2f8d",
+  "manifest_sha256": "92831bcec5752cf52ed97bf5887a0e459561f96aeaad8d9f6e2439125a94aa3b",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

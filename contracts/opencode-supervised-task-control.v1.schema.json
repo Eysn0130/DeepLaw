@@ -1,0 +1,149 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.opencode-supervised-task-control/v1"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "workflow_run_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "host": {
+      "const": "opencode"
+    },
+    "task_case": {
+      "const": "continuity"
+    },
+    "candidate_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "lock_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "wheel_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sdist_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "commit",
+        "tree",
+        "lock_sha256",
+        "wheel_sha256",
+        "sdist_sha256"
+      ]
+    },
+    "host_identity_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "host_identity_source_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "broker_source_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nonce_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "max_turns": {
+      "const": 2
+    },
+    "max_calls_per_turn": {
+      "const": 2
+    },
+    "max_read_chars": {
+      "const": 4000
+    },
+    "max_guard_requests": {
+      "const": 6
+    },
+    "formal_admission": {
+      "const": false
+    },
+    "credential_delivery_mode": {
+      "const": "owner_external_guard_host_nonce_mcp_no_key"
+    },
+    "formal_gaps": {
+      "const": [
+        "os_isolation_unobserved",
+        "global_network_and_cost_unobserved",
+        "six_slot_formal_qualification_not_executed"
+      ]
+    },
+    "deployment_source_closure_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "mcp_launch_prefix_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "original_plugin_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "privacy_wrapper_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "workflow_run_id",
+    "host",
+    "task_case",
+    "candidate_binding",
+    "host_identity_sha256",
+    "host_identity_source_sha256",
+    "broker_source_sha256",
+    "nonce_sha256",
+    "issued_at",
+    "expires_at",
+    "max_turns",
+    "max_calls_per_turn",
+    "max_read_chars",
+    "max_guard_requests",
+    "formal_admission",
+    "credential_delivery_mode",
+    "formal_gaps",
+    "deployment_source_closure_sha256",
+    "mcp_launch_prefix_sha256",
+    "original_plugin_sha256",
+    "privacy_wrapper_sha256"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/opencode-supervised-task-control.v1.schema.json"
+}

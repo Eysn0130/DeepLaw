@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
+import types
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,7 @@ from benchmarks.release.typed_qualification_evidence_v3_host_tasks import (
     HARD_FAILURE_IDS,
     TASK_DUTIES,
     TASK_OPERATIONS,
+    TASK_RESULT_V3_SCHEMA_VERSION,
     TASK_WRONG_STATES,
     HostTaskEvidenceError,
     _host_identity_projection,
@@ -510,6 +513,178 @@ def _manifest(
     manifest = tmp_path / f"{host}-{task}.json"
     manifest.write_bytes(_canonical(envelope))
     return manifest
+
+
+def _v3_continuity_manifest(tmp_path: Path) -> Path:
+    manifest = _manifest(
+        tmp_path,
+        host="opencode",
+        task="continuity",
+        current=True,
+    )
+    envelope = json.loads(manifest.read_text())
+    result_path = tmp_path / envelope["payload"]["continuity_source"]["relative_path"]
+    result = json.loads(result_path.read_text())
+    result["schema_version"] = TASK_RESULT_V3_SCHEMA_VERSION
+    result["wrong_state_admission"] = [
+        {"state": row["state"], "observed": True, "admitted": row["admitted"]}
+        for row in result["wrong_state_admission"]
+    ]
+    result["duplicate_distractor"] = [
+        {"state": row["state"], "observed": True, "admitted": row["admitted"]}
+        for row in result["duplicate_distractor"]
+    ]
+    result["host_observation_source"] = _source(
+        tmp_path,
+        "opencode/continuity/host-observation.json",
+        {
+            "synthetic": True,
+            "control": {
+                "credential_delivery_mode": "owner_external_guard_host_nonce_mcp_no_key",
+                "formal_gaps": [
+                    "os_isolation_unobserved",
+                    "global_network_and_cost_unobserved",
+                    "six_slot_formal_qualification_not_executed",
+                ],
+            },
+        },
+    )
+    result_path.write_bytes(_canonical(result))
+    _refresh_source_ref(manifest, "continuity_source", result_path)
+    return manifest
+
+
+def _install_synthetic_host_observation_validator(
+    monkeypatch: pytest.MonkeyPatch,
+    seen: list[dict[str, Any]],
+) -> None:
+    module = types.ModuleType("benchmarks.hosts.opencode_single_task_producer")
+
+    def validate_host_observation(
+        value: dict[str, Any],
+        *,
+        result: dict[str, Any],
+        envelope: dict[str, Any],
+        events: list[dict[str, Any]],
+    ) -> None:
+        seen.append(
+            {
+                "value": value,
+                "result": result,
+                "envelope": envelope,
+                "events": events,
+            }
+        )
+
+    module.validate_host_observation = validate_host_observation  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+
+
+def test_v3_task_result_schema_accepts_host_source_and_unknown_state_rows(
+    tmp_path: Path,
+) -> None:
+    manifest = _v3_continuity_manifest(tmp_path)
+    envelope = json.loads(manifest.read_text())
+    result_path = tmp_path / envelope["payload"]["continuity_source"]["relative_path"]
+    result = json.loads(result_path.read_text())
+    result["wrong_state_admission"] = [
+        {"state": row["state"], "observed": False, "admitted": None}
+        for row in result["wrong_state_admission"]
+    ]
+    result["duplicate_distractor"] = [
+        {"state": row["state"], "observed": False, "admitted": None}
+        for row in result["duplicate_distractor"]
+    ]
+    result_path.write_bytes(_canonical(result))
+    _refresh_source_ref(manifest, "continuity_source", result_path)
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "contracts/v013-host-task-result.v3.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(result)
+
+
+def test_v3_continuity_uses_root_host_observation_and_keeps_unknown_nonzero(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = _v3_continuity_manifest(tmp_path)
+    envelope = json.loads(manifest.read_text())
+    result_path = tmp_path / envelope["payload"]["continuity_source"]["relative_path"]
+    result = json.loads(result_path.read_text())
+    result["wrong_state_admission"] = [
+        {"state": row["state"], "observed": False, "admitted": None}
+        for row in result["wrong_state_admission"]
+    ]
+    result["duplicate_distractor"] = [
+        {"state": row["state"], "observed": False, "admitted": None}
+        for row in result["duplicate_distractor"]
+    ]
+    result["duties"][0] = {
+        **result["duties"][0],
+        "status": "not_executed",
+        "gap_code": None,
+    }
+    result_path.write_bytes(_canonical(result))
+    _refresh_source_ref(manifest, "continuity_source", result_path)
+    seen: list[dict[str, Any]] = []
+    _install_synthetic_host_observation_validator(monkeypatch, seen)
+
+    parsed = parse_typed_evidence(
+        manifest,
+        root=tmp_path,
+        expected_corpus_sha256=_expected_sha(tmp_path, "opencode", "continuity"),
+    )
+
+    assert len(seen) == 1
+    assert seen[0]["value"]["synthetic"] is True
+    assert seen[0]["value"]["control"] == {
+        "credential_delivery_mode": "owner_external_guard_host_nonce_mcp_no_key",
+        "formal_gaps": [
+            "os_isolation_unobserved",
+            "global_network_and_cost_unobserved",
+            "six_slot_formal_qualification_not_executed",
+        ],
+    }
+    assert seen[0]["events"][1]["event_type"] == "chat.message"
+    assert seen[0]["result"]["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION
+    assert seen[0]["envelope"]["task_case"] == "continuity"
+    assert parsed["status"] == "failed"
+    assert parsed["hard_failure_counts"]["wrong_state_observation_gap"] > 0
+    assert parsed["hard_failure_counts"]["duplicate_distractor_observation_gap"] > 0
+    assert parsed["hard_failure_counts"]["required_duty_gap"] > 0
+    assert parsed["metrics"]["wrong_state_admission_count"] is None
+    assert parsed["metrics"]["duplicate_distractor_admission_count"] is None
+    assert parsed["metrics"]["wrong_state_observation_unknown_count"] > 0
+
+
+def test_v3_missing_parent_secret_is_failed_but_still_emits_metrics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = _v3_continuity_manifest(tmp_path)
+    envelope = json.loads(manifest.read_text())
+    isolation_path = tmp_path / envelope["payload"]["isolation_source"]["relative_path"]
+    isolation = json.loads(isolation_path.read_text())
+    isolation["secret_boundary"]["parent_secret_present"] = False
+    isolation_path.write_bytes(_canonical(isolation))
+    _refresh_source_ref(manifest, "isolation_source", isolation_path)
+    seen: list[dict[str, Any]] = []
+    _install_synthetic_host_observation_validator(monkeypatch, seen)
+
+    parsed = parse_typed_evidence(
+        manifest,
+        root=tmp_path,
+        expected_corpus_sha256=_expected_sha(tmp_path, "opencode", "continuity"),
+    )
+
+    assert parsed["status"] == "failed"
+    assert parsed["hard_failure_counts"]["secret_exposure"] > 0
+    assert parsed["hard_failure_counts"]["cross_boundary_disclosure"] > 0
+    assert parsed["metrics"]["isolation_observed"] is False
 
 
 @pytest.mark.parametrize("host", ["codex", "opencode"])

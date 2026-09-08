@@ -53,6 +53,14 @@ The historical editor/Wiki/scale evidence boundary is recorded in
 These Pass records describe their original candidates and must not override later retained
 observations. Current formal acceptance is read from the exact qualification artifact and its
 source-specific receipts under [the qualification protocol](V0_13_QUALIFICATION_PROTOCOL.md).
+
+The working-tree supervised OpenCode producer and its task-result/v3 are development candidates
+under review. They provide a collection path for one actual continuity/fork journey; synthetic
+tests do not establish that the journey ran. The external-guard/Host-nonce credential mode,
+installed-wheel binding, native message inspection and remaining OS isolation duties are
+explicitly distinguished in the qualification protocol. This path does not change the pending
+real-model acceptance row or transfer session, model, credential or general tool ownership to
+DeepLaw.
 Configuration installed, no-model handshake, actual hook execution, checkpoint commit, correct
 revision restored and correct next action are different observations. Missing native measurements
 remain unavailable. Planned automatic/guided/manual integration reporting is discussed in the

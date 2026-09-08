@@ -10,6 +10,7 @@ import pytest
 from benchmarks.hosts.v013_task_service_observation import (
     SERVICE_SCHEMA_VERSION,
     TASK_RESULT_SCHEMA_VERSION,
+    TASK_RESULT_V3_SCHEMA_VERSION,
     TaskServiceObservationError,
     _bounded_call,
     collect_task_service_observation,
@@ -167,6 +168,14 @@ def test_task_result_service_source_helper_is_closed_and_compatible() -> None:
             "schema_version": TASK_RESULT_SCHEMA_VERSION,
             "task_case": "living_wiki",
             "service_source": reference,
+        }
+    ) == reference
+    assert task_result_service_source(
+        {
+            "artifact_kind": "task_result",
+            "schema_version": TASK_RESULT_V3_SCHEMA_VERSION,
+            "task_case": "continuity",
+            "host_observation_source": reference,
         }
     ) == reference
     with pytest.raises(TaskServiceObservationError):
