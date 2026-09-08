@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import sys
+import traceback
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,6 +31,92 @@ def _seed() -> dict:
         content_sha256="2" * 64,
         expected_gaps=({"code": "duty_unresolved", "duty": "limitation"},),
     )
+
+
+def _valid_capsule(seed: dict) -> tuple[dict, dict]:
+    include = seed["expected"]["include"]
+    quote = "Exact source quote."
+    include["quote_sha256"] = sha256_bytes(quote.encode("utf-8"))
+    reference = {
+        key: include[key]
+        for key in ("source_revision_id", "fragment_id", "locator", "quote_sha256")
+    }
+    capsule = {
+        "schema_version": "deeplaw.knowledge-capsule-projection/v1",
+        "statements": [
+            {
+                **{
+                    key: include[key]
+                    for key in (
+                        "knowledge_id",
+                        "knowledge_revision_id",
+                        "authority",
+                        "legal_authority",
+                        "verification",
+                    )
+                },
+                "statement_id": "statement_777777777777777777777777",
+                "statement_text": quote,
+                "statement_type": "factual",
+                "support_status": "supported",
+                "current_supported": True,
+                "freshness": "fresh",
+                "origin": "agent_derived",
+                "source_refs": [reference],
+            }
+        ],
+        "evidence": [
+            {
+                "evidence_id": "queryevidence_888888888888888888888888",
+                "source_revision_id": include["source_revision_id"],
+                "fragment_id": include["fragment_id"],
+                "content_sha256": include["quote_sha256"],
+                "excerpt": quote,
+                "selection_reason": "exact_source",
+                "verification": "verified_source",
+                "source_refs": [reference],
+            }
+        ],
+        "projection": "standard",
+        "receipt_id": "queryreceipt_666666666666666666666666",
+        "hard_limit_bytes": 65_536,
+        "selected_statement_count": 1,
+        "selected_source_count": 1,
+        "gaps": [
+            {
+                **gap,
+                "gap_id": f"querygap_{index + 1:024x}",
+                "message": "Limitation remains unresolved.",
+            }
+            for index, gap in enumerate(seed["expected"]["gaps"])
+        ],
+    }
+    return capsule, reference
+
+
+def _valid_outer(capsule: dict, *, operation: str = "query") -> dict:
+    boundary = {
+        "legal_authority": False,
+        "official_legal_sources_tool": "law_support",
+        "persistent_writes": "separate_explicit_knowledge_sink",
+        "case_data_allowed": False,
+        "authority_from_ranking": False,
+    }
+    return {
+        "schema_version": "deeplaw.knowledge-support-output/v6",
+        "operation": operation,
+        "authority_boundary": boundary,
+        "result": {
+            "capsule": capsule,
+            "delivery": {
+                "hard_limit_bytes": 65_536,
+                "write_performed": False,
+                "provider_content_bytes": len(canonical_json(capsule).encode("utf-8")),
+            },
+            "policy_id": "evidence-first-v1",
+            "purpose": "quote",
+        },
+    }
 
 
 def _prepared_vault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, dict]:
@@ -89,6 +176,240 @@ def test_public_api_is_bounded_and_seed_is_development_only() -> None:
     assert seed["driver_kind"] == "task_domain_driver"
 
 
+@pytest.mark.parametrize("operation", ("query", "context", "explain"))
+def test_v6_envelope_valid_control_checks_operation(operation: str) -> None:
+    capsule, _ = _valid_capsule(_seed())
+    value = _valid_outer(capsule, operation=operation)
+    result = SimpleNamespace(isError=False, structuredContent=value)
+    assert driver._structured(result, operation=operation) is value
+    if operation != "explain":
+        assert driver._capsule(value, operation=operation)[0] is capsule
+
+
+def test_capsule_schema_required_fields_and_types_fail_closed() -> None:
+    mutations = (
+        (None, "projection", "missing"),
+        (None, "receipt_id", "missing"),
+        (None, "hard_limit_bytes", "missing"),
+        (None, "selected_statement_count", "missing"),
+        (None, "selected_source_count", "missing"),
+        ("statements", "statement_id", "missing"),
+        ("evidence", "evidence_id", "missing"),
+        ("gaps", "gap_id", "missing"),
+        ("statements", "statement_text", "type"),
+        ("gaps", "message", "type"),
+    )
+    for collection, field, mode in mutations:
+        seed = _seed()
+        capsule, _ = _valid_capsule(seed)
+        target = capsule if collection is None else capsule[collection][0]
+        if mode == "missing":
+            del target[field]
+        else:
+            target[field] = 1
+        with pytest.raises(
+            driver.TaskDomainDriverError, match="capsule schema is invalid"
+        ) as capsule_error:
+            driver._capsule(_valid_outer(capsule), operation="query")
+        assert "queryreceipt_" not in str(capsule_error.value)
+        with pytest.raises(
+            driver.TaskDomainDriverError, match="capsule schema is invalid"
+        ) as observation_error:
+            driver._capsule_observation(capsule, seed["expected"], operation="query")
+        assert "queryreceipt_" not in str(observation_error.value)
+    seed = _seed()
+    capsule, _ = _valid_capsule(seed)
+    payload_canary = "synthetic-rejected-payload-must-not-appear"
+    capsule["statements"][0]["statement_type"] = payload_canary
+    with pytest.raises(driver.TaskDomainDriverError) as error:
+        driver._capsule(_valid_outer(capsule), operation="query")
+    assert payload_canary not in "".join(traceback.format_exception(error.value))
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    (
+        ("legal_authority", True),
+        ("legal_authority", 0),
+        ("official_legal_sources_tool", "wrong"),
+        ("official_legal_sources_tool", False),
+        ("persistent_writes", "allow"),
+        ("persistent_writes", False),
+        ("case_data_allowed", True),
+        ("case_data_allowed", 0),
+        ("authority_from_ranking", True),
+        ("authority_from_ranking", 0),
+    ),
+)
+def test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary(
+    field: str, bad_value: object
+) -> None:
+    capsule, _ = _valid_capsule(_seed())
+    value = _valid_outer(capsule)
+    value["authority_boundary"][field] = bad_value
+    result = SimpleNamespace(isError=False, structuredContent=value)
+    with pytest.raises(driver.TaskDomainDriverError, match="authority boundary"):
+        driver._structured(result, operation="query")
+    with pytest.raises(driver.TaskDomainDriverError, match="authority boundary"):
+        driver._capsule(value, operation="query")
+
+
+@pytest.mark.parametrize("mutation", ("missing", "extra"))
+def test_v6_envelope_rejects_nonclosed_authority_boundary(mutation: str) -> None:
+    if mutation == "missing":
+        invalid_boundaries = []
+        for field in (
+            "legal_authority",
+            "official_legal_sources_tool",
+            "persistent_writes",
+            "case_data_allowed",
+            "authority_from_ranking",
+        ):
+            capsule, _ = _valid_capsule(_seed())
+            boundary = _valid_outer(capsule)["authority_boundary"]
+            del boundary[field]
+            invalid_boundaries.append(boundary)
+        capsule, _ = _valid_capsule(_seed())
+        invalid_boundaries.extend((None, []))
+        for boundary in invalid_boundaries:
+            value = _valid_outer(capsule)
+            value["authority_boundary"] = boundary
+            result = SimpleNamespace(isError=False, structuredContent=value)
+            with pytest.raises(driver.TaskDomainDriverError, match="authority boundary"):
+                driver._structured(result, operation="query")
+            with pytest.raises(driver.TaskDomainDriverError, match="authority boundary"):
+                driver._capsule(value, operation="query")
+    else:
+        capsule, _ = _valid_capsule(_seed())
+        value = _valid_outer(capsule)
+        value["authority_boundary"]["unexpected"] = False
+        result = SimpleNamespace(isError=False, structuredContent=value)
+        with pytest.raises(driver.TaskDomainDriverError, match="authority boundary"):
+            driver._structured(result, operation="query")
+        with pytest.raises(driver.TaskDomainDriverError, match="authority boundary"):
+            driver._capsule(value, operation="query")
+
+
+def test_v6_envelope_rejects_operation_or_schema_mismatch_at_structured_seam() -> None:
+    capsule, _ = _valid_capsule(_seed())
+    for field, value in (("operation", "context"), ("schema_version", "v5")):
+        outer = _valid_outer(capsule)
+        outer[field] = value
+        result = SimpleNamespace(isError=False, structuredContent=outer)
+        with pytest.raises(driver.TaskDomainDriverError):
+            driver._structured(result, operation="query")
+
+
+@pytest.mark.parametrize("operation", ("query", "context"))
+def test_capsule_observation_accepts_exact_single_source_control(operation: str) -> None:
+    seed = _seed()
+    capsule, _ = _valid_capsule(seed)
+    observation = driver._capsule_observation(capsule, seed["expected"], operation=operation)
+    assert observation["statement_count"] == 1
+    assert observation["evidence_count"] == 1
+    assert observation["gap_pairs"] == [
+        {"code": "duty_unresolved", "duty": "limitation"}
+    ]
+
+
+@pytest.mark.parametrize("collection", ("statements", "evidence"))
+@pytest.mark.parametrize("mutation", ("malformed", "duplicate", "foreign"))
+def test_capsule_observation_rejects_extra_statement_or_evidence_entries(
+    collection: str, mutation: str
+) -> None:
+    seed = _seed()
+    capsule, _ = _valid_capsule(seed)
+    entry = copy.deepcopy(capsule[collection][0])
+    if mutation == "malformed":
+        entry = {}
+    elif collection == "statements" and mutation == "foreign":
+        entry["knowledge_revision_id"] = "knowledgerev_666666666666666666666666"
+    elif collection == "evidence" and mutation == "foreign":
+        entry["fragment_id"] = "fragment_666666666666666666666666"
+    capsule[collection].append(entry)
+    with pytest.raises(
+        driver.TaskDomainDriverError, match=r"capsule schema|source|identity"
+    ):
+        driver._capsule_observation(capsule, seed["expected"], operation="query")
+
+
+@pytest.mark.parametrize("collection", ("statements", "evidence"))
+def test_capsule_observation_rejects_unknown_collection_identity(collection: str) -> None:
+    seed = _seed()
+    capsule, _ = _valid_capsule(seed)
+    entry = copy.deepcopy(capsule[collection][0])
+    if collection == "statements":
+        entry["knowledge_id"] = "knowledge_666666666666666666666666"
+    else:
+        entry["source_revision_id"] = "sourcerev_666666666666666666666666"
+    capsule[collection][0] = entry
+    with pytest.raises(driver.TaskDomainDriverError, match=r"identity|source"):
+        driver._capsule_observation(capsule, seed["expected"], operation="query")
+
+
+@pytest.mark.parametrize("collection", ("statements", "evidence"))
+@pytest.mark.parametrize(
+    "mutation", ("foreign", "duplicate", "malformed", "extra_key")
+)
+def test_capsule_observation_requires_one_exact_closed_source_ref(
+    collection: str, mutation: str
+) -> None:
+    seed = _seed()
+    capsule, reference = _valid_capsule(seed)
+    if mutation == "foreign":
+        extra = {**reference, "source_revision_id": "sourcerev_666666666666666666666666"}
+    elif mutation == "duplicate":
+        extra = copy.deepcopy(reference)
+    elif mutation == "extra_key":
+        extra = {**reference, "unexpected": "must-be-rejected"}
+    else:
+        extra = {}
+    refs = capsule["statements" if collection == "statements" else "evidence"][0]["source_refs"]
+    refs.append(extra)
+    with pytest.raises(driver.TaskDomainDriverError, match=r"capsule schema|binding"):
+        driver._capsule_observation(capsule, seed["expected"], operation="context")
+    if mutation != "duplicate":
+        single_mutation_seed = _seed()
+        single_mutation_capsule, single_reference = _valid_capsule(single_mutation_seed)
+        if mutation == "foreign":
+            single_extra = {
+                **single_reference,
+                "source_revision_id": "sourcerev_666666666666666666666666",
+            }
+        elif mutation == "extra_key":
+            single_extra = {**single_reference, "unexpected": "must-be-rejected"}
+        else:
+            single_extra = {}
+        single_refs = single_mutation_capsule[
+            "statements" if collection == "statements" else "evidence"
+        ][0]["source_refs"]
+        single_refs[0] = single_extra
+        with pytest.raises(driver.TaskDomainDriverError, match=r"capsule schema|binding"):
+            driver._capsule_observation(
+                single_mutation_capsule,
+                single_mutation_seed["expected"],
+                operation="context",
+            )
+
+
+@pytest.mark.parametrize("mutation", ("malformed", "duplicate", "unknown"))
+def test_capsule_observation_rejects_malformed_duplicate_or_unknown_gaps(
+    mutation: str,
+) -> None:
+    seed = _seed()
+    capsule, _ = _valid_capsule(seed)
+    if mutation == "malformed":
+        capsule["gaps"].append({"code": "duty_unresolved"})
+    elif mutation == "duplicate":
+        capsule["gaps"].append(copy.deepcopy(capsule["gaps"][0]))
+    else:
+        gap = copy.deepcopy(capsule["gaps"][0])
+        gap["code"] = "unknown_gap"
+        capsule["gaps"].append(gap)
+    with pytest.raises(driver.TaskDomainDriverError, match=r"capsule schema|Gap"):
+        driver._capsule_observation(capsule, seed["expected"], operation="query")
+
+
 def test_wrong_seed_scope_and_quote_fail_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -112,43 +433,15 @@ def test_wrong_seed_scope_and_quote_fail_closed(
 
 def test_capsule_internal_trace_is_rejected() -> None:
     seed = _seed()
-    include = seed["expected"]["include"]
-    quote = "Exact source quote."
-    include["quote_sha256"] = sha256_bytes(quote.encode("utf-8"))
-    reference = {
-        "source_revision_id": include["source_revision_id"],
-        "fragment_id": include["fragment_id"],
-        "locator": include["locator"],
-        "quote_sha256": include["quote_sha256"],
-    }
-    capsule = {
-        "statements": [
-            {
-                "knowledge_id": include["knowledge_id"],
-                "knowledge_revision_id": include["knowledge_revision_id"],
-                "authority": "agent_derived",
-                "legal_authority": False,
-                "verification": "source_bound",
-                "source_refs": [reference],
-            }
-        ],
-        "evidence": [
-            {
-                "source_revision_id": include["source_revision_id"],
-                "fragment_id": include["fragment_id"],
-                "content_sha256": include["quote_sha256"],
-                "excerpt": quote,
-                "verification": "verified_source",
-                "source_refs": [reference],
-            }
-        ],
-        "gaps": [{"code": "duty_unresolved", "duty": "limitation"}],
-        "query_trace": {"audit_head": "must-not-be-delivered"},
-    }
-    clean = {key: value for key, value in capsule.items() if key != "query_trace"}
-    driver._capsule_observation(clean, seed["expected"], operation="context")
-    with pytest.raises(driver.TaskDomainDriverError, match="leaked local trace"):
-        driver._capsule_observation(capsule, seed["expected"], operation="context")
+    capsule, _ = _valid_capsule(seed)
+    driver._capsule_observation(capsule, seed["expected"], operation="context")
+    for field in ("audit", "query_trace", "query_plan", "ledger"):
+        changed = copy.deepcopy(capsule)
+        changed[field] = {"audit_head": "must-not-be-delivered"}
+        with pytest.raises(
+            driver.TaskDomainDriverError, match=r"capsule schema|leaked local trace"
+        ):
+            driver._capsule_observation(changed, seed["expected"], operation="context")
 
 
 def test_provider_content_must_match_structured_capsule() -> None:
@@ -185,31 +478,7 @@ def test_provider_content_must_match_structured_capsule() -> None:
 
 def test_capsule_exact_quote_is_recomputed_from_returned_text() -> None:
     seed = _seed()
-    include = seed["expected"]["include"]
-    quote = "Exact source quote."
-    include["quote_sha256"] = sha256_bytes(quote.encode("utf-8"))
-    reference = {
-        key: include[key]
-        for key in ("source_revision_id", "fragment_id", "locator", "quote_sha256")
-    }
-    capsule = {
-        "statements": [{
-            **{key: include[key] for key in (
-                "knowledge_id", "knowledge_revision_id", "authority",
-                "legal_authority", "verification",
-            )},
-            "source_refs": [reference],
-        }],
-        "evidence": [{
-            "source_revision_id": include["source_revision_id"],
-            "fragment_id": include["fragment_id"],
-            "content_sha256": include["quote_sha256"],
-            "excerpt": quote,
-            "verification": "verified_source",
-            "source_refs": [reference],
-        }],
-        "gaps": seed["expected"]["gaps"],
-    }
+    capsule, _ = _valid_capsule(seed)
     driver._capsule_observation(capsule, seed["expected"], operation="context")
     for field, value in (
         ("excerpt", "Altered quote."),

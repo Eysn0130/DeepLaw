@@ -23,7 +23,7 @@ from mcp.client.stdio import stdio_client
 from benchmarks.hosts.run_v013_host_task_qualification import load_task_cases
 from deeplaw.closed_mcp_launcher import closed_mcp_environment
 from deeplaw.host_runtime import build_closed_mcp_argv, observed_knowledge_vault_id
-from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
+from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore, _validate_contract
 from deeplaw.knowledge_store import KnowledgeVault
 from deeplaw.read_services import SourceReadService, WikiReadService
 from deeplaw.util import canonical_json, sha256_bytes, sha256_file, strict_json_loads
@@ -65,6 +65,13 @@ _MAX_TASK_BYTES = 5_000
 _MAX_SEED_BYTES = 64 * 1024
 _MAX_SOURCE_BYTES = 512 * 1024 * 1024
 _CALLER = "task_domain_driver"
+_V6_AUTHORITY_BOUNDARY = {
+    "legal_authority": False,
+    "official_legal_sources_tool": "law_support",
+    "persistent_writes": "separate_explicit_knowledge_sink",
+    "case_data_allowed": False,
+    "authority_from_ranking": False,
+}
 
 
 class TaskDomainDriverError(ValueError):
@@ -564,15 +571,34 @@ def _wiki_observation(seed: Mapping[str, Any], vault: Path) -> dict[str, Any]:
     }
 
 
+def _support_envelope(value: Any, *, operation: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise TaskDomainDriverError(f"public {operation} structured output is invalid")
+    if value.get("schema_version") != "deeplaw.knowledge-support-output/v6":
+        raise TaskDomainDriverError(f"public {operation} did not return Query Plan v6")
+    if value.get("operation") != operation:
+        raise TaskDomainDriverError(f"public {operation} operation identity differs")
+    boundary = value.get("authority_boundary")
+    if not isinstance(boundary, Mapping) or set(boundary) != set(_V6_AUTHORITY_BOUNDARY):
+        raise TaskDomainDriverError(f"public {operation} authority boundary is not closed")
+    if (
+        boundary.get("legal_authority") is not False
+        or boundary.get("official_legal_sources_tool")
+        != _V6_AUTHORITY_BOUNDARY["official_legal_sources_tool"]
+        or boundary.get("persistent_writes")
+        != _V6_AUTHORITY_BOUNDARY["persistent_writes"]
+        or boundary.get("case_data_allowed") is not False
+        or boundary.get("authority_from_ranking") is not False
+    ):
+        raise TaskDomainDriverError(f"public {operation} authority boundary is invalid")
+    return value
+
+
 def _structured(result: Any, *, operation: str) -> Mapping[str, Any]:
     if getattr(result, "isError", False):
         raise TaskDomainDriverError(f"public knowledge_support {operation} failed")
     value = getattr(result, "structuredContent", None)
-    if not isinstance(value, Mapping):
-        raise TaskDomainDriverError(
-            f"public knowledge_support {operation} had no structured output"
-        )
-    return value
+    return _support_envelope(value, operation=operation)
 
 
 def _provider_content(
@@ -600,13 +626,19 @@ def _provider_content(
     return len(provider_bytes), sha256_bytes(provider_bytes)
 
 
+def _validate_capsule_schema(capsule: Any, *, operation: str) -> None:
+    if not isinstance(capsule, Mapping):
+        raise TaskDomainDriverError(f"public {operation} capsule schema is invalid")
+    try:
+        _validate_contract("knowledge-capsule-projection.v1.schema.json", dict(capsule))
+    except (TypeError, ValueError):
+        raise TaskDomainDriverError(f"public {operation} capsule schema is invalid") from None
+
+
 def _capsule(
     value: Mapping[str, Any], *, operation: str
 ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    if value.get("schema_version") != "deeplaw.knowledge-support-output/v6":
-        raise TaskDomainDriverError(f"public {operation} did not return Query Plan v6")
-    if value.get("operation") != operation:
-        raise TaskDomainDriverError(f"public {operation} operation identity differs")
+    value = _support_envelope(value, operation=operation)
     result = value.get("result")
     if not isinstance(result, Mapping):
         raise TaskDomainDriverError(f"public {operation} result is invalid")
@@ -614,6 +646,7 @@ def _capsule(
     delivery = result.get("delivery")
     if not isinstance(capsule, Mapping) or not isinstance(delivery, Mapping):
         raise TaskDomainDriverError(f"public {operation} provider capsule is invalid")
+    _validate_capsule_schema(capsule, operation=operation)
     if (
         capsule.get("schema_version") != "deeplaw.knowledge-capsule-projection/v1"
         or delivery.get("hard_limit_bytes") != 65_536
@@ -633,6 +666,7 @@ def _capsule_observation(
     *,
     operation: str,
 ) -> dict[str, Any]:
+    _validate_capsule_schema(capsule, operation=operation)
     include = expected["include"]
     exclude = expected["exclude"]
     statements = capsule.get("statements")
@@ -642,44 +676,29 @@ def _capsule_observation(
         not isinstance(statements, list)
         or not isinstance(evidence, list)
         or not isinstance(gaps, list)
+        or len(statements) != 1
+        or len(evidence) != 1
+        or not isinstance(statements[0], Mapping)
+        or not isinstance(evidence[0], Mapping)
     ):
-        raise TaskDomainDriverError(f"public {operation} capsule collections are invalid")
-    selected_ids = {
-        item.get("knowledge_id")
-        for item in statements
-        if isinstance(item, Mapping) and isinstance(item.get("knowledge_id"), str)
-    }
-    selected_sources = {
-        item.get("source_revision_id")
-        for item in evidence
-        if isinstance(item, Mapping) and isinstance(item.get("source_revision_id"), str)
-    }
-    if selected_ids != {include["knowledge_id"]} or selected_ids & set(exclude["knowledge_ids"]):
+        raise TaskDomainDriverError(f"public {operation} source/authority binding is invalid")
+    target = statements[0]
+    evidence_ref = evidence[0]
+    selected_id = target.get("knowledge_id")
+    selected_source = evidence_ref.get("source_revision_id")
+    if not isinstance(selected_id, str) or not isinstance(selected_source, str):
+        raise TaskDomainDriverError(f"public {operation} selected identity is invalid")
+    selected_ids = {selected_id}
+    selected_sources = {selected_source}
+    if selected_ids != {include["knowledge_id"]} or selected_ids & set(
+        exclude["knowledge_ids"]
+    ):
         raise TaskDomainDriverError(f"public {operation} selected an unexpected knowledge identity")
     if selected_sources != {include["source_revision_id"]} or selected_sources & set(
         exclude["source_revision_ids"]
     ):
         raise TaskDomainDriverError(f"public {operation} selected an unexpected source revision")
-    target = next(
-        (
-            item
-            for item in statements
-            if isinstance(item, Mapping) and item.get("knowledge_id") == include["knowledge_id"]
-        ),
-        None,
-    )
-    if not isinstance(target, Mapping):
-        raise TaskDomainDriverError(f"public {operation} omitted the expected statement")
     refs = target.get("source_refs")
-    evidence_ref = next(
-        (
-            item
-            for item in evidence
-            if isinstance(item, Mapping)
-            and item.get("source_revision_id") == include["source_revision_id"]
-        ),
-        None,
-    )
     expected_ref = {
         "source_revision_id": include["source_revision_id"],
         "fragment_id": include["fragment_id"],
@@ -688,9 +707,18 @@ def _capsule_observation(
     }
     if (
         not isinstance(refs, list)
-        or expected_ref not in refs
-        or not isinstance(evidence_ref, Mapping)
-        or expected_ref not in evidence_ref.get("source_refs", [])
+        or len(refs) != 1
+        or not isinstance(refs[0], Mapping)
+        or set(refs[0]) != set(expected_ref)
+        or any(refs[0].get(key) != expected_ref[key] for key in expected_ref)
+        or not isinstance(evidence_ref.get("source_refs"), list)
+        or len(evidence_ref["source_refs"]) != 1
+        or not isinstance(evidence_ref["source_refs"][0], Mapping)
+        or set(evidence_ref["source_refs"][0]) != set(expected_ref)
+        or any(
+            evidence_ref["source_refs"][0].get(key) != expected_ref[key]
+            for key in expected_ref
+        )
         or target.get("knowledge_revision_id") != include["knowledge_revision_id"]
         or target.get("authority") != include["authority"]
         or target.get("legal_authority") is not include["legal_authority"]
@@ -702,15 +730,17 @@ def _capsule_observation(
         or sha256_bytes(evidence_ref["excerpt"].encode("utf-8")) != include["quote_sha256"]
     ):
         raise TaskDomainDriverError(f"public {operation} source/authority binding is invalid")
-    actual_gaps = {
-        (item.get("code"), item.get("duty"))
-        for item in gaps
-        if (
-            isinstance(item, Mapping)
-            and isinstance(item.get("code"), str)
-            and isinstance(item.get("duty"), str)
-        )
-    }
+    actual_gap_pairs: list[tuple[str, str]] = []
+    for item in gaps:
+        if not isinstance(item, Mapping) or not isinstance(item.get("code"), str) or not isinstance(
+            item.get("duty"), str
+        ):
+            raise TaskDomainDriverError(f"public {operation} Gap set is malformed")
+        pair = (item["code"], item["duty"])
+        if pair in actual_gap_pairs:
+            raise TaskDomainDriverError(f"public {operation} Gap set contains duplicates")
+        actual_gap_pairs.append(pair)
+    actual_gaps = set(actual_gap_pairs)
     expected_gaps = {(item["code"], item["duty"]) for item in expected["gaps"]}
     if actual_gaps != expected_gaps:
         raise TaskDomainDriverError(f"public {operation} Gap set differs from the frozen seed")
@@ -721,7 +751,9 @@ def _capsule_observation(
         "selected_source_revision_ids": sorted(selected_sources),
         "knowledge_revision_id": include["knowledge_revision_id"],
         "source_refs": [expected_ref],
-        "gap_pairs": [{"code": code, "duty": duty} for code, duty in sorted(actual_gaps)],
+        "gap_pairs": [
+            {"code": code, "duty": duty} for code, duty in sorted(actual_gap_pairs)
+        ],
         "statement_count": len(statements),
         "evidence_count": len(evidence),
         "provider_content_bytes": len(canonical_json(capsule).encode("utf-8")),

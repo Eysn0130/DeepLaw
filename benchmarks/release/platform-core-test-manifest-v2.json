@@ -17961,6 +17961,160 @@
         {
           "junit": {
             "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_accepts_exact_single_source_control[context]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_accepts_exact_single_source_control[context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_accepts_exact_single_source_control[query]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_accepts_exact_single_source_control[query]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_extra_statement_or_evidence_entries[duplicate-evidence]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_extra_statement_or_evidence_entries[duplicate-evidence]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_extra_statement_or_evidence_entries[duplicate-statements]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_extra_statement_or_evidence_entries[duplicate-statements]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_extra_statement_or_evidence_entries[foreign-evidence]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_extra_statement_or_evidence_entries[foreign-evidence]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_extra_statement_or_evidence_entries[foreign-statements]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_extra_statement_or_evidence_entries[foreign-statements]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_extra_statement_or_evidence_entries[malformed-evidence]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_extra_statement_or_evidence_entries[malformed-evidence]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_extra_statement_or_evidence_entries[malformed-statements]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_extra_statement_or_evidence_entries[malformed-statements]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_malformed_duplicate_or_unknown_gaps[duplicate]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_malformed_duplicate_or_unknown_gaps[duplicate]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_malformed_duplicate_or_unknown_gaps[malformed]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_malformed_duplicate_or_unknown_gaps[malformed]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_malformed_duplicate_or_unknown_gaps[unknown]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_malformed_duplicate_or_unknown_gaps[unknown]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_unknown_collection_identity[evidence]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_unknown_collection_identity[evidence]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_rejects_unknown_collection_identity[statements]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_rejects_unknown_collection_identity[statements]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_requires_one_exact_closed_source_ref[duplicate-evidence]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_requires_one_exact_closed_source_ref[duplicate-evidence]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_requires_one_exact_closed_source_ref[duplicate-statements]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_requires_one_exact_closed_source_ref[duplicate-statements]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_requires_one_exact_closed_source_ref[extra_key-evidence]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_requires_one_exact_closed_source_ref[extra_key-evidence]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_requires_one_exact_closed_source_ref[extra_key-statements]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_requires_one_exact_closed_source_ref[extra_key-statements]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_requires_one_exact_closed_source_ref[foreign-evidence]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_requires_one_exact_closed_source_ref[foreign-evidence]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_requires_one_exact_closed_source_ref[foreign-statements]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_requires_one_exact_closed_source_ref[foreign-statements]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_requires_one_exact_closed_source_ref[malformed-evidence]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_requires_one_exact_closed_source_ref[malformed-evidence]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_observation_requires_one_exact_closed_source_ref[malformed-statements]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_observation_requires_one_exact_closed_source_ref[malformed-statements]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_capsule_schema_required_fields_and_types_fail_closed"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_capsule_schema_required_fields_and_types_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
             "name": "test_collect_records_bounded_call_facts_and_rejects_ledger_change"
           },
           "node_id": "tests/test_v013_task_domain_driver.py::test_collect_records_bounded_call_facts_and_rejects_ledger_change"
@@ -17992,6 +18146,118 @@
             "name": "test_seed_file_has_a_bounded_read"
           },
           "node_id": "tests/test_v013_task_domain_driver.py::test_seed_file_has_a_bounded_read"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_nonclosed_authority_boundary[extra]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_nonclosed_authority_boundary[extra]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_nonclosed_authority_boundary[missing]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_nonclosed_authority_boundary[missing]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_operation_or_schema_mismatch_at_structured_seam"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_operation_or_schema_mismatch_at_structured_seam"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[authority_from_ranking-0]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[authority_from_ranking-0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[authority_from_ranking-True]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[authority_from_ranking-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[case_data_allowed-0]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[case_data_allowed-0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[case_data_allowed-True]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[case_data_allowed-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[legal_authority-0]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[legal_authority-0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[legal_authority-True]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[legal_authority-True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[official_legal_sources_tool-False]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[official_legal_sources_tool-False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[official_legal_sources_tool-wrong]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[official_legal_sources_tool-wrong]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[persistent_writes-False]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[persistent_writes-False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[persistent_writes-allow]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_rejects_wrong_or_nonliteral_authority_boundary[persistent_writes-allow]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_valid_control_checks_operation[context]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_valid_control_checks_operation[context]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_valid_control_checks_operation[explain]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_valid_control_checks_operation[explain]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_task_domain_driver",
+            "name": "test_v6_envelope_valid_control_checks_operation[query]"
+          },
+          "node_id": "tests/test_v013_task_domain_driver.py::test_v6_envelope_valid_control_checks_operation[query]"
         },
         {
           "junit": {
@@ -19422,9 +19688,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2740,
+      "count": 2778,
       "selection": "not qualification and not windows_native",
-      "sha256": "01f952c5bda8ff4f294a1dd17cef0ddfa6adb8d1f8f9f8fe6fb51ed5ae7cbdb7"
+      "sha256": "e2b36c685bda934010178d7e113b7e5e5594f55a353f23d718a807b490cdc311"
     },
     "windows": {
       "additional_cases": [
@@ -19464,13 +19730,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2745,
+      "count": 2783,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "183d552579c94b77042f4018a81af9ba7216c4fcf464b736e6d69eb059c812d4"
+      "sha256": "fb94e676b9e0ab01cebd375224550cf796d17174fcaa0b1a93fb317411797f59"
     }
   },
-  "manifest_sha256": "16857b555aa2577b611000165971e3d646f5c7d2e0f315dafe51db3972d81888",
+  "manifest_sha256": "6f34ca9f9e3e2be047e2b01ff4be09e2e0b354b6651c9e1b18d355ef46e43476",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
