@@ -47,11 +47,16 @@ def test_platform_core_manifest_is_closed_frozen_and_digest_bound() -> None:
     assert manifest["selection"]["windows"] == "not qualification"
     assert manifest["inventories"]["common"]["count"] > 1_000
     assert manifest["inventories"]["windows"]["count"] > manifest["inventories"]["common"]["count"]
-    assert len(manifest["classifications"]["qualification"]["cases"]) == 12
+    assert len(manifest["classifications"]["qualification"]["cases"]) == 13
     qualification_ids = {
         case["node_id"]
         for case in manifest["classifications"]["qualification"]["cases"]
     }
+    assert (
+        "tests/test_v013_pass24_opencode_plugin.py::"
+        "test_bun_continuity_resolution_cold_start_and_hard_deadline"
+        in qualification_ids
+    )
     assert (
         "tests/test_v013_pass26_opencode_real_loader.py::"
         "test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event"

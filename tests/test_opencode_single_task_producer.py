@@ -1302,7 +1302,9 @@ def test_supervised_agent_overrides_only_prompt_and_steps():
     config = deepcopy(original)
     producer._configure_supervised_agent(config)
     agent = config["agent"]["qualification"]
-    assert agent["steps"] == 3
+    # In pinned OpenCode, step >= steps injects MAX_STEPS_PROMPT. The
+    # query/read/final-response sequence must finish before that boundary.
+    assert 3 < agent["steps"] == 4
     assert producer.TOOL in agent["prompt"]
     assert "exactly twice: first operation query" in agent["prompt"]
     assert "then operation read with the exact knowledge reference" in agent["prompt"]
@@ -1310,7 +1312,7 @@ def test_supervised_agent_overrides_only_prompt_and_steps():
     assert "Make no other tool calls" in agent["prompt"]
     assert "do not invoke any tool" not in agent["prompt"]
     expected = deepcopy(original)
-    expected["agent"]["qualification"].update(prompt=agent["prompt"], steps=3)
+    expected["agent"]["qualification"].update(prompt=agent["prompt"], steps=4)
     assert config == expected
     assert legacy.build_opencode_config() == original
     assert "do not invoke any tool" in original["agent"]["qualification"]["prompt"]

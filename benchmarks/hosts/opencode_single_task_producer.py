@@ -1552,6 +1552,10 @@ def prepare(input_path: Path) -> None:
     host = identity["hosts"]["opencode"]
     binary = exact_file(Path(value["opencode"]), host["executable_sha256"])
     deeplaw = Path(value["deeplaw"]).resolve(strict=True)
+    require(
+        Path(sys.executable).parent.resolve() == deeplaw.parent,
+        "prepare must use the selected installed CLI's Python environment",
+    )
     node = Path(value["node"]).resolve(strict=True)
     runtime_entry_hashes = {
         "deeplaw": digest(deeplaw.read_bytes()), "node": digest(node.read_bytes()),
@@ -1756,7 +1760,9 @@ def measure_usage(
 def _configure_supervised_agent(config: dict[str, Any]) -> None:
     """Override only this producer's agent instructions and bounded step count."""
     agent = config["agent"]["qualification"]
-    agent["steps"] = 3
+    # Pinned OpenCode injects a forced summary at step >= steps. Keep the
+    # ordinary third response below that boundary; ReadBudget still allows two calls.
+    agent["steps"] = 4
     agent["prompt"] = (
         f"On each user turn, invoke only {TOOL}, exactly twice: first operation query "
         "for the governed procedure, then operation read with the exact knowledge reference "

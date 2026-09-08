@@ -62,13 +62,22 @@ explicitly distinguished in the qualification protocol. This path does not chang
 real-model acceptance row or transfer session, model, credential or general tool ownership to
 DeepLaw.
 The supervised development fixture compiles its synthetic procedure from a public Source Revision
-through the normal observation/publication/validation/commit pipeline. A source-free `remember`
-alone does not supply the compiled Statements selected by default Query Plan v6. Before opening
+through the normal observation/publication/validation/commit pipeline. The producer's `prepare`
+command must run with the Python environment containing the selected installed CLI so fixture
+compilation does not silently use a different runtime. A source-free `remember` alone does not
+supply the compiled Statements selected by default Query Plan v6. Before opening
 the external guard or starting OpenCode, the producer uses the selected installed CLI and MCP launch
 prefix to perform an offline query followed by an exact revision read. It checks the complete
 procedure, preserves the same scope/privacy/read budgets, and records this preflight separately
 from actual Host tool calls. A failed preflight prevents model execution. Passing it does not prove
 ordinary source-free memory recall, actual Host continuity, or formal qualification.
+The native OpenCode continuity CLI has a hard 3,000 ms deadline including Python cold start;
+expiry still kills the child and returns an explicit gap. The earlier 1,500 ms bound rejected an
+otherwise admitted isolated-wheel resolution measured at approximately 1,956 ms. This observation
+does not establish a latency percentile or an across-platform performance guarantee.
+The supervised agent uses `steps=4` so query, exact read, and the final response occur before
+OpenCode's fixed-version `step >= steps` forced-summary boundary. Its two-tool-call and six-total-
+request guard budgets remain independently enforced; the fourth step is not extra tool permission.
 Configuration installed, no-model handshake, actual hook execution, checkpoint commit, correct
 revision restored and correct next action are different observations. Missing native measurements
 remain unavailable. Planned automatic/guided/manual integration reporting is discussed in the

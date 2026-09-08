@@ -150,6 +150,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_opencode_plugin",
+            "name": "test_bun_continuity_resolution_cold_start_and_hard_deadline"
+          },
+          "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_continuity_resolution_cold_start_and_hard_deadline"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_opencode_plugin",
             "name": "test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env"
           },
           "node_id": "tests/test_v013_pass24_opencode_plugin.py::test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env"
@@ -21087,7 +21094,7 @@
       "sha256": "5d36fcda79ff79d4e3b48b37d270b5690e43c8426a4f2e97603c18908764140c"
     }
   },
-  "manifest_sha256": "f27b1e0b4ca42775da8b682a76f36eee059b01a31df447975da524a113980d16",
+  "manifest_sha256": "18a850ff37df50467522e9a238bec7e19ed1ec6347c9e1eb6096b8ca83064803",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
