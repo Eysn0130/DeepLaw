@@ -53,7 +53,8 @@ DIAGNOSTIC_CODES = frozenset({
     "internal_error", "validation_rejected", "timeout", "network_error", "http_error",
     "io_error", "redirect_forbidden", "body_length", "inactive_turn", "route_forbidden",
     "association_mismatch", "body_bound", "invalid_json", "request_object", "request_shape",
-    "model_mismatch", "messages_missing", "message_count", "tool_inventory", "tool_shape",
+    "model_mismatch", "reasoning_effort_invalid", "messages_missing", "message_count",
+    "tool_inventory", "tool_shape",
     "tool_name", "tool_schema", "tool_schema_bound", "privacy_rejected", "canary_in_body",
     "message_invalid", "message_shape", "message_role", "multimodal_forbidden",
     "call_shape", "call_name", "request_budget", "forward_disabled", "response_bound",
@@ -673,6 +674,7 @@ class RequestGuard:
                 "tool_choice",
                 "parallel_tool_calls",
                 "thinking",
+                "reasoning_effort",
                 "frequency_penalty",
                 "presence_penalty",
                 "stop",
@@ -680,6 +682,8 @@ class RequestGuard:
             },
             "request_shape",
         )
+        if "reasoning_effort" in value:
+            guard_require(value["reasoning_effort"] == "max", "reasoning_effort_invalid")
         guard_require(value.get("model") == "deepseek-v4-flash", "model_mismatch")
         guard_require(isinstance(value.get("messages"), list), "messages_missing")
         guard_require(1 <= len(value["messages"]) <= 32, "message_count")
@@ -1624,6 +1628,19 @@ def measure_usage(
     return totals, dict(list(messages.values())[-1])
 
 
+def _configure_supervised_agent(config: dict[str, Any]) -> None:
+    """Override only this producer's agent instructions and bounded step count."""
+    agent = config["agent"]["qualification"]
+    agent["steps"] = 3
+    agent["prompt"] = (
+        f"On each user turn, invoke only {TOOL}, exactly twice: first operation query "
+        "for the governed procedure, then operation read with the exact knowledge reference "
+        "returned by that query. Use scope project, max_sensitivity public and max_chars 4000 "
+        "for both calls. Make no other tool calls. Return only JSON with decision and "
+        "next_action copied from the read result."
+    )
+
+
 def run(prepared_path: Path) -> None:
     import secrets
 
@@ -1724,7 +1741,7 @@ def run(prepared_path: Path) -> None:
         config_path = Path(environment["OPENCODE_CONFIG"])
         config = read_json(config_path)
         config["provider"]["deepseek"]["options"]["baseURL"] = guard.url
-        config["agent"]["qualification"]["steps"] = 3
+        _configure_supervised_agent(config)
         config["compaction"] = {"auto": False, "prune": False}
         config["mcp"]["deeplaw_knowledge"]["command"] = [
             sys.executable,

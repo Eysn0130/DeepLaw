@@ -3821,6 +3821,20 @@
         {
           "junit": {
             "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_accepts_optional_exact_max_reasoning_effort[False]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_accepts_optional_exact_max_reasoning_effort[False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_accepts_optional_exact_max_reasoning_effort[True]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_accepts_optional_exact_max_reasoning_effort[True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
             "name": "test_guard_does_not_confirm_cleanup_with_inflight_request"
           },
           "node_id": "tests/test_opencode_single_task_producer.py::test_guard_does_not_confirm_cleanup_with_inflight_request"
@@ -3898,6 +3912,20 @@
         {
           "junit": {
             "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_max_effort_does_not_admit_unknown_or_camelcase_fields[extra0]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_max_effort_does_not_admit_unknown_or_camelcase_fields[extra0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_max_effort_does_not_admit_unknown_or_camelcase_fields[extra1]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_max_effort_does_not_admit_unknown_or_camelcase_fields[extra1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
             "name": "test_guard_process_emits_failed_cleanup_receipt"
           },
           "node_id": "tests/test_opencode_single_task_producer.py::test_guard_process_emits_failed_cleanup_receipt"
@@ -3936,6 +3964,62 @@
             "name": "test_guard_rejects_key_inside_runtime_or_repository_before_loading[task]"
           },
           "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_key_inside_runtime_or_repository_before_loading[task]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_reasoning_effort_other_than_exact_max[1]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_reasoning_effort_other_than_exact_max[1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_reasoning_effort_other_than_exact_max[False]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_reasoning_effort_other_than_exact_max[False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_reasoning_effort_other_than_exact_max[MAX]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_reasoning_effort_other_than_exact_max[MAX]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_reasoning_effort_other_than_exact_max[None]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_reasoning_effort_other_than_exact_max[None]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_reasoning_effort_other_than_exact_max[]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_reasoning_effort_other_than_exact_max[]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_reasoning_effort_other_than_exact_max[effort6]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_reasoning_effort_other_than_exact_max[effort6]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_reasoning_effort_other_than_exact_max[effort7]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_reasoning_effort_other_than_exact_max[effort7]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_guard_rejects_reasoning_effort_other_than_exact_max[high]"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_guard_rejects_reasoning_effort_other_than_exact_max[high]"
         },
         {
           "junit": {
@@ -4230,6 +4314,13 @@
             "name": "test_run_rechecks_prepared_entry_bytes_before_guard_or_host[node]"
           },
           "node_id": "tests/test_opencode_single_task_producer.py::test_run_rechecks_prepared_entry_bytes_before_guard_or_host[node]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_opencode_single_task_producer",
+            "name": "test_supervised_agent_overrides_only_prompt_and_steps"
+          },
+          "node_id": "tests/test_opencode_single_task_producer.py::test_supervised_agent_overrides_only_prompt_and_steps"
         },
         {
           "junit": {
@@ -20654,9 +20745,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2916,
+      "count": 2929,
       "selection": "not qualification and not windows_native",
-      "sha256": "f3085a242dd37d58864eff01275610bda8976e00213dd0b5130eb8bb56424054"
+      "sha256": "84274925b4cb7916acdde8231c84fbe778b2fd32d841d53f79f8fbba6ca0c698"
     },
     "windows": {
       "additional_cases": [
@@ -20696,13 +20787,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2921,
+      "count": 2934,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "c7a1fac7dc9f3294c98f4b5c64b70132f714195506d1df17b61c0e9803d585d1"
+      "sha256": "1505d3a6cb7be9740310d0eeb573d0eee1d3d2106ba8fac75df8d07175791f00"
     }
   },
-  "manifest_sha256": "3933293459b6d629f522ef8e78d13101e1a3450cab0894bfc669a721ca6da537",
+  "manifest_sha256": "c1e4e669bc57261174c2f310b387800a57e40944dffe9da37bdd48a2041e8878",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

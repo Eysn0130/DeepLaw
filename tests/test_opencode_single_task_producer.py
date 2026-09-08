@@ -1243,3 +1243,67 @@ def test_guard_does_not_confirm_cleanup_with_inflight_request():
         guard.stop()
     with pytest.raises(producer.ProducerError):
         producer.validate_guard_snapshot(guard.snapshot(cleanup_confirmed=True))
+
+
+@pytest.mark.parametrize("include_effort", [False, True])
+def test_guard_accepts_optional_exact_max_reasoning_effort(include_effort):
+    body = json.loads(_guard_body())
+    if include_effort:
+        body["reasoning_effort"] = "max"
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce")
+    guard.active = True
+    result = guard.inspect(
+        producer.encoded(body), path="/chat/completions", authorization="Bearer synthetic-nonce",
+    )
+    assert result == body
+    assert guard.requests == []  # Inspection is not a forwarded Provider request.
+
+
+@pytest.mark.parametrize("effort", [None, False, 1, "high", "MAX", "", {}, ["max"]])
+def test_guard_rejects_reasoning_effort_other_than_exact_max(effort):
+    body = {**json.loads(_guard_body()), "reasoning_effort": effort}
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce")
+    guard.active = True
+    with pytest.raises(producer.DiagnosticError, match="inspect:reasoning_effort_invalid"):
+        guard.inspect(
+            producer.encoded(body),
+            path="/chat/completions",
+            authorization="Bearer synthetic-nonce",
+        )
+    assert guard.requests == []
+
+
+@pytest.mark.parametrize("extra", [{"reasoningEffort": "max"}, {"unknown": "max"}])
+def test_guard_max_effort_does_not_admit_unknown_or_camelcase_fields(extra):
+    body = {**json.loads(_guard_body()), "reasoning_effort": "max", **extra}
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce")
+    guard.active = True
+    with pytest.raises(producer.DiagnosticError, match="inspect:request_shape"):
+        guard.inspect(
+            producer.encoded(body),
+            path="/chat/completions",
+            authorization="Bearer synthetic-nonce",
+        )
+
+
+def test_supervised_agent_overrides_only_prompt_and_steps():
+    from copy import deepcopy
+
+    from benchmarks.hosts import run_pass13_opencode_continuity_qualification as legacy
+
+    original = legacy.build_opencode_config()
+    config = deepcopy(original)
+    producer._configure_supervised_agent(config)
+    agent = config["agent"]["qualification"]
+    assert agent["steps"] == 3
+    assert producer.TOOL in agent["prompt"]
+    assert "exactly twice: first operation query" in agent["prompt"]
+    assert "then operation read with the exact knowledge reference" in agent["prompt"]
+    assert "scope project, max_sensitivity public and max_chars 4000" in agent["prompt"]
+    assert "Make no other tool calls" in agent["prompt"]
+    assert "do not invoke any tool" not in agent["prompt"]
+    expected = deepcopy(original)
+    expected["agent"]["qualification"].update(prompt=agent["prompt"], steps=3)
+    assert config == expected
+    assert legacy.build_opencode_config() == original
+    assert "do not invoke any tool" in original["agent"]["qualification"]["prompt"]
