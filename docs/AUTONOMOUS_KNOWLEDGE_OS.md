@@ -243,6 +243,12 @@ change them. Ranking, link count, community membership, feedback, model confiden
 retrieval cannot change these fields. Source-free knowledge defaults to `tentative` and cannot
 self-declare the `supported` epistemic state.
 
+Current coverage limitation: activation of an ordinary source-free `remember` revision does not
+create a compiled Statement. Default Query Plan v6 therefore does not yet provide general recall
+of these objects. The retained v5 object-retrieval compatibility path and the separately governed
+run-bound working-checkpoint projection must not be described as full v6 memory coverage. A
+source-bound compiled fixture proves the compiler/read journey only; it does not close this gap.
+
 A preference records `preference_basis=direct_user_statement` or `agent_inference`. A direct-user
 label without a source/run binding is quarantined. External source text never receives instruction
 semantics merely because it resembles a command.

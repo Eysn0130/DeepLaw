@@ -1040,6 +1040,8 @@ def test_run_failure_receipt_survives_all_cleanup_failures(tmp_path, monkeypatch
 
     from benchmarks.hosts import run_pass13_opencode_continuity_qualification as legacy
 
+    monkeypatch.setattr(producer, "preflight_reads", lambda *args, **kwargs: {})
+
     root = tmp_path / "task"
     repository = root / "repo"
     for relative in (".opencode/plugins/deeplaw-native.ts",
@@ -1049,6 +1051,7 @@ def test_run_failure_receipt_survives_all_cleanup_failures(tmp_path, monkeypatch
         path.write_bytes(b"synthetic")
     prepared = {
         "root": str(root), "repository": str(repository), "deeplaw": "unused",
+        "case": {"current_checkpoint": {}},
         "opencode": "unused", "deployment_sha256": "a" * 64,
         "mcp_launch_prefix_sha256": producer.digest({"argv": [], "files": []}),
         "host_identity": {"executable_sha256": "a" * 64},

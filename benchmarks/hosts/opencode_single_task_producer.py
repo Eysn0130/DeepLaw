@@ -433,6 +433,64 @@ class ReadBudget:
         }
 
 
+def preflight_reads(
+    config: Mapping[str, Any], *, expected_checkpoint: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Prove the installed MCP discovery/read journey before any model request."""
+    import anyio
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    from deeplaw.closed_mcp_launcher import closed_mcp_environment
+
+    prefix = config.get("mcp_launch_prefix", {"argv": [], "files": []})
+    validate_launch_prefix(prefix)
+
+    async def exercise() -> dict[str, Any]:
+        with anyio.fail_after(60), closed_mcp_environment(
+            surface="knowledge_support", vault_path=config["vault"]
+        ) as closed:
+            argv = [*prefix["argv"], config["deeplaw"], "knowledge", "mcp",
+                    "--closed-environment", "--stdio"]
+            parameters = StdioServerParameters(
+                command=argv[0], args=argv[1:], cwd=closed.cwd, env=closed.environment,
+            )
+            with open(os.devnull, "w") as errors:
+                async with stdio_client(parameters, errlog=errors) as (reader, writer):
+                    async with ClientSession(reader, writer) as session:
+                        await session.initialize()
+                        advertised_receipt([
+                            item.model_dump(mode="json", exclude_none=True)
+                            for item in (await session.list_tools()).tools
+                        ])
+                        budget = ReadBudget()
+                        query = {"operation": "query", "query": "Supervised continuity procedure",
+                                 "scope": "project", "max_sensitivity": "public", "max_chars": 4000}
+                        budget.request(query)
+                        response = await session.call_tool("knowledge_support", query)
+                        discovery = budget.response(
+                            response.model_dump(mode="json", exclude_none=True)
+                        )
+                        target = budget.targets[0]
+                        request = {"operation": "read", "target": target,
+                                   "scope": "project", "max_sensitivity": "public",
+                                   "max_chars": 4000}
+                        budget.request(request)
+                        response = await session.call_tool("knowledge_support", request)
+                        reading = budget.response(
+                            response.model_dump(mode="json", exclude_none=True),
+                            expected_target=target,
+                        )
+                        require(response.structuredContent["result"]["content"] == canonical_json({
+                            key: expected_checkpoint[key] for key in ("decision", "next_action")
+                        }), "preflight did not read the complete expected procedure")
+                        return {"schema_version": "deeplaw.supervised-read-preflight/v1",
+                                "formal_admission": False, "model_invoked": False,
+                                "discovery": discovery, "read": reading}
+
+    return anyio.run(exercise)
+
+
 def correlate_calls(
     parts: Sequence[Mapping[str, Any]], records: Sequence[Mapping[str, Any]], *, session: str
 ) -> list[dict[str, Any]]:
@@ -1530,27 +1588,9 @@ def prepare(input_path: Path) -> None:
         environment=environment,
         cwd=repository,
     )
-    checkpoint = case["current_checkpoint"]
-    public = legacy._run_sink_request(
-        deeplaw,
-        vault=repository / "vault",
-        grant_id=fixture["grant_id"],
-        request={
-            "operation": "remember",
-            "idempotency_key": "supervised-public-procedure",
-            "confirm_no_case_data": True,
-            "title": "Supervised continuity procedure",
-            "body": canonical_json(
-                {"decision": checkpoint["decision"], "next_action": checkpoint["next_action"]}
-            ),
-            "kind": "procedure",
-            "semantic_key": "supervised:continuity:procedure",
-            "scope": "project",
-            "sensitivity": "public",
-        },
-        environment=environment,
-        cwd=repository,
-    )
+    from benchmarks.hosts.supervised_procedure_fixture import seed_procedure
+
+    public = seed_procedure(repository / "vault", case["current_checkpoint"])
     write_json(
         root / "prepared.json",
         {
@@ -1748,6 +1788,13 @@ def run(prepared_path: Path) -> None:
     deeplaw = Path(prepared["deeplaw"])
     binary = exact_file(Path(prepared["opencode"]), prepared["host_identity"]["executable_sha256"])
     vault = repository / "vault"
+    # An offline development preflight is separate from actual Host calls and
+    # never contributes to their native-event counts or formal qualification.
+    preflight = preflight_reads({
+        "vault": str(vault), "deeplaw": str(deeplaw),
+        "mcp_launch_prefix": prepared.get("mcp_launch_prefix", {"argv": [], "files": []}),
+    }, expected_checkpoint=prepared["case"]["current_checkpoint"])
+    write_json(root / "read-preflight.json", preflight)
     nonce = secrets.token_hex(32)
     issued = datetime.now(UTC)
     require(

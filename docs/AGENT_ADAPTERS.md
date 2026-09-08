@@ -61,6 +61,14 @@ installed-wheel binding, native message inspection and remaining OS isolation du
 explicitly distinguished in the qualification protocol. This path does not change the pending
 real-model acceptance row or transfer session, model, credential or general tool ownership to
 DeepLaw.
+The supervised development fixture compiles its synthetic procedure from a public Source Revision
+through the normal observation/publication/validation/commit pipeline. A source-free `remember`
+alone does not supply the compiled Statements selected by default Query Plan v6. Before opening
+the external guard or starting OpenCode, the producer uses the selected installed CLI and MCP launch
+prefix to perform an offline query followed by an exact revision read. It checks the complete
+procedure, preserves the same scope/privacy/read budgets, and records this preflight separately
+from actual Host tool calls. A failed preflight prevents model execution. Passing it does not prove
+ordinary source-free memory recall, actual Host continuity, or formal qualification.
 Configuration installed, no-model handshake, actual hook execution, checkpoint commit, correct
 revision restored and correct next action are different observations. Missing native measurements
 remain unavailable. Planned automatic/guided/manual integration reporting is discussed in the

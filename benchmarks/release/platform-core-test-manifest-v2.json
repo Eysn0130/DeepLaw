@@ -8013,6 +8013,27 @@
         },
         {
           "junit": {
+            "classname": "tests.test_supervised_procedure_fixture",
+            "name": "test_failed_preflight_prevents_guard_and_host_start"
+          },
+          "node_id": "tests/test_supervised_procedure_fixture.py::test_failed_preflight_prevents_guard_and_host_start"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_supervised_procedure_fixture",
+            "name": "test_supervised_preflight_requires_queryable_seed[False]"
+          },
+          "node_id": "tests/test_supervised_procedure_fixture.py::test_supervised_preflight_requires_queryable_seed[False]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_supervised_procedure_fixture",
+            "name": "test_supervised_preflight_requires_queryable_seed[True]"
+          },
+          "node_id": "tests/test_supervised_procedure_fixture.py::test_supervised_preflight_requires_queryable_seed[True]"
+        },
+        {
+          "junit": {
             "classname": "tests.test_typed_compiler_benchmark",
             "name": "test_typed_compiler_dev_fixture_scores_every_required_metric"
           },
@@ -21018,9 +21039,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2968,
+      "count": 2971,
       "selection": "not qualification and not windows_native",
-      "sha256": "8c75090bf0f6dfde6579a3a8e05748ff517258eb91788c8cf4f5c81f2614462f"
+      "sha256": "ec73d8f6bc53490006ea85d9f02a2a4cc4b1fa3b060e97312ec2bce1e2dfb2ac"
     },
     "windows": {
       "additional_cases": [
@@ -21060,13 +21081,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2973,
+      "count": 2976,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "942fab836fc42cb91252d0b75ef2e92c4b27b2a758f5fa314e11ea996638caae"
+      "sha256": "5d36fcda79ff79d4e3b48b37d270b5690e43c8426a4f2e97603c18908764140c"
     }
   },
-  "manifest_sha256": "1d4397d8165c928d2ccfd8e8a6e835e7fd1f26b4509fc43a1ccadfb7e19b88f1",
+  "manifest_sha256": "f27b1e0b4ca42775da8b682a76f36eee059b01a31df447975da524a113980d16",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",
