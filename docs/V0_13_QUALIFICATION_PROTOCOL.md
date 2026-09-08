@@ -52,14 +52,18 @@ first-party legal policy plane of the Evidence Library. Professional source stay
 the Wiki is not a complete editable canonical copy. DeepLaw does not automatically ingest a Host
 transcript, prompt, hidden reasoning, raw log, authentication, or Secret as memory.
 
-The current Provider advertisement is knowledge-support input v7/output v6 with only `query`,
-`context`, and `explain`. Input v1-v6 and output v1-v5 are compatibility/internal. Provider output
+The current autonomous-core Provider advertisement is knowledge-support input v8/output v7 with only `query`,
+`context`, `explain`, and typed `read`. Existing response versions remain intact; read uses output/v7
+and input v7 remains unchanged. [ADR 0007](adr/0007-exact-progressive-mcp-reads.md) records the explicit
+12 KiB new advertisement budget and read accounting boundaries. Old frozen inputs/receipts retain
+their original version and limits; the changed candidate requires fresh exact bindings. Provider output
 must not contain paths, session hashes, internal selection identity, raw logs, transcript,
 reasoning, Secret material, or unadmitted content. Ordinary reads must not append the canonical
 Ledger.
 
 Current development-only seam: `benchmarks/hosts/v013_task_domain_driver.py` exercises bounded
-Source/Wiki reads and closed v7 MCP reads against a pre-frozen source-bound seed. Its caller is the
+Source/Wiki reads and closed query/context/explain MCP calls against a pre-frozen source-bound seed.
+The typed v8 read journey has separate public stdio regression coverage. The former caller is the
 task-domain driver, not a native Host. Local service response projections, Provider Capsule bytes,
 Query Trace, and Ledger observations remain distinct; unexecuted catalog duties stay explicit.
 The driver does not establish an installed-wheel, native Host, model-usage, holdout, or Formal

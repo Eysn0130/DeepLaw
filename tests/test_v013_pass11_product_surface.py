@@ -205,11 +205,11 @@ def test_host_connect_builds_read_only_config_without_owning_host_or_auth(
         assert readiness["autonomous_vault_ready"] is True
         assert readiness["mcp"] == {
             "mode": "compact_current_with_internal_compatibility",
-            "input_schema": "deeplaw.knowledge-support-input/v7",
-            "output_schema": "deeplaw.knowledge-support-output/v6",
-            "advertised_operations": ["query", "context", "explain"],
-            "compatibility_inputs": ["v1", "v2", "v3", "v4", "v5", "v6"],
-            "compatibility_outputs": ["v1", "v2", "v3", "v4", "v5"],
+            "input_schema": "deeplaw.knowledge-support-input/v8",
+            "output_schema": "deeplaw.knowledge-support-output/v7",
+            "advertised_operations": ["query", "context", "explain", "read"],
+            "compatibility_inputs": ["v1", "v2", "v3", "v4", "v5", "v6", "v7"],
+            "compatibility_outputs": ["v1", "v2", "v3", "v4", "v5", "v6"],
         }
         assert [item["host"] for item in readiness["hosts"]] == [host]
         assert readiness["hosts"][0]["status"] == "owner_verification_required"
@@ -363,13 +363,13 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
     )
     assert knowledge_support["current_bindings"] == [
         "knowledge_support leaf",
-        "contracts/knowledge-support.input.v7.schema.json",
-        "contracts/knowledge-support.output.v6.schema.json",
-        "advertised operations: query, context, explain",
+        "contracts/knowledge-support.input.v8.schema.json",
+        "contracts/knowledge-support.output.v7.schema.json",
+        "advertised operations: query, context, explain, read",
     ]
     assert knowledge_support["compatibility_bindings"] == [
-        "contracts/knowledge-support.input.v1.schema.json through v6 (internal compatibility)",
-        "contracts/knowledge-support.output.v1.schema.json through v5 (internal compatibility)",
+        "contracts/knowledge-support.input.v1.schema.json through v7 (compatibility)",
+        "contracts/knowledge-support.output.v1.schema.json through v6 (compatibility)",
     ]
     tests_contracts = next(
         item
@@ -454,4 +454,4 @@ def test_current_documented_product_truth_cannot_drift_to_historical_state() -> 
         assert "--operation record_run --operation remember --operation forget" in readme
         assert "knowledge task checkpoint --vault ./vault" in readme
         assert "knowledge task timeline --vault ./vault" in readme
-        assert "knowledge-support input v7 / output v6" in readme
+        assert "knowledge-support input v8 / output v7" in readme

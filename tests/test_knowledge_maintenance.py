@@ -135,6 +135,7 @@ def test_doctor_and_gc_only_repair_removable_state(tmp_path: Path) -> None:
         "query",
         "context",
         "explain",
+        "read",
     ]
     assert len(readiness["hosts"]) == 3
     assert all(item["status"] == "blocked" for item in readiness["hosts"])

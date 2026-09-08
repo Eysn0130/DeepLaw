@@ -140,9 +140,9 @@ async def _mcp_registration(
         }
         if (
             not isinstance(input_schema, dict)
-            or input_schema.get("title") != "DeepLaw Knowledge Support Provider Input v7"
+            or input_schema.get("title") != "DeepLaw Knowledge Support Provider Input v8"
             or not isinstance(input_schema.get("oneOf"), list)
-            or advertised_operations != {"query", "context", "explain"}
+            or advertised_operations != {"query", "context", "explain", "read"}
             or '"additionalProperties":false' not in rendered_input_schema
             or '"context"' not in rendered_input_schema
         ):

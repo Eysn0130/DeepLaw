@@ -36,6 +36,8 @@ machine-state sources. This navigation page intentionally does not restate their
 
 ## Research
 
+- [Knowledge and continuity frontiers, 2026-09-09](KNOWLEDGE_FRONTIERS_2026-09-09.md) — primary
+  research, inspected upstream code, reuse limits and prioritized delivery work; not qualification.
 - [Named upstream product closure, 2026-08-18](UPSTREAM_PRODUCT_CLOSURE_2026-08-18.md)
 - [v0.13 upstream research](V0_13_UPSTREAM_RESEARCH.md)
 - [Upstream capability matrix](UPSTREAM_CAPABILITY_MATRIX.md)

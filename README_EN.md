@@ -31,12 +31,15 @@ and Locators; the Wiki is a rebuildable projection, not a complete editable cano
 
 ## Current honest state
 
-- Public package/main: `0.12.0 Beta`; latest tag: `v0.12.0`.
+- Public release/main: `0.12.0 Beta`; latest tag: `v0.12.0`. This branch's source candidate is
+  `0.13.0`, as declared in `pyproject.toml`; a candidate version is not a published release.
 - Active qualification: `machine_evaluation_pending`; profile:
   `kernel_release_core`; Gate classification: v9.
 - `release_ready=false`; there is no `0.13.0` tag or release.
-- Current Provider advertisement: knowledge-support input v7 / output v6 with only `query`,
-  `context`, and `explain`; input v1-v6 and output v1-v5 are compatibility/internal only.
+- Current autonomous-core Provider advertisement: knowledge-support input v8 / output v7 with only `query`,
+  `context`, `explain`, and `read`. New reads use output v7; the other operations preserve their
+  existing response versions and byte contracts. Input v7 remains closed and compatible; older
+  broad operation inventories do not become current tools.
 - Local regressions, mocks, dry-runs, old reports, and no-model smoke are not real-Host, Human Gold,
   legal-expert, 3-OS, scale, supply-chain, or release evidence. Kernel Release Core, Capability, and
   Competitive/Research Claim evidence are decided separately; missing optional evidence remains
@@ -46,7 +49,9 @@ and Locators; the Wiki is a rebuildable projection, not a complete editable cano
   Pack, GUI/Desktop interoperability, semantic restore, and Claude remain unclaimed without their
   own evidence.
 
-Current machine state is read only from
+The repository record is a construction input; Candidate Full freezes an artifact-bound copy.
+An unbound template does not mean no package was built, and a built package does not mean real
+tasks were executed. Read machine state from the applicable frozen artifact, retained receipts and
 [`benchmarks/v013/active-qualification-v3.json`](benchmarks/v013/active-qualification-v3.json) and
 [`benchmarks/release/v013-gate-classification-v9.json`](benchmarks/release/v013-gate-classification-v9.json).
 This README is not a second status ledger.
@@ -69,6 +74,9 @@ uv sync --all-extras
 
 ## Primary product journey
 
+The repository workflow below describes the source candidate. Its newer contracts and behavior
+must not be attributed to the `v0.12.0` release installed above.
+
 Create and inspect the local Vault first. `doctor` must report canonical/autonomous readiness and
 an actionable Gap when a prerequisite is missing.
 
@@ -80,7 +88,10 @@ deeplaw knowledge doctor --vault ./vault
 The repository development environment includes one copyable, public, source-free, no-model
 shortest successful flow. In a new directory it performs Source add, owner source review, the
 read-only Host handoff, compilation through the existing Coordinator/MCP grant path, Query,
-Context, and Wiki drill-down to the exact Source Revision. Its JSON result reports every step:
+Context, and owner CLI/local-read-service Wiki drill-down to the exact Source Revision. Its JSON
+result reports every step. Public MCP v8 `read` has separate stdio regression coverage for current
+non-memory knowledge revisions, their Wiki knowledge pages and exact source fragments; this demo
+is not real-Host qualification:
 
 ```bash
 uv run python -m examples.living_wiki.run_demo \

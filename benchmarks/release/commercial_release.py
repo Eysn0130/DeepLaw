@@ -191,13 +191,13 @@ def _docs(repository: Path) -> dict[str, bool]:
             "Local-first Agent Knowledge OS",
             "Knowledge Capsule",
             "release_ready=false",
-            "knowledge-support input v7 / output v6",
+            "knowledge-support input v8 / output v7",
         ),
         "README_EN.md": (
             "Local-first Agent Knowledge OS",
             "Knowledge Capsule",
             "release_ready=false",
-            "knowledge-support input v7 / output v6",
+            "knowledge-support input v8 / output v7",
         ),
         "SECURITY.md": (
             "kernel_release_core",

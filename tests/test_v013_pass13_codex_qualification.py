@@ -540,7 +540,7 @@ def test_seed_vault_uses_owner_mutations_expiry_and_binding_distractors(
 
 
 def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
-    from deeplaw.knowledge_mcp_server import knowledge_tool_definition
+    from deeplaw.knowledge_mcp_server import _v7_input_schema
 
     orchestrator = qualification.QualificationOrchestrator(
         host="codex",
@@ -584,7 +584,7 @@ def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
             "version": qualification.HISTORICAL_CODEX_VERSION_FIXTURE,
         },
         tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
-            [knowledge_tool_definition(autonomous=True)]
+            [{"name": "knowledge_support", "inputSchema": _v7_input_schema()}]
         ),
         runs=[
             qualification._placeholder_run(index, scenario)

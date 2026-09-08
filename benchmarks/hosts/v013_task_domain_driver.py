@@ -822,12 +822,12 @@ async def _public_v7_reads(
                 if len(tools.tools) != 1 or tools.tools[0].name != "knowledge_support":
                     raise TaskDomainDriverError("public knowledge_support inventory is not closed")
                 schema = tools.tools[0].inputSchema
-                if schema.get("title") != "DeepLaw Knowledge Support Provider Input v7":
-                    raise TaskDomainDriverError("public knowledge_support input is not v7")
+                if schema.get("title") != "DeepLaw Knowledge Support Provider Input v8":
+                    raise TaskDomainDriverError("public knowledge_support input is not v8")
                 if {
                     branch.get("$ref", "").rsplit("/", maxsplit=1)[-1]
                     for branch in schema.get("oneOf", [])
-                } != {"query", "context", "explain"}:
+                } != {"query", "context", "explain", "read"}:
                     raise TaskDomainDriverError(
                         "public knowledge_support operation inventory changed"
                     )

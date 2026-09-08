@@ -22,16 +22,34 @@ def _source_admitted(
     scope: str | None,
     max_sensitivity: str,
 ) -> bool:
+    governance = source.get("governance")
+    if source.get("source_revision_id") is not None:
+        if not isinstance(governance, dict):
+            return False
+        if (
+            governance.get("activation_status") != "active"
+            or governance.get("revoked_at") is not None
+            or governance.get("lifecycle_status") != "active"
+        ):
+            return False
+        sensitivity = governance.get("sensitivity")
+    else:
+        sensitivity = source.get("sensitivity")
     return (
         (scope is None or scope == vault_scope)
         and source.get("status") == "active"
-        and source.get("sensitivity") in SENSITIVITY_ORDER
-        and SENSITIVITY_ORDER.index(source["sensitivity"])
+        and sensitivity in SENSITIVITY_ORDER
+        and SENSITIVITY_ORDER.index(sensitivity)
         <= SENSITIVITY_ORDER.index(max_sensitivity)
     )
 
 
 def _source_card(source: dict[str, Any], *, fragment_count: int) -> dict[str, Any]:
+    # Source bytes are immutable, while the owner's current disclosure policy
+    # is independently revisioned. Cards and admission must use the same policy.
+    governance = source.get("governance")
+    if isinstance(governance, dict):
+        source = {**source, "sensitivity": governance["sensitivity"], "trust": governance["trust"]}
     return {
         key: source.get(key)
         for key in (

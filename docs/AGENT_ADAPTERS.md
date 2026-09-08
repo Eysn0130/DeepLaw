@@ -10,7 +10,7 @@ must not be collapsed into a read surface:
 | Product | Plugin | Process | Single leaf |
 | --- | --- | --- | --- |
 | Source-native Evidence Library / Legal Pack | `deeplaw` | `deeplaw mcp --closed-environment --stdio` | `law_support` |
-| Task Continuity, Governed Project Knowledge and Living Wiki read surface | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --closed-environment --stdio` | `knowledge_support` |
+| Task Continuity and governed knowledge context, including Wiki-derived navigation | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --closed-environment --stdio` | `knowledge_support` |
 | Autonomous mutation (not registered by default) | owner host config | `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` | `knowledge_sink` |
 
 This document describes adapter behavior only. Corpus building, release
@@ -41,14 +41,22 @@ operations, and the Agent must load the applicable split Skill, normally `deepla
 The scheduled `compile-living-wiki` wrapper is compatibility-only. The opt-in real-host
 harness records unavailable model tasks as `not_executed`. The Pass 10 receipts under
 [`../benchmarks/hosts/evidence/`](../benchmarks/hosts/evidence/) remain historical candidate
-evidence only; the current invalidation is recorded in
+evidence only; their historical invalidation is recorded in
 [`V0_13_PASS10_CURRENT_DISPOSITION.md`](V0_13_PASS10_CURRENT_DISPOSITION.md).
-The current Codex token-attribution failure disposition is recorded in
+The historical Codex token-attribution failure disposition is recorded in
 [`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md).
-The current OpenCode continuity failure disposition is recorded in
+The historical OpenCode continuity failure disposition is recorded in
 [`V0_13_PASS11_OPENCODE_DISPOSITION.md`](V0_13_PASS11_OPENCODE_DISPOSITION.md).
-The current editor/Wiki/scale evidence boundary is recorded in
+The historical editor/Wiki/scale evidence boundary is recorded in
 [`V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md).
+
+These Pass records describe their original candidates and must not override later retained
+observations. Current formal acceptance is read from the exact qualification artifact and its
+source-specific receipts under [the qualification protocol](V0_13_QUALIFICATION_PROTOCOL.md).
+Configuration installed, no-model handshake, actual hook execution, checkpoint commit, correct
+revision restored and correct next action are different observations. Missing native measurements
+remain unavailable. Planned automatic/guided/manual integration reporting is discussed in the
+[2026-09-09 research review](KNOWLEDGE_FRONTIERS_2026-09-09.md), not claimed as a shipped status API.
 
 The retained v0.7.0 host report is historical evidence scoped to official-CLI configuration,
 manifest, lifecycle, and MCP stdio handshake without a model or API key. The v0.9 release gate
@@ -59,14 +67,64 @@ competitive evidence program.
 
 ## Current `knowledge_support` Provider advertisement
 
-The current public advertisement is exactly
-`contracts/knowledge-support.input.v7.schema.json` plus
-`contracts/knowledge-support.output.v6.schema.json`. It exposes only the read operations `query`,
-`context`, and `explain`. Input v1-v6 and output v1-v5 remain internal compatibility contracts for
-existing callers and persisted receipts; their broader historical operation inventories are not
-current Provider tools. Provider bytes contain only bounded admitted context and safe authority,
+For a Vault with the autonomous core installed, the current public advertisement is exactly
+`contracts/knowledge-support.input.v8.schema.json` plus
+`contracts/knowledge-support.output.v7.schema.json`. It exposes only the read operations `query`,
+`context`, `explain`, and `read`. Input v7 remains unchanged and closed; v8 adds only the new read
+branch. Output v7 is the advertised schema accepting the existing response versions for
+query/context/explain and output/v7 for read. Older broad operation inventories are not current
+Provider tools. Provider bytes contain only bounded admitted context and safe authority,
 provenance, freshness and Gap fields. Paths, session/task hashes, internal receipt or selection
 identity, raw logs, transcript, reasoning, Secret material and unadmitted content are excluded.
+
+### Exact progressive read contract
+
+`knowledge_support` remains one read-only leaf. `operation=read` accepts a typed `target`:
+`knowledge` or `wiki` with exact `knowledge_id`/`revision_id`, or `source_fragment` with exact
+`source_revision_id`/`fragment_id`. It requires explicit `scope` and `max_sensitivity`. IDs identify
+objects; they do not grant access. Knowledge reads admit only the current active non-memory
+revision. Wiki reads cover its registered knowledge page, not arbitrary paths, aggregate navigation
+or all page families. Memory/checkpoints continue through task-bound context; historical reads are
+not added by this contract.
+
+Every page rechecks current governance and exact content. Source admission uses current governed
+sensitivity, trust and activation/revocation state, rather than immutable import-time metadata.
+Wiki reading also admits the selected knowledge and its source references; a public Wiki page
+cannot bypass a newly private or revoked source. Projection creation/rebuild remains an explicit
+owner operation. Missing, stale, forgotten, denied or unsupported targets fail through the existing
+sanitized error boundary and do not trigger fallback to a different revision or hidden writes.
+
+`offset` defaults to zero; `max_chars` defaults to 4,000 and is bounded to 200–12,000 characters.
+A continuation requires the exact full-content `content_sha256`: UTF-8 body hash for knowledge,
+whole registered page hash for Wiki, or whole fragment hash for Source. The knowledge body is
+parsed from the registered revision, not the entire Markdown object's frontmatter and bytes.
+Locator is output metadata, not an accepted path/locator selector. Responses carry that digest,
+offset/next offset, admitted governance, source references, locator where applicable, and
+`write_performed=false`. A page can be shorter than the requested maximum. `source_refs` preserves
+closed source, knowledge-revision or artifact lineage variants. Knowledge references include the
+admitted `knowledge_id` and exact `revision_id`; source references include the bound source revision
+and a fragment identity when available. An artifact reference is provenance, not a new read target.
+Only direct references are returned. Transitive dependencies are re-admitted within a total budget
+of 32 reference checks per call, counting repeated edges; admitted knowledge revisions are deduplicated
+and cycles are rejected. Knowledge dependencies must also be current, exact and non-memory.
+Unknown reference shapes fail closed. All new nested result shapes are closed by the output schema.
+
+The new single-tool canonical definition is bounded to **12 KiB**. Each successful read's canonical
+JSON body is bounded to **64 KiB**; the server serializes admission and counts at most **32**
+successful reads and **256 KiB** of their canonical bodies per MCP lifespan. The reported counter
+includes that body's envelope/metadata once. It excludes MCP transport wrapping, duplicate
+TextContent/structuredContent representations, error responses and query/context/explain.
+These are not Provider-token or complete-wire measurements. Serialized `CallToolResult` is also
+hard-bounded to **197,632 bytes** (`3 * 65,536 + 1,024`), including its two content representations
+but excluding JSON-RPC id/framing. Thus 64 KiB is not the complete duplicated MCP response size.
+Counters reset on reconnect/restart, so they are not a cross-session or whole-task cap; no budget
+counter is appended to canonical state. A Host must account for its complete exploration and
+Provider budget independently. A client-supplied limit never widens admission or permission.
+
+The tool-definition increase from the previous 8 KiB ceiling is explicit in
+[ADR 0007](adr/0007-exact-progressive-mcp-reads.md). New formal observations must freeze
+`projection_budget.tools_list_max_bytes=12288` for this advertisement. Old 8 KiB fixtures and
+receipts retain their original meaning and do not qualify the new candidate.
 
 ## Stable boundary
 
@@ -193,9 +251,9 @@ revalidates the same expected ID after process creation, closing the parent/chil
 explicit local `--vault` remains an owner diagnostic/compatibility input, not a production Host
 configuration. The process opens the vault read-only for each
 operation, verifies its closed identities and audit chains, and never mutates
-knowledge. An untouched v0.7 Vault and an autonomous Vault may retain historical
-compatibility contracts internally, but the current Host advertisement remains
-input v7/output v6 with only `query`, `context`, and `explain`. Restart is not
+knowledge. An untouched v0.7 Vault retains the legacy v1 advertisement and compatibility behavior;
+it does not expose the new exact read route. An autonomous-core Vault advertises input v8/output v7
+with only `query`, `context`, `explain`, and `read`. Restart is not
 required merely to observe a later committed revision, but a previously compiled
 Capsule remains bound to its recorded revision/audit head.
 
@@ -432,7 +490,7 @@ authentication or runtime state, or enable the separate `knowledge_sink` process
 one narrowly scoped owner-local DeepLaw configuration write that binds the opaque Vault ID to the
 selected path; the plan reports that write explicitly. The plan itself is path-free, binds
 `--expected-vault-id`, and uses the fixed closed launcher. It also reports autonomous-vault
-readiness, current compact MCP input v7/output v6 mode, the internal compatibility range, and exact
+readiness, current compact MCP input v8/output v7 mode, the internal compatibility range, and exact
 Host/plugin/version/environment preconditions as actionable Gaps; those owner checks are not a real
 Host attestation. Static configuration cannot embed a task handle or task binding. Hidden legacy
 `host connect --task-handle/--task-binding` parsing returns a migration error and never builds a
@@ -566,8 +624,8 @@ cp adapters/opencode/agents/deeplaw-knowledge.md \
 
 After autonomous migration, the local compatibility inventory is:
 
-The public Provider advertisement is only input v7/output v6 with `query`, `context`, and
-`explain`. The operations below are local CLI/Python/internal compatibility calls and are not
+The public Provider advertisement is input v8/output v7 with `query`, `context`, `explain`, and
+typed `read`. The broader operations below are local CLI/Python/internal compatibility calls and are not
 additional advertised Provider tools.
 
 | Operation | Purpose |

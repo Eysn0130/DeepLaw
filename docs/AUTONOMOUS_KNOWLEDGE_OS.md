@@ -1,6 +1,6 @@
 # DeepLaw Autonomous Knowledge OS
 
-Status: **Current v0.12.0 Beta contract; source candidate**, reviewed 2026-08-17. This document is
+Status: **Current autonomous kernel contract; source candidate**, reconciled 2026-09-09. This document is
 the autonomous kernel contract for three frozen product roles: **Task Continuity / Governed Project
 Knowledge**, **Source-native Evidence Library**, and **Living Wiki**. They share one identity,
 provenance, Ledger, governance and Context Compiler; none is a separate knowledge engine.
@@ -22,16 +22,20 @@ complete editable canonical copy. Task Continuity persists only explicitly autho
 content-minimized Run/Checkpoint/Artifact identities. Transcript, prompt, raw log and hidden
 reasoning are never automatically ingested as memory.
 
-The package and main remain `0.12.0 Beta` with `release_ready=false`. The active qualification
-binding is [`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json):
-`status=machine_evaluation_pending`, `profile=kernel_release_core`, and Gate classification v9.
-Required Core evidence is source-specific and remains `not_executed` until a
-fresh exact candidate, artifact, inputs and receipts are bound. Machine reviewers are not Human
-Gold, legal experts, `human_verified`, or a release decision.
+Public release/main and source-candidate versions are distinct: the release line remains
+`0.12.0 Beta`, while the v0.13 candidate is prepared as `0.13.0` in `pyproject.toml`.
+The repository [active record](../benchmarks/v013/active-qualification-v3.json) is the construction
+input to the [qualification protocol](V0_13_QUALIFICATION_PROTOCOL.md); Candidate Full freezes an
+artifact-bound copy. An unbound repository template does not mean no candidate artifact was built,
+and a frozen artifact does not mean its tasks were executed. Read exact status from the applicable
+artifact and retained evidence, rather than this subsystem contract. Core, optional Capability and
+competitive claims remain separate. Machine reviewers are not Human Gold, legal experts,
+`human_verified`, or a release decision.
 
-The current Provider advertisement is `knowledge-support.input/v7` plus
-`knowledge-support.output/v6`. It advertises only the read operations `query`, `context`, and
-`explain`; input v1-v6 and output v1-v5 remain internal compatibility contracts. Provider output
+The current autonomous-core Provider advertisement is `knowledge-support.input/v8` plus
+`knowledge-support.output/v7`. It advertises only the read operations `query`, `context`, and
+`explain`, plus exact `read`. The new output schema preserves existing response versions for the
+first three operations; `read` uses output/v7. Input v7 remains unchanged. Provider output
 is bounded and contains no paths, session/task identities, receipts beyond opaque joins, raw logs,
 transcripts, reasoning, Secrets or unadmitted material.
 
@@ -408,8 +412,8 @@ interval, and bounded evidence references; an endpoint-only contested marker is 
 admitted typed relation represents the selected object.
 
 Provider Capsule v2 and its nested projection use typed Source references and Source evidence. The
-advertised `knowledge_support` wire surface is input v7/output v6 and exposes only `query`,
-`context`, and `explain`; the broader local operation inventory below is internal compatibility,
+advertised `knowledge_support` wire surface is input v8/output v7 and exposes only `query`,
+`context`, `explain`, and typed `read`; the broader local operation inventory below is internal compatibility,
 not a second public Provider surface. A
 Source evidence card binds one exact Source Revision, fragment, locator and quote hash. If the
 complete passage cannot fit the evidence budget, the passage is withheld and the applicable duty
@@ -468,7 +472,8 @@ a verified reopen. `KnowledgeOS.verify` remains an explicit full verification. R
 Wiki and compatibility APIs retain their existing short-lived behavior rather than silently
 changing their fallback semantics.
 
-The Living Wiki keeps each Markdown page within its 256 KiB read boundary. A current Knowledge
+The local WikiReadService keeps each Markdown page file within a 256 KiB boundary. This is distinct
+from the MCP read lifespan's 256 KiB cumulative response budget. A current Knowledge
 Revision with at most 64 Statements renders those anchors inline. A larger revision renders
 deterministic Statement Evidence shard pages (64 Statements per shard), links them from the stable
 Knowledge page, and registers every shard and Statement anchor in the same v3 Page Registry and
@@ -482,12 +487,17 @@ evidence, Ledger identity, or Authority.
 - separate local stdio process;
 - one leaf named `knowledge_support`;
 - read-only MCP annotations;
-- current advertisement: `contracts/knowledge-support.input.v7.schema.json` plus
-  `contracts/knowledge-support.output.v6.schema.json`;
-- advertised operations are only `query`, `context`, and `explain`;
-- input v1-v6 and output v1-v5 remain internal compatibility contracts for existing callers and
+- current advertisement: `contracts/knowledge-support.input.v8.schema.json` plus
+  `contracts/knowledge-support.output.v7.schema.json`;
+- advertised operations are only `query`, `context`, `explain`, and typed `read`;
+- input v1-v7 and output v1-v6 remain internal compatibility contracts for existing callers and
   persisted receipts; they are not advertised as current product operations;
 - no remember, relation mutation, forget, grant, import, legal-source write, or arbitrary path.
+
+Exact reads use current Source/Wiki governance and the bounded targets, pagination and lifespan
+accounting in [Agent adapters](AGENT_ADAPTERS.md#exact-progressive-read-contract). They do not create
+projections, mutate canonical state, expose arbitrary files, or bypass task-bound memory admission.
+The output schema's version does not relabel the existing operations' response bodies.
 
 ### `knowledge_sink`
 
@@ -665,8 +675,9 @@ retrieval and controlled query backfill described in
 identity, grant, admission, reconciliation and verification primitives; it is not a parallel
 knowledge engine.
 
-The package version is `0.12.0`. Current implementation,
-compatibility and exact gate status are separated in:
+Public release/main remain `0.12.0 Beta`; the source-candidate package is `0.13.0` as declared in
+`pyproject.toml`. The following dated files preserve implementation and acceptance history; they
+do not define the current package or exact gate status:
 
 - [`LIVING_WIKI_IMPLEMENTATION_AUDIT_2026-07-30.md`](LIVING_WIKI_IMPLEMENTATION_AUDIT_2026-07-30.md);
 - [`LIVING_WIKI_COMPATIBILITY.md`](LIVING_WIKI_COMPATIBILITY.md);

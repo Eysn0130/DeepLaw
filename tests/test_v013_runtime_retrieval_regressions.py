@@ -207,11 +207,11 @@ def test_provider_v7_contract_and_instructions_recommend_one_read_path(
     root = _synthetic_vault(tmp_path)
     tool = knowledge_tool_definition(autonomous=True)
     assert "$id" not in tool.inputSchema
-    assert tool.inputSchema["title"] == "DeepLaw Knowledge Support Provider Input v7"
+    assert tool.inputSchema["title"] == "DeepLaw Knowledge Support Provider Input v8"
     assert {
         branch["$ref"].rsplit("/", maxsplit=1)[-1]
         for branch in tool.inputSchema["oneOf"]
-    } == {"query", "context", "explain"}
+    } == {"query", "context", "explain", "read"}
     query = {
         "operation": "query",
         "query": "bounded task knowledge",
@@ -227,10 +227,9 @@ def test_provider_v7_contract_and_instructions_recommend_one_read_path(
     for marker in (
         "query=task knowledge",
         "context=bounded Knowledge Capsule",
-        "wiki=pages and navigation",
-        "source=original user evidence",
+        "explain=receipt explanation",
+        "read=exact knowledge, Wiki, or source fragment",
         "law_support=separate Authoritative Evidence",
-        "verify=complete integrity verification",
     ):
         assert marker in instructions
 

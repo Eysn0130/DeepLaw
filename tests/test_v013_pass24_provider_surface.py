@@ -18,16 +18,14 @@ CONTRACT = REPOSITORY / "contracts/knowledge-support.input.v7.schema.json"
 
 
 def _canonical_bytes(value: object) -> int:
-    return len(
-        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    )
+    return len(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8"))
 
 
 def _advertised_operations(schema: dict[str, object]) -> set[str]:
     definitions = schema["$defs"]
     assert isinstance(definitions, dict)
     operations: set[str] = set()
-    for name in ("query", "context", "explain"):
+    for name in ("query", "context", "explain", "read"):
         branch = definitions[name]
         assert isinstance(branch, dict)
         properties = branch["properties"]
@@ -48,7 +46,7 @@ def _advertised_output_operations(schema: dict[str, object]) -> set[str]:
     return {str(value) for value in values}
 
 
-def test_provider_contract_is_closed_and_advertises_only_three_operations() -> None:
+def test_provider_contract_is_closed_and_advertises_versioned_read_operations() -> None:
     schema = json.loads(CONTRACT.read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
     definition = knowledge_tool_definition(autonomous=True)
@@ -56,11 +54,13 @@ def test_provider_contract_is_closed_and_advertises_only_three_operations() -> N
         "query",
         "context",
         "explain",
+        "read",
     }
     assert _advertised_output_operations(definition.outputSchema) == {
         "query",
         "context",
         "explain",
+        "read",
     }
     output_schema_version = definition.outputSchema["properties"]["schema_version"]
     assert isinstance(output_schema_version, dict)
@@ -69,29 +69,27 @@ def test_provider_contract_is_closed_and_advertises_only_three_operations() -> N
         "deeplaw.knowledge-support-output/v4",
         "deeplaw.knowledge-support-output/v5",
         "deeplaw.knowledge-support-output/v6",
+        "deeplaw.knowledge-support-output/v7",
     ]
-    internal_operation = _load_contract(
-        "knowledge-support.output.v6.schema.json"
-    )["properties"]["operation"]
+    internal_operation = _load_contract("knowledge-support.output.v6.schema.json")["properties"][
+        "operation"
+    ]
     assert "wiki" in internal_operation["enum"]
     assert "search" in internal_operation["enum"]
     assert "search" not in json.dumps(definition.inputSchema, sort_keys=True)
 
 
-def test_canonical_tool_definition_stays_within_eight_kibibytes() -> None:
+def test_v8_canonical_tool_definition_stays_within_twelve_kibibytes() -> None:
     definition = knowledge_tool_definition(autonomous=True)
     payload = definition.model_dump(by_alias=True, exclude_none=True)
     assert _canonical_bytes(definition.inputSchema) <= 7_000
-    assert _canonical_bytes(payload) <= 8 * 1024
+    assert _canonical_bytes(payload) <= 12 * 1024
 
 
 def test_legacy_v1_to_v6_calls_are_internal_compatibility_only() -> None:
     legacy = {"operation": "search", "query": "governed decision", "limit": 3}
     assert next(_provider_input_validator().iter_errors(legacy), None) is not None
-    assert (
-        _validate_knowledge_tool_arguments(legacy, autonomous=True)
-        == "internal_compatibility"
-    )
+    assert _validate_knowledge_tool_arguments(legacy, autonomous=True) == "internal_compatibility"
 
 
 def test_host_route_is_unadvertised_internal_compatibility_only() -> None:
@@ -101,10 +99,7 @@ def test_host_route_is_unadvertised_internal_compatibility_only() -> None:
         "host_route": {"host": "codex", "session_sha256": "a" * 64},
     }
     assert next(_provider_input_validator().iter_errors(route), None) is not None
-    assert (
-        _validate_knowledge_tool_arguments(route, autonomous=True)
-        == "internal_compatibility"
-    )
+    assert _validate_knowledge_tool_arguments(route, autonomous=True) == "internal_compatibility"
 
     schema = json.loads(CONTRACT.read_text(encoding="utf-8"))
     rendered = json.dumps(schema, sort_keys=True)
@@ -118,20 +113,39 @@ def test_unknown_operation_is_rejected_by_both_contract_planes() -> None:
     try:
         _validate_knowledge_tool_arguments(invalid, autonomous=True)
     except ValueError as error:
-        assert "current Provider contract or a historical compatibility contract" in str(
-            error
-        )
+        assert "current Provider contract or a historical compatibility contract" in str(error)
     else:
         raise AssertionError("unknown operation was admitted")
 
 
 def test_initial_capsule_character_budgets_are_bounded() -> None:
     assert _default_provider_max_chars({"operation": "context"}) == 8_000
-    assert (
-        _default_provider_max_chars({"operation": "query", "purpose": "legal"})
-        == 16_000
-    )
-    assert (
-        _default_provider_max_chars({"operation": "context", "max_chars": 1_500})
-        == 1_500
+    assert _default_provider_max_chars({"operation": "query", "purpose": "legal"}) == 16_000
+    assert _default_provider_max_chars({"operation": "context", "max_chars": 1_500}) == 1_500
+
+
+def test_host_plan_admits_both_exact_advertisement_generations() -> None:
+    schema = _load_contract("host-connect-plan.v2.schema.json")
+    readiness = schema["$defs"]["readiness"]["properties"]["mcp"]
+    validator = Draft202012Validator(readiness)
+    old = {
+        "mode": "compact_current_with_internal_compatibility",
+        "input_schema": "deeplaw.knowledge-support-input/v7",
+        "output_schema": "deeplaw.knowledge-support-output/v6",
+        "advertised_operations": ["query", "context", "explain"],
+        "compatibility_inputs": ["v1", "v2", "v3", "v4", "v5", "v6"],
+        "compatibility_outputs": ["v1", "v2", "v3", "v4", "v5"],
+    }
+    validator.validate(old)
+    current = {
+        **old,
+        "input_schema": "deeplaw.knowledge-support-input/v8",
+        "output_schema": "deeplaw.knowledge-support-output/v7",
+        "advertised_operations": [*old["advertised_operations"], "read"],
+        "compatibility_inputs": [*old["compatibility_inputs"], "v7"],
+        "compatibility_outputs": [*old["compatibility_outputs"], "v6"],
+    }
+    validator.validate(current)
+    assert not validator.is_valid(
+        {**old, "advertised_operations": current["advertised_operations"]}
     )

@@ -14,7 +14,7 @@ from benchmarks.hosts import pass13_evidence, pass17_development_diagnostic
 from benchmarks.hosts import run_pass13_codex_continuity_qualification as codex_runner
 from benchmarks.hosts import run_pass13_opencode_continuity_qualification as opencode_runner
 from benchmarks.hosts.pass13_orchestrator import QualificationOrchestrator
-from deeplaw.knowledge_mcp_server import knowledge_tool_definition
+from deeplaw.knowledge_mcp_server import _v7_input_schema
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 
@@ -500,7 +500,7 @@ def _failed_diagnostic_report(tmp_path: Path) -> dict[str, object]:
             "version": codex_runner.HISTORICAL_CODEX_VERSION_FIXTURE,
         },
         tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
-            [knowledge_tool_definition(autonomous=True)]
+            [{"name": "knowledge_support", "inputSchema": _v7_input_schema()}]
         ),
         runs=[
             codex_runner._placeholder_run(

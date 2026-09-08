@@ -10,7 +10,7 @@ more stable than an implementation specification. Current implementation mapping
 `docs/PRD_TRACEABILITY_MATRIX.md`; current machine and qualification state is maintained by the
 active qualification records and applicable protocol documents. Historical Pass dispositions are
 immutable evidence snapshots and no longer represent current status. Research snapshots live in
-`docs/V0_13_UPSTREAM_RESEARCH.md`.
+`docs/V0_13_UPSTREAM_RESEARCH.md` and the dated reviews linked from `docs/README.md`.
 
 Runtime facts remain authoritative in `src/deeplaw`, tests, JSON Schemas, SQLite migrations,
 `pyproject.toml`, and `uv.lock`. A requirement marked `Target` is not shipped merely because it is
@@ -1008,6 +1008,10 @@ quality claim. The durable conclusions are:
 Frozen upstream commits, licenses, primary references, and current candidate consequences live in
 `docs/V0_13_UPSTREAM_RESEARCH.md`. Broader comparisons live in
 `docs/UPSTREAM_CAPABILITY_MATRIX.md`. Neither document expands product scope.
+
+The [2026-09-09 research review](KNOWLEDGE_FRONTIERS_2026-09-09.md) prioritizes public evidence
+drill-down, real Host continuation and dependency-aware knowledge maintenance within these existing
+outcomes. It does not rotate frozen comparator inputs or make all research targets release gates.
 
 ## 19. Final product decision
 

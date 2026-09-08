@@ -207,10 +207,14 @@ from compiled knowledge to raw Fragments remains bounded and visible in the plan
 receipt, or Gap. Missing or unverifiable evidence is not replaced with model memory, unrelated Web
 content, or a plausible source.
 
-The current public provider advertisement is `knowledge-support.input/v7` /
-`knowledge-support.output/v6` (`knowledge-support input v7/output v6`) and exposes only `query`,
-`context`, and `explain`. Earlier input v1-v6 and output v1-v5 shapes remain
-compatibility/internal where implemented; they are not current public capability claims.
+For an autonomous-core Vault, the current public provider advertisement is `knowledge-support.input/v8` /
+`knowledge-support.output/v7` (`knowledge-support input v8/output v7`) and exposes only `query`,
+`context`, `explain`, and `read`. The new output schema admits existing response versions for the
+first three operations; `read` uses output/v7. Input v7 remains unchanged. Earlier broad operation
+inventories remain compatibility/internal where implemented, not current public capability claims.
+Exact reads reuse Source/Wiki services and current governance admission. Their limited target and
+budget contract is specified in [Agent adapters](AGENT_ADAPTERS.md#exact-progressive-read-contract)
+and [ADR 0007](adr/0007-exact-progressive-mcp-reads.md); no new knowledge engine or durable state is added.
 Provider-visible bytes contain
 only admitted, bounded task context, minimum evidence and
 limitations, structured Gaps, and an opaque receipt join key. They never contain paths, raw logs,
@@ -236,7 +240,7 @@ DeepLaw uses thin process and adapter boundaries around the shared kernel:
 
 | Surface | Boundary and authority |
 | --- | --- |
-| `knowledge_support` | Read-only query/context/explain process; no durable mutation or grant creation |
+| `knowledge_support` | Read-only query/context/explain and exact progressive read process; no durable mutation or grant creation |
 | `knowledge_sink` | Separate, explicitly enabled mutation process; requires an owner-created grant bound to writer, operations, scope, sensitivity, idempotency, and rate/capacity limits |
 | `law_support` | Separate read-only process and storage for official and user-private legal evidence |
 | CLI | Owner administration, source ingestion, grants, backup, migration, rebuild, forget, and explicit Legal Pack operations |

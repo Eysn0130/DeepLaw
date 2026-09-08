@@ -101,7 +101,9 @@ def test_living_wiki_core_is_not_bundled_with_optional_graph_analytics() -> None
 def test_readme_en_describes_a_source_candidate_not_a_stable_core() -> None:
     readme = (REPOSITORY / "README_EN.md").read_text(encoding="utf-8")
     assert "stable CLI/MCP/Python core" not in readme
-    assert "Public package/main: `0.12.0 Beta`" in readme
+    assert "Public release/main: `0.12.0 Beta`" in readme
+    assert "source candidate is\n  `0.13.0`" in readme
+    assert "a candidate version is not a published release" in readme
     assert "`release_ready=false`" in readme
     assert "Local regressions, mocks, dry-runs, old reports" in readme
 
@@ -183,7 +185,7 @@ def test_frozen_behavior_map_claim_boundary_and_candidate_status_are_explicit() 
     assert "Active gate classification: `v9`" in traceability
     assert "Active qualification profile: `kernel_release_core`" in traceability
     assert "public-seam, source-free development closure runner" in traceability
-    assert "knowledge-support input v7/output v6" in traceability
+    assert "knowledge-support input v8/output v7" in traceability
     assert "Caller-authored PASS values" in traceability
 
     pyproject = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))

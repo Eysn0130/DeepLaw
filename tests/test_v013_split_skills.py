@@ -74,9 +74,9 @@ def test_read_workflows_use_only_bounded_support_operations() -> None:
         assert "TODO" not in text
     assert "operation=query" in _skill_text("deeplaw-query")
     assert "operation=context" in _skill_text("deeplaw-query")
-    assert "operation=source" in _skill_text("deeplaw-verify-evidence")
-    assert "operation=verify" in _skill_text("deeplaw-verify-evidence")
-    assert "operation=wiki" in _skill_text("deeplaw-navigate-wiki")
+    assert "operation=read" in _skill_text("deeplaw-verify-evidence")
+    assert "target.kind=source_fragment" in _skill_text("deeplaw-verify-evidence")
+    assert "target.kind=wiki" in _skill_text("deeplaw-navigate-wiki")
 
 
 def test_write_workflows_require_owner_grants_and_no_automatic_mutation() -> None:

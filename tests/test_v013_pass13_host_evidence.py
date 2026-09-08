@@ -22,7 +22,7 @@ from benchmarks.hosts.pass13_evidence import (
 from benchmarks.hosts.pass13_evidence import (
     validate_historical_host_report_consistency_v1 as validate_host_report_consistency,
 )
-from deeplaw.knowledge_mcp_server import knowledge_tool_definition
+from deeplaw.knowledge_mcp_server import _v7_input_schema
 
 
 def _capsule(marker: str = "NEXT-ACTION-ALPHA") -> dict[str, object]:
@@ -1064,7 +1064,7 @@ def _v2_diagnostic_report(tmp_path: Path) -> dict[str, object]:
         },
         host_attestation=codex_runner._placeholder_attestation(),
         tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
-            [knowledge_tool_definition(autonomous=True)]
+            [{"name": "knowledge_support", "inputSchema": _v7_input_schema()}]
         ),
         runs=[
             codex_runner._placeholder_run(

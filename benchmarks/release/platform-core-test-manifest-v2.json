@@ -3491,6 +3491,111 @@
         },
         {
           "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_exact_read_rejects_unsafe_or_task_only_knowledge[expired]"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_exact_read_rejects_unsafe_or_task_only_knowledge[expired]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_exact_read_rejects_unsafe_or_task_only_knowledge[memory]"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_exact_read_rejects_unsafe_or_task_only_knowledge[memory]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_exact_read_rejects_unsafe_or_task_only_knowledge[split_path]"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_exact_read_rejects_unsafe_or_task_only_knowledge[split_path]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_exact_revision_forget_and_byte_budget"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_exact_revision_forget_and_byte_budget"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_initialize_recommendations_are_advertised"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_initialize_recommendations_are_advertised"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_mcp_only_progressive_read"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_mcp_only_progressive_read"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_output_nested_fields_are_closed"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_output_nested_fields_are_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_pagination_policy_and_connection_budget"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_pagination_policy_and_connection_budget"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_registered_knowledge_lineage_is_readable_and_rechecked[forget]"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_registered_knowledge_lineage_is_readable_and_rechecked[forget]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_registered_knowledge_lineage_is_readable_and_rechecked[sensitivity]"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_registered_knowledge_lineage_is_readable_and_rechecked[sensitivity]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_source_policy_rechecked_between_pages[pending]"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_source_policy_rechecked_between_pages[pending]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_source_policy_rechecked_between_pages[remove]"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_source_policy_rechecked_between_pages[remove]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_source_policy_rechecked_between_pages[sensitivity]"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_source_policy_rechecked_between_pages[sensitivity]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_source_policy_rechecked_between_pages[successor]"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_source_policy_rechecked_between_pages[successor]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_mcp_progressive_read",
+            "name": "test_v7_stays_closed"
+          },
+          "node_id": "tests/test_mcp_progressive_read.py::test_v7_stays_closed"
+        },
+        {
+          "junit": {
             "classname": "tests.test_official_baseline_adapter",
             "name": "test_baseline_collection_gate_rejects_post_receipt_artifact_drift"
           },
@@ -14524,9 +14629,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_provider_surface",
-            "name": "test_canonical_tool_definition_stays_within_eight_kibibytes"
+            "name": "test_host_plan_admits_both_exact_advertisement_generations"
           },
-          "node_id": "tests/test_v013_pass24_provider_surface.py::test_canonical_tool_definition_stays_within_eight_kibibytes"
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_host_plan_admits_both_exact_advertisement_generations"
         },
         {
           "junit": {
@@ -14552,9 +14657,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_provider_surface",
-            "name": "test_provider_contract_is_closed_and_advertises_only_three_operations"
+            "name": "test_provider_contract_is_closed_and_advertises_versioned_read_operations"
           },
-          "node_id": "tests/test_v013_pass24_provider_surface.py::test_provider_contract_is_closed_and_advertises_only_three_operations"
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_provider_contract_is_closed_and_advertises_versioned_read_operations"
         },
         {
           "junit": {
@@ -14562,6 +14667,13 @@
             "name": "test_unknown_operation_is_rejected_by_both_contract_planes"
           },
           "node_id": "tests/test_v013_pass24_provider_surface.py::test_unknown_operation_is_rejected_by_both_contract_planes"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_provider_surface",
+            "name": "test_v8_canonical_tool_definition_stays_within_twelve_kibibytes"
+          },
+          "node_id": "tests/test_v013_pass24_provider_surface.py::test_v8_canonical_tool_definition_stays_within_twelve_kibibytes"
         },
         {
           "junit": {
@@ -19772,9 +19884,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2790,
+      "count": 2806,
       "selection": "not qualification and not windows_native",
-      "sha256": "5d7f78b046ced6907a590e412c524411bf39fac99d9bd76b30a7fe98eb3a624c"
+      "sha256": "1d9e5d2df7c126b3cc54b7883e9bb1adeee67a4b3144b976bf4a926bdebb12f4"
     },
     "windows": {
       "additional_cases": [
@@ -19814,13 +19926,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2795,
+      "count": 2811,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "c65b645c3200e40a64ab7147524e51b470b98ba56c4ec349263572eac548b56c"
+      "sha256": "410bd387360a3d150a5aa359a69615d1a5a02d69b56efd0199e2b4ad1b655b92"
     }
   },
-  "manifest_sha256": "cc43f10bd256e4b8ee55b6e9cbae01121eef7de3b71d5dbbe809bf8dbe806f73",
+  "manifest_sha256": "edfb6440a9528d427d7655d1fe377906c9cd8d32c63cd93acab244bcf76f2f8d",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

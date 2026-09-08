@@ -766,7 +766,7 @@ def test_semantic_v2_observes_across_packets_and_publishes_atomically(
 
     support_tool = knowledge_tool_definition(autonomous=True)
     assert support_tool.inputSchema["title"] == (
-        "DeepLaw Knowledge Support Provider Input v7"
+        "DeepLaw Knowledge Support Provider Input v8"
     )
     support_validator = _compatibility_input_validator()
     for request in (

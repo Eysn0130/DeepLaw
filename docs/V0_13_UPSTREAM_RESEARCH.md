@@ -3,10 +3,15 @@
 Status: **design evidence only**, researched 2026-08-08, reconciled with the 2026-08-17
 architecture freeze, augmented by the named 2026-08-18 product-closure review, and reconciled with
 Gate v9 on 2026-08-21. This report records concepts considered for v0.13; it is not evidence that
-any target capability is shipped. Package/main remain `0.12.0 Beta`, active qualification is
-`machine_evaluation_pending` under profile `kernel_release_core`, and Gate v9 remains pending.
+any target capability is shipped. Version and qualification statements below are dated observations
+of their original candidates. Current source version comes from `pyproject.toml`; current release
+and qualification disposition require the exact published/frozen artifacts and retained evidence.
 DeepLaw does not vendor or copy upstream implementation code in this work. The
 exact commits below are frozen research anchors, not dependency pins or release inputs.
+
+The [2026-09-09 follow-up](KNOWLEDGE_FRONTIERS_2026-09-09.md) adds the user-named Wiki projects,
+temporal maintenance, memory repair and action-based evaluation. It does not replace this report's
+historical observations or Gate v9's frozen behavior coordinates.
 
 The frozen product boundary is three roles on one governed kernel: Task Continuity / Governed
 Project Knowledge, Source-native Evidence Library, and Living Wiki. They share one Context Compiler;

@@ -1,7 +1,7 @@
 # DeepLaw PRD 1.3.3 traceability matrix
 
 Status: **current requirement-to-runtime mapping**
-Reviewed: **2026-08-20**
+Reviewed: **2026-09-09**
 
 This matrix maps the frozen Product Requirements to current runtime seams, contracts, tests, and
 evidence boundaries. It is not a release ledger, qualification result, artifact manifest, or
@@ -108,10 +108,22 @@ standard profile, while communities and all Canvas families require the explicit
 | `PRD-CTX-010..012` | Downstream task/evidence-duty quality, stateless retry, machine-readable capability discovery | Query plan, duty planner, MCP capabilities | Quality, retry, version, tool-list, and no-write tests | Retrieval metrics do not establish Authority; native Provider usage is required for qualification |
 | `PRD-CTX-013..015` | Order-independent eligibility, exact input-head binding/staleness, fail-closed ambiguity | `Q`, `CAP`, `TC`, `TR`, admission | Tail/position, stale-head, changed-worktree, and ambiguity tests | Resource truncation and ambiguity remain explicit; no silent broader-scope search |
 
-The current Provider advertisement is `knowledge-support.input/v7` /
-`knowledge-support.output/v6` (`knowledge-support input v7/output v6`) with only `query`, `context`,
-and `explain`. Input v1-v6 and output v1-v5 remain compatibility/internal where supported; they are
-not current public advertisement versions.
+The current autonomous-core Provider advertisement is `knowledge-support.input/v8` /
+`knowledge-support.output/v7` (`knowledge-support input v8/output v7`) with only `query`, `context`,
+`explain`, and typed `read`. Input v7 remains unchanged; the new output schema accepts existing
+operation response versions plus output/v7 for read. Older broad operation inventories are not
+current advertisements.
+
+The source candidate closes a bounded no-shell Agent read journey under `PRD-PRINCIPLE-005`,
+`PRD-WIKI-014..015` and `PRD-CTX-010..012`: `progressive_read.py`, Source/Wiki services, input v8,
+output v7 and `tests/test_mcp_progressive_read.py` cover current non-memory knowledge, its Wiki page
+and exact source fragments. Aggregate navigation, historical exact reads and task-memory direct
+reads are not included. Public stdio regression is development evidence, not native Host or release
+qualification. Internal service existence alone is not product reachability.
+
+The general v6 Query Plan reports unresolved exception duties when no adequate witness exists;
+the presence of a source passage or a limitation does not prove exception completeness. This
+boundary is distinct from the isolated `law_support` query implementation and its qualification.
 
 ## Evidence, security, and operations mapping
 

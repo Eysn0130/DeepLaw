@@ -184,11 +184,11 @@ def test_provider_v7_is_compact_without_mutating_frozen_v2_to_v4() -> None:
     }
     provider = knowledge_tool_definition(autonomous=True).inputSchema
     assert "$id" not in provider
-    assert provider["title"] == "DeepLaw Knowledge Support Provider Input v7"
+    assert provider["title"] == "DeepLaw Knowledge Support Provider Input v8"
     assert {
         branch["$ref"].rsplit("/", maxsplit=1)[-1]
         for branch in provider["oneOf"]
-    } == {"query", "context", "explain"}
+    } == {"query", "context", "explain", "read"}
     purpose_context = {
         "operation": "context",
         "task": "Quote the exact governed statement.",
@@ -1421,11 +1421,11 @@ def test_stdio_advertises_v7_while_direct_v5_compatibility_remains_internal(
             listed = await session.list_tools()
             assert [tool.name for tool in listed.tools] == ["knowledge_support"]
             provider = listed.tools[0].inputSchema
-            assert provider["title"] == "DeepLaw Knowledge Support Provider Input v7"
+            assert provider["title"] == "DeepLaw Knowledge Support Provider Input v8"
             assert {
                 branch["$ref"].rsplit("/", maxsplit=1)[-1]
                 for branch in provider["oneOf"]
-            } == {"query", "context", "explain"}
+            } == {"query", "context", "explain", "read"}
             purpose_context = await session.call_tool(
                 "knowledge_support",
                 {
