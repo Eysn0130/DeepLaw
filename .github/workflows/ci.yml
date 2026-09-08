@@ -62,6 +62,7 @@ jobs:
           tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_preserves_observed_overflow
           tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_terminates_live_child_on_timeout
           tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_does_not_use_unbounded_communicate
+          tests/test_repository_gold_quality.py
 
   macos-broker-inputs:
     name: macOS broker interpreter and runtime inputs (Python ${{ matrix.python }})
