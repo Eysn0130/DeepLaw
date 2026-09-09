@@ -1,9 +1,9 @@
 # DeepLaw v0.13.0 release notes
 
-Status: **release candidate contract; not yet released**. The construction branch remains at
-package `0.12.0` until its integration tree passes CI. These notes become release facts only when
-the exact `0.13.0` wheel/sdist, Gate v9 receipts, tag, public GitHub Release, and anonymous
-redownload verification are all bound by the final release manifest.
+Status: **release candidate contract; not yet released**. The qualification branch carries package
+`0.13.0`, but that version is not a release claim. These notes become release facts only when the
+exact `0.13.0` wheel/sdist, Gate v9 receipts, tag, public GitHub Release, and anonymous redownload
+verification are all bound by the final release manifest.
 
 ## Kernel release scope
 
@@ -78,8 +78,10 @@ candidate and make no platform-qualification or release-pass claim.
 
 Calibration shards 1 and 3 were cancelled at the 100-minute job limit before they could retain
 JUnit receipts. Their progress stream nevertheless contained failures, so timeout cannot be treated
-as the only cause or as a pass. The calibration-only limit is now 150 minutes, while the later
-duration-weighted platform shards keep their existing bound. Deterministically mapped failed nodes
+as the only cause or as a pass. The calibration-only limit is now 150 minutes, and the later
+duration-weighted final Windows platform shards now use the same 150-minute bound. Final Windows
+shards stop at the first failure (`--maxfail=1`) to expose its traceback immediately; a green shard
+still executes the complete selected inventory. Deterministically mapped failed nodes
 are included in the fast Windows sentinel before another expensive candidate is admitted. One
 confirmed OpenCode cause was the absolute-path scanner interpreting the drive suffix inside an
 already verified `file:///C:/...` project-plugin URI as a separate path. Preflight now first verifies
@@ -100,3 +102,83 @@ public journey but exceeded its previous 900-second subprocess limit. Its Window
 bound is now 3,600 seconds inside the still-bounded 150-minute Candidate Full calibration job. The
 fast Windows sentinel executes the separated environment-isolation contract and partial-checkpoint
 recovery test; the full 1k journey remains in Candidate Full and cannot be replaced by the sentinel.
+
+Candidate-v5 Candidate Full run #9 (`33149976563`) is consumed failed evidence, not a pass: the
+Python 3.12 calibration and 10k lanes succeeded but do not replace the final platform matrix; all
+six full Windows jobs were cancelled under the old 100-minute bound, and the Python 3.11 shard 3
+failure signal was not parsed. A fresh Candidate Full run must validate the new bound and expose and
+verify that failure; these notes do not claim the unknown failure is fixed.
+
+Candidate-v5 Candidate Full run #10 (`33168253385`, exact head
+`cae1688c39ac17b94074987bdd7fc35aa381cd2b`) is also consumed failed evidence, not a pass: 11 jobs
+succeeded and 1 failed, with 4 skipped. The six POSIX matrix jobs, artifact freeze, exact-wheel public
+journey, 10k lane, and Windows Python 3.12 calibration shards 1 and 3 succeeded. Calibration shard 2
+failed in the real production-registration test with a bounded generic native Windows ACL command
+failure; the operation was not observable in that run. Windows calibration aggregation, all final
+Windows shards, and raw-evidence aggregation were `not_executed`/skipped. This diagnostic patch only
+adds the bounded failure kind and sanitized operation context; it does not fix the ACL behavior or
+constitute a Candidate Full pass. A fresh Candidate Full run is required.
+
+Candidate-v5 Candidate Full run #11 (`33185134591`, exact head
+`c1048341e0407e1977ac8e4e93109751031bbfa9`) is consumed failed evidence, not a pass. The artifact
+freeze, exact-wheel public journey, 10k lane, six POSIX jobs, all three Windows calibration shards,
+all six final Windows shards, and the Python 3.13 coverage aggregate succeeded. The Python 3.11
+coverage aggregate alone failed closed while rebuilding two otherwise identical shard manifests:
+the shard producer used Python 3.11's ordinary floating-point `sum`, while the Ubuntu aggregate
+used a newer Python implementation with different rounding for the informational selected-duration
+total. Selected files, file hashes, duration weights, and their digests were identical. The raw
+evidence aggregate was therefore skipped/`not_executed`. The manifest producer now uses
+`math.fsum` for that information field without weakening strict manifest equality; a fresh
+Candidate Full run is required.
+
+Candidate-v5 Candidate Full run #12 (`33209378256`, exact head
+`12ec2bc66d8632d2ad5f09182f11f7ecc65d3378`, tree
+`e0f29884d925277c4b3260bb5f851dba78759a4d`) completed all 22 jobs successfully. Its raw-evidence
+bundle contains 46 inventoried files whose sizes and SHA-256 digests were independently checked,
+including byte-identical copies of the separately downloaded wheel, sdist, and exact-wheel
+receipt. The exact-wheel receipt records its bounded public journey as passed. Separately, the 10k
+report records `release_gate_passed=true` with exact full, incremental, and no-op equivalence, and
+the Linux, macOS, and Windows Candidate Full lanes completed. This establishes exact Candidate Full
+engineering evidence only: the frozen qualification record still has all 13 Kernel Core gates
+literal `not_executed`, with `release_ready=false`. The subsequent legacy-CI lifecycle correction
+changes the candidate bytes, so run #12 is retained historical evidence and a fresh Candidate Full
+run must bind the resulting commit/tree before Kernel qualification can proceed.
+
+Candidate-v5 Candidate Full run #13 (`33229318619`, exact head
+`3fa70018eb29a8eafe351eb67bf77f4b52a8dbe7`, tree
+`529a3c7789ea5f5ba8581904ea09a90e3b6a4920`) is consumed failed evidence, not a pass. All 22 jobs
+reported success, but the retained 10k report records `release_gate_passed=false` with hard failures
+`query_p95_exceeded` and `context_p95_exceeded`: the measured p95 values were 2,083.576875 ms and
+2,085.145579 ms against the frozen 2,000 ms ceilings. The Candidate Full workflow now enforces the
+semantic result of that report in a separate bounded job without preventing raw failed-evidence
+aggregation. Alias discovery now applies containment before its bounded candidate window, and the
+dense scan removes repeated query-norm and temporary-vector work without changing its governed
+filters or result ordering. These changes invalidate run #13 and require a fresh exact Candidate
+Full run; their focused tests and local synthetic measurements are not a scale-qualification pass.
+
+Candidate Full run `33405198495` (exact head
+`b928b08a472f60b888261c1e0b4ac40def3cda91`, tree
+`c10e6b7a577ac7e04aad503172e07bff8c834268`) is consumed failed evidence, not a pass: the Platform
+manifest was stale for 26 nodes, and Windows calibration shard 3 was cancelled at 150 minutes.
+Source-byte LPT repairs only the self-contained bootstrap assignment; a fresh Candidate Full run is
+required, and Formal gates remain `not_executed`.
+
+Candidate Full run `33427103571` completed successfully, but a downstream path-safety audit found
+runner-local absolute paths in retained requirements and JUnit bytes, so the run is consumed and is
+not admissible as the next Formal input. This candidate-only remediation uses a relative uv export
+output argument, removes only the originating checkout-root prefix from non-identity JUnit content,
+and validates retained JUnit/XML plus the explicit requirements text before upload. It makes no new
+Candidate Full or Formal pass claim; a fresh exact run is required.
+
+Candidate Full run `33456027141` is consumed failed evidence, not a pass: Windows calibration shard 3
+completed with a fail-closed `unclassified candidate skips` error after the path-policy test identity
+drifted. All downstream Windows aggregate/raw-evidence jobs were skipped. A fresh Candidate Full run
+is required after this taxonomy correction; no Formal claim is made.
+
+Candidate Full run `33466492019` (job `99727390646`, exact head
+`c67b89d2658244193f28bfaa91b5033bceb04b0d`, tree
+`682f22e3b51eecdbced8fb93cc507ca535971e4b`) is consumed failed evidence, not a pass: Windows
+calibration shard 3 raised `subprocess.TimeoutExpired` in the outer Tolaria integration harness
+test. This candidate-only seam aligns the test outer lifetime/process-tree cleanup with the harness's
+two serial 60-second CLI budgets; it does not claim Windows success. A fresh Candidate Full run is
+required, and Formal remains `not_executed`.

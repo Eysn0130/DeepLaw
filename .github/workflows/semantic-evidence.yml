@@ -1,26 +1,6 @@
 name: Legacy pre-v0.13 Semantic Living Wiki evidence
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - .github/workflows/semantic-evidence.yml
-      - benchmarks/hosts/run_semantic_host_harness.py
-      - benchmarks/semantic/**
-      - contracts/deterministic-semantic-*.schema.json
-      - contracts/autonomous-query-plan.v1.schema.json
-      - contracts/knowledge-query-plan.v5.schema.json
-      - contracts/knowledge-capsule-verification.v2.schema.json
-      - contracts/real-semantic-host-report.v2.schema.json
-      - contracts/semantic-*.schema.json
-      - src/deeplaw/context_compiler.py
-      - src/deeplaw/knowledge_autonomy.py
-      - src/deeplaw/knowledge_store.py
-      - src/deeplaw/read_services.py
-      - src/deeplaw/retrieval/purpose.py
-      - src/deeplaw/retrieval_fabric.py
-      - src/deeplaw/util.py
   workflow_dispatch:
     inputs:
       mode:
@@ -80,7 +60,7 @@ jobs:
           import tomllib
           version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
           if tuple(map(int, version.split("."))) >= (0, 13, 0):
-              raise SystemExit("v0.13 must use the active qualification and Gate v6 path")
+              raise SystemExit("v0.13 must use the active qualification and Gate v9 path")
           PY
 
       - name: Install exact candidate and pinned official host CLIs
@@ -219,7 +199,7 @@ jobs:
           import tomllib
           version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
           if tuple(map(int, version.split("."))) >= (0, 13, 0):
-              raise SystemExit("v0.13 must use the active qualification and Gate v6 path")
+              raise SystemExit("v0.13 must use the active qualification and Gate v9 path")
           PY
 
       - name: Install uv

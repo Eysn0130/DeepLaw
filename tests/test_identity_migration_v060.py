@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sqlite3
@@ -10,6 +9,13 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks.release.historical_migration_fixture import (
+    FIXTURE_VERIFIED_ENV_NAME,
+    WHEEL_ENV_NAME,
+    WHEEL_SHA_ENV_NAME,
+    FixtureError,
+    verify_fixture,
+)
 from deeplaw.knowledge_compiler import compile_source
 from deeplaw.knowledge_store import (
     KNOWLEDGE_EVENT_SCHEMA,
@@ -20,13 +26,9 @@ from deeplaw.knowledge_store import (
 )
 from deeplaw.util import canonical_json, sha256_bytes, stable_id
 
-_HISTORICAL_V060_WHEEL_SHA256 = (
-    "04523ef7fef320a4a7452eb6aefeebfe1dcb745ac2a2d48edafa795a62f7ab7a"
-)
-
 
 def _v060_wheel() -> Path:
-    supplied = os.environ.get("DEEPLAW_V060_WHEEL")
+    supplied = os.environ.get(WHEEL_ENV_NAME)
     if supplied:
         return Path(supplied).expanduser().resolve()
     return (
@@ -36,17 +38,45 @@ def _v060_wheel() -> Path:
     )
 
 
+def _historical_fixture_is_required() -> bool:
+    configured = (WHEEL_ENV_NAME, WHEEL_SHA_ENV_NAME, FIXTURE_VERIFIED_ENV_NAME)
+    if any(name in os.environ for name in configured):
+        return True
+    return any(
+        os.environ.get(name, "").lower() in {"1", "true", "yes"}
+        for name in ("CI", "GITHUB_ACTIONS")
+    )
+
+
 def _verified_v060_wheel() -> Path | None:
     wheel = _v060_wheel()
+    required = _historical_fixture_is_required()
     if not wheel.is_file():
+        if required:
+            raise RuntimeError(f"configured historical v0.6.0 fixture is missing: {wheel}")
         return None
-    expected = os.environ.get(
-        "DEEPLAW_V060_WHEEL_SHA256",
-        _HISTORICAL_V060_WHEEL_SHA256,
-    )
-    if hashlib.sha256(wheel.read_bytes()).hexdigest() != expected:
+    try:
+        verified = verify_fixture(wheel.parent)
+    except (FixtureError, OSError) as error:
+        if required:
+            raise RuntimeError(
+                f"configured historical v0.6.0 fixture is invalid: {error}"
+            ) from error
         return None
-    return wheel
+    verified_wheel = Path(verified["wheel_path"]).resolve()
+    if verified_wheel != wheel.resolve():
+        if required:
+            raise RuntimeError(
+                "configured historical fixture wheel path does not match its provenance"
+            )
+        return None
+    supplied_sha = os.environ.get(WHEEL_SHA_ENV_NAME)
+    if supplied_sha is not None and supplied_sha != verified["wheel"]["sha256"]:
+        raise RuntimeError("configured historical fixture SHA-256 does not match its provenance")
+    supplied_marker = os.environ.get(FIXTURE_VERIFIED_ENV_NAME)
+    if supplied_marker is not None and supplied_marker != "true":
+        raise RuntimeError("configured historical fixture verification indicator is not true")
+    return verified_wheel
 
 
 def _build_real_v060_vault(tmp_path: Path, wheel: Path) -> Path:
@@ -281,14 +311,12 @@ def test_v060_schema_fixture_additive_migration_verification_and_rollback(
     _assert_migration_round_trip(root, tmp_path / "identity-v2-backup")
 
 
-@pytest.mark.skipif(
-    _verified_v060_wheel() is None,
-    reason="exact historical v0.6 wheel unavailable",
-)
 def test_real_v060_wheel_additive_migration_verification_and_rollback(
     tmp_path: Path,
 ) -> None:
     wheel = _verified_v060_wheel()
+    if wheel is None:
+        pytest.skip("exact historical v0.6 wheel unavailable")
     assert wheel is not None
     root = _build_real_v060_vault(tmp_path, wheel)
     _assert_migration_round_trip(root, tmp_path / "identity-v2-backup")

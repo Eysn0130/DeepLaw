@@ -1,11 +1,59 @@
 from __future__ import annotations
 
+from collections import deque
 from pathlib import Path
 from typing import Any
 
 from ..knowledge_autonomy import AutonomousKnowledgeStore, _validate_contract, _write_object
 from ..util import canonical_json, sha256_bytes, stable_id
 from .models import SOURCE_FRESHNESS_REPORT_SCHEMA
+
+MAX_FRAGMENT_INVENTORY = 20_000
+MAX_DEPENDENCY_EDGES = 4_096
+MAX_TRANSITIVE_CONSUMER_REVISIONS = 2_048
+
+
+class MaintenanceBudgetExceeded(ValueError):
+    code = "maintenance_budget_exceeded"
+    review_required = True
+
+    def __init__(self, budget_name: str, limit: int) -> None:
+        self.budget_name = budget_name
+        self.limit = limit
+        super().__init__(f"{self.code}: {budget_name} limit {limit} exceeded")
+
+
+class _MaintenanceBudget:
+    __slots__ = ("budget_name", "limit", "used")
+
+    def __init__(self, budget_name: str, limit: int) -> None:
+        if limit < 0:
+            raise ValueError("maintenance budget limit must be non-negative")
+        self.budget_name = budget_name
+        self.limit = limit
+        self.used = 0
+
+    def consume(self, amount: int = 1) -> None:
+        if amount < 0:
+            raise ValueError("maintenance budget consumption must be non-negative")
+        if self.used + amount > self.limit:
+            raise MaintenanceBudgetExceeded(self.budget_name, self.limit)
+        self.used += amount
+
+
+def _bounded_rows(
+    store: AutonomousKnowledgeStore,
+    query: str,
+    parameters: tuple[Any, ...],
+    *,
+    budget: _MaintenanceBudget,
+) -> list[Any]:
+    rows = store.connection.execute(
+        f"{query.rstrip()}\nLIMIT ?",
+        (*parameters, budget.limit - budget.used + 1),
+    ).fetchall()
+    budget.consume(len(rows))
+    return rows
 
 
 class FreshnessService:
@@ -40,6 +88,8 @@ class FreshnessService:
                 request_bytes=len(request_bytes),
             )
             store._enforce_grant_limits(grant, enforce_object_capacity=False)
+            input_audit_head = store.audit_head
+            input_legacy_audit_head = store.legacy_audit_head
             source = self._source(store, source_revision_id)
             replacement = (
                 self._source(store, replacement_source_revision_id)
@@ -60,7 +110,11 @@ class FreshnessService:
             unchanged_fragment_ids = set(fragment_diff["unchanged_fragment_ids"])
             moved_fragment_ids = set(fragment_diff["moved_fragment_ids"])
             missing_fragment_ids = set(fragment_diff["missing_fragment_ids"])
-            dependencies = store.connection.execute(
+            dependency_budget = _MaintenanceBudget(
+                "dependency_edges", MAX_DEPENDENCY_EDGES
+            )
+            dependencies = _bounded_rows(
+                store,
                 """
                 SELECT * FROM knowledge_dependencies_v1
                 WHERE source_revision_id = ?
@@ -68,7 +122,8 @@ class FreshnessService:
                 ORDER BY consumer_kind, consumer_revision_id, fragment_id
                 """,
                 (source_revision_id,),
-            ).fetchall()
+                budget=dependency_budget,
+            )
             transitions: list[dict[str, Any]] = []
             affected_knowledge: set[str] = set()
             affected_relations: set[str] = set()
@@ -115,7 +170,13 @@ class FreshnessService:
                 source_revision_id=source_revision_id,
                 direct_transitions=transitions,
                 direct_revision_states=direct_revision_states,
+                dependency_budget=dependency_budget,
             )
+            for kind, revision_id in transitive["reached_consumers"]:
+                if kind == "knowledge_revision":
+                    affected_knowledge.add(revision_id)
+                else:
+                    affected_relations.add(revision_id)
             for item in transitive["consumers"]:
                 if item["consumer_kind"] == "knowledge_revision":
                     affected_knowledge.add(item["consumer_revision_id"])
@@ -181,6 +242,11 @@ class FreshnessService:
                         operation="refresh_compilation",
                         request_bytes=len(request_bytes),
                     )
+                    if (
+                        store.audit_head != input_audit_head
+                        or store.legacy_audit_head != input_legacy_audit_head
+                    ):
+                        raise RuntimeError("Freshness input audit head changed before commit")
                     locked_source = self._source(store, source_revision_id)
                     if self._report_status(locked_source["status"]) != source_status:
                         raise RuntimeError("Source lifecycle changed during freshness refresh")
@@ -272,6 +338,21 @@ class FreshnessService:
                             ),
                         )
                     for synthesis_revision_id in sorted(affected_knowledge):
+                        grouped = store.connection.execute(
+                            "SELECT r.scope, r.sensitivity FROM knowledge_revisions_v3 r "
+                            "JOIN knowledge_statements_v1 s "
+                            "ON s.knowledge_revision_id = r.revision_id "
+                            "WHERE r.revision_id = ? AND json_extract(s.statement_json, "
+                            "'$.schema_version') = 'deeplaw.knowledge-statement/v2' LIMIT 1",
+                            (synthesis_revision_id,),
+                        ).fetchone()
+                        if grouped is not None:
+                            from ..evidence.support import SupportEvaluator
+
+                            if SupportEvaluator(
+                                store, scope=grouped["scope"], sensitivity=grouped["sensitivity"]
+                            ).revision("knowledge_revision", synthesis_revision_id) == "fresh":
+                                continue
                         synthesis = store.connection.execute(
                             """
                             SELECT revisions.knowledge_id,
@@ -465,7 +546,12 @@ class FreshnessService:
     def _fragment_inventory(
         store: AutonomousKnowledgeStore,
         source_revision_id: str,
+        *,
+        budget: _MaintenanceBudget | None = None,
     ) -> dict[str, dict[str, Any]]:
+        selected_budget = budget or _MaintenanceBudget(
+            "fragment_inventory", MAX_FRAGMENT_INVENTORY
+        )
         rows = store.connection.execute(
             """
             SELECT legacy_fragment_bindings_v2.fragment_id,
@@ -482,13 +568,14 @@ class FreshnessService:
                      fragment_node_membership_v2.node_ordinal
             """,
             (source_revision_id,),
-        ).fetchall()
+        )
         fragments: dict[str, dict[str, Any]] = {}
         for row in rows:
-            fragment = fragments.setdefault(
-                row["fragment_id"],
-                {"ordinal": row["ordinal"], "nodes": {}},
-            )
+            fragment_id = row["fragment_id"]
+            if fragment_id not in fragments:
+                selected_budget.consume()
+                fragments[fragment_id] = {"ordinal": row["ordinal"], "nodes": {}}
+            fragment = fragments[fragment_id]
             fragment["nodes"][row["logical_node_key"]] = row[
                 "content_sha256"
             ]
@@ -502,7 +589,12 @@ class FreshnessService:
         source_revision_id: str,
         replacement_source_revision_id: str | None,
     ) -> dict[str, list[str]]:
-        old = cls._fragment_inventory(store, source_revision_id)
+        inventory_budget = _MaintenanceBudget(
+            "fragment_inventory", MAX_FRAGMENT_INVENTORY
+        )
+        old = cls._fragment_inventory(
+            store, source_revision_id, budget=inventory_budget
+        )
         if replacement_source_revision_id is None:
             return {
                 "added_fragment_ids": [],
@@ -514,6 +606,7 @@ class FreshnessService:
         new_fragments = cls._fragment_inventory(
             store,
             replacement_source_revision_id,
+            budget=inventory_budget,
         )
         new_nodes = {
             logical_key: content_sha256
@@ -531,15 +624,19 @@ class FreshnessService:
         moved: list[str] = []
         unchanged: list[str] = []
         missing: list[str] = []
+        new_by_nodes: dict[
+            tuple[tuple[str, str], ...], deque[dict[str, Any]]
+        ] = {}
+        for candidate in new_fragments.values():
+            nodes_key = tuple(sorted(candidate["nodes"].items()))
+            new_by_nodes.setdefault(nodes_key, deque()).append(candidate)
         for fragment_id, fragment in old.items():
             nodes = fragment["nodes"]
-            exact_destination = next(
-                (
-                    candidate
-                    for candidate in new_fragments.values()
-                    if candidate["nodes"] == nodes
-                ),
-                None,
+            exact_destinations = new_by_nodes.get(tuple(sorted(nodes.items())))
+            exact_destination = (
+                exact_destinations.popleft()
+                if exact_destinations
+                else None
             )
             if exact_destination is not None:
                 if exact_destination["ordinal"] == fragment["ordinal"]:
@@ -614,7 +711,15 @@ class FreshnessService:
         source_revision_id: str,
         direct_transitions: list[dict[str, Any]],
         direct_revision_states: dict[tuple[str, str], str],
+        dependency_budget: _MaintenanceBudget | None = None,
+        consumer_budget: _MaintenanceBudget | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
+        dependency_budget = dependency_budget or _MaintenanceBudget(
+            "dependency_edges", MAX_DEPENDENCY_EDGES
+        )
+        consumer_budget = consumer_budget or _MaintenanceBudget(
+            "transitive_consumer_revisions", MAX_TRANSITIVE_CONSUMER_REVISIONS
+        )
         source_overrides = {
             item["dependency_id"]: item["freshness"] for item in direct_transitions
         }
@@ -626,8 +731,31 @@ class FreshnessService:
 
         def effective_state(target: tuple[str, str]) -> str:
             consumer_kind, consumer_revision_id = target
+            if consumer_kind == "knowledge_revision":
+                grouped = store.connection.execute(
+                    "SELECT 1 FROM knowledge_statements_v1 WHERE knowledge_revision_id = ? "
+                    "AND json_extract(statement_json, '$.schema_version') = "
+                    "'deeplaw.knowledge-statement/v2' LIMIT 1", (consumer_revision_id,),
+                ).fetchone()
+                if grouped is not None:
+                    from ..evidence.support import SupportEvaluator
+
+                    row = store.connection.execute(
+                        "SELECT scope, sensitivity FROM knowledge_revisions_v3 "
+                        "WHERE revision_id = ?", (consumer_revision_id,),
+                    ).fetchone()
+                    if row is None:
+                        return "unknown"
+                    return SupportEvaluator(
+                        store, scope=row["scope"], sensitivity=row["sensitivity"],
+                        source_overrides=source_overrides,
+                    ).revision("knowledge_revision", consumer_revision_id)
             states: list[str] = []
-            for row in store.connection.execute(
+            state_budget = _MaintenanceBudget(
+                "dependency_edges", MAX_DEPENDENCY_EDGES
+            )
+            for row in _bounded_rows(
+                store,
                 """
                 SELECT dependency_id, source_revision_id,
                        dependency_kind, freshness
@@ -635,6 +763,7 @@ class FreshnessService:
                 WHERE consumer_kind = ? AND consumer_revision_id = ?
                 """,
                 target,
+                budget=state_budget,
             ):
                 if (
                     row["source_revision_id"] == source_revision_id
@@ -642,13 +771,15 @@ class FreshnessService:
                 ):
                     continue
                 states.append(source_overrides.get(row["dependency_id"], row["freshness"]))
-            for row in store.connection.execute(
+            for row in _bounded_rows(
+                store,
                 """
                 SELECT dependency_id, freshness
                 FROM revision_dependencies_v1
                 WHERE consumer_kind = ? AND consumer_revision_id = ?
                 """,
                 (consumer_kind, consumer_revision_id),
+                budget=state_budget,
             ):
                 states.append(revision_overrides.get(row["dependency_id"], row["freshness"]))
             result = "fresh"
@@ -662,7 +793,8 @@ class FreshnessService:
             if observed_states.get((input_kind, upstream_revision_id)) == upstream_state:
                 continue
             observed_states[(input_kind, upstream_revision_id)] = upstream_state
-            rows = store.connection.execute(
+            rows = _bounded_rows(
+                store,
                 """
                 SELECT dependency_id, consumer_kind, consumer_object_id,
                        consumer_revision_id, freshness
@@ -671,7 +803,8 @@ class FreshnessService:
                 ORDER BY consumer_kind, consumer_revision_id, dependency_id
                 """,
                 (input_kind, upstream_revision_id),
-            ).fetchall()
+                budget=dependency_budget,
+            )
             for row in rows:
                 reason = (
                     "upstream_revision_fresh"
@@ -688,7 +821,9 @@ class FreshnessService:
                     "reason": reason,
                 }
                 consumer = (row["consumer_kind"], row["consumer_revision_id"])
-                reached_consumers.add(consumer)
+                if consumer not in reached_consumers:
+                    consumer_budget.consume()
+                    reached_consumers.add(consumer)
                 consumer_state = effective_state(consumer)
                 if observed_states.get(consumer) != consumer_state:
                     pending.append(consumer)
@@ -745,6 +880,7 @@ class FreshnessService:
             )
         return {
             "consumers": consumers,
+            "reached_consumers": sorted(reached_consumers),
             "revision_dependencies": [
                 revision_updates[key] for key in sorted(revision_updates)
             ],

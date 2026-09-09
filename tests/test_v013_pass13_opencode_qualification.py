@@ -3,7 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import signal
 import stat
+import subprocess
+import sys
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -21,6 +24,8 @@ from benchmarks.hosts import (
 )
 from benchmarks.release.kernel_qualification_bundle_v1 import host_identity_sha256
 from deeplaw.task_context import build_task_context_binding
+
+_REAL_INSTALLED_OPENCODE_PLUGIN_BYTES = runner._installed_opencode_plugin_bytes
 
 _TASK_BINDING = build_task_context_binding(
     "1" * 64,
@@ -59,6 +64,49 @@ _ZERO_MODEL_HOST_ITEM = {
     "dotenv_policy": "owner_only_external_strict_parser",
     "secret_visibility": "forbidden",
 }
+
+
+def _verified_acl_hardening_report(path: Path, *, kind: str = "file") -> dict[str, Any]:
+    current_sid = "S-1-5-21-1000"
+    verification = {
+        "schema_version": "deeplaw.windows-acl-report/v1",
+        "current_user_sid": current_sid,
+        "entry_count": 1,
+        "owner_sid_verified": True,
+        "users_principal_sid": "S-1-5-32-545",
+        "everyone_principal_sid": "S-1-1-0",
+        "reparse_points_absent": True,
+        "permissions_verified": True,
+        "errors": [],
+        "errors_truncated": False,
+        "entries": [
+            {
+                "path": str(path),
+                "kind": kind,
+                "owner_sid": current_sid,
+                "owner_matches_current_user": True,
+                "reparse_point": False,
+                "acl_inheritance_enabled": False,
+                "inherited_rule_count": 0,
+                "users_rule_count": 0,
+                "everyone_rule_count": 0,
+                "valid": True,
+            }
+        ],
+        "entries_truncated": False,
+        "platform": "nt",
+        "status": "verified",
+        "scan_complete": True,
+        "files_and_directories_checked": 1,
+    }
+    return {
+        "schema_version": "deeplaw.windows-acl-hardening/v1",
+        "platform": "nt",
+        "applied": True,
+        "item_count": 1,
+        "current_user_sid": current_sid,
+        "verification": verification,
+    }
 
 
 def _digest(label: str) -> str:
@@ -400,13 +448,43 @@ def _preflight_plugin_fixture(tmp_path: Path) -> tuple[Path, dict[str, object], 
     return project, receipt, resolved
 
 
-def test_runner_routes_owner_dotenv_only_to_external_broker() -> None:
+def test_runner_routes_owner_dotenv_only_to_external_broker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     source = Path(runner.__file__).read_text(encoding="utf-8")
     assert not hasattr(runner, "load_deepseek_key")
     assert "--dotenv" not in source
     assert "load_deepseek_key" not in source
     assert "--opencode-dotenv" in source
     assert runner._OWNER_DOTENV_ENV_NAME == "DEEPLAW_OWNER_DOTENV"
+
+    windows_scripts = tmp_path / "runtime" / "Scripts"
+    windows_scripts.mkdir(parents=True)
+    windows_executable = windows_scripts / "deeplaw.exe"
+    windows_executable.write_bytes(b"candidate windows executable")
+    windows_python = windows_scripts / "python.exe"
+    windows_python.write_bytes(b"candidate windows python")
+    calls: list[tuple[Path, ...]] = []
+
+    def fake_run(
+        argv: list[Path | str], **_kwargs: object
+    ) -> dict[str, object]:
+        calls.append(tuple(Path(item) for item in argv))
+        return {
+            "stdout": b"candidate plugin bytes",
+            "stderr": b"",
+            "returncode": 0,
+            "timed_out": False,
+            "output_overflow": False,
+        }
+
+    monkeypatch.setattr(runner, "_run_bounded_process", fake_run)
+    assert (
+        _REAL_INSTALLED_OPENCODE_PLUGIN_BYTES(windows_executable)
+        == b"candidate plugin bytes"
+    )
+    assert calls and calls[0][0] == windows_python
+    assert calls[0][1:2] == (Path("-I"),)
 
 
 def _owner_dotenv(path: Path) -> Path:
@@ -1319,6 +1397,455 @@ def test_process_group_options_fail_closed_for_platform() -> None:
         assert options["start_new_session"] is True
 
 
+def test_windows_process_group_options_require_bound_taskkill(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    system_root = tmp_path / "Windows"
+    system_root.mkdir()
+
+    with monkeypatch.context() as windows:
+        windows.setattr(runner.os, "name", "nt")
+        windows.setattr(
+            runner.subprocess,
+            "CREATE_NEW_PROCESS_GROUP",
+            512,
+            raising=False,
+        )
+        windows.setenv("SYSTEMROOT", str(system_root))
+        assert runner.process_creation_options() == {"creationflags": 512}
+
+        windows.delenv("SYSTEMROOT", raising=False)
+        windows.delenv("WINDIR", raising=False)
+        assert runner.process_creation_options() == {"creationflags": 512}
+        with pytest.raises(
+            runner.QualificationError,
+            match="Windows system root is unavailable",
+        ):
+            runner._windows_child_environment({"PATH": os.defpath})
+
+
+@pytest.mark.parametrize("failure", ("nonzero", "exception", "timeout"))
+def test_windows_process_tree_cleanup_reports_unconfirmed_taskkill(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    del tmp_path
+
+    class Process:
+        pid = 4315
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def poll(self) -> None:
+            return None
+
+        def kill(self) -> None:
+            self.killed = True
+
+    cleanup_timeouts: list[float] = []
+
+    class Guard:
+        def cleanup(self, *, timeout_seconds: float) -> bool:
+            cleanup_timeouts.append(timeout_seconds)
+            if failure == "exception":
+                raise OSError("synthetic job cleanup failure")
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired("synthetic job cleanup", timeout_seconds)
+            return False
+
+    with monkeypatch.context() as windows:
+        windows.setattr(runner.os, "name", "nt")
+        process = Process()
+        confirmed = runner._terminate_process_tree(  # type: ignore[arg-type]
+            process,
+            Guard(),  # type: ignore[arg-type]
+        )
+
+    assert confirmed is False
+    assert process.killed is True
+    assert cleanup_timeouts == [5]
+
+    if failure == "nonzero":
+        with monkeypatch.context() as windows:
+            windows.setattr(runner.os, "name", "nt")
+            missing_guard = Process()
+            assert runner._terminate_process_tree(  # type: ignore[arg-type]
+                missing_guard
+            ) is False
+        assert missing_guard.killed is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_posix_process_tree_cleanup_kills_group_after_leader_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Process:
+        pid = 4323
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def poll(self) -> int:
+            return 0
+
+        def kill(self) -> None:
+            self.killed = True
+
+    process = Process()
+    killpg_calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        runner.os,
+        "killpg",
+        lambda pid, sig: killpg_calls.append((pid, sig)),
+    )
+
+    assert runner._terminate_process_tree(process) is True  # type: ignore[arg-type]
+    assert killpg_calls == [(process.pid, signal.SIGKILL)]
+    assert process.killed is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_posix_process_tree_cleanup_send_failure_is_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Process:
+        pid = 4324
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def poll(self) -> int:
+            return 0
+
+        def kill(self) -> None:
+            self.killed = True
+
+    def fail_group_kill(_pid: int, _signal: int) -> None:
+        raise OSError("synthetic process-group cleanup failure")
+
+    process = Process()
+    monkeypatch.setattr(runner.os, "killpg", fail_group_kill)
+
+    assert runner._terminate_process_tree(process) is False
+    assert process.killed is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_owner_broker_process_group_cleanup_send_failure_is_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Process:
+        pid = 4325
+
+        def __init__(self) -> None:
+            self.killed = False
+
+        def kill(self) -> None:
+            self.killed = True
+
+    def fail_group_kill(_pid: int, _signal: int) -> None:
+        raise OSError("synthetic process-group cleanup failure")
+
+    process = Process()
+    monkeypatch.setattr(runner.os, "killpg", fail_group_kill)
+
+    assert runner._terminate_broker_process_group(process) is False  # type: ignore[arg-type]
+    assert process.killed is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group contract")
+def test_owner_broker_success_fails_closed_when_final_cleanup_is_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class InputStream:
+        def write(self, _payload: bytes) -> int:
+            return 0
+
+        def flush(self) -> None:
+            return
+
+        def close(self) -> None:
+            return
+
+    class OutputStream:
+        def __init__(self, payload: bytes) -> None:
+            self.payload = payload
+
+        def read1(self, _size: int) -> bytes:
+            payload, self.payload = self.payload, b""
+            return payload
+
+        def close(self) -> None:
+            return
+
+    class Process:
+        pid = 4326
+        returncode = 0
+
+        def __init__(self) -> None:
+            self.stdin = InputStream()
+            self.stdout = OutputStream(b"{}")
+            self.stderr = OutputStream(b"")
+            self.killed = False
+
+        def wait(self, *, timeout: float) -> int:
+            del timeout
+            return 0
+
+        def kill(self) -> None:
+            self.killed = True
+
+    process = Process()
+
+    def fake_popen(*_args: object, **_kwargs: object) -> Process:
+        return process
+
+    def fail_group_kill(_pid: int, _signal: int) -> None:
+        raise OSError("synthetic process-group cleanup failure")
+
+    monkeypatch.setattr(runner.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(runner.os, "killpg", fail_group_kill)
+
+    with pytest.raises(
+        runner.QualificationError,
+        match="process-tree cleanup could not be confirmed",
+    ):
+        runner._bounded_broker_control_exchange(
+            Path("/owner-only/broker"),
+            payload=b"{}\n",
+            timeout_seconds=1,
+        )
+    assert process.killed is True
+
+
+def test_bounded_process_timeout_does_not_use_unbounded_communicate(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run(*args: object, **kwargs: object) -> None:
+        calls.append({"args": args, **kwargs})
+        raise runner.bounded_subprocess.BoundedSubprocessError(
+            "bounded subprocess timed out",
+            kind=runner.bounded_subprocess.BoundedSubprocessFailureKind.TIMEOUT,
+        )
+
+    monkeypatch.setattr(
+        runner.bounded_subprocess,
+        "run_bounded_subprocess",
+        fake_run,
+    )
+    result = runner._run_bounded_process(
+        ["fake-opencode", "--flag"],
+        environment={"PATH": os.defpath},
+        cwd=tmp_path,
+        input_bytes=b"input",
+        timeout=0.01,
+    )
+    assert result["timed_out"] is True
+    assert result["output_overflow"] is False
+    assert calls == [
+        {
+            "args": (["fake-opencode", "--flag"],),
+            "input_bytes": b"input",
+            "environment": runner._windows_child_environment({"PATH": os.defpath}),
+            "cwd": str(tmp_path),
+            "timeout_seconds": 0.01,
+            "max_stdout_bytes": runner.MAX_OUTPUT_BYTES,
+            "max_stderr_bytes": runner.MAX_OUTPUT_BYTES,
+        }
+    ]
+
+
+@pytest.mark.parametrize("stream", ("stdout", "stderr"))
+def test_bounded_process_timeout_preserves_observed_overflow(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    stream: str,
+) -> None:
+    def fail_timeout(*_args: object, **_kwargs: object) -> None:
+        raise runner.bounded_subprocess.BoundedSubprocessError(
+            "bounded subprocess timed out",
+            kind=runner.bounded_subprocess.BoundedSubprocessFailureKind.TIMEOUT,
+            stdout=b"synthetic limited stdout",
+            stderr=b"synthetic limited stderr",
+            stdout_truncated=stream == "stdout",
+            stderr_truncated=stream == "stderr",
+        )
+
+    monkeypatch.setattr(runner.bounded_subprocess, "run_bounded_subprocess", fail_timeout)
+    result = runner._run_bounded_process(
+        ["fake-opencode"], environment={"PATH": os.defpath}, cwd=tmp_path, timeout=1,
+    )
+    assert result["timed_out"] is True
+    assert result["output_overflow"] is True
+    assert result["stdout"] == b""
+    assert result["stderr"] == b""
+
+
+@pytest.mark.parametrize("stream", ("stdout", "stderr"))
+def test_bounded_process_stops_live_output_overflow_before_child_completion(
+    tmp_path: Path,
+    stream: str,
+) -> None:
+    marker = tmp_path / f"{stream}-completed"
+    script = tmp_path / f"{stream}-overflow.py"
+    script.write_text(
+        "import pathlib, sys, time\n"
+        f"sys.{stream}.buffer.write(b'x' * {runner.MAX_OUTPUT_BYTES * 2})\n"
+        f"sys.{stream}.buffer.flush()\n"
+        "time.sleep(2)\n"
+        f"pathlib.Path({str(marker)!r}).write_text('completed', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    result = runner._run_bounded_process(
+        [sys.executable, str(script)],
+        environment={"PATH": os.defpath},
+        cwd=tmp_path,
+        timeout=5,
+    )
+
+    assert result["output_overflow"] is True
+    assert result["stdout"] == b""
+    assert result["stderr"] == b""
+    assert not marker.exists()
+
+
+def test_bounded_process_accepts_exact_output_boundary(tmp_path: Path) -> None:
+    script = tmp_path / "exact-output.py"
+    script.write_text(
+        "import sys\n"
+        f"sys.stdout.buffer.write(b'o' * {runner.MAX_OUTPUT_BYTES})\n"
+        f"sys.stderr.buffer.write(b'e' * {runner.MAX_OUTPUT_BYTES})\n"
+        "sys.stdout.buffer.flush()\n"
+        "sys.stderr.buffer.flush()\n",
+        encoding="utf-8",
+    )
+
+    result = runner._run_bounded_process(
+        [sys.executable, str(script)],
+        environment={"PATH": os.defpath},
+        cwd=tmp_path,
+        timeout=5,
+    )
+
+    assert result["returncode"] == 0
+    assert len(result["stdout"]) == runner.MAX_OUTPUT_BYTES
+    assert len(result["stderr"]) == runner.MAX_OUTPUT_BYTES
+    assert result["output_overflow"] is False
+
+
+def test_bounded_process_terminates_live_child_on_timeout(tmp_path: Path) -> None:
+    marker = tmp_path / "timeout-completed"
+    script = tmp_path / "timeout.py"
+    script.write_text(
+        "import pathlib, time\n"
+        "time.sleep(2)\n"
+        f"pathlib.Path({str(marker)!r}).write_text('completed', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    result = runner._run_bounded_process(
+        [sys.executable, str(script)],
+        environment={"PATH": os.defpath},
+        cwd=tmp_path,
+        timeout=0.05,
+    )
+
+    assert result["timed_out"] is True
+    assert result["output_overflow"] is False
+    assert not marker.exists()
+
+
+def test_bounded_process_maps_start_failure(tmp_path: Path) -> None:
+    with pytest.raises(runner.QualificationError, match="bounded process failed to start"):
+        runner._run_bounded_process(
+            [str(tmp_path / "missing-opencode")],
+            environment={"PATH": os.defpath},
+            cwd=tmp_path,
+            timeout=1,
+        )
+
+
+def test_bounded_process_maps_cleanup_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fail_cleanup(*_args: object, **_kwargs: object) -> None:
+        raise runner.bounded_subprocess.BoundedSubprocessError(
+            "bounded subprocess cleanup could not be confirmed",
+            kind=runner.bounded_subprocess.BoundedSubprocessFailureKind.CLEANUP_UNCONFIRMED,
+        )
+
+    monkeypatch.setattr(
+        runner.bounded_subprocess,
+        "run_bounded_subprocess",
+        fail_cleanup,
+    )
+    with pytest.raises(
+        runner.QualificationError,
+        match="OpenCode process-tree cleanup could not be confirmed",
+    ):
+        runner._run_bounded_process(
+            ["fake-opencode"],
+            environment={"PATH": os.defpath},
+            cwd=tmp_path,
+            timeout=1,
+        )
+
+
+def test_local_server_stop_does_not_use_unbounded_communicate(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FakeProcess:
+        pid = 4317
+
+        def __init__(self) -> None:
+            self.timeouts: list[float | None] = []
+            self.killed = False
+
+        def poll(self) -> None:
+            return None
+
+        def communicate(
+            self, *, timeout: float | None = None
+        ) -> tuple[bytes, bytes]:
+            self.timeouts.append(timeout)
+            if len(self.timeouts) == 1:
+                raise runner.subprocess.TimeoutExpired("fake", timeout)
+            if timeout is None:
+                raise AssertionError("unbounded communicate")
+            return b"", b""
+
+        def kill(self) -> None:
+            self.killed = True
+
+    fake = FakeProcess()
+    server = runner._OpenCodeLocalServer(
+        binary=tmp_path / "opencode",
+        environment={},
+        cwd=tmp_path,
+        root=tmp_path,
+    )
+    server.process = fake  # type: ignore[assignment]
+    monkeypatch.setattr(
+        runner,
+        "_terminate_process_tree",
+        lambda _process, _guard=None: True,
+    )
+    server.stop()
+    assert fake.killed is True
+    assert fake.timeouts[0] == 10
+    assert fake.timeouts[1] is not None
+    assert server.process is None
+
+
 def test_owner_broker_launcher_must_be_owner_only_and_process_separated(
     tmp_path: Path,
 ) -> None:
@@ -1342,23 +1869,31 @@ def test_owner_broker_launcher_must_be_owner_only_and_process_separated(
 
 
 def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path) -> None:
+    hardening_path = tmp_path / "staged-broker"
     assert runner._windows_acl_hardening_verified(
-        {
-            "platform": "nt",
-            "applied": True,
-            "verification": {"permissions_verified": True},
-        }
+        _verified_acl_hardening_report(hardening_path),
+        expected_path=hardening_path,
+        directory=False,
     )
     for invalid_report in (
         None,
-        {"platform": "nt", "applied": False},
         {
-            "platform": "nt",
-            "applied": True,
-            "verification": {"permissions_verified": False},
+            **_verified_acl_hardening_report(hardening_path),
+            "applied": False,
+        },
+        {
+            **_verified_acl_hardening_report(hardening_path),
+            "verification": {
+                **_verified_acl_hardening_report(hardening_path)["verification"],
+                "permissions_verified": False,
+            },
         },
     ):
-        assert not runner._windows_acl_hardening_verified(invalid_report)
+        assert not runner._windows_acl_hardening_verified(
+            invalid_report,
+            expected_path=hardening_path,
+            directory=False,
+        )
 
     def metadata(**updates: int) -> SimpleNamespace:
         values = {
@@ -1499,30 +2034,26 @@ def _assert_owner_broker_executes_from_exact_private_staged_bytes(tmp_path: Path
 def test_timeout_terminates_the_created_process_group(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    class FakeProcess:
-        pid = 123
-        returncode = -9
+    calls: list[dict[str, object]] = []
 
-        def communicate(
-            self, *, input: bytes = b"", timeout: float | None = None
-        ) -> tuple[bytes, bytes]:
-            del input
-            if timeout is not None:
-                raise runner.subprocess.TimeoutExpired("fake", timeout)
-            return b"", b""
+    def fail_timeout(*args: object, **kwargs: object) -> None:
+        calls.append({"args": args, **kwargs})
+        raise runner.bounded_subprocess.BoundedSubprocessError(
+            "bounded subprocess timed out",
+            kind=runner.bounded_subprocess.BoundedSubprocessFailureKind.TIMEOUT,
+        )
 
-        def poll(self) -> None:
-            return None
-
-    fake = FakeProcess()
-    killed: list[object] = []
-    monkeypatch.setattr(runner.subprocess, "Popen", lambda *args, **kwargs: fake)
-    monkeypatch.setattr(runner, "_terminate_process_tree", lambda process: killed.append(process))
+    monkeypatch.setattr(
+        runner.bounded_subprocess,
+        "run_bounded_subprocess",
+        fail_timeout,
+    )
     result = runner._run_bounded_process(
         ["fake-opencode"], environment={"PATH": os.defpath}, cwd=tmp_path, timeout=0.01
     )
     assert result["timed_out"] is True
-    assert killed == [fake]
+    assert result["output_overflow"] is False
+    assert calls[0]["timeout_seconds"] == 0.01
 
 
 def test_mcp_receipt_proves_provider_and_auth_are_absent() -> None:
@@ -2092,6 +2623,162 @@ def test_compaction_delivery_adds_one_checkpoint_gap_to_canonical_bytes() -> Non
         event_type="experimental.session.compacting",
     )
     assert receipt["event_type"] == "experimental.session.compacting"
+
+
+def _reader_native(event_type: str = "session.created") -> dict[str, object]:
+    return {
+        "schema_version": "deeplaw.opencode-native-event-observation/v1",
+        "event_type": event_type,
+        "session_sha256": "8" * 64,
+        "parent_session_sha256": None,
+        "parent_gap": "parent_absent",
+        "status": "observed",
+        "gap": None,
+    }
+
+
+def _reader_model() -> dict[str, object]:
+    return _model_observation(summary=False, mode="development")
+
+
+def _reader_delivery() -> dict[str, object]:
+    return {
+        "schema_version": "deeplaw.opencode-continuity-delivery-observation/v1",
+        "event_type": "experimental.chat.system.transform",
+        "session_sha256": "8" * 64,
+        "context_sha256": "c" * 64,
+        "context_bytes": 32,
+        "status": "gap",
+        "statement_count": 0,
+        "gap_codes": ["route_forgotten"],
+        "conflict_count": 0,
+    }
+
+
+def test_shared_reader_accepts_interleaved_native_model_delivery_at_actual_offset(
+    tmp_path: Path,
+) -> None:
+    prefix = (json.dumps(_reader_native(), separators=(",", ":")) + "\n").encode()
+    rows = [
+        _reader_native("session.updated"),
+        _reader_model(),
+        _reader_native("session.compacted"),
+        _reader_delivery(),
+        _reader_native("session.created"),
+    ]
+    path = tmp_path / "model-observations.jsonl"
+    path.write_bytes(prefix + b"".join(
+        (json.dumps(row, separators=(",", ":")) + "\n").encode()
+        for row in rows
+    ))
+    path.chmod(0o600)
+
+    model, delivery = runner._read_host_observations(
+        path,
+        offset=len(prefix),
+        forbidden_values=("synthetic-forbidden",),
+    )
+    assert model == [_reader_model()]
+    assert delivery == [_reader_delivery()]
+
+    native_only = tmp_path / "native-only.jsonl"
+    native_only.write_bytes(
+        b"".join(
+            (json.dumps(_reader_native(event), separators=(",", ":")) + "\n").encode()
+            for event in ("session.created", "session.updated", "session.compacted")
+        )
+    )
+    native_only.chmod(0o600)
+    native_models, native_delivery = runner._read_host_observations(
+        native_only,
+        offset=0,
+        forbidden_values=("synthetic-forbidden",),
+    )
+    assert native_models == []
+    assert native_delivery == []
+    with pytest.raises(runner.QualificationError, match="model identity"):
+        runner._response_model_from_observations(
+            native_models,
+            session_id="session-fixture",
+        )
+
+
+def test_shared_reader_rejects_invalid_native_records_fail_closed(
+    tmp_path: Path,
+) -> None:
+    extra = _reader_native()
+    extra["unexpected"] = True
+    missing = _reader_native()
+    del missing["gap"]
+    cases: list[tuple[str, bytes]] = [
+        (
+            "unknown-schema",
+            json.dumps(
+                {**_reader_native(), "schema_version": "unknown"}, separators=(",", ":")
+            ).encode(),
+        ),
+        ("malformed-json", b"{not-json"),
+        ("extra-field", json.dumps(extra, separators=(",", ":")).encode()),
+        ("missing-field", json.dumps(missing, separators=(",", ":")).encode()),
+        (
+            "unsupported-event",
+            json.dumps(
+                {**_reader_native(), "event_type": "message.updated"}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "bad-sha",
+            json.dumps(
+                {**_reader_native(), "session_sha256": "not-a-sha"}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "bad-status",
+            json.dumps({**_reader_native(), "status": "completed"}, separators=(",", ":")).encode(),
+        ),
+        (
+            "bad-gap",
+            json.dumps(
+                {**_reader_native(), "gap": "synthetic-gap"}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "parent-present",
+            json.dumps(
+                {**_reader_native(), "parent_session_sha256": "a" * 64}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "bad-parent-gap",
+            json.dumps(
+                {**_reader_native(), "parent_gap": "parent_unknown"}, separators=(",", ":")
+            ).encode(),
+        ),
+        (
+            "duplicate-key",
+            json.dumps(_reader_native(), separators=(",", ":"))
+            .replace('"status":"observed"', '"status":"observed","status":"observed"', 1)
+            .encode(),
+        ),
+        (
+            "sensitive-value",
+            json.dumps(
+                {**_reader_native(), "parent_gap": "s098-sensitive-marker"},
+                separators=(",", ":"),
+            ).encode(),
+        ),
+        ("deep-nesting", b"[" * 1100 + b"0" + b"]" * 1100),
+    ]
+    for name, raw in cases:
+        path = tmp_path / f"{name}.jsonl"
+        path.write_bytes(raw + b"\n")
+        path.chmod(0o600)
+        with pytest.raises(runner.QualificationError):
+            runner._read_host_observations(
+                path,
+                offset=0,
+                forbidden_values=("s098-sensitive-marker",),
+            )
 
 
 def test_analyzer_rejects_provider_canonical_mismatch_and_unsafe_operation() -> None:

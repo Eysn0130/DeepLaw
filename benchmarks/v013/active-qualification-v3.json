@@ -3,8 +3,8 @@
   "qualification_id": "deeplaw-v013-active-kernel-release-core-candidate",
   "profile": "kernel_release_core",
   "no_human_attestation": true,
-  "status": "machine_evaluation_pending",
-  "candidate_version": "0.12.0",
+  "status": "construction_candidate_machine_evaluation_pending",
+  "candidate_version": "0.13.0",
   "construction_package_version": "0.12.0",
   "release_target": "0.13.0",
   "classification_binding": {
@@ -20,10 +20,10 @@
     "sha256": "7438f4ebe0eb23f64050e15bebe0ec30f2a2fa96cd6ff9d919a00db6f4aa0a1e"
   },
   "candidate_binding": {
-    "package_version": "0.12.0",
+    "package_version": "0.13.0",
     "source_commit": null,
     "source_tree": null,
-    "lock_sha256": "e2cacd96e66132fcb28f1b9bf4746709ad2696159ffb8498ddf0769c213a7082",
+    "lock_sha256": "a8e33e7d390bb7f94528c75827176b46b85f7539d27c51923700f38ccaf732d7",
     "wheel_filename": null,
     "wheel_sha256": null,
     "sdist_filename": null,
@@ -43,37 +43,172 @@
     "required_for_candidate_binding": false
   },
   "core_statuses": [
-    {"gate_id": "canonical_integrity", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "migration_recovery", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "secret_host_isolation", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "bounded_context", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "source_citation_locator", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "living_wiki", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "scale_performance", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "supported_platforms", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "reproducible_supply_chain", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "codex", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "opencode", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "selective_forget", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "timeline", "status": "not_executed", "passed": false, "claim": false}
+    {
+      "gate_id": "canonical_integrity",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "migration_recovery",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "secret_host_isolation",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "bounded_context",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "source_citation_locator",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "living_wiki",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "scale_performance",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "supported_platforms",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "reproducible_supply_chain",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "codex",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "opencode",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "selective_forget",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "timeline",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    }
   ],
   "capability_claims": [
-    {"gate_id": "official_legal_pack", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "semantic_restore", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "claude", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "gui_desktop_interoperability", "status": "not_executed", "passed": false, "claim": false}
+    {
+      "gate_id": "official_legal_pack",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "semantic_restore",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "claude",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "gui_desktop_interoperability",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    }
   ],
   "competitive_claims": [
-    {"gate_id": "machine_reference_isolation", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "qualification_comparative_holdout", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "final_blind_comparative_holdout", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "agent_review_panel", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "scorer_a", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "scorer_b", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "arbiter", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "comparative_incremental_benefit", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "superiority", "status": "not_executed", "passed": false, "claim": false},
-    {"gate_id": "sota", "status": "not_executed", "passed": false, "claim": false}
+    {
+      "gate_id": "machine_reference_isolation",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "qualification_comparative_holdout",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "final_blind_comparative_holdout",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "agent_review_panel",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "scorer_a",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "scorer_b",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "arbiter",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "comparative_incremental_benefit",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "superiority",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    },
+    {
+      "gate_id": "sota",
+      "status": "not_executed",
+      "passed": false,
+      "claim": false
+    }
   ],
   "host_constraints": {
     "codex": {
@@ -107,7 +242,7 @@
     "null_optional_inputs_do_not_block_freeze": true,
     "owner_release_confirmation_required": true
   },
-  "blocker": "machine_evaluation_not_executed",
+  "blocker": "candidate_artifact_not_built",
   "release_ready": false,
   "claim_eligible": false,
   "kernel_release_claim_eligible": false,

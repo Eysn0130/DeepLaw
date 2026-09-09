@@ -26,6 +26,8 @@ from benchmarks.v013.scale_qualification_v9 import (
     ScaleQualificationError,
     _change_counts,
     _equivalence_digest,
+    _measure_query_context,
+    _observe_query_context_sample,
     _public_semantic_compile,
     build_scale_qualification_report,
     verify_report,
@@ -162,12 +164,42 @@ def _source_compile() -> dict[str, object]:
     return {
         "source_file_count": SOURCE_BATCH_COUNT,
         "fragments_per_source": FRAGMENTS_PER_SOURCE,
-        "query_plan_version": "5",
         "expected_asset_count": ACTIVE_GOVERNED_OBJECT_TARGET,
         "asset_count": ACTIVE_GOVERNED_OBJECT_TARGET,
         "unique_asset_count": ACTIVE_GOVERNED_OBJECT_TARGET,
         "asset_ids_sha256": "c" * 64,
         "exact": True,
+    }
+
+
+def _query_context(provider_samples: list[int]) -> dict[str, object]:
+    query_bytes = [provider_samples[0], *provider_samples[2::2]]
+    context_bytes = [provider_samples[1], *provider_samples[3::2]]
+
+    def surface(bytes_by_sample: list[int]) -> dict[str, object]:
+        return {
+            "sample_count": 31,
+            "warmup_count": 1,
+            "measured_sample_count": 30,
+            "plan_schema_versions": ["deeplaw.knowledge-query-plan/v6"] * 31,
+            "query_plan_sha256": ["d" * 64] * 31,
+            "provider_schema_versions": ["deeplaw.provider-knowledge-capsule/v2"] * 31,
+            "provider_inner_schema_versions": [
+                "deeplaw.knowledge-capsule-projection/v1"
+            ]
+            * 31,
+            "provider_content_bytes": bytes_by_sample,
+            "provider_inner_sha256": ["e" * 64] * 31,
+            "source_binding_sha256": ["f" * 64] * 31,
+            "source_ref_counts": [1] * 31,
+            "selected_semantic_keys": ["v013-scale-qualification-v9:00000"] * 31,
+            "write_performed": [False] * 31,
+        }
+
+    return {
+        "schema_version": "deeplaw.v013-scale-query-context-observation/v1",
+        "query": surface(query_bytes),
+        "context": surface(context_bytes),
     }
 
 
@@ -179,6 +211,8 @@ def _report(
     query_samples_ms: list[float] | None = None,
     context_samples_ms: list[float] | None = None,
     provider_samples: list[int] | None = None,
+    query_warmup_bytes: int = 1000,
+    context_warmup_bytes: int = 2000,
 ) -> dict[str, object]:
     observed_query_samples = query_samples_ms or [
         float(index + 1) for index in range(query_count)
@@ -187,9 +221,9 @@ def _report(
         float(index + 2) for index in range(context_count)
     ]
     observed_provider_samples = (
-        [1000] * 62
+        [1000, 2000] + [1000] * 60
         if provider_samples is None
-        else [1000] * 61 + provider_samples
+        else [1000, 2000] + [1000] * 59 + provider_samples
         if len(provider_samples) == 1
         else provider_samples
     )
@@ -203,13 +237,13 @@ def _report(
             "elapsed_ms": 1.0,
             "sample_count": 1,
             "excluded_from_measured_samples": True,
-            "provider_payload_bytes": 1000,
+            "provider_payload_bytes": query_warmup_bytes,
         },
         context_warmup={
             "elapsed_ms": 2.0,
             "sample_count": 1,
             "excluded_from_measured_samples": True,
-            "provider_payload_bytes": 2000,
+            "provider_payload_bytes": context_warmup_bytes,
         },
         rss={"start_bytes": 100, "peak_bytes": 120, "end_bytes": 110},
         storage_bytes=1024,
@@ -219,6 +253,7 @@ def _report(
         equivalence=_equivalence(),
         rebuild=_rebuild(),
         source_compile=_source_compile(),
+        query_context=_query_context(observed_provider_samples),
         semantic_batches=_semantic_batches(),
         user_files=[_user_file()],
         provider_sample_bytes=observed_provider_samples,
@@ -243,7 +278,7 @@ def _typed_scale_manifest(
         "active_governed_object_count": ACTIVE_GOVERNED_OBJECT_TARGET,
         "source_file_count": SOURCE_BATCH_COUNT,
         "fragments_per_source": FRAGMENTS_PER_SOURCE,
-        "query_plan_version": "5",
+        "query_plan_version": "6",
         "warm_samples": WARM_SAMPLE_TARGET,
         "provider_hard_limit_bytes": PROVIDER_HARD_LIMIT_BYTES,
         "above_10000_status": "experimental_unqualified",
@@ -374,6 +409,48 @@ def test_v9_scale_schema_is_strict_and_valid_report_has_exact_10k_contract() -> 
     assert "warmup" in report["warm_samples"]["query"]
 
 
+@pytest.mark.parametrize("surface", ("query", "context"))
+@pytest.mark.parametrize(
+    "field",
+    ("query_plan_sha256", "provider_inner_sha256", "source_binding_sha256"),
+)
+@pytest.mark.parametrize("position", (0, WARM_SAMPLE_TARGET))
+def test_v9_rejects_all_zero_observation_digest_placeholders(
+    surface: str, field: str, position: int
+) -> None:
+    schema = json.loads((ROOT / SCHEMA_RELATIVE_PATH).read_text(encoding="utf-8"))
+    report = _report()
+    report["query_context"][surface][field][position] = "0" * 64
+    _redigest(report)
+
+    schema_errors = list(
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(report)
+    )
+    assert schema_errors
+    assert verify_report(report)["valid"] is False
+
+
+def test_v9_typed_scale_evidence_rejects_redigested_zero_observation_digest(
+    tmp_path: Path,
+) -> None:
+    report = _report()
+    report["query_context"]["context"]["source_binding_sha256"][WARM_SAMPLE_TARGET] = (
+        "0" * 64
+    )
+    _redigest(report)
+    manifest = _typed_scale_manifest(tmp_path, report=report)
+    envelope = json.loads(manifest.read_text())
+
+    with pytest.raises(
+        TypedQualificationEvidenceError,
+        match="scale v9 observed report is invalid",
+    ):
+        parse_typed_evidence(
+            manifest,
+            expected_corpus_sha256=envelope["corpus"]["sha256"],
+        )
+
+
 def test_v9_scale_count_must_be_exactly_10k_and_over_10k_is_not_qualified() -> None:
     for count in (9_999, 10_001, 100_000):
         report = _report(count=count)
@@ -489,6 +566,95 @@ def test_v9_scale_provider_bound_is_hard_and_zero_violation_is_required() -> Non
     tampered["provider"]["sample_count"] -= 1
     _redigest(tampered)
     assert verify_report(tampered)["valid"] is False
+
+
+def test_v9_verify_recomputes_provider_summary_from_retained_samples() -> None:
+    report = _report()
+    report["provider"]["sample_bytes"][-1] = PROVIDER_HARD_LIMIT_BYTES + 1
+    report["query_context"]["context"]["provider_content_bytes"][-1] = (
+        PROVIDER_HARD_LIMIT_BYTES + 1
+    )
+    _redigest(report)
+
+    checked = verify_report(report)
+
+    assert checked["valid"] is False
+    assert any("provider" in error for error in checked["errors"])
+
+
+def test_v9_verify_binds_provider_warmup_to_query_context_first_samples() -> None:
+    report = _report()
+    report["warm_samples"]["query"]["warmup"]["provider_payload_bytes"] = 3333
+    report["provider"]["warmup_payload_bytes"]["query"] = 3333
+    _redigest(report)
+
+    checked = verify_report(report)
+
+    assert checked["valid"] is False
+    assert any("warmup" in error for error in checked["errors"])
+
+
+def test_v9_builder_rejects_warmup_unbound_to_query_context() -> None:
+    with pytest.raises(ScaleQualificationError, match="warmup Provider bytes"):
+        _report(query_warmup_bytes=3333)
+
+
+def test_v9_query_context_observation_rejects_unbound_plan_or_inner_bytes() -> None:
+    result = {
+        "schema_version": "deeplaw.purpose-aware-retrieval/v3",
+        "query_plan": {"schema_version": "deeplaw.knowledge-query-plan/v6"},
+        "query_plan_sha256": "0" * 64,
+    }
+    with pytest.raises(ScaleQualificationError, match="plan hash"):
+        _observe_query_context_sample(
+            result,
+            {},
+            expected_semantic_key="v013-scale-qualification-v9:00000",
+            surface="query",
+        )
+
+    result["query_plan_sha256"] = _digest(result["query_plan"])
+    inner = {"schema_version": "deeplaw.knowledge-capsule-projection/v1", "statements": []}
+    provider = {
+        "schema_version": "deeplaw.provider-knowledge-capsule/v2",
+        "capsule": inner,
+        "delivery": {
+            "hard_limit_bytes": PROVIDER_HARD_LIMIT_BYTES,
+            "provider_content_bytes": 1,
+            "write_performed": False,
+        },
+    }
+    with pytest.raises(ScaleQualificationError, match="canonical inner projection"):
+        _observe_query_context_sample(
+            result,
+            provider,
+            expected_semantic_key="v013-scale-qualification-v9:00000",
+            surface="query",
+        )
+
+
+def test_v9_query_context_observation_rejects_v5_and_local_trace_metadata() -> None:
+    report = _report()
+    report["query_context"]["query"]["plan_schema_versions"][0] = (
+        "deeplaw.knowledge-query-plan/v5"
+    )
+    _redigest(report)
+    assert verify_report(report)["valid"] is False
+
+    report = _report()
+    report["query_context"]["context"]["local_trace"] = {"receipt_id": "private"}
+    _redigest(report)
+    assert verify_report(report)["valid"] is False
+
+    report = _report()
+    report["source_compile"]["query_plan_version"] = "5"
+    _redigest(report)
+    assert verify_report(report)["valid"] is False
+
+    report = _report()
+    report["query_context"]["query"]["selected_semantic_keys"][0] = "other-key"
+    _redigest(report)
+    assert verify_report(report)["valid"] is False
 
 
 def test_v9_scale_report_digest_is_bound_to_exact_bytes() -> None:
@@ -631,6 +797,40 @@ def test_v9_repeated_40_object_batches_keep_finalization_provider_bounded(
         0 < item["finalization_provider_bytes"] <= PROVIDER_HARD_LIMIT_BYTES
         for item in receipts
     )
+
+
+def test_v9_default_v6_query_context_observation_binds_actual_provider_projection(
+    tmp_path: Path,
+) -> None:
+    _public_batch_smoke(tmp_path, batch_count=1, fragments_per_source=2)
+    vault = tmp_path / "Vault"
+    with AutonomousKnowledgeStore(vault, read_only=False) as store:
+        store.rebuild_derived(projection_profile="standard")
+    with KnowledgeOS.open(vault) as knowledge_os:
+        measured = _measure_query_context(
+            knowledge_os,
+            query_text="Smoke 000-000",
+            expected_semantic_key="v013-scale-qualification-v9:00000",
+        )
+    assert measured["query_context"]["query"]["plan_schema_versions"] == [
+        "deeplaw.knowledge-query-plan/v6"
+    ] * 31
+    assert measured["query_context"]["context"]["plan_schema_versions"] == [
+        "deeplaw.knowledge-query-plan/v6"
+    ] * 31
+    assert measured["provider_bytes"] == [
+        measured["query_context"]["query"]["provider_content_bytes"][0],
+        measured["query_context"]["context"]["provider_content_bytes"][0],
+        *(
+            item
+            for query_bytes, context_bytes in zip(
+                measured["query_context"]["query"]["provider_content_bytes"][1:],
+                measured["query_context"]["context"]["provider_content_bytes"][1:],
+                strict=True,
+            )
+            for item in (query_bytes, context_bytes)
+        ),
+    ]
 
 
 def test_v9_100_observation_finalization_stays_on_public_bounded_path(

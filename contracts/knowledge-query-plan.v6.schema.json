@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deeplaw.dev/contracts/knowledge-query-plan.v6.schema.json",
   "title": "DeepLaw statement-selective Knowledge Query Plan v6",
+  "description": "Planner duty coverage is structural. An exception or proviso requires a task-bound witness; exact source evidence may be returned while the duty remains unresolved when current v3 cannot establish that witness.",
   "type": "object",
   "additionalProperties": false,
   "required": [

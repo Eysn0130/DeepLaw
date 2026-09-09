@@ -27,8 +27,10 @@ cross-platform, supply-chain, provenance, and public-redownload evidence. Option
 Competitive/Research Claim gates remain explicit `not_executed` non-claims and do not substitute
 for Kernel evidence.
 Real Host qualification retains the closed `host-preflight-receipt/v1` and current
-`host-process-receipt/v2` control records. `host-process-receipt/v1` is historical/invalidated and
-cannot satisfy current qualification. They bind safe reason/status codes, exact binary and
+per-process `host-process-receipt/v2` control records inside one bounded
+`host-process-receipt-set/v1` for each Host/task slot. `host-process-receipt/v1` is
+historical/invalidated and cannot satisfy current qualification. These records bind safe
+reason/status codes, exact binary and
 repository-external broker hashes, owner-only broker mode, and negative isolation facts. Raw
 commands, environment values, paths, process identifiers, stdout/stderr, prompts, transcripts,
 hidden reasoning, authentication material, and Secrets are forbidden from those records.
@@ -95,6 +97,21 @@ Legal interpretation disagreements, source-currentness corrections, retrieval
 quality suggestions, and documentation errors are normally not security
 vulnerabilities. They may be reported through a public issue only when the
 report contains no private, licensed, or otherwise restricted material.
+
+## Host process containment boundary
+
+The shared bounded-subprocess helper and the benchmark Codex/OpenCode launchers use native
+process containment options. On POSIX, `start_new_session` plus `killpg(SIGKILL)` provides
+best-effort containment of the created session/process group, not an operating-system sandbox. A
+successful group signal, or an already-exited leader, is not proof that every descendant is gone: a
+descendant can deliberately call `setsid()`, and this boundary has no portable all-descendant
+enumeration or proof. Cleanup signal errors therefore remain fail-closed.
+
+On Windows, the launcher attaches the child at creation time to a Job Object. Its cleanup has an
+independent bounded five-second containment/proof grace while checking that the Job Object is
+empty; that grace is not the caller's child-execution timeout. Synthetic or local process tests
+do not establish strict Formal Host evidence. Strict Formal Host evidence remains external and
+fail-closed, with no relaxation of the existing Authority, authentication, or Secret boundaries.
 
 ## Signing-key custody
 

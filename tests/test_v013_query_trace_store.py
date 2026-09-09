@@ -18,6 +18,10 @@ from deeplaw.knowledge_mcp_server import _KnowledgeRuntime, create_knowledge_mcp
 from deeplaw.knowledge_store import initialize_knowledge_vault
 from deeplaw.util import canonical_json, sha256_bytes
 
+_V4_TRACE_REASON_CODES = frozenset(
+    {"action_outcome_unknown", "action_state_changed", "task_action_bound_exceeded"}
+)
+
 
 def _identity(audit_head: str = "a" * 64, legacy_head: str = "b" * 64) -> Any:
     return SimpleNamespace(
@@ -250,8 +254,9 @@ def test_provider_v2_and_audit_read_contracts_are_closed(tmp_path: Path) -> None
     provider_validator = Draft202012Validator(provider_schema)
     audit_validator = Draft202012Validator(audit_schema)
     audit_item_properties = audit_schema["$defs"]["audit_item"]["properties"]
+    legacy_reason_codes = set(mcp_server._TRACE_REASON_CODES) - _V4_TRACE_REASON_CODES
     assert set(audit_item_properties["reason"]["enum"]) == set(
-        mcp_server._TRACE_REASON_CODES
+        legacy_reason_codes
     )
     assert set(audit_item_properties["duty"]["enum"]) == set(mcp_server._TRACE_DUTY_CODES)
 
@@ -264,7 +269,7 @@ def test_provider_v2_and_audit_read_contracts_are_closed(tmp_path: Path) -> None
                 server,
                 runtime,
                 1,
-                {"operation": "query", "query": "trace contract probe"},
+                {"operation": "query", "query": "trace contract probe", "query_plan_version": "6"},
             )
             assert query.root.isError is False
             provider = query.root.structuredContent["result"]
@@ -283,7 +288,7 @@ def test_provider_v2_and_audit_read_contracts_are_closed(tmp_path: Path) -> None
             for collection in ("fallback", "deduplications", "suppressions", "rejections"):
                 for item in audit["audit"][collection]:
                     if "reason" in item:
-                        assert item["reason"] in mcp_server._TRACE_REASON_CODES
+                        assert item["reason"] in legacy_reason_codes
                     if "duty" in item:
                         assert item["duty"] in mcp_server._TRACE_DUTY_CODES
             assert "trace contract probe" not in canonical_json(audit)

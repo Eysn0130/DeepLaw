@@ -341,6 +341,55 @@ def test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams() -> N
 
 
 @pytest.mark.qualification
+def test_bun_continuity_resolution_cold_start_and_hard_deadline() -> None:
+    result = _bun_probe(
+        """
+        import { resolveHostContinuity } from './adapters/opencode/plugins/deeplaw-native.ts'
+        process.env.DEEPLAW_KNOWLEDGE_VAULT = '/tmp/deeplaw-vault'
+        const originalSet = globalThis.setTimeout
+        const originalClear = globalThis.clearTimeout
+        async function run(stalled) {
+          let timers = [], killed = false
+          globalThis.setTimeout = (callback, at) => {
+            const timer = { callback, at, cancelled: false }
+            timers.push(timer)
+            return timer
+          }
+          globalThis.clearTimeout = (timer) => { timer.cancelled = true }
+          const stream = (value) => new ReadableStream({start(c) {
+            c.enqueue(new TextEncoder().encode(value)); c.close()
+          }})
+          const spawn = () => ({
+            stdout: stream(JSON.stringify({
+              schema_version: 'deeplaw.host-continuity-capsule/v1', status: 'gap',
+              statements: [], gaps: [{code: 'checkpoint_grant_missing'}],
+              conflicts: [], write_performed: false,
+            })), stderr: stream(''),
+            exited: new Promise((resolve) => {
+              if (!stalled) setTimeout(() => resolve(0), 2000)
+            }),
+            kill() { killed = true },
+          })
+          const pending = resolveHostContinuity('a'.repeat(64), '/tmp/worktree', spawn)
+          const deadline = Math.max(...timers.map(t => t.at))
+          for (const timer of timers.sort((a,b) => a.at-b.at)) {
+            if (timer.at <= (stalled ? 3000 : 2000) && !timer.cancelled) timer.callback()
+          }
+          const capsule = await pending
+          return {capsule, killed, deadline}
+        }
+        try { console.log(JSON.stringify({cold: await run(false), stalled: await run(true)})) }
+        finally { globalThis.setTimeout = originalSet; globalThis.clearTimeout = originalClear }
+        """
+    )
+    assert result["cold"]["capsule"]["gaps"] == [{"code": "checkpoint_grant_missing"}]
+    assert result["cold"]["killed"] is False
+    assert result["stalled"]["capsule"]["gaps"] == [{"code": "continuity_resolve_timeout"}]
+    assert result["stalled"]["killed"] is True
+    assert result["stalled"]["deadline"] == 3000
+
+
+@pytest.mark.qualification
 def test_bun_continuity_resolution_uses_jsonl_capsule_and_closed_env() -> None:
     result = _bun_probe(
         """

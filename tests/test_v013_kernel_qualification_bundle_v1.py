@@ -10,13 +10,17 @@ from typing import Any
 
 import pytest
 
-from benchmarks.hosts import host_process_receipt_v2
+from benchmarks.hosts import host_process_receipt_set_v1, host_process_receipt_v2
 from benchmarks.release import kernel_qualification_bundle_v1 as bundle
 
 RUN_IDS = {
     "candidate_run_id": 101,
     "evidence_run_id": 202,
     "qualification_run_id": 303,
+}
+RECEIPT_RUN_BINDING = {
+    "evidence_run_id": RUN_IDS["evidence_run_id"],
+    "qualification_run_id": RUN_IDS["evidence_run_id"],
 }
 EXPECTED_CANDIDATE = {
     "commit": "1" * 40,
@@ -37,6 +41,7 @@ BROKER_SOURCE_SHA256 = {
     host: hashlib.sha256(raw).hexdigest()
     for host, raw in BROKER_SOURCE_BYTES.items()
 }
+COLLECTOR_SOURCE_BYTES = b"#!/bin/sh\nprintf 'collector fixture\\n'\n"
 HOST_BINARY = {
     "codex": (
         "codex-cli 0.148.0-alpha.15",
@@ -76,6 +81,30 @@ HOST_IDENTITY = {
 def _write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(bundle.canonical_json(value) + b"\n")
+
+
+def _collector_identity(raw: bytes) -> dict[str, Any]:
+    digest = hashlib.sha256(raw).hexdigest()
+    value: dict[str, Any] = {
+        "schema_version": bundle.owner_external_collector.SCHEMA_VERSION,
+        "artifact_kind": bundle.owner_external_collector.ARTIFACT_KIND,
+        "candidate_run_id": RUN_IDS["candidate_run_id"],
+        "evidence_run_id": RUN_IDS["evidence_run_id"],
+        "source_sha256": digest,
+        "source_byte_size": len(raw),
+        "frozen_sha256": digest,
+        "frozen_byte_size": len(raw),
+        "repository_external": True,
+        "source_regular": True,
+        "source_single_link": True,
+        "source_owner_only": True,
+        "frozen_private": True,
+        "frozen_non_writable": True,
+        "frozen_executable": True,
+        "formal_authority": False,
+    }
+    value["record_sha256"] = bundle.owner_external_collector.record_sha256(value)
+    return value
 
 
 def _copy_bindings(root: Path) -> None:
@@ -168,23 +197,37 @@ def _native_event_binding(host: str, task_case: str, index: int) -> dict[str, st
     }
 
 
-def _process_receipt(host: str, task_case: str, index: int) -> dict[str, Any]:
-    process_identity = _digest(f"{host}:{task_case}:{index}:process")
-    native_binding = _native_event_binding(host, task_case, index)
+def _process_receipt(
+    host: str,
+    task_case: str,
+    slot_index: int,
+    *,
+    member_index: int,
+) -> dict[str, Any]:
+    process_identity = _digest(
+        f"{host}:{task_case}:{slot_index}:{member_index}:process"
+    )
+    native_binding = _native_event_binding(host, task_case, slot_index)
     if host == "codex":
         proof = {
             "proof_kind": "codex_stdio_hook_correlation",
             "process_identity_sha256": process_identity,
-            "connection_sha256": _digest(f"{host}:{task_case}:{index}:connection"),
+            "connection_sha256": _digest(
+                f"{host}:{task_case}:{slot_index}:{member_index}:connection"
+            ),
             "initialize_request_sha256": _digest(
-                f"{host}:{task_case}:{index}:initialize-request"
+                f"{host}:{task_case}:{slot_index}:{member_index}:initialize-request"
             ),
             "initialized_notification_sha256": _digest(
-                f"{host}:{task_case}:{index}:initialized-notification"
+                f"{host}:{task_case}:{slot_index}:{member_index}:initialized-notification"
             ),
             "initialized_connection_count": 1,
-            "hook_session_sha256": _digest(f"{host}:{task_case}:{index}:hook-session"),
-            "hook_event_sha256": _digest(f"{host}:{task_case}:{index}:hook-event"),
+            "hook_session_sha256": _digest(
+                f"{host}:{task_case}:{slot_index}:{member_index}:hook-session"
+            ),
+            "hook_event_sha256": _digest(
+                f"{host}:{task_case}:{slot_index}:{member_index}:hook-event"
+            ),
             "native_event_sequence_sha256": native_binding["event_sequence_sha256"],
             "native_session_identity_sha256": native_binding[
                 "session_identity_sha256"
@@ -215,22 +258,28 @@ def _process_receipt(host: str, task_case: str, index: int) -> dict[str, Any]:
             )
         )
     else:
-        child_session = _digest(f"{host}:{task_case}:{index}:child-session")
+        child_session = _digest(
+            f"{host}:{task_case}:{slot_index}:{member_index}:child-session"
+        )
         proof = {
             "proof_kind": "opencode_public_fork_route_correlation",
             "process_identity_sha256": process_identity,
             "request_method": "POST",
             "route_observation_sha256": _digest(
-                f"{host}:{task_case}:{index}:actual-route"
+                f"{host}:{task_case}:{slot_index}:{member_index}:actual-route"
             ),
-            "request_body_sha256": _digest(f"{host}:{task_case}:{index}:request-body"),
-            "response_sha256": _digest(f"{host}:{task_case}:{index}:response"),
+            "request_body_sha256": _digest(
+                f"{host}:{task_case}:{slot_index}:{member_index}:request-body"
+            ),
+            "response_sha256": _digest(
+                f"{host}:{task_case}:{slot_index}:{member_index}:response"
+            ),
             "parent_session_sha256": _digest(
-                f"{host}:{task_case}:{index}:parent-session"
+                f"{host}:{task_case}:{slot_index}:{member_index}:parent-session"
             ),
             "child_session_sha256": child_session,
             "child_plugin_event_sha256": _digest(
-                f"{host}:{task_case}:{index}:child-plugin-event"
+                f"{host}:{task_case}:{slot_index}:{member_index}:child-plugin-event"
             ),
             "child_plugin_session_sha256": child_session,
             "native_event_sequence_sha256": native_binding["event_sequence_sha256"],
@@ -267,9 +316,9 @@ def _process_receipt(host: str, task_case: str, index: int) -> dict[str, Any]:
     return host_process_receipt_v2.build_receipt(
         host=host,
         task_case=task_case,
-        run_id=f"fixture-{host}-{index}",
+        run_id=f"fixture-{host}-{slot_index}",
         candidate_binding=EXPECTED_CANDIDATE,
-        run_binding=RUN_IDS,
+        run_binding=RECEIPT_RUN_BINDING,
         host_binary={"version": HOST_BINARY[host][0], "sha256": HOST_BINARY[host][1]},
         broker_source={
             "repository_external": True,
@@ -281,8 +330,12 @@ def _process_receipt(host: str, task_case: str, index: int) -> dict[str, Any]:
             bundle.canonical_json(HOST_IDENTITY) + b"\n"
         ).hexdigest(),
         process_identity_sha256=process_identity,
-        broker_instance_sha256=_digest(f"{host}:{task_case}:{index}:broker-instance"),
-        nonce_sha256=_digest(f"{host}:{task_case}:{index}:nonce"),
+        broker_instance_sha256=_digest(
+            f"{host}:{task_case}:{slot_index}:{member_index}:broker-instance"
+        ),
+        nonce_sha256=_digest(
+            f"{host}:{task_case}:{slot_index}:{member_index}:nonce"
+        ),
         issued_at="2026-08-27T00:00:00Z",
         expires_at="2026-08-27T00:04:00Z",
         validation_reference_time="2026-08-27T00:02:00Z",
@@ -324,6 +377,13 @@ def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                 for host in ("codex", "opencode")
             },
         },
+    )
+    collector_source = root / bundle.COLLECTOR_SOURCE_RELATIVE_PATH
+    collector_source.parent.mkdir(parents=True, exist_ok=True)
+    collector_source.write_bytes(COLLECTOR_SOURCE_BYTES)
+    _write_json(
+        root / bundle.COLLECTOR_IDENTITY_RELATIVE_PATH,
+        _collector_identity(COLLECTOR_SOURCE_BYTES),
     )
     external_identity = root.parent / "external-host-exact-identity.json"
     _write_json(external_identity, HOST_IDENTITY)
@@ -367,9 +427,43 @@ def _make_fixture(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         )
     for index in range(6):
         host = "codex" if index < 3 else "opencode"
-        _write_json(root / "receipts" / host / f"preflight-{index}.json", _preflight(host))
-        process_receipt = _process_receipt(host, task_cases[index % 3], index)
-        _write_json(root / "receipts" / host / f"process-{index}.json", process_receipt)
+        task_case = task_cases[index % 3]
+        _write_json(
+            root / "receipts" / host / task_case / "host-preflight.json",
+            _preflight(host),
+        )
+        process_receipts = [
+            _process_receipt(
+                host,
+                task_case,
+                index,
+                member_index=member_index,
+            )
+            for member_index in (1, 2)
+        ]
+        process_set = host_process_receipt_set_v1.build_receipt_set(
+            host=host,
+            task_case=task_case,
+            run_id=f"fixture-{host}-{index}",
+            candidate_binding=EXPECTED_CANDIDATE,
+            run_binding=RECEIPT_RUN_BINDING,
+            host_binary={"version": HOST_BINARY[host][0], "sha256": HOST_BINARY[host][1]},
+            broker_source={
+                "repository_external": True,
+                "owner_only_mode": True,
+                "sha256": BROKER_SOURCE_SHA256[host],
+            },
+            host_identity_sha256=bundle.host_identity_sha256(HOST_IDENTITY["hosts"][host]),
+            host_identity_source_sha256=hashlib.sha256(
+                bundle.canonical_json(HOST_IDENTITY) + b"\n"
+            ).hexdigest(),
+            task_native_event_binding=_native_event_binding(host, task_case, index),
+            processes=process_receipts,
+        )
+        _write_json(
+            root / "receipts" / host / task_case / "host-process.json",
+            process_set,
+        )
     for host, raw in BROKER_SOURCE_BYTES.items():
         path = root / "retained-broker-source" / f"{host}.launcher-source"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -428,7 +522,138 @@ def test_build_and_validate_exact_candidate_bundle(
     assert validated["preflight_receipt_count"] == 6
     assert validated["process_receipt_count"] == 6
     assert validated["broker_source_count"] == 2
+    assert validated["collector_source_count"] == 1
+    assert validated["collector_sha256"] == hashlib.sha256(
+        COLLECTOR_SOURCE_BYTES
+    ).hexdigest()
     assert validated["corpus_roles"] == sorted(bundle.CORPUS_ROLES)
+
+
+def test_bundle_rejects_missing_collector_identity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    (root / bundle.COLLECTOR_IDENTITY_RELATIVE_PATH).unlink()
+
+    with pytest.raises(
+        bundle.KernelQualificationBundleError,
+        match="must retain the exact Kernel evidence collector and identity",
+    ):
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
+
+
+def test_bundle_rejects_collector_bytes_that_differ_from_identity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    (root / bundle.COLLECTOR_SOURCE_RELATIVE_PATH).write_bytes(
+        COLLECTOR_SOURCE_BYTES + b"# changed\n"
+    )
+
+    with pytest.raises(
+        bundle.KernelQualificationBundleError,
+        match="collector identity is not cross-bound",
+    ):
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
+
+
+def test_bundle_rejects_collector_identity_for_another_evidence_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    identity = _collector_identity(COLLECTOR_SOURCE_BYTES)
+    identity["evidence_run_id"] += 1
+    identity["record_sha256"] = bundle.owner_external_collector.record_sha256(identity)
+    _write_json(root / bundle.COLLECTOR_IDENTITY_RELATIVE_PATH, identity)
+
+    with pytest.raises(
+        bundle.KernelQualificationBundleError,
+        match="collector identity is not cross-bound",
+    ):
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
+
+
+def test_bundle_rebuilds_exact_evidence_with_new_commercial_run_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    bundle.build_bundle(
+        root,
+        run_ids=RUN_IDS,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
+    before = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != bundle.MANIFEST_FILENAME
+    }
+
+    (root / bundle.MANIFEST_FILENAME).unlink()
+    rebuilt_run_ids = {**RUN_IDS, "qualification_run_id": 304}
+    rebuilt = bundle.build_bundle(
+        root,
+        run_ids=rebuilt_run_ids,
+        expected_candidate=EXPECTED_CANDIDATE,
+        host_identity_input=external,
+    )
+
+    after = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != bundle.MANIFEST_FILENAME
+    }
+    assert after == before
+    assert rebuilt["run_ids"] == rebuilt_run_ids
+
+
+def test_bundle_rejects_coherent_passed_active_core_row(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    external = _make_fixture(root, monkeypatch)
+    active_path = root / bundle.ACTIVE_RELATIVE_PATH
+    active = json.loads(active_path.read_text(encoding="utf-8"))
+    row = next(
+        row for row in active["core_statuses"] if row["gate_id"] == "canonical_integrity"
+    )
+    row.update(status="passed", passed=True, claim=True)
+    _write_json(active_path, active)
+
+    with pytest.raises(
+        bundle.KernelQualificationBundleError,
+        match=r"active qualification schema validation failed at core_statuses",
+    ):
+        bundle.build_bundle(
+            root,
+            run_ids=RUN_IDS,
+            expected_candidate=EXPECTED_CANDIDATE,
+            host_identity_input=external,
+        )
 
 
 def test_bundle_accepts_six_retained_v2_slots_without_parallel_receipt_family(
@@ -585,7 +810,7 @@ def test_process_receipt_is_schema_bound_and_cannot_retain_raw_output(
         host_identity_input=external,
     )
 
-    process_path = root / "receipts" / "codex" / "process-0.json"
+    process_path = root / "receipts" / "codex" / "continuity" / "host-process.json"
     process = json.loads(process_path.read_text(encoding="utf-8"))
     process["stdout"] = "forbidden raw output"
     process["record_sha256"] = bundle.record_sha256(process)
@@ -600,7 +825,9 @@ def test_failed_preflight_cannot_enter_a_kernel_qualification_bundle(
     root = tmp_path / "bundle"
     root.mkdir()
     external = _make_fixture(root, monkeypatch)
-    preflight_path = root / "receipts" / "opencode" / "preflight-3.json"
+    preflight_path = (
+        root / "receipts" / "opencode" / "continuity" / "host-preflight.json"
+    )
     preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
     preflight.update(
         status="failed",
@@ -663,7 +890,7 @@ def test_process_receipt_run_and_record_digest_are_bound(
     root.mkdir()
     external = _make_fixture(root, monkeypatch)
 
-    process_path = root / "receipts" / "codex" / "process-0.json"
+    process_path = root / "receipts" / "codex" / "continuity" / "host-process.json"
     process = json.loads(process_path.read_text(encoding="utf-8"))
     process["run_id"] = "unrelated-run"
     process["record_sha256"] = bundle.record_sha256(process)
@@ -677,7 +904,7 @@ def test_process_receipt_run_and_record_digest_are_bound(
         )
 
     _make_fixture(root, monkeypatch)
-    process_path = root / "receipts" / "codex" / "process-0.json"
+    process_path = root / "receipts" / "codex" / "continuity" / "host-process.json"
     process = json.loads(process_path.read_text(encoding="utf-8"))
     process["record_sha256"] = "f" * 64
     _write_json(process_path, process)

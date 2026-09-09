@@ -7,8 +7,10 @@ description: "Use only when the user explicitly asks to refresh a stale or inval
 
 Require explicit user direction, `confirm_no_case_data=true`, and the exact stale task.
 
-1. Read `knowledge_support` with `operation=synthesis` and `synthesis_action=list_stale`, then
-   inspect status, coverage, source revisions, and verification gaps.
+1. Obtain stale synthesis status, coverage, source revisions, and verification gaps through
+   the explicit owner CLI or a separately declared internal compatibility surface. Public
+   input v8 does not advertise synthesis/list_stale; report a capability gap when no supported
+   status path is available rather than submitting an unadvertised operation.
 2. Require a separately owner-created Grant for `knowledge_sink` (or an explicit owner CLI
    action) covering only this refresh and its scope. Never create, widen, inspect, or copy it.
 3. Run `begin_synthesis_refresh`, stage a closed plan with exact revision and relation evidence,

@@ -662,6 +662,29 @@ def _v6_input_schema(
     return schema
 
 
+def _v7_input_schema(
+    *,
+    operations: tuple[str, ...] | None = None,
+    evaluator_types: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    schema = _v6_input_schema(operations=operations, evaluator_types=evaluator_types)
+    if operations is not None and "record_run" not in operations:
+        return schema
+    contract = deepcopy(_contract("knowledge-sink.input.v7.schema.json"))
+    schema["$id"] = contract["$id"]
+    schema["title"] = contract["title"]
+    branch = contract["oneOf"][1]
+    metadata = branch["properties"]["run_metadata"]
+    for field, filename in (
+        ("task_binding", "task-context-binding.v1.schema.json"),
+        ("action_state", "task-action-state.v1.schema.json"),
+    ):
+        metadata["properties"][field] = deepcopy(_contract(filename))
+    schema["oneOf"].append(branch)
+    Draft202012Validator.check_schema(schema)
+    return schema
+
+
 def knowledge_sink_tool_definition(
     *,
     operations: tuple[str, ...] | None = None,
@@ -671,7 +694,7 @@ def knowledge_sink_tool_definition(
     v4 = bool(operations and _V4_OPERATIONS.intersection(operations))
     extended = bool(operations and _EXTENDED_OPERATIONS.intersection(operations))
     input_schema = (
-        _v6_input_schema(operations=operations, evaluator_types=evaluator_types)
+        _v7_input_schema(operations=operations, evaluator_types=evaluator_types)
         if v6
         else _v4_input_schema(operations=operations, evaluator_types=evaluator_types)
         if v4
@@ -703,7 +726,9 @@ def knowledge_sink_tool_definition(
         inputSchema=input_schema,
         outputSchema=deepcopy(
             _contract(
-                "knowledge-sink.output.v4.schema.json"
+                "knowledge-sink.output.v5.schema.json"
+                if v6
+                else "knowledge-sink.output.v4.schema.json"
                 if v4
                 else "knowledge-sink.output.v3.schema.json"
                 if extended
@@ -721,7 +746,9 @@ def knowledge_sink_tool_definition(
 
 def _validate(name: str, value: dict[str, Any]) -> None:
     schema = (
-        _v6_input_schema()
+        _v7_input_schema()
+        if name == "knowledge-sink.input.v7.schema.json"
+        else _v6_input_schema()
         if name == "knowledge-sink.input.v6.schema.json"
         else _v5_input_schema()
         if name == "knowledge-sink.input.v5.schema.json"
@@ -752,6 +779,7 @@ def _validate(name: str, value: dict[str, Any]) -> None:
         "knowledge-sink.input.v4.schema.json",
         "knowledge-sink.input.v5.schema.json",
         "knowledge-sink.input.v6.schema.json",
+        "knowledge-sink.input.v7.schema.json",
     }:
         operation = value.get("operation")
         allowed = _OPERATION_FIELDS.get(operation)
@@ -786,7 +814,7 @@ def handle_knowledge_sink(
     extended = bool(_EXTENDED_OPERATIONS.intersection(grant_operations))
     _validate(
         (
-            "knowledge-sink.input.v6.schema.json"
+            "knowledge-sink.input.v7.schema.json"
             if v6
             else "knowledge-sink.input.v4.schema.json"
             if v4
@@ -1124,9 +1152,12 @@ def _sink_response(
     extended: bool,
     v4: bool,
 ) -> dict[str, Any]:
+    action = result.get("schema_version") == "deeplaw.knowledge-run-record/v2"
     response = {
         "schema_version": (
-            "deeplaw.knowledge-sink-output/v4"
+            "deeplaw.knowledge-sink-output/v5"
+            if action
+            else "deeplaw.knowledge-sink-output/v4"
             if v4
             else "deeplaw.knowledge-sink-output/v3"
             if extended
@@ -1141,7 +1172,9 @@ def _sink_response(
         raise RuntimeError("knowledge_sink output exceeds its hard 64 KiB budget")
     _validate(
         (
-            "knowledge-sink.output.v4.schema.json"
+            "knowledge-sink.output.v5.schema.json"
+            if action
+            else "knowledge-sink.output.v4.schema.json"
             if v4
             else "knowledge-sink.output.v3.schema.json"
             if extended

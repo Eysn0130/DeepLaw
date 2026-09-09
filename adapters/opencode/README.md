@@ -49,3 +49,9 @@ carry the DeepSeek key.
 This is a candidate seam, not a real OpenCode qualification or release receipt. The owner must
 review the exact installed plugin/source and provider configuration before using it; this adapter
 does not change trust, authentication, or Secret state.
+
+## Native continuity deadline
+
+The continuity CLI has a hard 3,000 ms deadline, including isolated Python cold start.
+Expiry kills the child and returns `continuity_resolve_timeout`; it never admits partial context.
+The capsule and output byte limits continue to apply independently of the deadline.

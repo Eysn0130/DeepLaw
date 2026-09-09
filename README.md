@@ -30,12 +30,14 @@ Agent runtime。
 
 ## 当前诚实状态
 
-- 公开 package/main：`0.12.0 Beta`；最新 tag：`v0.12.0`。
+- 公开发行/main：`0.12.0 Beta`；最新 tag：`v0.12.0`。本分支源码候选为 `0.13.0`，
+  以 `pyproject.toml` 为准；候选版本不表示已经发布。
 - Active qualification：`machine_evaluation_pending`，profile：
   `kernel_release_core`，Gate classification：v9。
 - `release_ready=false`，尚无 `0.13.0` tag 或 release。
-- 当前 Provider advertisement：knowledge-support input v7 / output v6，仅 `query`、`context`、
-  `explain`；input v1-v6 和 output v1-v5 仅为 compatibility/internal。
+- 当前 autonomous-core Provider advertisement：knowledge-support input v8 / output v7，仅 `query`、`context`、
+  `explain`、`read`；新 read 使用 output v7，旧三个操作保持各自既有响应版本与字节合同。
+  input v7 保持封闭兼容；更早的宽操作面不因此成为当前工具。
 - 本地 regression、mock、dry-run、旧报告或 no-model smoke 不构成真实 Host、Human Gold、法律专家、
   3 OS、scale、供应链或发布证据。Kernel Release Core、Capability 与 Competitive/Research
   Claim 分别判定；缺失的可选能力或研究证据保持 `not_executed`，只禁止对应声明。
@@ -43,7 +45,9 @@ Agent runtime。
   为实验范围，100k 与其 sharding/bundling 不属于 v0.13。官方 signed Legal Pack、GUI/Desktop
   interoperability、semantic restore 与 Claude 未经各自证据不得宣称发布。
 
-机器状态只读取
+仓库中的记录是资格冻结的 construction input；Candidate Full 产出的冻结副本绑定具体安装包。
+模板尚未绑定不表示安装包未构建，安装包已构建也不表示真实任务已执行。机器状态读取相应
+冻结 artifact、retained receipts 以及
 [`benchmarks/v013/active-qualification-v3.json`](benchmarks/v013/active-qualification-v3.json) 和
 [`benchmarks/release/v013-gate-classification-v9.json`](benchmarks/release/v013-gate-classification-v9.json)；
 README 不承担第二状态台账。
@@ -66,6 +70,8 @@ uv sync --all-extras
 
 ## 首要产品旅程
 
+以下仓库开发流程描述当前源码候选；不要将其新增合同与行为套用到上面的 `v0.12.0` 发行包。
+
 先建立并检查本地 Vault。`doctor` 必须报告 canonical/autonomous readiness；缺失前置条件时应返回
 可操作 Gap，而不是继续连接 Host。
 
@@ -76,7 +82,9 @@ deeplaw knowledge doctor --vault ./vault
 
 仓库开发环境提供一个可复制、公开、source-free、无模型的最短成功流程。它在新目录中执行
 Source add、owner source review、只读 Host handoff、现有 Coordinator/MCP grant 编译、Query、
-Context，以及 Wiki 到 exact Source Revision 的下钻，并在 JSON 中逐项报告结果：
+Context，以及通过 owner CLI/local read service 从 Wiki 到 exact Source Revision 的下钻，
+并在 JSON 中逐项报告结果。纯 MCP 的 v8 `read` 另有独立 stdio 回归，范围限当前非 memory
+知识修订、对应 Wiki 知识页和精确来源片段，不能将此 demo 当成真实 Host 资格：
 
 ```bash
 uv run python -m examples.living_wiki.run_demo \

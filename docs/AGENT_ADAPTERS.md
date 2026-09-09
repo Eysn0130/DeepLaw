@@ -10,7 +10,7 @@ must not be collapsed into a read surface:
 | Product | Plugin | Process | Single leaf |
 | --- | --- | --- | --- |
 | Source-native Evidence Library / Legal Pack | `deeplaw` | `deeplaw mcp --closed-environment --stdio` | `law_support` |
-| Task Continuity, Governed Project Knowledge and Living Wiki read surface | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --closed-environment --stdio` | `knowledge_support` |
+| Task Continuity and governed knowledge context, including Wiki-derived navigation | `deeplaw-knowledge-os` | `deeplaw knowledge mcp --closed-environment --stdio` | `knowledge_support` |
 | Autonomous mutation (not registered by default) | owner host config | `deeplaw knowledge sink mcp --closed-environment --grant-id … --stdio` | `knowledge_sink` |
 
 This document describes adapter behavior only. Corpus building, release
@@ -41,14 +41,58 @@ operations, and the Agent must load the applicable split Skill, normally `deepla
 The scheduled `compile-living-wiki` wrapper is compatibility-only. The opt-in real-host
 harness records unavailable model tasks as `not_executed`. The Pass 10 receipts under
 [`../benchmarks/hosts/evidence/`](../benchmarks/hosts/evidence/) remain historical candidate
-evidence only; the current invalidation is recorded in
+evidence only; their historical invalidation is recorded in
 [`V0_13_PASS10_CURRENT_DISPOSITION.md`](V0_13_PASS10_CURRENT_DISPOSITION.md).
-The current Codex token-attribution failure disposition is recorded in
+The historical Codex token-attribution failure disposition is recorded in
 [`V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md`](V0_13_PASS11_TOKEN_ATTRIBUTION_DISPOSITION.md).
-The current OpenCode continuity failure disposition is recorded in
+The historical OpenCode continuity failure disposition is recorded in
 [`V0_13_PASS11_OPENCODE_DISPOSITION.md`](V0_13_PASS11_OPENCODE_DISPOSITION.md).
-The current editor/Wiki/scale evidence boundary is recorded in
+The historical editor/Wiki/scale evidence boundary is recorded in
 [`V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md`](V0_13_PASS11_WIKI_EVIDENCE_DISPOSITION.md).
+
+These Pass records describe their original candidates and must not override later retained
+observations. Current formal acceptance is read from the exact qualification artifact and its
+source-specific receipts under [the qualification protocol](V0_13_QUALIFICATION_PROTOCOL.md).
+
+The working-tree supervised OpenCode producer and its task-result/v3 are development candidates
+under review. They provide a collection path for one actual continuity/fork journey; synthetic
+tests do not establish that the journey ran. The external-guard/Host-nonce credential mode,
+installed-wheel binding, native message inspection and remaining OS isolation duties are
+explicitly distinguished in the qualification protocol. This path does not change the pending
+real-model acceptance row or transfer session, model, credential or general tool ownership to
+DeepLaw.
+The current supervised producer binds input v9/output v8 in Host MCP Observation v2.
+The v1 observation contract remains readable for its original input v8/output v7 evidence.
+Its ordered query/context-to-read guard accepts exact references from both Statements and
+ordinary admitted Knowledge Revisions. Public stdio coverage of this guard is not a model
+execution or a qualified Host slot. Windows owner-only checks reuse native ACL verification;
+POSIX mode bits are not treated as Windows permission evidence.
+
+The supervised development fixture compiles its synthetic procedure from a public Source Revision
+through the normal observation/publication/validation/commit pipeline. The producer's `prepare`
+command must run with the Python environment containing the selected installed CLI so fixture
+compilation does not silently use a different runtime. A source-free `remember` is eligible for
+default v7 ordinary-revision recall; it does not
+supply compiled Statements or satisfy source-only duties. Before opening
+the external guard or starting OpenCode, the producer uses the selected installed CLI and MCP launch
+prefix to perform an offline query followed by an exact revision read. It checks the complete
+procedure, preserves the same scope/privacy/read budgets, and records this preflight separately
+from actual Host tool calls. A failed preflight prevents model execution. Passing it does not prove
+ordinary source-free memory recall, actual Host continuity, or formal qualification.
+The native OpenCode continuity CLI has a hard 3,000 ms deadline including Python cold start;
+expiry still kills the child and returns an explicit gap. The earlier 1,500 ms bound rejected an
+otherwise admitted isolated-wheel resolution measured at approximately 1,956 ms. This observation
+does not establish a latency percentile or an across-platform performance guarantee.
+The supervised agent uses `steps=4` so query, exact read, and the final response occur before
+OpenCode's fixed-version `step >= steps` forced-summary boundary. Its two-tool-call and six-total-
+request guard budgets remain independently enforced; the fourth step is not extra tool permission.
+Native event and lifecycle receipt validation loads the wheel's `deeplaw/contracts/` resources.
+Source-checkout contracts are used only when the packaged resource is absent; a present invalid
+or symlinked packaged resource fails closed. Installed Host collection must not require a checkout.
+Configuration installed, no-model handshake, actual hook execution, checkpoint commit, correct
+revision restored and correct next action are different observations. Missing native measurements
+remain unavailable. Planned automatic/guided/manual integration reporting is discussed in the
+[2026-09-09 research review](KNOWLEDGE_FRONTIERS_2026-09-09.md), not claimed as a shipped status API.
 
 The retained v0.7.0 host report is historical evidence scoped to official-CLI configuration,
 manifest, lifecycle, and MCP stdio handshake without a model or API key. The v0.9 release gate
@@ -59,14 +103,67 @@ competitive evidence program.
 
 ## Current `knowledge_support` Provider advertisement
 
-The current public advertisement is exactly
-`contracts/knowledge-support.input.v7.schema.json` plus
-`contracts/knowledge-support.output.v6.schema.json`. It exposes only the read operations `query`,
-`context`, and `explain`. Input v1-v6 and output v1-v5 remain internal compatibility contracts for
-existing callers and persisted receipts; their broader historical operation inventories are not
-current Provider tools. Provider bytes contain only bounded admitted context and safe authority,
+For a Vault with the autonomous core installed, the current public advertisement is exactly
+`contracts/knowledge-support.input.v9.schema.json` plus
+`contracts/knowledge-support.output.v8.schema.json`. It exposes only the read operations `query`,
+`context`, `explain`, and `read`. Input v7/v8 remain frozen compatibility contracts. Input v9
+keeps the closed operation branches and hard limits, and defaults query/context to explicit
+Query Plan v7. Output v8 carries Provider Capsule v3 for that version and ordinary exact reads;
+explicit v6 retains Provider Capsule v2/response v6. Explain retains its existing response.
+The root `type: object` and union `properties` support strict MCP clients; the closed `oneOf`
+branches enforce operation-specific arguments. No new mutation or grant is introduced. Older broad operation inventories are not current
+Provider tools. Provider bytes contain only bounded admitted context and safe authority,
 provenance, freshness and Gap fields. Paths, session/task hashes, internal receipt or selection
 identity, raw logs, transcript, reasoning, Secret material and unadmitted content are excluded.
+
+### Exact progressive read contract
+
+`knowledge_support` remains one read-only leaf. `operation=read` accepts a typed `target`:
+`knowledge` or `wiki` with exact `knowledge_id`/`revision_id`, or `source_fragment` with exact
+`source_revision_id`/`fragment_id`. It requires explicit `scope` and `max_sensitivity`. IDs identify
+objects; they do not grant access. Knowledge reads admit only the current active non-memory
+revision. Wiki reads cover its registered knowledge page, not arbitrary paths, aggregate navigation
+or all page families. Memory/checkpoints continue through task-bound context; historical reads are
+not added by this contract.
+
+Every page rechecks current governance and exact content. Source admission uses current governed
+sensitivity, trust and activation/revocation state, rather than immutable import-time metadata.
+Wiki reading also admits the selected knowledge and its source references; a public Wiki page
+cannot bypass a newly private or revoked source. Projection creation/rebuild remains an explicit
+owner operation. Missing, stale, forgotten, denied or unsupported targets fail through the existing
+sanitized error boundary and do not trigger fallback to a different revision or hidden writes.
+
+`offset` defaults to zero; `max_chars` defaults to 4,000 and is bounded to 200–12,000 characters.
+A continuation requires the exact full-content `content_sha256`: UTF-8 body hash for knowledge,
+whole registered page hash for Wiki, or whole fragment hash for Source. The knowledge body is
+parsed from the registered revision, not the entire Markdown object's frontmatter and bytes.
+Locator is output metadata, not an accepted path/locator selector. Responses carry that digest,
+offset/next offset, admitted governance, source references, locator where applicable, and
+`write_performed=false`. A page can be shorter than the requested maximum. `source_refs` preserves
+closed source, knowledge-revision or artifact lineage variants. Knowledge references include the
+admitted `knowledge_id` and exact `revision_id`; source references include the bound source revision
+and a fragment identity when available. An artifact reference is provenance, not a new read target.
+Only direct references are returned. Transitive dependencies are re-admitted within a total budget
+of 32 reference checks per call, counting repeated edges; admitted knowledge revisions are deduplicated
+and cycles are rejected. Knowledge dependencies must also be current, exact and non-memory.
+Unknown reference shapes fail closed. All new nested result shapes are closed by the output schema.
+
+The new single-tool canonical definition is bounded to **12 KiB**. Each successful read's canonical
+JSON body is bounded to **64 KiB**; the server serializes admission and counts at most **32**
+successful reads and **256 KiB** of their canonical bodies per MCP lifespan. The reported counter
+includes that body's envelope/metadata once. It excludes MCP transport wrapping, duplicate
+TextContent/structuredContent representations, error responses and query/context/explain.
+These are not Provider-token or complete-wire measurements. Serialized `CallToolResult` is also
+hard-bounded to **197,632 bytes** (`3 * 65,536 + 1,024`), including its two content representations
+but excluding JSON-RPC id/framing. Thus 64 KiB is not the complete duplicated MCP response size.
+Counters reset on reconnect/restart, so they are not a cross-session or whole-task cap; no budget
+counter is appended to canonical state. A Host must account for its complete exploration and
+Provider budget independently. A client-supplied limit never widens admission or permission.
+
+The tool-definition increase from the previous 8 KiB ceiling is explicit in
+[ADR 0007](adr/0007-exact-progressive-mcp-reads.md). New formal observations must freeze
+`projection_budget.tools_list_max_bytes=12288` for this advertisement. Old 8 KiB fixtures and
+receipts retain their original meaning and do not qualify the new candidate.
 
 ## Stable boundary
 
@@ -193,9 +290,9 @@ revalidates the same expected ID after process creation, closing the parent/chil
 explicit local `--vault` remains an owner diagnostic/compatibility input, not a production Host
 configuration. The process opens the vault read-only for each
 operation, verifies its closed identities and audit chains, and never mutates
-knowledge. An untouched v0.7 Vault and an autonomous Vault may retain historical
-compatibility contracts internally, but the current Host advertisement remains
-input v7/output v6 with only `query`, `context`, and `explain`. Restart is not
+knowledge. An untouched v0.7 Vault retains the legacy v1 advertisement and compatibility behavior;
+it does not expose the new exact read route. An autonomous-core Vault advertises input v9/output v8
+with only `query`, `context`, `explain`, and `read`. Restart is not
 required merely to observe a later committed revision, but a previously compiled
 Capsule remains bound to its recorded revision/audit head.
 
@@ -394,6 +491,17 @@ deeplaw knowledge host connect --host claude-code --vault ./vault
 deeplaw knowledge host connect --host opencode --vault ./vault
 ```
 
+Current Host continuity projection preserves a single admitted checkpoint statement as at most two
+ordered, contiguous text segments when it exceeds 512 characters. The complete original text passes
+privacy and internal-identity checks before segmentation; concatenating the segments reproduces it
+exactly. A fitting existing newline is preferred. Each segment inherits the statement's Authority,
+valid time and citations; segments do not constitute separate decision or next-action fields.
+Multiple source statements remain separate: more than two, or any requiring segmentation, produce
+`continuity_statement_overflow` without returning a partial checkpoint. Each content remains bounded
+at 512 characters and the complete capsule at 1400 UTF-8 bytes. Content that cannot fit returns empty
+statements with `continuity_capsule_bound`; malformed input, sensitive content and internal identity
+use distinct gaps. Projection remains read-only and preserves route and scope admission.
+
 Static Host configuration is task-neutral. For task continuity, DeepLaw normalizes the chosen
 project/task labels, derives only digests for project, task lineage, repository and worktree, and
 recomputes the base revision and bounded dirty snapshot from the explicitly selected Git worktree.
@@ -419,7 +527,7 @@ caller-supplied Context/ingestion/mutation request still requires its own explic
 `confirm_no_case_data` confirmation. The plan distinguishes compiled Knowledge, a source-only
 honest Gap, and an empty honest Gap; an uncallable read seam is blocked rather than reported ready.
 It then validates and prints a
-[`host-connect-plan/v2`](../contracts/host-connect-plan.v2.schema.json) document containing only a
+[`host-connect-plan/v2`](../contracts/host-connect-plan.v3.schema.json) document containing only a
 `knowledge_support` stdio configuration. Codex direct setup is represented as TOML for either
 `~/.codex/config.toml` or trusted-project `.codex/config.toml`, together with the equivalent
 `codex mcp add ...` command and `codex mcp list` verification command. The separately named
@@ -432,7 +540,7 @@ authentication or runtime state, or enable the separate `knowledge_sink` process
 one narrowly scoped owner-local DeepLaw configuration write that binds the opaque Vault ID to the
 selected path; the plan reports that write explicitly. The plan itself is path-free, binds
 `--expected-vault-id`, and uses the fixed closed launcher. It also reports autonomous-vault
-readiness, current compact MCP input v7/output v6 mode, the internal compatibility range, and exact
+readiness v2, current compact MCP input v9/output v8 mode, the internal compatibility range, and exact
 Host/plugin/version/environment preconditions as actionable Gaps; those owner checks are not a real
 Host attestation. Static configuration cannot embed a task handle or task binding. Hidden legacy
 `host connect --task-handle/--task-binding` parsing returns a migration error and never builds a
@@ -566,16 +674,16 @@ cp adapters/opencode/agents/deeplaw-knowledge.md \
 
 After autonomous migration, the local compatibility inventory is:
 
-The public Provider advertisement is only input v7/output v6 with `query`, `context`, and
-`explain`. The operations below are local CLI/Python/internal compatibility calls and are not
+The public Provider advertisement is input v9/output v8 with `query`, `context`, `explain`, and
+typed `read`. The broader operations below are local CLI/Python/internal compatibility calls and are not
 additional advertised Provider tools.
 
 | Operation | Purpose |
 | --- | --- |
 | `search` / `recall` | return bounded source-derived and autonomous partitions without merging Authority |
 | `get` | read one exact active non-restricted `knowledge_id` or legacy `asset_id` |
-| `query` | run default Query Plan v6 statement selection, duty coverage and targeted evidence completion |
-| `context` | compile default Query Plan v6 through the shared domain assembler into local Capsule v3 plus bounded Provider v2 |
+| `query` | run default Query Plan v7 statement selection, duty coverage and targeted evidence completion |
+| `context` | compile default Query Plan v7 through the shared domain assembler into local Capsule v4 plus bounded Provider v3 |
 | `wiki` | read exact pages, indexed links, local graphs, kinds and recent changes |
 | `source` | read exact admitted Source Revisions and fragments |
 | `verify` | verify object/source binding, current usability, both event chains, and state reconciliation |
@@ -586,11 +694,11 @@ additional advertised Provider tools.
 | `identity_lookup` | return bounded Concept/Entity identity candidates without silently merging ambiguity |
 | `gaps` | return scope- and sensitivity-bounded semantic knowledge gaps without leaking other partitions |
 
-Autonomous `context` defaults to Query Plan v6 for Python, both Knowledge CLI Context commands,
+Autonomous `context` defaults to Query Plan v7 for Python, both Knowledge CLI Context commands,
 and MCP `operation=context`. `query_target`, `applicable_duties`, `projection`, `graph_hops`,
 `retrieval_mode`, and integrity-selected canonical lexical fallback are explicit v6 plan controls;
-they are not silently discarded. The local Capsule v3 is capped at 262,144 bytes, while Provider
-v2 content is capped at 65,536 bytes and receives only bounded Statement/evidence data plus the
+they are not silently discarded. The local Capsule v4 is capped at 262,144 bytes, while Provider
+v3 content is capped at 65,536 bytes and receives bounded Statements, evidence and explicitly tentative ordinary revisions plus the
 opaque `receipt_id`. The local Query Trace is bounded, redacted, non-persistent, and retained only
 after Provider and outer response validation. Explicit `query_plan_version=5` is compatibility-only:
 Python/CLI retain local Capsule v2, and MCP retains output/v3 with Capsule v2/Query Plan v5
@@ -755,3 +863,17 @@ Before publishing an adapter release:
 9. For the optional Knowledge Asset plugin, assert
    `tools/list == [knowledge_support]`, restricted/inactive assets are blocked,
    local paths are absent, and no persistent write operation exists.
+
+## Explicit task action recovery (current candidate)
+
+`deeplaw knowledge task record-action` records Host-reported action observations through the existing
+Sink grant. It does not execute an external action. Persist `not_executed`, then `initiated_unknown`
+before starting the action; bind each transition to the exact previous Run. Resolve an unknown
+result by checking the target system, and only then record `succeeded` or `failed` with an outcome
+hash. Successful receipt replay does not repeat the action.
+
+Task continuity result v3 exposes bounded action states. The native Hook additionally accepts
+Host continuity capsule v2 for action state, while v1 remains the no-action compatibility format.
+Unknown results and stale checkpoints remain Gaps, and the original 1400-byte native capsule bound
+is unchanged. See [ADR 0010](adr/0010-task-action-state.md) for state, migration and recovery contracts.
+This finite protocol support is separate from six-slot native Host qualification.

@@ -241,6 +241,7 @@ def test_working_checkpoint_survives_cold_v6_context_read(tmp_path: Path) -> Non
             query_target={"knowledge_id": knowledge_id},
             purpose="answer",
             task_binding=_TASK_BINDING,
+            query_plan_version="6",
             confirm_no_case_data=True,
         )
 
@@ -294,10 +295,11 @@ def test_working_checkpoint_survives_cold_v6_context_read(tmp_path: Path) -> Non
         mismatched = knowledge_os.context.compile(
             task="Resume the mismatched checkpoint.",
             query_target={"knowledge_id": mismatched_knowledge_id},
-            purpose="answer",
-            task_binding=_TASK_BINDING,
-            confirm_no_case_data=True,
-        )
+                purpose="answer",
+                task_binding=_TASK_BINDING,
+                query_plan_version="6",
+                confirm_no_case_data=True,
+            )
     assert mismatched["statements"] == []
     assert any(gap.get("code") == "no_answer" for gap in mismatched["gaps"])
     assert _MISMATCHED_BODY not in canonical_json(mismatched["provider_capsule"])
@@ -311,10 +313,11 @@ def test_working_checkpoint_survives_cold_v6_context_read(tmp_path: Path) -> Non
         raw_log = knowledge_os.context.compile(
             task="Resume the raw tool log.",
             query_target={"knowledge_id": raw_log_knowledge_id},
-            purpose="answer",
-            task_binding=_TASK_BINDING,
-            confirm_no_case_data=True,
-        )
+                purpose="answer",
+                task_binding=_TASK_BINDING,
+                query_plan_version="6",
+                confirm_no_case_data=True,
+            )
     assert raw_log["statements"] == []
     assert any(gap.get("code") == "no_answer" for gap in raw_log["gaps"])
     assert _RAW_LOG_BODY not in canonical_json(raw_log["provider_capsule"])
@@ -329,6 +332,7 @@ def test_working_checkpoint_survives_cold_v6_context_read(tmp_path: Path) -> Non
         query_target={"knowledge_id": knowledge_id},
         purpose="answer",
         task_binding=_TASK_BINDING,
+        query_plan_version="6",
         confirm_no_case_data=True,
         vault_path=root,
     )

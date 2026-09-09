@@ -10,7 +10,7 @@ more stable than an implementation specification. Current implementation mapping
 `docs/PRD_TRACEABILITY_MATRIX.md`; current machine and qualification state is maintained by the
 active qualification records and applicable protocol documents. Historical Pass dispositions are
 immutable evidence snapshots and no longer represent current status. Research snapshots live in
-`docs/V0_13_UPSTREAM_RESEARCH.md`.
+`docs/V0_13_UPSTREAM_RESEARCH.md` and the dated reviews linked from `docs/README.md`.
 
 Runtime facts remain authoritative in `src/deeplaw`, tests, JSON Schemas, SQLite migrations,
 `pyproject.toml`, and `uv.lock`. A requirement marked `Target` is not shipped merely because it is
@@ -421,6 +421,26 @@ MUST NOT be merged, admitted, or mutated without an explicit cross-boundary refe
 Independent knowledge bases MUST remain independently queryable, backupable, forgettable, and
 portable.
 
+`PRD-KNOW-011` A supported conclusion MUST bind complete support alternatives: all members
+of one alternative are required, and at least one complete alternative must remain admissible.
+Flat reference inventories MUST NOT silently acquire AND/OR semantics. Unknown dependencies,
+cycles without independent grounding and evaluation-budget exhaustion cannot establish support.
+Input changes MUST preserve independently supported canonical revisions and explicitly identify
+lost support or review needs. Apply must recheck input audit heads; reads cannot perform repair.
+
+`PRD-KNOW-012` Correction, withdrawal and applicable byte erasure MUST remain distinct owner
+operations. Loss of an input must affect dependent knowledge, Wiki, checkpoints and subsequent
+reads/verification without destroying an independent benign support chain. Rebuild, snapshot
+recovery and reimport MUST NOT silently reactivate a forgotten identity. Knowledge repair does
+not undo, repeat or physically recall actions or copies already delivered to an external Host.
+
+`PRD-KNOW-013` The 0.13 maintenance evaluator MUST freeze task-family inputs, action/parameter
+oracles, configuration order and repetitions before execution. It must compare no-memory,
+frozen-unmaintained and governed-maintenance paths and retain stale/wrong-maintenance controls.
+Actual environment events, including failed and unknown outcomes, determine the score. A
+preprogrammed deterministic policy is development regression evidence, not learned benefit;
+unexecuted model/Host activity and unavailable cost must remain explicit.
+
 ### 7.4 Living Wiki for human/Agent co-reading
 
 `PRD-WIKI-001` DeepLaw MUST project committed Source and Knowledge identities into readable
@@ -558,6 +578,16 @@ pointer.
 lines, entities, or temporal versions MUST fail closed with bounded disambiguation candidates from
 the already-admitted scope only. It MUST NOT search or reveal a broader private scope or choose the
 highest similarity result silently.
+
+`PRD-CTX-016` Ordinary source-free Agent knowledge MUST have a bounded default public
+remember-to-query/context-to-exact-read journey, separately typed from compiled Statements and
+working checkpoints. It remains tentative, non-authoritative data, cannot satisfy source-only
+duties, and obeys the same scope, lifecycle, time and combined selection budgets.
+
+`PRD-CTX-017` Capsule explanations MUST distinguish bounded discovery from exhaustive inventory,
+and admission from selection and epistemic state. Exact omitted identities/reasons are permitted
+only for admitted candidates. Denied objects must not contribute public content, IDs, titles or
+counts. Explanation overflow must remain explicit and cannot evade content budgets.
 
 ### 7.6 Protected and legal evidence
 
@@ -1008,6 +1038,10 @@ quality claim. The durable conclusions are:
 Frozen upstream commits, licenses, primary references, and current candidate consequences live in
 `docs/V0_13_UPSTREAM_RESEARCH.md`. Broader comparisons live in
 `docs/UPSTREAM_CAPABILITY_MATRIX.md`. Neither document expands product scope.
+
+The [2026-09-09 research review](KNOWLEDGE_FRONTIERS_2026-09-09.md) prioritizes public evidence
+drill-down, real Host continuation and dependency-aware knowledge maintenance within these existing
+outcomes. It does not rotate frozen comparator inputs or make all research targets release gates.
 
 ## 19. Final product decision
 

@@ -9,8 +9,10 @@ from benchmarks.hosts.v013_native_event_adapter import (
     NativeEventAdapterError,
     adapt_codex_hook_observation,
     adapt_codex_hook_sequence,
+    adapt_native_observation,
     adapt_opencode_plugin_observation,
     adapt_opencode_plugin_sequence,
+    adapt_opencode_public_fork_observation,
 )
 from deeplaw.util import canonical_json, sha256_bytes
 
@@ -146,6 +148,83 @@ def _fork_receipt(
             ).encode("utf-8")
         ),
         "gap_codes": [],
+    }
+
+
+def _public_fork_proof() -> dict[str, object]:
+    parent = "parent-session"
+    child = "child-session"
+    child_observation = {
+        "schema_version": "deeplaw.opencode-native-event-observation/v1",
+        "event_type": "session.created",
+        "session_sha256": sha256_bytes(child.encode()),
+        "parent_session_sha256": None,
+        "parent_gap": "parent_absent",
+        "status": "observed",
+        "gap": None,
+    }
+    process_binding = {
+        "task_case": "continuity",
+        "run_id": "public-fork-run-1",
+        "candidate_binding": {
+            "commit": "a" * 40,
+            "tree": "b" * 40,
+            "lock_sha256": "1" * 64,
+            "wheel_sha256": "2" * 64,
+            "sdist_sha256": "3" * 64,
+        },
+        "run_binding": {"evidence_run_id": 1, "qualification_run_id": 2},
+        "host_binary": {"version": "opencode-1.18.16", "sha256": "4" * 64},
+        "broker_source": {
+            "repository_external": True,
+            "owner_only_mode": True,
+            "sha256": "5" * 64,
+        },
+        "host_identity_sha256": "6" * 64,
+        "host_identity_source_sha256": "7" * 64,
+        "process_identity_sha256": "8" * 64,
+        "broker_instance_sha256": "9" * 64,
+        "nonce_sha256": "a" * 64,
+        "issued_at": "2026-09-09T00:00:00Z",
+        "expires_at": "2026-09-09T00:05:00Z",
+        "validation_reference_time": "2026-09-09T00:02:00Z",
+        "selector_source_symlink": True,
+        "execution_target_regular": True,
+        "execution_target_single_link": True,
+        "status": "running",
+        "exit_code": None,
+        "isolation": {
+            "runner_received_secret": False,
+            "mcp_received_secret": False,
+            "ambient_auth_forwarded_to_mcp": False,
+            "raw_output_retained": False,
+        },
+    }
+    return {
+        "schema_version": "deeplaw.opencode-public-fork-proof/v1",
+        "route_observation": canonical_json(
+            {
+                "method": "POST",
+                "path": f"/session/{parent}/fork",
+                "status_code": 200,
+            }
+        ).encode(),
+        "request_body": b"{}",
+        "response": canonical_json(
+            {"id": child, "parentID": parent}
+        ).encode(),
+        "child_plugin_observation": canonical_json(child_observation).encode(),
+        "event_barrier": {
+            "status": "satisfied",
+            "response_release": "after_child_plugin_event",
+            "timed_out": False,
+            "child_plugin_event_count": 1,
+            "event_type": "session.created",
+            "timeout_seconds": 30,
+            "elapsed_ms": 125,
+            "parent_source": "actual_ingress_route",
+        },
+        "process_binding": process_binding,
     }
 
 
@@ -417,6 +496,138 @@ def test_opencode_non_created_events_cannot_claim_fork(event_type: str) -> None:
         )
 
 
+def test_opencode_public_fork_binds_actual_route_body_response_plugin_and_process() -> None:
+    proof = _public_fork_proof()
+    process = proof["process_binding"]
+    result = adapt_opencode_public_fork_observation(
+        proof,
+        host_identity=OPENCODE_IDENTITY,
+        execution_identity=OPENCODE_EXECUTION,
+        route=EXACT_ROUTE,
+        event_sequence=0,
+        expected_process_binding=process,
+        seen_nonce_sha256s=set(),
+    )
+
+    assert result["event"]["event_type"] == "fork"
+    assert result["event"]["parent_session_sha256"] == sha256_bytes(
+        b"parent-session"
+    )
+    assert result["event"]["session_sha256"] == sha256_bytes(b"child-session")
+    assert result["receipt"]["claim_eligible"] is False
+    assert "process_receipt" not in result
+    public = result["public_fork_proof"]
+    assert public["process_binding"]["status"] == "running"
+    process_proof = public["process_proof"]
+    assert process_proof["process_identity_sha256"] == process["process_identity_sha256"]
+    assert process_proof["request_body_sha256"] == sha256_bytes(b"{}")
+    assert process_proof["response_sha256"] == sha256_bytes(proof["response"])
+    assert process_proof["child_plugin_event_sha256"] == sha256_bytes(
+        proof["child_plugin_observation"]
+    )
+    assert process_proof["parent_session_sha256"] == sha256_bytes(
+        b"parent-session"
+    )
+    assert process_proof["child_session_sha256"] == sha256_bytes(
+        b"child-session"
+    )
+
+
+def test_opencode_public_fork_adds_v2_receipt_only_after_clean_exit() -> None:
+    proof = _public_fork_proof()
+    process = proof["process_binding"]
+    process["status"] = "exited"
+    process["exit_code"] = 0
+    result = adapt_opencode_public_fork_observation(
+        proof,
+        host_identity=OPENCODE_IDENTITY,
+        execution_identity=OPENCODE_EXECUTION,
+        route=EXACT_ROUTE,
+        event_sequence=0,
+        expected_process_binding=process,
+        seen_nonce_sha256s=set(),
+    )
+    assert result["process_receipt"]["status"] == "exited"
+    assert result["process_receipt"]["exit_code"] == 0
+
+
+def test_opencode_public_fork_dispatch_requires_the_same_child_plugin_bytes() -> None:
+    proof = _public_fork_proof()
+    with pytest.raises(NativeEventAdapterError, match="child plugin bytes differ"):
+        adapt_native_observation(
+            "opencode",
+            b'{"not":"the child plugin"}',
+            host_identity=OPENCODE_IDENTITY,
+            execution_identity=OPENCODE_EXECUTION,
+            route=EXACT_ROUTE,
+            event_sequence=0,
+            public_fork_proof=proof,
+        )
+
+
+def test_opencode_public_fork_dispatch_rejects_the_legacy_synthetic_shape() -> None:
+    legacy = _fork_receipt()
+    with pytest.raises(NativeEventAdapterError, match="schema version"):
+        adapt_native_observation(
+            "opencode",
+            canonical_json(_opencode_observation("session.created")).encode(),
+            host_identity=OPENCODE_IDENTITY,
+            execution_identity=OPENCODE_EXECUTION,
+            route=EXACT_ROUTE,
+            event_sequence=0,
+            public_fork_proof=legacy,
+        )
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    (
+        lambda proof: proof.update({"request_body": b'{"operation":"session.fork"}'}),
+        lambda proof: proof.update(
+            {
+                "route_observation": canonical_json(
+                    {
+                        "method": "POST",
+                        "path": "/session/other-parent/fork",
+                        "status_code": 200,
+                    }
+                ).encode()
+            }
+        ),
+        lambda proof: proof.update(
+            {"response": canonical_json({"id": "other-child"}).encode()}
+        ),
+        lambda proof: proof.update(
+            {
+                "event_barrier": {
+                    **proof["event_barrier"],
+                    "timed_out": True,
+                }
+            }
+        ),
+        lambda proof: proof["process_binding"]["candidate_binding"].update(
+            {"commit": "f" * 40}
+        ),
+        lambda proof: proof["process_binding"].update(
+            {"status": "exited", "exit_code": -15}
+        ),
+    ),
+)
+def test_opencode_public_fork_rejects_unbound_actual_observations(mutator) -> None:
+    proof = _public_fork_proof()
+    mutator(proof)
+    with pytest.raises(NativeEventAdapterError):
+        adapt_opencode_public_fork_observation(
+            proof,
+            host_identity=OPENCODE_IDENTITY,
+            execution_identity=OPENCODE_EXECUTION,
+            route=EXACT_ROUTE,
+            event_sequence=0,
+            expected_process_binding=_public_fork_proof()["process_binding"],
+            seen_nonce_sha256s=set(),
+        )
+
+
 @pytest.mark.parametrize(
     "mutator",
     (
@@ -621,3 +832,67 @@ def test_opencode_sequence_rejects_parent_mismatch() -> None:
             route=EXACT_ROUTE,
             supervisor_parent_observations=[supervisor],
         )
+
+
+def test_public_fork_rejects_same_session_response() -> None:
+    proof = _public_fork_proof()
+    proof["response"] = canonical_json({"id": "parent-session"}).encode()
+    plugin = json.loads(proof["child_plugin_observation"])
+    plugin["session_sha256"] = sha256_bytes(b"parent-session")
+    proof["child_plugin_observation"] = canonical_json(plugin).encode()
+    with pytest.raises(NativeEventAdapterError, match="distinct"):
+        adapt_opencode_public_fork_observation(
+            proof, host_identity=OPENCODE_IDENTITY,
+            execution_identity=OPENCODE_EXECUTION, route=EXACT_ROUTE, event_sequence=0,
+        )
+
+
+def test_legacy_fork_rejects_same_session_receipt() -> None:
+    with pytest.raises(NativeEventAdapterError, match="distinct"):
+        adapt_opencode_plugin_observation(
+            _opencode_observation("session.created"), host_identity=OPENCODE_IDENTITY,
+            execution_identity=OPENCODE_EXECUTION, route=EXACT_ROUTE, event_sequence=0,
+            supervisor_parent_observation=_fork_receipt(parent="8" * 64),
+        )
+
+
+@pytest.mark.parametrize(
+    "binding", [None, {}, "wrong_candidate", "missing_nonce", "omitted", "immutable_nonce"]
+)
+def test_public_fork_dispatch_requires_complete_independent_binding(binding) -> None:
+    proof = _public_fork_proof()
+    kwargs = {"expected_process_binding": deepcopy(proof["process_binding"]),
+              "seen_nonce_sha256s": set()}
+    if binding == "wrong_candidate":
+        kwargs["expected_process_binding"]["candidate_binding"]["commit_sha"] = "f" * 40
+    elif binding == "omitted":
+        kwargs = {}
+    elif binding == "immutable_nonce":
+        kwargs["seen_nonce_sha256s"] = frozenset()
+    elif binding == "missing_nonce":
+        kwargs.pop("seen_nonce_sha256s")
+    else:
+        kwargs["expected_process_binding"] = binding
+    with pytest.raises(NativeEventAdapterError):
+        adapt_native_observation(
+            "opencode", proof["child_plugin_observation"],
+            host_identity=OPENCODE_IDENTITY, execution_identity=OPENCODE_EXECUTION,
+            route=EXACT_ROUTE, event_sequence=0, public_fork_proof=proof, **kwargs,
+        )
+
+
+@pytest.mark.parametrize("status", ["running", "exited"])
+def test_public_fork_dispatch_consumes_nonce_once(status) -> None:
+    proof = _public_fork_proof()
+    proof["process_binding"].update(status=status, exit_code=0 if status == "exited" else None)
+    seen = set()
+    kwargs = dict(
+        host_identity=OPENCODE_IDENTITY, execution_identity=OPENCODE_EXECUTION,
+        route=EXACT_ROUTE, event_sequence=0, public_fork_proof=proof,
+        expected_process_binding=deepcopy(proof["process_binding"]), seen_nonce_sha256s=seen,
+    )
+    result = adapt_native_observation("opencode", proof["child_plugin_observation"], **kwargs)
+    assert result["event"]["event_type"] == "fork"
+    assert seen == {proof["process_binding"]["nonce_sha256"]}
+    with pytest.raises(NativeEventAdapterError):
+        adapt_native_observation("opencode", proof["child_plugin_observation"], **kwargs)

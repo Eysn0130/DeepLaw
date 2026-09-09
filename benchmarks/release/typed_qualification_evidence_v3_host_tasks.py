@@ -19,7 +19,7 @@ import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from deeplaw.native_host import (
@@ -29,7 +29,11 @@ from deeplaw.native_host import (
 )
 
 SCHEMA_VERSION = "deeplaw.v013-host-task-evidence/v1"
+TASK_RESULT_V2_SCHEMA_VERSION = "deeplaw.v013-host-task-result/v2"
+TASK_RESULT_V3_SCHEMA_VERSION = "deeplaw.v013-host-task-result/v3"
+SERVICE_OBSERVATION_SCHEMA_VERSION = "deeplaw.v013-task-service-observation/v1"
 TASK_CASES = ("continuity", "living_wiki", "professional_evidence")
+SOURCE_TASK_CASES = frozenset({"living_wiki", "professional_evidence"})
 HOSTS = ("codex", "opencode")
 MAX_PROVIDER_BYTES = 65_536
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -296,6 +300,11 @@ HARD_FAILURE_IDS = (
     "ledger_read_mutation",
     "provider_disclosure",
 )
+V3_HARD_FAILURE_IDS = (
+    *HARD_FAILURE_IDS,
+    "wrong_state_observation_gap",
+    "duplicate_distractor_observation_gap",
+)
 
 
 class HostTaskEvidenceError(ValueError):
@@ -445,7 +454,12 @@ def _metadata(value: Mapping[str, Any], *, artifact: str) -> tuple[str, int, str
     required = {"artifact_kind", "schema_version", "run_id", "workflow_run_id", "task_case", "host"}
     if not required.issubset(value):
         _fail(f"{artifact} metadata is incomplete")
-    if value["artifact_kind"] != artifact or value["schema_version"] != SCHEMA_VERSION:
+    allowed_schemas = {SCHEMA_VERSION}
+    if artifact == "task_result":
+        allowed_schemas.update(
+            {TASK_RESULT_V2_SCHEMA_VERSION, TASK_RESULT_V3_SCHEMA_VERSION}
+        )
+    if value["artifact_kind"] != artifact or value["schema_version"] not in allowed_schemas:
         _fail(f"{artifact} schema version is unsupported")
     run_id = _identifier(value["run_id"], label=f"{artifact}.run_id")
     workflow = value["workflow_run_id"]
@@ -661,28 +675,49 @@ def _identity_list(value: Any) -> list[Mapping[str, Any]]:
 
 
 def _state_rows(
-    value: Any, *, label: str, expected_states: Sequence[str]
+    value: Any,
+    *,
+    label: str,
+    expected_states: Sequence[str],
+    allow_unknown: bool = False,
 ) -> tuple[list[Mapping[str, Any]], int]:
     if not isinstance(value, list) or len(value) > 256:
         _fail(f"{label} is invalid")
     rows: list[Mapping[str, Any]] = []
-    observed: dict[str, bool] = {}
+    observed: dict[str, bool | None] = {}
     for index, item in enumerate(value):
-        row = _closed(item, {"state", "admitted"}, label=f"{label}[{index}]")
+        row = _closed(
+            item,
+            {"state", "observed", "admitted"} if allow_unknown else {"state", "admitted"},
+            label=f"{label}[{index}]",
+        )
         state = _identifier(row["state"], label=f"{label}[{index}].state")
         if state in observed:
             _fail(f"{label} contains duplicate state")
-        if not isinstance(row["admitted"], bool):
-            _fail(f"{label}[{index}].admitted is invalid")
-        observed[state] = row["admitted"]
+        if allow_unknown:
+            if not isinstance(row["observed"], bool):
+                _fail(f"{label}[{index}].observed is invalid")
+            admitted = row["admitted"]
+            if row["observed"]:
+                if not isinstance(admitted, bool):
+                    _fail(f"{label}[{index}].admitted is invalid")
+            elif admitted is not None:
+                _fail(f"{label}[{index}].unknown admitted value is invalid")
+            observed[state] = admitted if row["observed"] else None
+        else:
+            if not isinstance(row["admitted"], bool):
+                _fail(f"{label}[{index}].admitted is invalid")
+            observed[state] = row["admitted"]
         rows.append(row)
     missing = set(expected_states) - set(observed)
     if missing:
         _fail(f"{label} omits required states: {sorted(missing)}")
-    return rows, sum(1 for value in observed.values() if value)
+    return rows, sum(1 for value in observed.values() if value is True)
 
 
-def _duties(value: Any, *, task_case: str) -> tuple[list[Mapping[str, Any]], int]:
+def _duties(
+    value: Any, *, task_case: str, allow_not_executed: bool = False
+) -> tuple[list[Mapping[str, Any]], int]:
     if not isinstance(value, list) or len(value) != len(TASK_DUTIES[task_case]):
         _fail("task duties are incomplete")
     rows: list[Mapping[str, Any]] = []
@@ -692,9 +727,12 @@ def _duties(value: Any, *, task_case: str) -> tuple[list[Mapping[str, Any]], int
         duty = _identifier(row["duty"], label=f"task duty {index}.duty")
         if duty in observed or duty not in TASK_DUTIES[task_case]:
             _fail("task duty identity is duplicated or unsupported")
-        if row["status"] not in {"observed", "gap"}:
+        allowed_statuses = {"observed", "gap"}
+        if allow_not_executed:
+            allowed_statuses.add("not_executed")
+        if row["status"] not in allowed_statuses:
             _fail("task duty status is invalid")
-        if row["status"] == "observed" and row["gap_code"] is not None:
+        if row["status"] in {"observed", "not_executed"} and row["gap_code"] is not None:
             _fail("observed task duty cannot carry a gap")
         if row["status"] == "gap" and (not isinstance(row["gap_code"], str) or not row["gap_code"]):
             _fail("gap task duty must carry a gap code")
@@ -727,7 +765,36 @@ def _task_result(value: Mapping[str, Any], *, envelope: Mapping[str, Any]) -> Ma
         "observed_public_seams",
         "claim_eligible",
     }
+    schema_version = value.get("schema_version")
+    if schema_version == TASK_RESULT_V2_SCHEMA_VERSION:
+        required.add("service_source")
+    elif schema_version == TASK_RESULT_V3_SCHEMA_VERSION and value.get("task_case") == "continuity":
+        required.add("host_observation_source")
     _closed(value, required, label="task result")
+    if schema_version == TASK_RESULT_V2_SCHEMA_VERSION:
+        from benchmarks.hosts.v013_task_service_observation import task_result_service_source
+
+        try:
+            service_ref = task_result_service_source(value)
+        except ValueError as error:
+            raise HostTaskEvidenceError("task result service source is invalid") from error
+        if service_ref is None:
+            _fail("current source-backed task result service source is unavailable")
+    elif schema_version == TASK_RESULT_V3_SCHEMA_VERSION:
+        if value.get("task_case") != "continuity":
+            if "host_observation_source" in value:
+                _fail("v3 host observation source is only valid for continuity")
+        else:
+            from benchmarks.hosts.v013_task_service_observation import task_result_service_source
+
+            try:
+                observation_ref = task_result_service_source(value)
+            except ValueError as error:
+                raise HostTaskEvidenceError(
+                    "task result Host observation source is invalid"
+                ) from error
+            if observation_ref is None:
+                _fail("v3 continuity task result Host observation source is unavailable")
     metadata = _metadata(value, artifact="task_result")
     if value["claim_eligible"] is not False:
         _fail("task result cannot claim qualification eligibility")
@@ -742,6 +809,13 @@ def _task_result(value: Mapping[str, Any], *, envelope: Mapping[str, Any]) -> Ma
     _bind_metadata(metadata, expected=expected, failures=failures)
     if failures:
         _fail("task result binding differs from envelope")
+    first = _closed(
+        value["first_correct_action"],
+        {"observed", "event_index", "seam"},
+        label="task first correct action",
+    )
+    if type(first["event_index"]) is not int or first["event_index"] < 0:
+        _fail("task first correct action event index is invalid")
     steps = value["lifecycle_steps"]
     if not isinstance(steps, list) or len(steps) > len(CONTINUITY_LIFECYCLE):
         _fail("task result lifecycle steps are invalid")
@@ -778,6 +852,536 @@ def _task_result(value: Mapping[str, Any], *, envelope: Mapping[str, Any]) -> Ma
     ):
         _fail("task result public seam projection is invalid")
     return value
+
+
+_SERVICE_SEAMS = {
+    ("SourceReadService", "get"): "source_read",
+    ("SourceReadService", "fragment"): "fragment_read",
+    ("WikiReadService", "page"): "wiki_read",
+    ("knowledge_support", "query"): "query_context",
+    ("knowledge_support", "context"): "query_context",
+}
+
+
+def _reject_service_content(value: Any, *, label: str) -> None:
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                _fail(f"{label} field name is invalid")
+            if key.casefold() in {
+                "query",
+                "task",
+                "provider_content_bytes",
+                "provider_content_kind",
+                "provider_content_sha256",
+                "structured_response_byte_size",
+                "structured_response_kind",
+                "structured_response_sha256",
+                "query_trace",
+                "ledger",
+            }:
+                _fail(f"{label} contains a forbidden field")
+            _reject_service_content(item, label=label)
+    elif isinstance(value, list):
+        for item in value:
+            _reject_service_content(item, label=label)
+
+
+def _service_call(value: Any, *, index: int) -> str:
+    required = {
+        "operation",
+        "action",
+        "seam",
+        "caller",
+        "request",
+        "request_byte_size",
+        "request_sha256",
+        "projection",
+        "projection_byte_size",
+        "projection_sha256",
+        "observed_request_byte_size",
+        "observed_request_sha256",
+        "observed_projection_byte_size",
+        "observed_projection_sha256",
+    }
+    call = _closed(value, required, label=f"task service call {index}")
+    operation = call["operation"]
+    action = call["action"]
+    if not isinstance(operation, str) or not isinstance(action, str):
+        _fail(f"task service call {index} operation/action types are invalid")
+    seam = _SERVICE_SEAMS.get((operation, action))
+    if seam is None or call["seam"] != seam or call["caller"] != "task_domain_driver":
+        _fail(f"task service call {index} operation/action is not admitted")
+    request = call["request"]
+    projection = call["projection"]
+    _reject_service_content(request, label=f"task service call {index} request")
+    _reject_service_content(projection, label=f"task service call {index} projection")
+    request_bytes = _canonical(request)
+    projection_bytes = _canonical(projection)
+    for field, expected in (
+        ("request_byte_size", len(request_bytes)),
+        ("projection_byte_size", len(projection_bytes)),
+    ):
+        if call[field] != expected:
+            _fail(f"task service call {index}.{field} does not bind retained bytes")
+    if call["request_sha256"] != _sha(request_bytes):
+        _fail(f"task service call {index}.request_sha256 does not bind retained bytes")
+    if call["projection_sha256"] != _sha(projection_bytes):
+        _fail(f"task service call {index}.projection_sha256 does not bind retained bytes")
+    for field in (
+        "request_sha256",
+        "projection_sha256",
+        "observed_request_sha256",
+        "observed_projection_sha256",
+    ):
+        _digest(call[field], label=f"task service call {index}.{field}")
+    for field in ("request_byte_size", "projection_byte_size"):
+        if (
+            isinstance(call[field], bool)
+            or not isinstance(call[field], int)
+            or not 1 <= call[field] <= 24_576
+        ):
+            _fail(f"task service call {index}.{field} is invalid")
+    for field in ("observed_request_byte_size", "observed_projection_byte_size"):
+        if (
+            isinstance(call[field], bool)
+            or not isinstance(call[field], int)
+            or not 1 <= call[field] <= 24_576
+        ):
+            _fail(f"task service call {index}.{field} is invalid")
+    return seam
+
+
+def _service_shape(
+    value: Mapping[str, Any], *, index: int, seam: str, seed: Mapping[str, Any]
+) -> None:
+    """Bind each retained call to the frozen source identity and read policy."""
+
+    request = value["request"]
+    projection = value["projection"]
+    if not isinstance(request, Mapping) or not isinstance(projection, Mapping):
+        _fail(f"task service call {index} request/projection is not an object")
+    include = seed["include"]
+    scope = seed["scope"]
+    sensitivity = seed["max_sensitivity"]
+    common = {"scope", "max_sensitivity"}
+    if request.get("scope") != scope or request.get("max_sensitivity") != sensitivity:
+        _fail(f"task service call {index} scope or sensitivity differs from the seed")
+
+    def positive(value: Any, label: str, *, maximum: int = 65_536) -> None:
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+            _fail(f"task service call {index}.{label} is invalid")
+
+    def read_only(item: Mapping[str, Any], label: str) -> None:
+        if item.get("write_performed") is not False:
+            _fail(f"task service call {index}.{label} is not read-only")
+
+    if seam == "source_read" and value["action"] == "get":
+        if set(request) != common | {"action", "source_id"}:
+            _fail(f"task service call {index} SourceReadService.get request shape is invalid")
+        if request["action"] != "get" or request["source_id"] != include["source_id"]:
+            _fail(f"task service call {index} source identity differs from the seed")
+        if set(projection) != {"source", "write_performed"}:
+            _fail(f"task service call {index} SourceReadService.get projection shape is invalid")
+        source = projection["source"]
+        if not isinstance(source, Mapping) or set(source) != {
+            "source_id",
+            "source_revision_id",
+            "content_sha256",
+            "byte_size",
+        }:
+            _fail(f"task service call {index} source projection is invalid")
+        if (
+            source["source_id"] != include["source_id"]
+            or source["source_revision_id"] != include["source_revision_id"]
+            or source["content_sha256"] != include["content_sha256"]
+        ):
+            _fail(f"task service call {index} source projection identity differs from the seed")
+        _digest(source["content_sha256"], label=f"task service call {index} source content")
+        positive(source["byte_size"], "source.byte_size", maximum=512 * 1024 * 1024)
+        read_only(projection, "source projection")
+        return
+    if seam == "fragment_read":
+        if set(request) != common | {"action", "fragment_id", "max_chars"}:
+            _fail(f"task service call {index} SourceReadService.fragment request shape is invalid")
+        if request["action"] != "fragment" or request["fragment_id"] != include["fragment_id"]:
+            _fail(f"task service call {index} fragment identity differs from the seed")
+        positive(request["max_chars"], "max_chars", maximum=12_000)
+        if set(projection) != {"fragment", "write_performed"}:
+            _fail(
+                f"task service call {index} SourceReadService.fragment projection shape is invalid"
+            )
+        fragment = projection["fragment"]
+        if not isinstance(fragment, Mapping) or set(fragment) != {
+            "fragment_id",
+            "source_revision_id",
+            "locator",
+            "text_sha256",
+            "content_truncated",
+        }:
+            _fail(f"task service call {index} fragment projection is invalid")
+        if (
+            fragment["fragment_id"] != include["fragment_id"]
+            or fragment["source_revision_id"] != include["source_revision_id"]
+            or fragment["locator"] != include["locator"]
+            or fragment["text_sha256"] != include["quote_sha256"]
+            or fragment["content_truncated"] is not False
+        ):
+            _fail(f"task service call {index} fragment projection identity differs from the seed")
+        _digest(fragment["text_sha256"], label=f"task service call {index} fragment quote")
+        read_only(projection, "fragment projection")
+        return
+    if seam == "wiki_read":
+        if set(request) != common | {"action", "knowledge_id"}:
+            _fail(f"task service call {index} WikiReadService.page request shape is invalid")
+        if request["action"] != "page" or request["knowledge_id"] != include["knowledge_id"]:
+            _fail(f"task service call {index} Wiki identity differs from the seed")
+        if set(projection) != {
+            "wiki_path",
+            "content_sha256",
+            "content_characters",
+            "binding_markers",
+            "write_performed",
+        }:
+            _fail(f"task service call {index} WikiReadService.page projection shape is invalid")
+        wiki_path = projection["wiki_path"]
+        if (
+            not isinstance(wiki_path, str)
+            or not wiki_path
+            or "\\" in wiki_path
+            or PurePosixPath(wiki_path).is_absolute()
+            or any(part in {"", ".", ".."} for part in wiki_path.split("/"))
+        ):
+            _fail(f"task service call {index} Wiki path is not a safe relative locator")
+        _digest(projection["content_sha256"], label=f"task service call {index} Wiki content")
+        positive(projection["content_characters"], "content_characters", maximum=20_000)
+        markers = projection["binding_markers"]
+        marker_keys = {
+            "knowledge_id",
+            "knowledge_revision_id",
+            "source_revision_id",
+            "fragment_id",
+            "locator",
+            "quote_sha256",
+        }
+        if (
+            not isinstance(markers, Mapping)
+            or set(markers) != marker_keys
+            or any(markers[key] is not True for key in marker_keys)
+        ):
+            _fail(f"task service call {index} Wiki projection identity is not source-bound")
+        read_only(projection, "Wiki projection")
+        return
+    if seam == "query_context":
+        operation = value["action"]
+        expected_request = common | {
+            "purpose",
+            "policy",
+            "query_plan_version",
+            "query_target",
+            "limit",
+            "max_chars",
+            "max_tokens",
+            "max_sources",
+            "applicable_duties",
+            "operation",
+        }
+        if operation == "context":
+            expected_request.add("confirm_no_case_data")
+        if set(request) != expected_request:
+            _fail(f"task service call {index} knowledge_support request shape is invalid")
+        if (
+            request["operation"] != operation
+            or request["purpose"] != "quote"
+            or request["policy"] != "evidence-first-v1"
+            or request["query_plan_version"] != "6"
+            or request["query_target"] != {"knowledge_id": include["knowledge_id"]}
+        ):
+            _fail(f"task service call {index} knowledge_support policy or target is invalid")
+        if operation == "context" and request["confirm_no_case_data"] is not True:
+            _fail(f"task service call {index} context request is not case-data bounded")
+        for field, maximum in (
+            ("limit", 4),
+            ("max_chars", 8_000),
+            ("max_tokens", 2_000),
+            ("max_sources", 4),
+        ):
+            positive(request[field], field, maximum=maximum)
+        duties = request["applicable_duties"]
+        if (
+            not isinstance(duties, list)
+            or not duties
+            or any(not isinstance(duty, str) or not duty for duty in duties)
+            or len(duties) != len(set(duties))
+        ):
+            _fail(f"task service call {index} applicable duties are invalid")
+        expected_projection = {
+            "selected_knowledge_ids",
+            "selected_source_revision_ids",
+            "knowledge_revision_id",
+            "source_refs",
+            "gap_pairs",
+            "statement_count",
+            "evidence_count",
+            "write_performed",
+            "caller",
+        }
+        if set(projection) != expected_projection:
+            _fail(f"task service call {index} knowledge_support projection shape is invalid")
+        if (
+            projection["selected_knowledge_ids"] != [include["knowledge_id"]]
+            or projection["selected_source_revision_ids"] != [include["source_revision_id"]]
+            or projection["knowledge_revision_id"] != include["knowledge_revision_id"]
+        ):
+            _fail(f"task service call {index} knowledge_support identity differs from the seed")
+        refs = projection["source_refs"]
+        expected_ref = {
+            "source_revision_id": include["source_revision_id"],
+            "fragment_id": include["fragment_id"],
+            "locator": include["locator"],
+            "quote_sha256": include["quote_sha256"],
+        }
+        if refs != [expected_ref]:
+            _fail(
+                f"task service call {index} knowledge_support source reference differs "
+                "from the seed"
+            )
+        gaps = projection["gap_pairs"]
+        if not isinstance(gaps, list) or len(gaps) > 64:
+            _fail(f"task service call {index} knowledge_support gaps are invalid")
+        for gap in gaps:
+            if (
+                not isinstance(gap, Mapping)
+                or set(gap) != {"code", "duty"}
+                or not isinstance(gap["code"], str)
+                or not isinstance(gap["duty"], str)
+                or not gap["code"]
+                or not gap["duty"]
+            ):
+                _fail(f"task service call {index} knowledge_support gap is invalid")
+        positive(projection["statement_count"], "statement_count")
+        positive(projection["evidence_count"], "evidence_count")
+        if projection["caller"] != "task_domain_driver":
+            _fail(f"task service call {index} knowledge_support caller is invalid")
+        read_only(projection, "knowledge_support projection")
+        return
+    _fail(f"task service call {index} has no typed operation shape")
+
+
+def _validate_service_observation(
+    value: Mapping[str, Any],
+    *,
+    result: Mapping[str, Any],
+    envelope: Mapping[str, Any],
+    message_event: tuple[int, Mapping[str, Any]],
+) -> tuple[set[str], int, set[str]]:
+    required = {
+        "schema_version",
+        "status",
+        "formal_admission",
+        "claim_eligible",
+        "caller",
+        "driver_kind",
+        "task_case",
+        "seed",
+        "executed_operations",
+        "executed_duties",
+        "not_executed_duties",
+        "observed_public_seams",
+        "service_calls",
+        "audit_head_facts",
+        "native_event_binding",
+    }
+    _closed(value, required, label="task service observation")
+    if (
+        value["schema_version"] != SERVICE_OBSERVATION_SCHEMA_VERSION
+        or value["status"] != "executed"
+        or value["formal_admission"] is not False
+        or value["claim_eligible"] is not False
+        or value["caller"] != "task_domain_driver"
+        or value["driver_kind"] != "task_domain_driver"
+    ):
+        _fail("task service observation status is invalid")
+    task_case = envelope["task_case"]
+    host = envelope["host"]
+    if task_case not in SOURCE_TASK_CASES or value["task_case"] != task_case:
+        _fail("task service observation task binding is invalid")
+    seed = _closed(
+        value["seed"],
+        {"task_case", "scope", "max_sensitivity", "include", "duties"},
+        label="task service seed",
+    )
+    if seed["task_case"] != task_case:
+        _fail("task service seed task binding is invalid")
+    if seed["scope"] not in {"personal", "project", "domain"} or seed[
+        "max_sensitivity"
+    ] not in {"public", "internal", "private"}:
+        _fail("task service seed policy is invalid")
+    include = seed["include"]
+    _closed(
+        include,
+        {
+            "knowledge_id",
+            "knowledge_revision_id",
+            "source_id",
+            "source_revision_id",
+            "fragment_id",
+            "locator",
+            "quote_sha256",
+            "content_sha256",
+            "authority",
+            "legal_authority",
+            "verification",
+        },
+        label="task service seed identity",
+    )
+    for field in (
+        "knowledge_id",
+        "knowledge_revision_id",
+        "source_id",
+        "source_revision_id",
+        "fragment_id",
+    ):
+        _identifier(include[field], label=f"task service seed {field}")
+    _digest(include["quote_sha256"], label="task service seed quote")
+    _digest(include["content_sha256"], label="task service seed content")
+    if (
+        include["authority"] != "agent_derived"
+        or include["legal_authority"] is not False
+        or include["verification"] != "source_bound"
+    ):
+        _fail("task service seed authority is invalid")
+    duties = seed["duties"]
+    if not isinstance(duties, list) or any(not isinstance(duty, str) for duty in duties):
+        _fail("task service seed duties are invalid")
+    if len(duties) != len(set(duties)) or set(duties) != set(TASK_DUTIES[task_case]):
+        _fail("task service seed duties differ from the frozen task case")
+    for duty in duties:
+        _identifier(duty, label="task service seed duty")
+    calls = value["service_calls"]
+    if not isinstance(calls, list) or not calls or len(calls) > 32:
+        _fail("task service calls are invalid")
+    seams = []
+    for index, item in enumerate(calls):
+        seam = _service_call(item, index=index)
+        _service_shape(item, index=index, seam=seam, seed=seed)
+        seams.append(seam)
+    call_keys = [(item["operation"], item["action"]) for item in calls]
+    if len(call_keys) != len(set(call_keys)):
+        _fail("task service calls contain duplicate operations")
+    derived_seams = set(seams)
+    if value["observed_public_seams"] != sorted(derived_seams):
+        _fail("task service public seams are not derived from calls")
+    if value["executed_operations"] != sorted(derived_seams):
+        _fail("task service operations are not derived from calls")
+    if result["observed_public_seams"] != sorted(derived_seams):
+        _fail("task result public seams differ from actual service calls")
+    if task_case == "professional_evidence":
+        required_seams = {"source_read", "fragment_read", "wiki_read", "query_context"}
+        executed_duties = {
+            "original_bytes",
+            "original_hash",
+            "fragment",
+            "locator",
+            "wiki_exact_source_drill_down",
+        }
+    else:
+        required_seams = {"source_read", "wiki_read", "query_context"}
+        executed_duties = {"wiki_exact_source_drill_down"}
+    if not required_seams.issubset(derived_seams):
+        _fail("task service observation is missing a required actual read")
+    if set(value["executed_duties"]) != executed_duties:
+        _fail("task service duties are outside the driver read subset")
+    not_executed_duties = value["not_executed_duties"]
+    if not isinstance(not_executed_duties, list) or any(
+        not isinstance(duty, str) for duty in not_executed_duties
+    ):
+        _fail("task service not-executed duties are not frozen")
+    if (
+        len(not_executed_duties) != len(set(not_executed_duties))
+        or set(not_executed_duties) != set(duties) - executed_duties
+    ):
+        _fail("task service not-executed duties are not frozen")
+    for duty in executed_duties:
+        if duty not in duties:
+            _fail("task service executed duty is not in the seed")
+    promoted_duties = sum(
+        1
+        for row in result["duties"]
+        if row["status"] == "observed" and row["duty"] not in executed_duties
+    )
+    audit = _closed(
+        value["audit_head_facts"],
+        {
+            "before_audit_head",
+            "after_audit_head",
+            "before_legacy_audit_head",
+            "after_legacy_audit_head",
+            "unchanged",
+        },
+        label="task service audit-head facts",
+    )
+    for field in (
+        "before_audit_head",
+        "after_audit_head",
+        "before_legacy_audit_head",
+        "after_legacy_audit_head",
+    ):
+        _digest(audit[field], label=f"task service {field}")
+    if (
+        audit["unchanged"] is not True
+        or audit["before_audit_head"] != audit["after_audit_head"]
+        or audit["before_legacy_audit_head"] != audit["after_legacy_audit_head"]
+    ):
+        _fail("task service audit-head facts indicate mutation")
+    binding = _closed(
+        value["native_event_binding"],
+        {
+            "run_id",
+            "workflow_run_id",
+            "candidate_binding",
+            "host",
+            "task_case",
+            "event_index",
+            "event_sha256",
+            "session_sha256",
+            "route",
+            "host_identity_sha256",
+            "host_consumption_proven",
+        },
+        label="task service native binding",
+    )
+    if (
+        binding["run_id"] != envelope["run_binding"]["run_id"]
+        or binding["workflow_run_id"] != envelope["run_binding"]["workflow_run_id"]
+        or binding["host"] != host
+        or binding["task_case"] != task_case
+        or binding["host_consumption_proven"] is not False
+    ):
+        _fail("task service native binding differs from envelope")
+    if type(binding["workflow_run_id"]) is not int or binding["workflow_run_id"] < 1:
+        _fail("task service workflow binding type is invalid")
+    if dict(_candidate(binding["candidate_binding"], label="task service candidate")) != dict(
+        envelope["candidate_binding"]
+    ):
+        _fail("task service candidate binding differs from envelope")
+    event_index, event = message_event
+    if type(binding["event_index"]) is not int or binding["event_index"] < 0:
+        _fail("task service event index type is invalid")
+    if binding["event_index"] != event_index or binding["event_index"] != result[
+        "first_correct_action"
+    ]["event_index"]:
+        _fail("task service event index is not bound to the task event")
+    if binding["event_sha256"] != _sha(_canonical(event)):
+        _fail("task service event digest differs from the native event")
+    if binding["session_sha256"] != event["session_sha256"]:
+        _fail("task service session differs from the native event")
+    route = event.get("route")
+    if binding["route"] != route:
+        _fail("task service route differs from the native event")
+    if binding["host_identity_sha256"] != _sha(_canonical(event["host_identity"])):
+        _fail("task service Host identity differs from the native event")
+    return derived_seams, promoted_duties, set(not_executed_duties)
 
 
 def _authorized_mutation(value: Any, *, task_case: str, label: str) -> Mapping[str, Any]:
@@ -1026,6 +1630,93 @@ def parse_host_task_evidence(
         failures["native_host_pin_mismatch"] += 1
 
     result = result_value
+    from benchmarks.hosts.v013_task_service_observation import task_result_service_source
+
+    if result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION:
+        if task_case != "continuity":
+            _fail("v3 Host observation is only supported for continuity")
+        try:
+            host_observation_ref = task_result_service_source(result)
+        except ValueError as error:
+            raise HostTaskEvidenceError(
+                "v3 Host observation source is invalid"
+            ) from error
+        if host_observation_ref is None:
+            _fail("v3 continuity Host observation source is unavailable")
+        host_observation = _json_source(
+            host_observation_ref,
+            root=root,
+            label="v0.13 Host observation",
+        )
+        try:
+            from benchmarks.hosts.opencode_single_task_producer import (
+                validate_host_observation,
+            )
+        except ImportError as error:
+            raise HostTaskEvidenceError(
+                "v3 Host observation validator is unavailable"
+            ) from error
+        try:
+            validation_result = validate_host_observation(
+                host_observation,
+                result=result,
+                envelope=bound_envelope,
+                events=events,
+            )
+        except ValueError as error:
+            raise HostTaskEvidenceError(
+                "v3 Host observation failed strict validation"
+            ) from error
+        if validation_result is not None:
+            _fail("v3 Host observation validator must return None")
+
+    service_ref = task_result_service_source(result)
+    service_not_executed_duties: set[str] = set()
+    message_events = [
+        (index, event)
+        for index, event in enumerate(parsed_events)
+        if event.get("schema_version") == "deeplaw.native-host-event/v3"
+        and event.get("event_type") in {"UserPromptSubmit", "chat.message"}
+    ]
+    current_source_task = task_case in SOURCE_TASK_CASES and (
+        result["schema_version"] == TASK_RESULT_V2_SCHEMA_VERSION
+        or any(
+            event.get("schema_version") == "deeplaw.native-host-event/v3"
+            for event in parsed_events
+        )
+    )
+    if current_source_task:
+        if any(
+            event.get("schema_version") != "deeplaw.native-host-event/v3"
+            for event in parsed_events
+        ):
+            _fail("current source task requires only native-v3 events")
+        selected_message = next(
+            (
+                item
+                for item in message_events
+                if item[0] == result["first_correct_action"]["event_index"]
+            ),
+            None,
+        )
+        if service_ref is None:
+            failures["missing_required_operation"] += 1
+            failures["required_duty_gap"] += 1
+        elif selected_message is None:
+            _fail("task service native message event is not the task event")
+        else:
+            service_value = _json_source(
+                service_ref,
+                root=root,
+                label="v0.13 Host task service observation",
+            )
+            _, promoted_duties, service_not_executed_duties = _validate_service_observation(
+                service_value,
+                result=result,
+                envelope=bound_envelope,
+                message_event=selected_message,
+            )
+            failures["required_duty_gap"] += promoted_duties
     first = result["first_correct_action"]
     if not isinstance(first["observed"], bool) or not first["observed"]:
         failures["first_correct_action_missing"] += 1
@@ -1037,6 +1728,11 @@ def parse_host_task_evidence(
     if not message_indices or first["event_index"] != message_indices[0]:
         failures["first_correct_action_missing"] += 1
     if task_case == "continuity" and first["seam"] not in {"knowledge_support", "native_capsule"}:
+        failures["first_correct_action_missing"] += 1
+    if (
+        result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION
+        and first["seam"] != "knowledge_support"
+    ):
         failures["first_correct_action_missing"] += 1
     if task_case == "living_wiki" and first["seam"] not in {
         "knowledge_support",
@@ -1060,25 +1756,48 @@ def parse_host_task_evidence(
     ):
         failures["decision_preservation_missing"] += 1
 
-    _, wrong_admissions = _state_rows(
+    wrong_state_rows, wrong_admissions = _state_rows(
         result["wrong_state_admission"],
         label="wrong-state admission",
         expected_states=TASK_WRONG_STATES[task_case],
+        allow_unknown=result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION,
+    )
+    wrong_state_unknown = sum(
+        1 for row in wrong_state_rows if row.get("observed") is False
     )
     if wrong_admissions:
         failures["wrong_state_admission"] += wrong_admissions
-    _, duplicate_admissions = _state_rows(
+    if wrong_state_unknown:
+        failures["wrong_state_observation_gap"] += wrong_state_unknown
+    duplicate_rows, duplicate_admissions = _state_rows(
         result["duplicate_distractor"],
         label="duplicate/distractor admission",
         expected_states=("duplicate", "distractor"),
+        allow_unknown=result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION,
+    )
+    duplicate_unknown = sum(
+        1 for row in duplicate_rows if row.get("observed") is False
     )
     if duplicate_admissions:
         failures["duplicate_distractor_admission"] += duplicate_admissions
+    if duplicate_unknown:
+        failures["duplicate_distractor_observation_gap"] += duplicate_unknown
 
-    duty_rows, _observed_duty_hits = _duties(result["duties"], task_case=task_case)
+    duty_rows, _observed_duty_hits = _duties(
+        result["duties"],
+        task_case=task_case,
+        allow_not_executed=result["schema_version"]
+        in {TASK_RESULT_V2_SCHEMA_VERSION, TASK_RESULT_V3_SCHEMA_VERSION},
+    )
     expected_statuses = {item["duty"]: item for item in expected_value["duty_expectations"]}
     duty_hits = 0
     for row in duty_rows:
+        if row["duty"] in service_not_executed_duties:
+            failures["required_duty_gap"] += 1
+            continue
+        if row["status"] == "not_executed":
+            failures["required_duty_gap"] += 1
+            continue
         expectation = expected_statuses[row["duty"]]
         status_allowed = row["status"] in expectation["allowed_statuses"]
         gap_matches = (
@@ -1115,6 +1834,9 @@ def parse_host_task_evidence(
     _digest(provider["capsule_sha256"], label="task provider capsule")
     provider_bytes = provider["provider_bytes"]
     token_fields = ("input_tokens", "output_tokens", "cache_tokens", "reasoning_tokens")
+    for field in (*token_fields, "provider_bytes"):
+        if type(provider[field]) is not int or provider[field] < 0:
+            _fail(f"task provider {field} is invalid")
     if (
         not isinstance(provider_bytes, int)
         or provider_bytes < 1
@@ -1234,7 +1956,11 @@ def parse_host_task_evidence(
     process = isolation["process_boundary"]
     write = isolation["write_observation"]
     secret_boundary_failure = (
-        secret["child_secret_present"]
+        (
+            result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION
+            and not secret["parent_secret_present"]
+        )
+        or secret["child_secret_present"]
         or secret["auth_read"]
         or secret["transcript_read"]
         or secret["prompt_read"]
@@ -1293,7 +2019,12 @@ def parse_host_task_evidence(
             failures["query_trace_in_capsule"] + failures["ledger_in_capsule"]
         )
 
-    normalized = {failure: int(failures.get(failure, 0)) for failure in HARD_FAILURE_IDS}
+    failure_ids = (
+        V3_HARD_FAILURE_IDS
+        if result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION
+        else HARD_FAILURE_IDS
+    )
+    normalized = {failure: int(failures.get(failure, 0)) for failure in failure_ids}
     model_task_failures = sum(normalized.values())
 
     metrics = {
@@ -1312,8 +2043,12 @@ def parse_host_task_evidence(
         "observed_gap_codes": sorted(observed_gaps),
         "first_correct_action_rate": 1.0 if not failures["first_correct_action_missing"] else 0.0,
         "decision_preservation_rate": 1.0 if not failures["decision_preservation_missing"] else 0.0,
-        "wrong_state_admission_count": wrong_admissions,
-        "duplicate_distractor_admission_count": duplicate_admissions,
+        "wrong_state_admission_count": (
+            None if wrong_state_unknown else wrong_admissions
+        ),
+        "duplicate_distractor_admission_count": (
+            None if duplicate_unknown else duplicate_admissions
+        ),
         "required_duty_count": len(TASK_DUTIES[task_case]),
         "required_duty_observed_count": duty_hits,
         "required_duty_rate": duty_hits / len(TASK_DUTIES[task_case]),
@@ -1349,7 +2084,11 @@ def parse_host_task_evidence(
             )
             else 0.0
         ),
-        "forgotten_state_admission_count": failures["forgotten_state_admission"],
+        "forgotten_state_admission_count": (
+            None
+            if wrong_state_unknown
+            else failures["forgotten_state_admission"]
+        ),
         "unrelated_state_preservation": (
             1.0 if not failures["unrelated_state_loss"] else 0.0
         ),
@@ -1358,6 +2097,18 @@ def parse_host_task_evidence(
         ),
         "scenario_count": 3 if task_case == "continuity" else 0,
     }
+    if result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION:
+        metrics.update(
+            {
+                "wrong_state_observation_unknown_count": wrong_state_unknown,
+                "duplicate_distractor_observation_unknown_count": duplicate_unknown,
+            }
+        )
+        if task_case == "continuity":
+            # The supervised v3 source observes one fork scenario, not the
+            # three-scenario denominator retained in expected_task.
+            metrics["scenario_count"] = 1
+            metrics["unrelated_state_preservation"] = None
     return {
         "schema_version": "deeplaw.typed-qualification-derived/v3",
         "kind": "host_event_sequence",
@@ -1387,7 +2138,10 @@ __all__ = [
     "TASK_CASES",
     "TASK_DUTIES",
     "TASK_OPERATIONS",
+    "TASK_RESULT_V2_SCHEMA_VERSION",
+    "TASK_RESULT_V3_SCHEMA_VERSION",
     "TASK_WRONG_STATES",
+    "V3_HARD_FAILURE_IDS",
     "HostTaskEvidenceError",
     "is_v013_host_task_event_source",
     "parse_host_task_evidence",

@@ -1,16 +1,18 @@
 # DeepLaw Evaluation Protocol
 
-Status: **v3 Kernel-release protocol; package/main 0.12.0 Beta**.
-Reviewed 2026-08-21. Active qualification is
+Status: **v3 Kernel-release protocol; source-candidate contract**, reconciled 2026-09-09.
+Public release/main and source-candidate version are distinct. Active construction input is
 [`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json)
-with `status=machine_evaluation_pending`, profile
-`kernel_release_core`, and Gate classification v9. The 13 v9 Kernel Release Core gates remain
+with profile `kernel_release_core` and Gate classification v9; its frozen artifact-bound copy and
+retained evidence own exact task status. The 13 v9 Kernel Release Core gates remain
 required; `release_ready=false`, `claim_eligible=false`, and no `0.13.0` tag/release follows from
 this document.
 
-The current Provider advertisement is `knowledge-support` input v7/output v6 and exposes only
-`query`, `context`, and `explain`. Input v1-v6 and output v1-v5 remain internal compatibility
-contracts. Evaluation never treats transcript, prompt, raw log, hidden reasoning, Secret, local
+The current autonomous-core Provider advertisement is `knowledge-support` input v8/output v7 and exposes only
+`query`, `context`, `explain`, and typed `read`. Existing operation response versions remain intact;
+read uses output/v7 and input v7 remains unchanged. New advertisement/reading budgets and their
+measurement boundaries are explicit in [ADR 0007](adr/0007-exact-progressive-mcp-reads.md).
+Evaluation never treats transcript, prompt, raw log, hidden reasoning, Secret, local
 path, or unadmitted content as Provider evidence. Task Continuity uses explicit task and Host
 session seams; automatic transcript memory is out of scope.
 
@@ -27,7 +29,7 @@ receipts, passing exact-artifact real Host/model tasks, professional-source evid
 10,000-object support boundary, and cross-platform/supply-chain results. Official signed Legal Pack
 evidence, semantic restore, Claude, and GUI/Desktop evidence gate only those Capability claims.
 Blind comparative holdouts, machine-reference isolation, panels, scorers, arbitration, and
-comparative results gate only Competitive/Research claims. Pass 11 retains
+comparative results gate only Competitive/Research claims. Historical Pass 11 retained
 some claim-ineligible exact-candidate Host, editor, scale, and artifact observations, but they do
 not supply the complete v9 Core gate set and are not part of this repository-visible development
 protocol. See [`V0_13_PASS11_FINAL_DISPOSITION.md`](V0_13_PASS11_FINAL_DISPOSITION.md).

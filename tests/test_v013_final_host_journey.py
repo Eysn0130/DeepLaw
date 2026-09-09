@@ -195,7 +195,9 @@ def test_default_public_host_journey_fails_closed_across_lifecycle_states(
         "--idempotency-key",
         "v013-final-checkpoint",
         "--summary",
-        "The exact Host route is enrolled.",
+        "The exact Host route is enrolled. Preserve the complete checkpoint, including its "
+        "confirmed decision, next action, pending qualification gap and artifact reference. "
+        "Every continuation must retain the original ordering and exact wording.",
         "--next-action",
         "Run the exact frozen qualification task.",
         "--expires-at",
@@ -249,6 +251,20 @@ def test_default_public_host_journey_fails_closed_across_lifecycle_states(
     checkpoint_content = statements[0]["statement_text"]
     assert "CONFIRMED_DECISION: Keep static Host Connect task-neutral." in checkpoint_content
     assert "NEXT_ACTION: Run the exact frozen qualification task." in checkpoint_content
+    assert 512 < len(checkpoint_content) <= 1024
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        audit_before_projection = store.audit_head
+    projected = _run_cli(
+        capsys, "task", "resolve-host-continuity", "--vault", str(vault),
+        "--host", "codex", "--session-sha256", session_sha256,
+        "--workspace", str(repository),
+    )
+    assert projected["status"] == "admitted"
+    assert len(projected["statements"]) == 2
+    assert "".join(item["content"] for item in projected["statements"]) == checkpoint_content
+    assert len(canonical_json(projected).encode("utf-8")) <= 1400
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        assert store.audit_head == audit_before_projection
     provider_serialized = canonical_json(provider)
     for forbidden in (
         raw_session_id,

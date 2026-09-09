@@ -1079,7 +1079,13 @@ class KnowledgeVault(AbstractContextManager["KnowledgeVault"]):
             self.connection.execute("PRAGMA query_only = ON")
         else:
             self.connection = sqlite3.connect(database)
-            self.connection.execute("PRAGMA journal_mode = DELETE")
+            # The autonomous kernel uses this same database in WAL mode.
+            # Switching an open Vault back to DELETE requires an exclusive
+            # lock and prevents owner writes alongside a persistent reader.
+            journal_mode = self.connection.execute("PRAGMA journal_mode").fetchone()
+            if journal_mode is None or journal_mode[0].lower() not in {"delete", "wal"}:
+                self.connection.close()
+                raise RuntimeError("knowledge vault journal mode is unsupported")
             self.connection.execute("PRAGMA synchronous = FULL")
         try:
             self.connection.row_factory = sqlite3.Row

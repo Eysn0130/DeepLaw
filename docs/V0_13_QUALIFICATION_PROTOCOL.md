@@ -3,12 +3,23 @@
 Status: **v3 Kernel-release protocol frozen; exact candidate binding pending**
 Reviewed: **2026-08-21**
 
-Package and main remain `0.12.0 Beta`. The active record is
+Released main remains `0.12.0 Beta`. A prepared qualification candidate carries
+`0.13.0` as specified below; that candidate version is not a release disposition. The active record is
 [`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json):
 `status=machine_evaluation_pending`, `profile=kernel_release_core`,
 `release_ready=false`, and `claim_eligible=false`. The current classification is Gate v9. This
 protocol does not authorize a `0.13.0` tag/release, RC, GA, Human Gold, legal attestation, or a
 competitive claim.
+
+Current: every active `core_statuses` row is schema-constrained to
+`status=not_executed`, `passed=false`, and `claim=false` in all three pending stages; formal Gate
+results exist only in retained evidence and Commercial-derived outputs and are never backfilled
+into the active record.
+
+Current: formal Host process receipts and receipt sets are produced by the Kernel Evidence
+workflow and bind both `evidence_run_id` and `qualification_run_id` to that current Evidence run.
+The future Commercial run ID cannot be known during collection, so it remains only in
+bundle/report/release run bindings; this does not establish third-party attestation or Authority.
 
 The machine-readable protocol is
 `contracts/v013-qualification-protocol.v3.schema.json`; the frozen bytes are
@@ -16,7 +27,8 @@ The machine-readable protocol is
 v1-v8 remain historical compatibility inputs. They are not rewritten or used as current state.
 The frozen Host process receipt v1 remains a historical compatibility record and is
 `invalidated-for-current-qualification`; current Gate v9 control admission requires the sibling
-`deeplaw.host-process-receipt/v2`. Current Host evidence continues to use
+`deeplaw.host-process-receipt/v2` for each observed model-bearing Host process and the bounded
+`deeplaw.host-process-receipt-set/v1` wrapper for each Host/task control slot. Current Host evidence continues to use
 `deeplaw.host-continuity-qualification/v2`.
 
 ## Product and Provider boundary
@@ -40,11 +52,76 @@ first-party legal policy plane of the Evidence Library. Professional source stay
 the Wiki is not a complete editable canonical copy. DeepLaw does not automatically ingest a Host
 transcript, prompt, hidden reasoning, raw log, authentication, or Secret as memory.
 
-The current Provider advertisement is knowledge-support input v7/output v6 with only `query`,
-`context`, and `explain`. Input v1-v6 and output v1-v5 are compatibility/internal. Provider output
+The current autonomous-core Provider advertisement is knowledge-support input v8/output v7 with only `query`,
+`context`, `explain`, and typed `read`. Existing response versions remain intact; read uses output/v7
+and input v7 remains unchanged. [ADR 0007](adr/0007-exact-progressive-mcp-reads.md) records the explicit
+12 KiB new advertisement budget and read accounting boundaries. Old frozen inputs/receipts retain
+their original version and limits; the changed candidate requires fresh exact bindings. Provider output
 must not contain paths, session hashes, internal selection identity, raw logs, transcript,
 reasoning, Secret material, or unadmitted content. Ordinary reads must not append the canonical
 Ledger.
+
+Current development-only seam: `benchmarks/hosts/v013_task_domain_driver.py` exercises bounded
+Source/Wiki reads and closed query/context/explain MCP calls against a pre-frozen source-bound seed.
+The typed v8 read journey has separate public stdio regression coverage. The former caller is the
+task-domain driver, not a native Host. Local service response projections, Provider Capsule bytes,
+Query Trace, and Ledger observations remain distinct; unexecuted catalog duties stay explicit.
+The driver does not establish an installed-wheel, native Host, model-usage, holdout, or Formal
+qualification result. A collector must still bind actual execution and retained evidence before
+any of these observations can contribute to a formal task result.
+
+Current development-only retention: `v013_task_service_observation.py` invokes that driver and
+associates its bounded Source/Wiki/query/context calls with one validated native-v3 message event,
+candidate, run, session, and route. A source-backed `deeplaw.v013-host-task-result/v2` retains a
+digest-bound `service_source` inside the existing task-result reference; the outer six-reference
+contract is unchanged. Intake, executor closure, and bundle retention reopen those exact bytes.
+Current source-backed evidence (a v2 task result or any native-v3 event) requires an entirely
+native-v3 event sequence and validated service calls; mixing old events cannot bypass this check.
+Entirely historical native-v2 events with a v1 task result remain compatibility inputs only.
+Raw driver-call and retained projection sizes/hashes are separate and bounded; caller overrides
+cannot replace the observed raw-call binding. Source identities and admission policy must match
+the frozen seed. Provider token/byte totals and event indices reject boolean numeric values.
+The retained association explicitly has `host_consumption_proven=false`, `formal_admission=false`,
+and `claim_eligible=false`. It does not prove a Host consumed the driver output. Unexecuted task
+duties remain `not_executed` and cannot be promoted to a passing duty or an acceptable Gap. Native
+turn/usage collection, installed-wheel execution, and the remaining task journeys are still
+required; these local development records do not satisfy Formal Host evidence.
+
+The working-tree `opencode_single_task_producer.py` is a separate supervised development
+producer under review. Its `v013-host-task-result/v3` retains a `host-mcp-observation/v1`
+source within the same six-reference envelope. Unlike the service-driver association above,
+this path requires actual completed native tool parts correlated with the MCP proxy's request
+and response bytes. Synthetic producer tests establish neither that execution occurred nor that
+a Host consumed the output. The owner must execute and retain a fresh exact-candidate run.
+
+The bounded scenario covers one OpenCode continuity/fork journey with two supervised turns.
+Missing catalog duties and the other formal slots remain unexecuted. Its credential mode is
+`owner_external_guard_host_nonce_mcp_no_key`: an external owner process holds the Provider key;
+the Host receives a nonce and MCP receives neither. This does not satisfy the older formal
+Secret-only Host topology by renaming it. Closed environments and process-group cleanup also
+do not establish OS-enforced file or network isolation. Native message inspection in this
+development collector must remain declared in its isolation evidence.
+
+`candidate_binding.wheel_sha256` is an owner-supplied expected identity, not proof of the
+installed runtime. Before real execution the owner must independently bind and verify the exact
+wheel, installed files, interpreter and launch paths; a console entrypoint hash alone does not
+cover the installed package or dependencies. Producer-source closure and runtime closure are
+separate bindings. These development records keep `formal_admission=false` and cannot replace
+the six required Host slots, Core gates, or exact-candidate release qualification.
+
+Current benchmark transport boundary: while a Codex `turn/start` is in flight, the client rejects
+foreign thread/turn notifications before recording text, usage projections, tool output, or
+completion. Non-null identity aliases must be nonempty strings and agree with each other before
+comparison with the active request. The `turn/start` response must also supply one unambiguous turn
+identity and cannot declare a different thread; malformed responses fail before active state is set.
+Turn-bearing notifications received before the response are limited to eight records and 64 KiB;
+they are checked against the returned turn identity before replay. A server tool request
+cannot invoke its handler before that identity is confirmed. The client recognizes the official
+nested `turn.id` completion shape and leaves separate compaction lifecycles outside the active-turn
+capture scope. Thread, turn, and Host session remain different identities; token usage remains keyed
+by the exact thread/turn, with missing usage `unreported`. These are local transport-fixture checks,
+not native Host qualification. The [official App Server reference](https://developers.openai.com/codex/app-server/)
+was checked on 2026-09-07 for wire shapes only; no Host or comparator pin was changed.
 
 ## Why this is not a result
 
@@ -73,6 +150,14 @@ closed; it does not accept a dirty tree, wrong integration commit, main-branch a
 Secret-bearing input. Competitive/research external inputs are not candidate-preparation
 prerequisites.
 
+`benchmarks/release/prepare_v013_candidate.py` is an explicit owner preparation utility; current
+Candidate Full invokes the candidate freezer directly and does not call this utility. The owner
+must refresh and verify `origin/main` before preparation: it must still equal the explicit frozen
+main commit, while the prospective integration merge has that commit as its first parent. The
+utility checks the local remote-tracking reference without fetching or advancing main. The owner
+must recheck these identities before formal freezing and advance main only after qualification of
+that exact candidate. Source regression success alone does not perform these integration checks.
+
 Candidate Full produces exactly one reproducible wheel and one sdist and binds:
 
 - source commit and tree;
@@ -81,6 +166,16 @@ Candidate Full produces exactly one reproducible wheel and one sdist and binds:
 - retained artifact manifest;
 - SBOM, installed licenses, OpenVEX, and provenance;
 - exact workflow/run identity.
+
+The required v0.6.0 migration fixture is built from pinned historical commit
+`e0f1fe3ff01d3026df12673d57c69014c2c4dca4` and retained as a separate fixture artifact,
+outside the candidate wheel/sdist directory. Every matrix cell verifies its source/tree,
+version and wheel bytes before tests; missing or mismatched configured fixtures fail before
+test execution. Historical migration/rollback is required, never OS-nonapplicable. The final
+Candidate Platform aggregation invokes the same typed platform admission used downstream,
+including all nine identity sets and mandatory skips. CI success without this admission is
+not qualification evidence; run `33561475032` is a historical example with nine required
+historical-fixture skips and remains qualification-ineligible.
 
 Kernel Qualification Evidence and Commercial Qualification download those same artifacts and never
 rebuild them. A
@@ -210,6 +305,16 @@ values, PID, thread digests, or broker nonces cannot become Host identity or sat
 Duplicate, replayed, expired, future-issued, cross-candidate, cross-run, cross-task, cross-process,
 cross-connection, and cross-session records fail closed.
 
+One Host/task can require more than one model-bearing Host process. The existing
+`host_process_receipt` slot therefore retains one
+`deeplaw.host-process-receipt-set/v1` wrapper rather than pretending that one v2 record observed a
+whole process set. The wrapper is bounded to 32 ordered members, requires declared and observed
+counts to agree with a complete non-empty inventory, and cross-binds every embedded v2 record to
+the same Host, task, run, candidate, broker, Host identity, and binary. Member record digests,
+process identities, broker instances, and nonces are unique. The wrapper separately binds the
+typed task-level native-event aggregate; it cannot create, repair, or confer observation Authority
+on a member receipt.
+
 The bound validation reference time makes an admitted historical bundle reproducible without
 silently disabling expiry checks. Neither control record permits a command, environment, path,
 PID, stdout/stderr, raw identity, Provider body, prompt, transcript, hidden reasoning,
@@ -275,6 +380,57 @@ it neither reads nor forwards ambient OpenAI authentication. The broker may repo
 Thread creation alone, a diagnostic sidecar, login state, or a fixture is not formal Host task
 evidence; the `thread_id_sha256` field is never renamed to `session_sha256`.
 
+**Current development measurement boundary:** `benchmarks/hosts/codex_transport_observer.py`
+is a thin observer of the existing App Server client's transport, not a v4 broker producer or a
+second JSONL engine. Its closed `deeplaw.codex-transport-observation/v1` output separately counts
+successfully sent public `model/list` and `turn/start` messages. These are RPC observations, not
+internal model inventory, invocation, or sampling measurements. Each of those three internal
+counters is explicitly `status=not_executed, value=null`; neither absence of `model/list`, lack of
+token-usage notifications, a stopped Hook, nor zero loopback connections may convert it into a
+measured integer zero. The output always has `formal_admission=false` and `claim_eligible=false`.
+The existing v4 consumer rejects this development output and retains all seven activity checks.
+
+The observer separately hashes the actual validated `thread/start` response's `thread.id` and
+`thread.sessionId`. Its session digest aggregates the ordered observed session hashes; it is not
+a renamed thread hash, a Hook identity, a complete Formal task/session aggregate, or process/stdio
+attestation. Empty or incomplete observations cannot manufacture an identity or observation
+Authority. Bounded wire digests and explicit EOF/wait results remain local diagnostics; graceful
+parent exit is not proof that every descendant exited or that all Host activity was observed.
+
+The installed-version source audit at OpenAI Codex
+[`3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/core/src/session/turn.rs#L155)
+also shows client-session creation and pre-turn compaction checks before the stopped Hook
+branch, with the ordinary sampling loop later in the function. This is a source/control-flow
+observation, not an executed internal counter; it does not rotate the lifecycle reference above.
+Closing the unavailable measurements requires an independently auditable runtime observation
+source. Development instrumentation must continue to expose the gap until such a source exists,
+without weakening the formal zero-activity requirements.
+
+**Current development account-readiness boundary:**
+`benchmarks/hosts/codex_account_readiness.py` reuses the bounded App Server transport with
+payload projections and raw-output hashes disabled. Its outbound surface is only `initialize`,
+`initialized`, and public `account/read` with literal `refreshToken=false`; incoming tool or auth
+requests are rejected. It returns only a closed account-type/auth-required projection, not email,
+plan, account identifiers, credentials, raw frames, or their hashes. Existing diagnostic clients
+retain their previous behavior; the wire-hashing transport observer above must not be substituted
+for this account-readiness client. Byte limits and fail-closed cleanup still apply.
+The installed Codex 0.153.4 protocol also emits `remoteControl/status/changed` after
+initialization. The readiness client discards this known status notification without reading
+or hashing its installation, server, or environment identity. Unknown notifications and all
+server requests remain rejected; accepting a status envelope does not enable remote control.
+
+The installed-version public account handler uses cached auth, but its config reload and App
+Server startup also load managed cloud policy, whose normal Host-owned auth path may refresh.
+This distinction is visible in pinned
+[`account_processor.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/app-server/src/request_processors/account_processor.rs#L1108)
+and [`cloud-config/service.rs`](https://github.com/openai/codex/blob/3d2ee51ca2d5db578f328aa75e20aa22c0197c9a/codex-rs/cloud-config/src/service.rs#L178).
+Do not claim process-wide zero authentication or background network activity from
+`refreshToken=false`, disable managed requirements, or copy credentials into an isolated home.
+A public static model catalog and disabled plugin/telemetry startup are development controls,
+not measured internal counters. Readiness remains `formal_admission=false` and
+`claim_eligible=false`; it does not prove Desktop account equality, any thread/session identity,
+model invocation, six-slot execution, or any Formal gate.
+
 The v2 receipt shape remains unchanged, but its existing native digests must bind the v4
 observation rather than arbitrary broker labels. `native_event_binding.event_sequence_sha256` is
 the SHA-256 of canonical UTF-8 JSON (sorted keys, compact separators, no NaN) over
@@ -324,10 +480,38 @@ binding can never be reused as a formal receipt.
 
 If the external broker source is interpreter-backed, the construction kit must also pin and
 reopen the exact interpreter bytes, version, ownership, writability, link topology, and executable
-identity before parsing the control request. An ambient `python3` selected only by `PATH` is not an
-exact execution binding. The current POSIX construction kit records this interpreter dependency in
-its control-only installation receipt; Windows interpreter/ACL execution remains literal
-`not_executed` and unsupported fail-closed for that kit.
+identity before parsing the control request. The CLI accepts the three interpreter controls as one
+closed group: `--codex-broker-interpreter`,
+`--expected-codex-broker-interpreter-sha256`, and
+`--expected-codex-broker-interpreter-version`. The broker is launched as
+`[interpreter, -I, -S, staged_source]`; an ambient `python3` selected only by `PATH` is not an
+exact execution binding. The path-free control summary exposes only the interpreter identity,
+version, and SHA-256, and explicitly does not bind the Python import closure. The current POSIX
+construction kit records this interpreter dependency in its control-only installation receipt;
+Windows interpreter/ACL execution remains literal `not_executed` and unsupported fail-closed for
+that kit. It performs one non-executing stable-FD identity/hash rebind after source staging and
+again after the broker context exits; this is best-effort and does not claim atomic `fexecve`,
+import-closure binding, or protection against an arbitrary same-owner swap-and-restore race.
+
+When the staged broker needs non-stdlib imports, the three runtime controls are also one closed
+group: `--codex-broker-runtime-root`, `--codex-broker-runtime-manifest`, and
+`--expected-codex-broker-runtime-manifest-sha256`; they are accepted only together with the
+pinned interpreter group. The manifest is `deeplaw.broker-runtime-input/v1`: it contains a bounded
+relative file list with exact size/SHA-256 entries and separate declared wheel/lock digests. The
+runtime root and manifest are repository-external, owner-controlled, non-writable, and free of
+symlinks/hardlinks; missing, extra, changed, or unlisted files fail closed. The fixed stdlib
+bootstrap runs with `-I -S`, disables bytecode writes, adds only the explicit `source`,
+`site-packages` roots (never the runtime root itself), and invokes the staged source with `runpy`; `.pth`,
+`sitecustomize`, and ambient `PYTHONPATH` are not used. Runtime binding is development/preflight
+only: declared artifact digests do not prove installation provenance, and Python stdlib or OS
+dynamic-library closure remains unbound.
+
+OpenCode development/continuity subprocess capture reuses the shared bounded subprocess runner:
+each stdout/stderr buffer has a 4 MiB limit during execution, with the existing per-call timeout.
+Observed overflow clears both returned streams, including when truncation accompanies a timeout;
+unconfirmed cleanup fails closed. Windows uses the shared Job Guard, while POSIX containment covers
+the created process group only, not a descendant that escapes it. These local capture bounds do not
+replace the separate Provider Capsule limit or establish Formal Host evidence.
 
 The OpenCode runner now has the parallel path-free
 `deeplaw.opencode-owner-external-broker-control/v2` consumer. Its exact owner-only external broker,
@@ -368,13 +552,14 @@ receipt output.
 Passing either zero-model capability preflight only allows that Host's formal runner to move beyond
 its previous fail-before. It does not admit a Host task, prove the later model-bearing process, or
 close any Core Gate. Both diagnostic modes remain fail-before. Each of the six actual task processes
-must still return its own owner-external v2 receipt in the existing slot.
-The v2, consumer, and Kernel validators establish only closed structure and exact cross-binding to
+must still return its own owner-external v2 receipt inside the existing Host/task slot's receipt
+set. The v2, receipt-set, consumer, and Kernel validators establish only closed structure and exact cross-binding to
 the candidate, run IDs, retained per-Host broker source, Host identity, native-event digests, nonce,
 and time window. They cannot self-attest observation provenance; formal authority additionally
 requires the exact external broker process and formal workflow provenance. The six existing Kernel
 `host_process_receipt` slots remain the only receipt inventory; Kernel and Commercial reopen their
-exact bytes and cross-bindings. No second external receipt directory is created or uploaded.
+exact set bytes, embedded v2 bytes, and cross-bindings. No second external receipt directory is
+created or uploaded.
 Focused contract acceptance is not formal Host evidence, and Codex x3/OpenCode x3 remains
 `not_executed`.
 
@@ -445,14 +630,29 @@ are Competitive/Research Claim gates. Missing optional evidence remains `not_exe
 claim false and cannot block Kernel release.
 
 The v0.13 scale gate executes exactly 10,000 active governed Knowledge Objects per Vault. Before
-the measured lane, the public retrieval query and context compile each run exactly one warmup;
-the report retains each warmup's elapsed time, one-sample count, exclusion marker, and Provider
-payload bytes. Warmup values are excluded from exactly 30 measured query/context samples. The
-measured lane reports p50/p95/max and applies hard ceilings of p95 <= 2,000 ms and max <= 5,000 ms
-per surface; the query/context worst case is the typed Gate metric. It also proves RSS, storage,
-file count, build/rebuild duration, full/incremental/no-op equivalence, user-byte protection, and
-the Provider hard bound. More than 10,000 is experimental; 100,000 sharding/bundling belongs to
-v0.14 and is not a v0.13 Core gate.
+the measured lane, the public retrieval query and context compile use their default
+`deeplaw.knowledge-query-plan/v6` path and each run exactly one warmup. For every warmup and all
+30 measured samples, the report retains only the returned plan hash/schema, Provider wrapper
+`deeplaw.provider-knowledge-capsule/v2` and inner
+`deeplaw.knowledge-capsule-projection/v1` schemas, canonical inner Provider byte count/hash,
+source-reference binding and selected semantic-key checks, plus `write_performed=false`. The
+query latency interval includes the public query and its `provider_capsule_from_v6` projection;
+the context latency interval includes `context.compile`, including its Provider projection.
+Observation validation runs outside both latency intervals. Neither interval includes network or
+model work.
+The inner canonical byte count is the Provider delivery count; context additionally binds that count
+to `budget.provider_payload_bytes`. Those query/context byte arrays are cross-bound to the 62
+Provider samples (two warmups plus 30 samples per surface); local traces, raw plans, and payload
+text are not retained. Source compilation metadata does not carry a query-plan version; an old
+v5 observation or an unbound whole local context payload is rejected. Plan, Provider-inner, and
+source-binding observation digests must not be all-zero placeholders. This check does not establish
+the authenticity of arbitrary nonzero digests; exact-run producer and retained-byte bindings remain
+required. Warmup values are excluded
+from exactly 30 measured query/context samples. The measured lane reports p50/p95/max and applies
+hard ceilings of p95 <= 2,000 ms and max <= 5,000 ms per surface; the query/context worst case is
+the typed Gate metric. It also proves RSS, storage, file count, build/rebuild duration,
+full/incremental/no-op equivalence, user-byte protection, and the Provider hard bound. More than
+10,000 is experimental; 100,000 sharding/bundling belongs to v0.14 and is not a v0.13 Core gate.
 
 Formal order is:
 
@@ -460,9 +660,13 @@ Formal order is:
    required Python/3-OS matrix, SBOM/licenses/OpenVEX/provenance.
 2. Kernel Qualification Evidence: download the same artifact, run isolated
    Host/Evidence/Wiki/Context tasks through the exact owner-controlled external collector, retain
-   the no-Secret broker sources, and upload only sanitized evidence. The collector and both brokers
-   are repository-external, owner-only, exact-hash inputs; their presence is a prerequisite, not
-   product runtime.
+   the no-Secret broker sources, and upload only sanitized evidence. Before execution, the workflow
+   reads the collector through a stable file descriptor, freezes those exact bytes into a private
+   non-writable executable, and uses only that copy. The sanitized bundle retains the exact frozen
+   source plus a path-free candidate/Evidence-run descriptor; Kernel, Commercial, and release
+   validators reopen both. This byte binding does not establish third-party collector attestation
+   or observation Authority. The collector and both brokers are repository-external, owner-only,
+   exact-hash inputs; their presence is a prerequisite, not product runtime.
 3. Commercial Qualification: download the same artifact, reopen every source, and derive all 13
    Core gates plus explicit optional-claim statuses, `assembly_enabled`, `release_ready`, and
    bounded Kernel technical claims.

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/broker-runtime-input.v1.schema.json",
+  "title": "DeepLaw bounded broker runtime input manifest v1",
+  "description": "A closed, path-relative digest manifest for an external non-stdlib broker module tree. Artifact digests are declarations only and do not prove installation provenance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "runtime_root_identity",
+    "files",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.broker-runtime-input/v1"
+    },
+    "runtime_root_identity": {
+      "const": "private_external_nonstdlib_runtime"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wheel_sha256",
+        "lock_sha256"
+      ],
+      "properties": {
+        "wheel_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "lock_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": {
+        "const": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "byte_size",
+        "sha256"
+      ],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?:source|site-packages)/(?!\\.{1,2}(?:/|$))(?!.*(?:/\\.{1,2})(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+        },
+        "byte_size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

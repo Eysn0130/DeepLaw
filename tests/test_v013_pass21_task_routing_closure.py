@@ -63,7 +63,7 @@ def _vault(tmp_path: Path) -> tuple[Path, str]:
 def _validate_result(value: dict[str, object]) -> None:
     repository = Path(__file__).resolve().parents[1]
     schema = json.loads(
-        (repository / "contracts/task-continuity-result.v2.schema.json").read_text(
+        (repository / "contracts/task-continuity-result.v3.schema.json").read_text(
             encoding="utf-8"
         )
     )

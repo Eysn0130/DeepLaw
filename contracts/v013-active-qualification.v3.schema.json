@@ -56,7 +56,18 @@
       "minItems": 13,
       "maxItems": 13,
       "uniqueItems": true,
-      "items": {"$ref": "#/$defs/coreStatus"}
+      "items": {
+        "allOf": [
+          {"$ref": "#/$defs/coreStatus"},
+          {
+            "properties": {
+              "status": {"const": "not_executed"},
+              "passed": {"const": false},
+              "claim": {"const": false}
+            }
+          }
+        ]
+      }
     },
     "capability_claims": {
       "type": "array",

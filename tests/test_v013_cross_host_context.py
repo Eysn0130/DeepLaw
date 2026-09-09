@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+from deeplaw.bounded_subprocess import run_bounded_subprocess
 from deeplaw.editor_bridge import (
     host_bridge_contract,
     host_context_envelope,
@@ -15,6 +15,8 @@ from deeplaw.editor_bridge import (
 )
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+TOLARIA_HARNESS_TIMEOUT_SECONDS = 180
+TOLARIA_HARNESS_OUTPUT_BYTES = 65_536
 
 
 def _schema() -> dict[str, object]:
@@ -103,15 +105,17 @@ def test_host_bridge_contracts_match_closed_artifacts() -> None:
 
 
 def test_tolaria_harness_reports_limited_steps_without_private_paths() -> None:
-    completed = subprocess.run(
+    # The harness makes two serial CLI calls with 60-second inner budgets;
+    # reserve a 60-second bridge/setup/cleanup margin for the 180-second total.
+    completed = run_bounded_subprocess(
         [sys.executable, "adapters/tolaria/integration_harness.py"],
         cwd=REPOSITORY,
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=30,
+        timeout_seconds=TOLARIA_HARNESS_TIMEOUT_SECONDS,
+        max_stdout_bytes=TOLARIA_HARNESS_OUTPUT_BYTES,
+        max_stderr_bytes=TOLARIA_HARNESS_OUTPUT_BYTES,
     )
-    result = json.loads(completed.stdout)
+    assert completed.returncode == 0
+    result = json.loads(completed.stdout.decode("utf-8"))
     serialized = json.dumps(result, ensure_ascii=False, sort_keys=True)
     assert len(serialized.encode("utf-8")) <= 65_536
     assert result["integration_status"] == "integration_limited"

@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from ..evidence.statements import validate_statement
+from ..evidence.statements import evidence_contract_name, validate_statement
 from ..knowledge_autonomy import _read_object, _validate_contract, parse_knowledge_markdown
 from ..knowledge_models import canonical_timestamp
 from ..util import canonical_json, sha256_bytes, sha256_file, strict_json_loads
@@ -291,7 +291,7 @@ def compilation_tables_sql() -> str:
 
         CREATE TABLE IF NOT EXISTS knowledge_dependencies_v1 (
             dependency_id TEXT PRIMARY KEY,
-            compilation_run_id TEXT NOT NULL
+            compilation_run_id TEXT
                 REFERENCES source_compilation_runs_v1(compilation_run_id),
             consumer_kind TEXT NOT NULL CHECK(consumer_kind IN (
                 'knowledge_revision', 'relation_revision'
@@ -308,6 +308,10 @@ def compilation_tables_sql() -> str:
             reason TEXT NOT NULL,
             recorded_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            CHECK(compilation_run_id IS NOT NULL OR (
+                consumer_kind = 'relation_revision'
+                AND dependency_kind = 'direct'
+            )),
             UNIQUE(
                 consumer_kind, consumer_revision_id, source_revision_id,
                 fragment_id, dependency_kind
@@ -647,6 +651,7 @@ def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) ->
         ),
         "source_compilation_usage_v1": "freeze_semantic_inventory",
         "source_compilation_mcp_replays_v1": "abort_synthesis_refresh",
+        "knowledge_dependencies_v1": "CHECK(compilation_run_id IS NOT NULL OR (",
     }
     definitions = {
         "source_compilation_artifacts_v1": """
@@ -706,6 +711,36 @@ def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) ->
                 PRIMARY KEY(grant_id, idempotency_key)
             ) STRICT
         """,
+        "knowledge_dependencies_v1": """
+            CREATE TABLE _knowledge_dependencies_v1_next (
+                dependency_id TEXT PRIMARY KEY,
+                compilation_run_id TEXT
+                    REFERENCES source_compilation_runs_v1(compilation_run_id),
+                consumer_kind TEXT NOT NULL CHECK(consumer_kind IN (
+                    'knowledge_revision', 'relation_revision'
+                )),
+                consumer_object_id TEXT NOT NULL,
+                consumer_revision_id TEXT NOT NULL,
+                source_revision_id TEXT NOT NULL
+                    REFERENCES source_revisions_v2(source_revision_id),
+                fragment_id TEXT,
+                dependency_kind TEXT NOT NULL CHECK(dependency_kind IN ('direct', 'transitive')),
+                freshness TEXT NOT NULL CHECK(freshness IN (
+                    'fresh', 'stale', 'invalidated', 'unknown'
+                )),
+                reason TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                CHECK(compilation_run_id IS NOT NULL OR (
+                    consumer_kind = 'relation_revision'
+                    AND dependency_kind = 'direct'
+                )),
+                UNIQUE(
+                    consumer_kind, consumer_revision_id, source_revision_id,
+                    fragment_id, dependency_kind
+                )
+            ) STRICT
+        """,
     }
     selected = []
     for table, marker in required.items():
@@ -740,6 +775,12 @@ def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) ->
                     "grant_id, idempotency_key, operation, request_sha256, "
                     "result_sha256, recorded_at"
                 ),
+                "knowledge_dependencies_v1": (
+                    "dependency_id, compilation_run_id, consumer_kind, "
+                    "consumer_object_id, consumer_revision_id, source_revision_id, "
+                    "fragment_id, dependency_kind, freshness, reason, recorded_at, "
+                    "updated_at"
+                ),
             }[table]
             connection.execute(f"INSERT INTO {temporary}({columns}) SELECT {columns} FROM {table}")
             connection.execute(f"DROP TABLE {table}")
@@ -748,15 +789,23 @@ def _upgrade_extended_compilation_constraints(connection: sqlite3.Connection) ->
             "CREATE INDEX IF NOT EXISTS source_compilation_usage_v1_rate "
             "ON source_compilation_usage_v1(grant_id, recorded_at)"
         )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS knowledge_dependencies_v1_source "
+            "ON knowledge_dependencies_v1(source_revision_id, freshness)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS knowledge_dependencies_v1_consumer "
+            "ON knowledge_dependencies_v1(consumer_object_id, freshness)"
+        )
+        failure = connection.execute("PRAGMA foreign_key_check").fetchone()
+        if failure is not None:
+            raise RuntimeError("source compilation constraint migration broke a foreign key")
         connection.commit()
     except BaseException:
         connection.rollback()
         raise
     finally:
         connection.execute("PRAGMA foreign_keys = ON")
-    failure = connection.execute("PRAGMA foreign_key_check").fetchone()
-    if failure is not None:
-        raise RuntimeError("source compilation constraint migration broke a foreign key")
 
 
 def install_compilation_schema(
@@ -813,6 +862,66 @@ def install_compilation_schema(
         field="statement evidence installed_at",
     )
     connection.commit()
+
+
+def _relation_source_dependency_is_bound(
+    connection: sqlite3.Connection,
+    dependency: sqlite3.Row,
+) -> bool:
+    """Validate a direct relation source dependency without a compilation run."""
+
+    if (
+        dependency["compilation_run_id"] is not None
+        or dependency["consumer_kind"] != "relation_revision"
+        or dependency["dependency_kind"] != "direct"
+    ):
+        return dependency["compilation_run_id"] is not None
+    relation = connection.execute(
+        """
+        SELECT relation_key, evidence_refs_json, recorded_at
+        FROM knowledge_relation_revisions_v3
+        WHERE relation_revision_id = ?
+        """,
+        (dependency["consumer_revision_id"],),
+    ).fetchone()
+    if (
+        relation is None
+        or relation["relation_key"] != dependency["consumer_object_id"]
+        or relation["recorded_at"] != dependency["recorded_at"]
+    ):
+        return False
+    event = connection.execute(
+        """
+        SELECT payload_json, recorded_at
+        FROM autonomous_events_v3
+        WHERE event_type = 'knowledge_relation_committed'
+          AND object_id = ?
+        ORDER BY sequence DESC
+        LIMIT 1
+        """,
+        (dependency["consumer_revision_id"],),
+    ).fetchone()
+    if event is None or event["recorded_at"] != relation["recorded_at"]:
+        return False
+    try:
+        evidence_refs = strict_json_loads(relation["evidence_refs_json"])
+        event_payload = strict_json_loads(event["payload_json"])
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(evidence_refs, list) or not isinstance(event_payload, dict):
+        return False
+    if not any(
+        isinstance(reference, dict)
+        and reference.get("source_revision_id") == dependency["source_revision_id"]
+        and reference.get("fragment_id") == dependency["fragment_id"]
+        for reference in evidence_refs
+    ):
+        return False
+    return (
+        event_payload.get("relation_key") == relation["relation_key"]
+        and event_payload.get("evidence_refs_sha256")
+        == sha256_bytes(canonical_json(evidence_refs).encode("utf-8"))
+    )
 
 
 def verify_compilation_schema(
@@ -1245,10 +1354,17 @@ def verify_compilation_schema(
                 plan = strict_json_loads(plan_path.read_bytes())
                 if (
                     not isinstance(plan, dict)
-                    or plan.get("schema_version") != "deeplaw.semantic-publication-plan/v3"
+                    or plan.get("schema_version") not in {
+                        "deeplaw.semantic-publication-plan/v3",
+                        "deeplaw.semantic-publication-plan/v4"
+                    }
                 ):
                     raise ValueError("v3 publication plan is invalid")
-                _validate_contract("semantic-publication-plan.v3.schema.json", plan)
+                _validate_contract(
+                    "semantic-publication-plan.v4.schema.json"
+                    if plan.get("schema_version") == "deeplaw.semantic-publication-plan/v4"
+                    else "semantic-publication-plan.v3.schema.json", plan
+                )
                 if (
                     plan.get("compilation_run_id") != run_id
                     or plan.get("compiler_profile_version") != "3"
@@ -1361,7 +1477,9 @@ def verify_compilation_schema(
             statement = strict_json_loads(statement_payload)
             if not isinstance(statement, dict):
                 raise ValueError("statement artifact is not an object")
-            _validate_contract("knowledge-statement.v1.schema.json", statement)
+            _validate_contract(
+                evidence_contract_name("knowledge-statement", statement), statement
+            )
             if (
                 canonical_json(statement) != statement_row["statement_json"]
                 or statement["knowledge_revision_id"] != statement_row["knowledge_revision_id"]
@@ -1455,12 +1573,15 @@ def verify_compilation_schema(
             map_value = strict_json_loads(map_payload)
             if not isinstance(map_value, dict):
                 raise ValueError("statement map is not an object")
-            _validate_contract("statement-evidence-map.v1.schema.json", map_value)
+            _validate_contract(
+                evidence_contract_name("statement-evidence-map", map_value), map_value
+            )
             if (
                 canonical_json(map_value) != map_row["map_json"]
                 or map_value["statement_id"] != statement_id_value
                 or map_value["statement_sha256"] != statement_row["statement_sha256"]
                 or map_value["input_set_sha256"] != statement_row["input_set_sha256"]
+                or map_value.get("support_sets") != statement.get("support_sets")
                 or map_value["char_start"] != map_row["char_start"]
                 or map_value["char_end"] != map_row["char_end"]
                 or body[map_value["char_start"] : map_value["char_end"]]
@@ -1483,8 +1604,8 @@ def verify_compilation_schema(
             expected_refs = [
                 ("source", canonical_json(item)) for item in statement["source_refs"]
             ] + [
-                ("knowledge", item) for item in statement["knowledge_revision_refs"]
-            ] + [("relation", item) for item in statement["relation_revision_refs"]]
+                ("knowledge", canonical_json(item)) for item in statement["knowledge_revision_refs"]
+            ] + [("relation", canonical_json(item)) for item in statement["relation_revision_refs"]]
             if len(refs) != len(expected_refs) or any(
                 (row["ref_ordinal"], row["ref_kind"], row["ref_json"])
                 != (index, kind, value)
@@ -1523,7 +1644,9 @@ def verify_compilation_schema(
             receipt = strict_json_loads(receipt_payload)
             if not isinstance(receipt, dict):
                 raise ValueError("statement evidence receipt is not an object")
-            _validate_contract("statement-evidence-receipt.v1.schema.json", receipt)
+            _validate_contract(
+                evidence_contract_name("statement-evidence-receipt", receipt), receipt
+            )
             receipt_body = dict(receipt)
             receipt_digest = receipt_body.pop("receipt_sha256", None)
             if (
@@ -1534,6 +1657,7 @@ def verify_compilation_schema(
                 or receipt["map_sha256"] != map_row["map_sha256"]
                 or receipt["statement_sha256"] != statement_row["statement_sha256"]
                 or receipt["input_set_sha256"] != statement_row["input_set_sha256"]
+                or receipt.get("support_sets") != statement.get("support_sets")
                 or receipt["statement_type"] != statement["statement_type"]
                 or receipt["support_status"] != statement["support_status"]
                 or receipt["valid_from"] != statement["valid_from"]
@@ -1614,7 +1738,9 @@ def verify_compilation_schema(
             )
     for dependency in connection.execute(
         """
-        SELECT consumer_kind, consumer_revision_id
+        SELECT dependency_id, compilation_run_id, consumer_kind,
+               consumer_object_id, consumer_revision_id, source_revision_id,
+               fragment_id, dependency_kind, recorded_at
         FROM knowledge_dependencies_v1
         ORDER BY dependency_id
         """
@@ -1631,6 +1757,7 @@ def verify_compilation_schema(
                 (dependency["consumer_revision_id"],),
             ).fetchone()
             is None
+            or not _relation_source_dependency_is_bound(connection, dependency)
         ):
             failures.append(
                 {

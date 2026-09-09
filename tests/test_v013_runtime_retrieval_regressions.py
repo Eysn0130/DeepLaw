@@ -184,7 +184,7 @@ def test_persistent_read_runtime_reuses_verified_snapshot_without_nested_legacy_
     assert final_verified == first_verified
 
 
-def test_query_without_explicit_plan_version_uses_v6_provider_receipt(
+def test_default_query_uses_current_provider_receipt(
     tmp_path: Path,
 ) -> None:
     root = _synthetic_vault(tmp_path)
@@ -196,22 +196,23 @@ def test_query_without_explicit_plan_version_uses_v6_provider_receipt(
     )
 
     assert response["operation"] == "query"
+    assert response["schema_version"] == "deeplaw.knowledge-support-output/v8"
     result = response.get("result", {})
-    assert result.get("schema_version") == "deeplaw.provider-knowledge-capsule/v2"
+    assert result.get("schema_version") == "deeplaw.provider-knowledge-capsule/v3"
     assert set(result.get("receipt", {})) == {"receipt_id"}
 
 
-def test_provider_v7_contract_and_instructions_recommend_one_read_path(
+def test_current_provider_contract_and_instructions_recommend_one_read_path(
     tmp_path: Path,
 ) -> None:
     root = _synthetic_vault(tmp_path)
     tool = knowledge_tool_definition(autonomous=True)
     assert "$id" not in tool.inputSchema
-    assert tool.inputSchema["title"] == "DeepLaw Knowledge Support Provider Input v7"
+    assert tool.inputSchema["title"] == "DeepLaw Knowledge Support Provider Input v9"
     assert {
         branch["$ref"].rsplit("/", maxsplit=1)[-1]
         for branch in tool.inputSchema["oneOf"]
-    } == {"query", "context", "explain"}
+    } == {"query", "context", "explain", "read"}
     query = {
         "operation": "query",
         "query": "bounded task knowledge",
@@ -227,10 +228,9 @@ def test_provider_v7_contract_and_instructions_recommend_one_read_path(
     for marker in (
         "query=task knowledge",
         "context=bounded Knowledge Capsule",
-        "wiki=pages and navigation",
-        "source=original user evidence",
+        "explain=receipt explanation",
+        "read=exact knowledge, Wiki, or source fragment",
         "law_support=separate Authoritative Evidence",
-        "verify=complete integrity verification",
     ):
         assert marker in instructions
 

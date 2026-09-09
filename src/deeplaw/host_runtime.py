@@ -123,15 +123,15 @@ def host_product_readiness(
             }
         )
     return {
-        "schema_version": "deeplaw.host-product-readiness/v1",
+        "schema_version": "deeplaw.host-product-readiness/v2",
         "autonomous_vault_ready": autonomous_vault_ready,
         "mcp": {
             "mode": "compact_current_with_internal_compatibility",
-            "input_schema": "deeplaw.knowledge-support-input/v7",
-            "output_schema": "deeplaw.knowledge-support-output/v6",
-            "advertised_operations": ["query", "context", "explain"],
-            "compatibility_inputs": ["v1", "v2", "v3", "v4", "v5", "v6"],
-            "compatibility_outputs": ["v1", "v2", "v3", "v4", "v5"],
+            "input_schema": "deeplaw.knowledge-support-input/v9",
+            "output_schema": "deeplaw.knowledge-support-output/v8",
+            "advertised_operations": ["query", "context", "explain", "read"],
+            "compatibility_inputs": ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"],
+            "compatibility_outputs": ["v1", "v2", "v3", "v4", "v5", "v6", "v7"],
         },
         "hosts": profiles,
     }

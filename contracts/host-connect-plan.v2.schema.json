@@ -359,20 +359,40 @@
         "schema_version": {"const": "deeplaw.host-product-readiness/v1"},
         "autonomous_vault_ready": {"const": true},
         "mcp": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "mode", "input_schema", "output_schema", "advertised_operations",
-            "compatibility_inputs", "compatibility_outputs"
-          ],
-          "properties": {
-            "mode": {"const": "compact_current_with_internal_compatibility"},
-            "input_schema": {"const": "deeplaw.knowledge-support-input/v7"},
-            "output_schema": {"const": "deeplaw.knowledge-support-output/v6"},
-            "advertised_operations": {"const": ["query", "context", "explain"]},
-            "compatibility_inputs": {"const": ["v1", "v2", "v3", "v4", "v5", "v6"]},
-            "compatibility_outputs": {"const": ["v1", "v2", "v3", "v4", "v5"]}
-          }
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "mode", "input_schema", "output_schema", "advertised_operations",
+                "compatibility_inputs", "compatibility_outputs"
+              ],
+              "properties": {
+                "mode": {"const": "compact_current_with_internal_compatibility"},
+                "input_schema": {"const": "deeplaw.knowledge-support-input/v7"},
+                "output_schema": {"const": "deeplaw.knowledge-support-output/v6"},
+                "advertised_operations": {"const": ["query", "context", "explain"]},
+                "compatibility_inputs": {"const": ["v1", "v2", "v3", "v4", "v5", "v6"]},
+                "compatibility_outputs": {"const": ["v1", "v2", "v3", "v4", "v5"]}
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "mode", "input_schema", "output_schema", "advertised_operations",
+                "compatibility_inputs", "compatibility_outputs"
+              ],
+              "properties": {
+                "mode": {"const": "compact_current_with_internal_compatibility"},
+                "input_schema": {"const": "deeplaw.knowledge-support-input/v8"},
+                "output_schema": {"const": "deeplaw.knowledge-support-output/v7"},
+                "advertised_operations": {"const": ["query", "context", "explain", "read"]},
+                "compatibility_inputs": {"const": ["v1", "v2", "v3", "v4", "v5", "v6", "v7"]},
+                "compatibility_outputs": {"const": ["v1", "v2", "v3", "v4", "v5", "v6"]}
+              }
+            }
+          ]
         },
         "hosts": {
           "type": "array",

@@ -246,7 +246,7 @@ def _assert_git_identity(
     if frozen_main != frozen_main_commit:
         _fail("--frozen-main-commit is not the exact current commit")
     try:
-        integrated_main = _run_git(
+        tracked_main = _run_git(
             repository,
             [
                 "rev-parse",
@@ -257,10 +257,10 @@ def _assert_git_identity(
         )
     except CandidatePrepError as error:
         raise CandidatePrepError("remote-tracking origin/main cannot be resolved") from error
-    if not GIT_OBJECT.fullmatch(integrated_main):
+    if not GIT_OBJECT.fullmatch(tracked_main):
         _fail("remote-tracking origin/main cannot be resolved")
-    if integrated_main != integration_commit:
-        _fail("remote-tracking origin/main does not equal --integration-commit")
+    if tracked_main != frozen_main:
+        _fail("remote-tracking origin/main does not equal --frozen-main-commit")
     if frozen_main == integration_commit:
         _fail("--frozen-main-commit must differ from --integration-commit")
     try:

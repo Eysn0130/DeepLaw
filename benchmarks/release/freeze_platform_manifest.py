@@ -1,4 +1,4 @@
-"""Freeze a complete, disjoint Platform Core manifest from pytest collection.
+"""Freeze a complete Platform Core manifest from pytest collection.
 
 This maintainer-only command never changes test selection. It records the exact
 node IDs produced by the repository's closed marker expressions and preserves
@@ -22,6 +22,32 @@ HISTORICAL_MANIFEST = (
 HISTORICAL_COMPATIBILITY_NODE_ID = (
     "tests/test_identity_migration_v060.py::"
     "test_real_v060_wheel_additive_migration_verification_and_rollback"
+)
+POSIX_ONLY_ON_WINDOWS_NODE_IDS: tuple[str, ...] = (
+    "tests/test_v013_owner_external_collector.py::"
+    "test_frozen_collector_survives_ambient_path_replacement",
+    "tests/test_v013_owner_external_collector.py::"
+    "test_source_must_be_owner_only_and_credential_free",
+    "tests/test_v013_owner_external_collector.py::"
+    "test_tampered_frozen_collector_fails_closed",
+    "tests/test_v013_owner_external_collector.py::"
+    "test_wrong_run_binding_and_identity_tamper_fail_closed",
+    "tests/test_v013_host_process_receipt_v2.py::"
+    "test_codex_posix_close_cleans_group_after_leader_exit",
+    "tests/test_v013_host_process_receipt_v2.py::"
+    "test_codex_posix_group_cleanup_send_failure_is_unconfirmed",
+    "tests/test_v013_host_process_receipt_v2.py::"
+    "test_codex_posix_start_cleans_stale_group_after_leader_exit",
+    "tests/test_v013_host_process_receipt_v2.py::"
+    "test_codex_posix_start_uses_new_session_process_group",
+    "tests/test_v013_pass13_opencode_qualification.py::"
+    "test_owner_broker_process_group_cleanup_send_failure_is_unconfirmed",
+    "tests/test_v013_pass13_opencode_qualification.py::"
+    "test_owner_broker_success_fails_closed_when_final_cleanup_is_unconfirmed",
+    "tests/test_v013_pass13_opencode_qualification.py::"
+    "test_posix_process_tree_cleanup_kills_group_after_leader_exit",
+    "tests/test_v013_pass13_opencode_qualification.py::"
+    "test_posix_process_tree_cleanup_send_failure_is_unconfirmed",
 )
 
 
@@ -83,6 +109,18 @@ def build_manifest(repository: Path = REPOSITORY) -> dict[str, Any]:
     additional_ids = sorted(windows_set - common_set)
     common = [_descriptor(node_id, historical) for node_id in common_ids]
     additional = [_descriptor(node_id, historical) for node_id in additional_ids]
+    posix_only_ids = sorted(POSIX_ONLY_ON_WINDOWS_NODE_IDS)
+    if len(posix_only_ids) != len(set(posix_only_ids)):
+        raise PlatformManifestFreezeError(
+            "POSIX-only-on-Windows cases contain duplicate node IDs"
+        )
+    missing_posix_only = sorted(set(posix_only_ids) - common_set)
+    if missing_posix_only:
+        raise PlatformManifestFreezeError(
+            "POSIX-only-on-Windows cases are absent from common inventory: "
+            + ", ".join(missing_posix_only)
+        )
+    posix_only = [_descriptor(node_id, historical) for node_id in posix_only_ids]
     qualification = [
         _descriptor(node_id, historical) for node_id in qualification_ids
     ]
@@ -136,9 +174,12 @@ def build_manifest(repository: Path = REPOSITORY) -> dict[str, Any]:
                 "cases": qualification,
             },
             "nonapplicable": {
-                "selection": "windows_native on non-Windows",
+                "selection": "platform-specific tests outside their applicable OS",
                 "status": "nonapplicable",
-                "cases": additional,
+                "cases": sorted(
+                    [*additional, *posix_only],
+                    key=lambda case: case["node_id"],
+                ),
             },
             "historical_compatibility": {
                 "selection": "exact frozen v0.6 wheel required",

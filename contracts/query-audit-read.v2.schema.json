@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/query-audit-read.v2.schema.json",
+  "title": "DeepLaw bounded admitted selection page v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "selection_entries",
+    "selection_sha256",
+    "receipt_sha256",
+    "next_receipt_id",
+    "discovery_exhaustive",
+    "selection_truncated",
+    "scope",
+    "write_performed"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.query-audit-read/v2"
+    },
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^queryreceipt_[0-9a-f]{24}$"
+    },
+    "selection_entries": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidate_id",
+          "kind",
+          "state",
+          "reason"
+        ],
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "kind": {
+            "enum": [
+              "statement",
+              "knowledge_revision",
+              "evidence"
+            ]
+          },
+          "state": {
+            "enum": [
+              "selected",
+              "omitted"
+            ]
+          },
+          "reason": {
+            "enum": [
+              "selected",
+              "selection_budget",
+              "character_budget",
+              "token_budget",
+              "source_budget",
+              "source_only_purpose",
+              "relevance_floor",
+              "exact_source_passage_budget",
+              "duplicate_source_reference",
+              "represented_source_reference"
+            ]
+          }
+        }
+      }
+    },
+    "selection_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "receipt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "next_receipt_id": {
+      "oneOf": [
+        {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^queryreceipt_[0-9a-f]{24}(\\.[0-9]{1,4}\\.[0-9a-f]{64})?$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "discovery_exhaustive": {
+      "const": false
+    },
+    "selection_truncated": {
+      "type": "boolean"
+    },
+    "scope": {
+      "const": "bounded_admitted_candidates_only"
+    },
+    "write_performed": {
+      "const": false
+    }
+  }
+}

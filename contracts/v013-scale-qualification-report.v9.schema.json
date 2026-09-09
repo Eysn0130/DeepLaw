@@ -18,6 +18,7 @@
     "equivalence",
     "rebuild",
     "source_compile",
+    "query_context",
     "semantic_batches",
     "user_bytes",
     "provider",
@@ -38,6 +39,7 @@
     "equivalence": {"$ref": "#/$defs/equivalence"},
     "rebuild": {"$ref": "#/$defs/rebuild"},
     "source_compile": {"$ref": "#/$defs/sourceCompile"},
+    "query_context": {"$ref": "#/$defs/queryContext"},
     "semantic_batches": {
       "type": "array",
       "minItems": 250,
@@ -55,7 +57,7 @@
     "report_sha256": {"$ref": "#/$defs/sha256"}
   },
   "$defs": {
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sha256": {"type": "string", "pattern": "^(?!0{64}$)[0-9a-f]{64}$"},
     "gitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "identifier": {
       "type": "string",
@@ -249,7 +251,6 @@
       "required": [
         "source_file_count",
         "fragments_per_source",
-        "query_plan_version",
         "expected_asset_count",
         "asset_count",
         "unique_asset_count",
@@ -259,12 +260,105 @@
       "properties": {
         "source_file_count": {"const": 250},
         "fragments_per_source": {"const": 40},
-        "query_plan_version": {"const": "5"},
         "expected_asset_count": {"const": 10000},
         "asset_count": {"type": "integer", "minimum": 0},
         "unique_asset_count": {"type": "integer", "minimum": 0},
         "asset_ids_sha256": {"$ref": "#/$defs/sha256"},
         "exact": {"type": "boolean"}
+      }
+    },
+    "queryContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "query", "context"],
+      "properties": {
+        "schema_version": {"const": "deeplaw.v013-scale-query-context-observation/v1"},
+        "query": {"$ref": "#/$defs/queryContextSurface"},
+        "context": {"$ref": "#/$defs/queryContextSurface"}
+      }
+    },
+    "queryContextSurface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_count",
+        "warmup_count",
+        "measured_sample_count",
+        "plan_schema_versions",
+        "query_plan_sha256",
+        "provider_schema_versions",
+        "provider_inner_schema_versions",
+        "provider_content_bytes",
+        "provider_inner_sha256",
+        "source_binding_sha256",
+        "source_ref_counts",
+        "selected_semantic_keys",
+        "write_performed"
+      ],
+      "properties": {
+        "sample_count": {"const": 31},
+        "warmup_count": {"const": 1},
+        "measured_sample_count": {"const": 30},
+        "plan_schema_versions": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"const": "deeplaw.knowledge-query-plan/v6"}
+        },
+        "query_plan_sha256": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "provider_schema_versions": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"const": "deeplaw.provider-knowledge-capsule/v2"}
+        },
+        "provider_inner_schema_versions": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"const": "deeplaw.knowledge-capsule-projection/v1"}
+        },
+        "provider_content_bytes": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "provider_inner_sha256": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "source_binding_sha256": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "source_ref_counts": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "selected_semantic_keys": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "write_performed": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "items": {"const": false}
+        }
       }
     },
     "semanticBatch": {
@@ -339,10 +433,16 @@
     "provider": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["hard_limit_bytes", "sample_count", "max_bytes", "violation_count", "violation", "warmup_payload_bytes"],
+      "required": ["hard_limit_bytes", "sample_count", "sample_bytes", "max_bytes", "violation_count", "violation", "warmup_payload_bytes"],
       "properties": {
         "hard_limit_bytes": {"const": 65536},
-        "sample_count": {"type": "integer", "minimum": 1},
+        "sample_count": {"const": 62},
+        "sample_bytes": {
+          "type": "array",
+          "minItems": 62,
+          "maxItems": 62,
+          "items": {"type": "integer", "minimum": 1}
+        },
         "max_bytes": {"type": "integer", "minimum": 0},
         "violation_count": {"type": "integer", "minimum": 0},
         "violation": {"type": "boolean"},

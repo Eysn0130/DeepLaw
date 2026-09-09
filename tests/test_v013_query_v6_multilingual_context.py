@@ -167,6 +167,7 @@ def test_v6_multilingual_context_public_seams(tmp_path: Path) -> None:
             purpose="verify",
             scope="project",
             max_sensitivity="public",
+            query_plan_version="6",
             confirm_no_case_data=True,
         )
     cli_context = _run_cli(
@@ -178,6 +179,8 @@ def test_v6_multilingual_context_public_seams(tmp_path: Path) -> None:
         task,
         "--purpose",
         "verify",
+        "--query-plan-version",
+        "6",
         "--confirm-no-case-data",
     )
     mcp_context = handle_knowledge_support(
@@ -190,6 +193,7 @@ def test_v6_multilingual_context_public_seams(tmp_path: Path) -> None:
         max_sources=12,
         scope="project",
         max_sensitivity="public",
+        query_plan_version="6",
         confirm_no_case_data=True,
         vault_path=root,
     )
@@ -224,6 +228,7 @@ def test_v6_multilingual_exact_badge_quote_keeps_source_evidence(tmp_path: Path)
             purpose="quote",
             scope="project",
             max_sensitivity="public",
+            query_plan_version="6",
             confirm_no_case_data=True,
         )
     serialized = canonical_json(context)

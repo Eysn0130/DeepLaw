@@ -262,7 +262,7 @@ def test_generated_host_config_is_path_free_and_task_neutral(
     )
 
     rendered = canonical_json(plan)
-    assert plan["schema_version"] == "deeplaw.host-connect-plan/v2"
+    assert plan["schema_version"] == "deeplaw.host-connect-plan/v3"
     assert plan["data_binding"] == {
         "environment_variable": "DEEPLAW_KNOWLEDGE_VAULT",
         "expected_vault_id": plan["vault_id"],

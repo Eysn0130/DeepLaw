@@ -453,13 +453,49 @@ def _preflight(root: Path, fixture: dict[str, Any], seeded: dict[str, Any]) -> d
     }
 
 
-def _wrapper_source(runtime_python: Path) -> str:
+def _runtime_layout(executable: Path) -> tuple[Path, str]:
+    """Return the bound interpreter and receipt entrypoint for one venv layout."""
+    parent = executable.parent
+    if parent.name == "bin" and executable.name == "deeplaw":
+        runtime_python = parent / "python"
+        child_entrypoint = "runtime/bin/deeplaw"
+        alternate_paths = (
+            executable.parent.parent / "Scripts" / "python.exe",
+            executable.parent.parent / "Scripts" / "deeplaw.exe",
+        )
+    elif parent.name == "Scripts" and executable.name == "deeplaw.exe":
+        runtime_python = parent / "python.exe"
+        child_entrypoint = "runtime/Scripts/deeplaw.exe"
+        alternate_paths = (
+            executable.parent.parent / "bin" / "python",
+            executable.parent.parent / "bin" / "deeplaw",
+        )
+    else:
+        raise ValueError(
+            "candidate DeepLaw runtime must use bin/deeplaw or Scripts/deeplaw.exe"
+        )
+    if any(path.exists() or path.is_symlink() for path in alternate_paths):
+        raise ValueError("candidate DeepLaw runtime has mixed platform layouts")
+    if not runtime_python.is_file():
+        raise ValueError("candidate DeepLaw runtime has no adjacent Python interpreter")
+    return runtime_python, child_entrypoint
+
+
+def _wrapper_source(
+    runtime_python: Path,
+    runtime_executable: Path | None = None,
+) -> str:
     blocked = repr(_BLOCKED_MCP_NAMES)
     shebang = str(runtime_python.absolute())
+    if runtime_executable is None:
+        child_entrypoint = "runtime/bin/deeplaw"
+    else:
+        _bound_python, child_entrypoint = _runtime_layout(runtime_executable)
     return f'''#!{shebang}
 from __future__ import annotations
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from deeplaw.closed_mcp_launcher import closed_mcp_environment
@@ -470,25 +506,33 @@ arguments = sys.argv[1:]
 expected_index = arguments.index("--expected-vault-id")
 expected_vault_id = arguments[expected_index + 1]
 surface = "knowledge_sink" if arguments[:3] == ["knowledge", "sink", "mcp"] else "knowledge_support"
+child_argv = [{child_entrypoint!r}, *arguments]
 with closed_mcp_environment(
     surface=surface,
     expected_vault_id=expected_vault_id,
 ) as launch:
     environment_names = sorted(launch.allowed_environment_names)
     home_isolated = launch.environment.get("HOME") != os.environ.get("HOME")
-child_argv = ["runtime/bin/deeplaw", *arguments]
-receipt = {{
-    "schema_version": "deeplaw.closed-mcp-environment-receipt/v1",
-    "closed": True,
-    "home_isolated": home_isolated,
-    "blocked_names_present": sorted(name for name in blocked if name in environment_names),
-    "environment_names": environment_names,
-    "child_argv": child_argv,
-}}
-Path("mcp-environment-receipt.json").write_text(
-    json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\\n",
-    encoding="utf-8",
-)
+    receipt = {{
+        "schema_version": "deeplaw.closed-mcp-environment-receipt/v1",
+        "closed": True,
+        "home_isolated": home_isolated,
+        "blocked_names_present": sorted(name for name in blocked if name in environment_names),
+        "environment_names": environment_names,
+        "child_argv": child_argv,
+    }}
+    Path("mcp-environment-receipt.json").write_text(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\\n",
+        encoding="utf-8",
+    )
+    if os.name == "nt":
+        completed = subprocess.run(
+            [child_argv[0], *arguments],
+            env=launch.environment,
+            check=False,
+            shell=False,
+        )
+        raise SystemExit(completed.returncode)
 os.execve(sys.executable, [sys.executable, *child_argv], launch.environment)
 '''
 
@@ -500,13 +544,14 @@ def _prepare_runtime(
 ) -> tuple[Path, str]:
     executable = deeplaw_executable.resolve(strict=True)
     runtime_root = executable.parent.parent
-    runtime_python = executable.parent / "python"
-    if not runtime_python.is_file():
-        raise ValueError("candidate DeepLaw runtime has no adjacent Python interpreter")
+    runtime_python, _child_entrypoint = _runtime_layout(executable)
     runtime_link = output_dir / "runtime"
     runtime_link.symlink_to(runtime_root, target_is_directory=True)
     wrapper = output_dir / "deeplaw-closed-mcp"
-    wrapper.write_text(_wrapper_source(runtime_python), encoding="utf-8")
+    wrapper.write_text(
+        _wrapper_source(runtime_python, executable),
+        encoding="utf-8",
+    )
     wrapper.chmod(0o700)
     (output_dir / "mcp-home" / "config").mkdir(parents=True)
     return wrapper, _sha256_file(wrapper)
@@ -764,7 +809,11 @@ def _environment_receipt(path: Path) -> dict[str, Any] | None:
         return None
     value = _load_object(path)
     expected_prefix = [
-        "runtime/bin/deeplaw",
+        (
+            "runtime/Scripts/deeplaw.exe"
+            if os.name == "nt"
+            else "runtime/bin/deeplaw"
+        ),
         "knowledge",
         "mcp",
         "--closed-environment",

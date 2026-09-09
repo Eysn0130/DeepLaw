@@ -29,6 +29,13 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from defusedxml import ElementTree as DefusedET
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.release.qualification_artifact_safety import (
+    ABSOLUTE_PATH_RE as _ABSOLUTE_PATH_RE,
+)
+from benchmarks.release.qualification_artifact_safety import MAX_SOURCE_BYTES
+from benchmarks.release.qualification_artifact_safety import (
+    SECRET_MARKER_RE as _SECRET_RE,
+)
 from benchmarks.release.security_domain_receipt import (
     ROLES as _SECURITY_DOMAIN_ROLES,
 )
@@ -53,7 +60,6 @@ SCHEMA_V3_VERSION = "deeplaw.typed-qualification-evidence/v3"
 DERIVED_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v1"
 DERIVED_V2_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v2"
 DERIVED_V3_SCHEMA_VERSION = "deeplaw.typed-qualification-derived/v3"
-MAX_SOURCE_BYTES = 64 * 1024 * 1024
 PACKAGE_NAME = "deeplaw"
 _V2_COMPATIBLE_SCHEMA_VERSIONS = frozenset({SCHEMA_V2_VERSION, SCHEMA_V3_VERSION})
 _V3_PROFESSIONAL_CASE_TYPES = frozenset(
@@ -124,7 +130,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "130ccd20fc7c9b4636e365c4a1bdcfa06e8f355beac84e0653399dae5cbe1db6"
+    "8682b547f2c6c163e0dffe59f5c7646f2d92b1e415634d6346e844afb47e3ccf"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -151,24 +157,9 @@ _FORBIDDEN_KEYS = frozenset(
     }
 )
 _COUNT_KEY_RE = re.compile(r"(?:^|_)(?:count|counts)$")
-# Sanitized receipts may contain URLs and legal locators (for example
-# ``https://example.test/page/1`` and ``page:/1``), but must never retain a
-# local path.  Keep the local roots explicit so a URL's ``://`` is not
-# mistaken for an absolute path.  The Windows alternatives are deliberately
-# separate because a drive/UNC path is not POSIX-absolute on this host.
-_ABSOLUTE_PATH_RE = re.compile(
-    r"""(?:
-        (?<![A-Za-z0-9_:/])/(?:Users|home|root|private|tmp|var|etc|opt|workspace|Volumes|System|Library|bin|sbin|usr|dev|proc|sys|run|mnt)(?:/|[\s"']|$)
-        |(?<![A-Za-z0-9_\\:])(?:[A-Za-z]:[\\/]|\\\\(?!u[0-9a-fA-F]{4}[\\/])[^\\/\s]+[\\/])
-    )""",
-    re.VERBOSE,
-)
 _RAW_JSON_POSIX_PATH_RE = re.compile(
     r"""(?<![A-Za-z0-9_:/\[])/(?:Users|home|root|private|tmp|var|etc|opt|workspace|Volumes|System|Library|bin|sbin|usr|dev|proc|sys|run|mnt)(?:/|[\s"']|$)""",
     re.VERBOSE,
-)
-_SECRET_RE = re.compile(
-    r"""(?i)(?:api[_-]?key|access[_-]?token|authorization|bearer|private[_-]?key|secret)\s*[:=]"""
 )
 _SECRET_ENV_KEY_RE = re.compile(
     r"(?:auth|credential|secret|password|passwd|api[_-]?key|private[_-]?key|"
@@ -448,6 +439,7 @@ def _source_json(
     label: str,
     allow_count_paths: frozenset[tuple[str, ...]] = frozenset(),
     allow_frozen_identity_literals: bool = False,
+    allow_public_signature_b64: bool = False,
 ) -> tuple[Any, _SourceData]:
     source = _source_data(ref, root=root, label=label, media_type="application/json")
     if not allow_frozen_identity_literals:
@@ -457,6 +449,7 @@ def _source_json(
         value,
         label=label,
         allow_frozen_identity_literals=allow_frozen_identity_literals,
+        allow_public_signature_b64=allow_public_signature_b64,
     )
     _reject_forbidden_keys(value, allow_count_paths=allow_count_paths)
     return value, source
@@ -498,12 +491,15 @@ def _reject_projection_strings(
     label: str,
     path: tuple[str, ...] = (),
     allow_frozen_identity_literals: bool = False,
+    allow_public_signature_b64: bool = False,
 ) -> None:
     if isinstance(value, str):
         if allow_frozen_identity_literals and (
             path[-1:] == ("node_id",)
             or path[-2:] in {("junit", "classname"), ("junit", "name")}
         ):
+            return
+        if allow_public_signature_b64 and path == ("signature_b64",):
             return
         if _ABSOLUTE_PATH_RE.search(value) or _SECRET_RE.search(value):
             _fail(f"{label} contains a secret or local absolute path")
@@ -514,6 +510,7 @@ def _reject_projection_strings(
                 label=label,
                 path=(*path, str(key)),
                 allow_frozen_identity_literals=allow_frozen_identity_literals,
+                allow_public_signature_b64=allow_public_signature_b64,
             )
     elif isinstance(value, list):
         for index, item in enumerate(value):
@@ -522,6 +519,7 @@ def _reject_projection_strings(
                 label=label,
                 path=(*path, str(index)),
                 allow_frozen_identity_literals=allow_frozen_identity_literals,
+                allow_public_signature_b64=allow_public_signature_b64,
             )
 
 
@@ -979,7 +977,12 @@ def _platform_manifest_expectations(
     ref: Mapping[str, Any],
     *,
     root: Path,
-) -> tuple[dict[str, set[tuple[str, str]]], str, str]:
+) -> tuple[
+    dict[str, set[tuple[str, str]]],
+    dict[str, set[tuple[str, str]]],
+    str,
+    str,
+]:
     manifest, source = _source_json(
         ref,
         root=root,
@@ -1031,9 +1034,17 @@ def _platform_manifest_expectations(
         return set(values)
 
     common_identities = identities(common["cases"], label="Platform common inventory")
+    windows_native_identities = identities(
+        windows["additional_cases"],
+        label="Platform Windows-native inventory",
+    )
     windows_identities = identities(
         [*common["cases"], *windows["additional_cases"]],
         label="Platform Windows inventory",
+    )
+    nonapplicable_identities = identities(
+        manifest["classifications"]["nonapplicable"]["cases"],
+        label="Platform nonapplicable classification",
     )
     common_digest = _sha256_bytes(_canonical(common["cases"]))
     windows_digest = _sha256_bytes(
@@ -1048,11 +1059,25 @@ def _platform_manifest_expectations(
         _fail("Platform core test manifest inventory digest or count is invalid")
     if not windows_identities.issuperset(common_identities):
         _fail("Platform Windows inventory does not extend common inventory")
+    if not (
+        windows_native_identities
+        <= nonapplicable_identities
+        <= windows_identities
+    ):
+        _fail("Platform nonapplicable classification is inconsistent")
+    posix_only_on_windows = nonapplicable_identities - windows_native_identities
+    if not posix_only_on_windows <= common_identities:
+        _fail("Platform POSIX-only classification is outside common inventory")
     return (
         {
             "ubuntu": common_identities,
             "macos": common_identities,
             "windows": windows_identities,
+        },
+        {
+            "ubuntu": set(),
+            "macos": set(),
+            "windows": posix_only_on_windows,
         },
         source.ref["sha256"],
         manifest_digest,
@@ -1133,11 +1158,14 @@ def _parse_platform(
         label="Candidate Platform receipt",
     )
     _platform_wrapper, rows = _platform_rows(value, envelope=envelope)
-    required_by_platform, platform_manifest_source_sha256, platform_manifest_digest = (
-        _platform_manifest_expectations(
-            envelope["payload"]["platform_manifest_source"],
-            root=root,
-        )
+    (
+        required_by_platform,
+        nonapplicable_by_platform,
+        platform_manifest_source_sha256,
+        platform_manifest_digest,
+    ) = _platform_manifest_expectations(
+        envelope["payload"]["platform_manifest_source"],
+        root=root,
     )
     descriptors, observations_by_digest = _platform_junit_sources(
         envelope["payload"],
@@ -1147,6 +1175,8 @@ def _parse_platform(
     binding_keys: set[tuple[str, str, str]] = set()
     testcase_keys: set[tuple[str, str, str]] = set()
     outcomes: Counter[str] = Counter()
+    nonapplicable_testcase_count = 0
+    mandatory_skip_count = 0
     identity_sets: list[tuple[str, str, set[tuple[str, str]]]] = []
     wheel_sha = envelope["candidate_binding"]["wheel_sha256"]
     for index, row in enumerate(rows):
@@ -1185,6 +1215,12 @@ def _parse_platform(
                 _fail("Candidate Platform receipt contains duplicate testcase identity")
             testcase_keys.add(testcase_key)
             outcomes[outcome] += 1
+            if outcome == "skip":
+                identity = tuple(testcase_identity.split("::", 1))
+                if identity in nonapplicable_by_platform[platform]:
+                    nonapplicable_testcase_count += 1
+                else:
+                    mandatory_skip_count += 1
     expected_bindings = {
         (item["platform"], item["python_version"], item["source"]["sha256"])
         for item in descriptors
@@ -1213,6 +1249,7 @@ def _parse_platform(
             "row_count": len(rows),
             "testcase_count": sum(outcomes.values()),
             "successful_testcase_count": outcomes["success"],
+            "nonapplicable_testcase_count": nonapplicable_testcase_count,
             "platforms": ["ubuntu", "macos", "windows"],
             "python_versions": ["3.11", "3.12", "3.13"],
             "platform_matrix_rows": len(rows),
@@ -1242,11 +1279,11 @@ def _parse_platform(
         },
         {
             "platform_failure": outcomes["failure"],
-            "platform_skip": outcomes["skip"],
+            "platform_skip": mandatory_skip_count,
             "platform_identity_set_mismatch": identity_set_mismatch,
             "platform_required_identity_missing": missing_required,
             "platform_unexpected_identity": unexpected_identities,
-            "mandatory_skip": outcomes["skip"],
+            "mandatory_skip": mandatory_skip_count,
         },
         record_sha256,
     )
@@ -2042,6 +2079,7 @@ def _parse_human_gold(
         payload["human_attestation_source"],
         root=root,
         label="external human attestation",
+        allow_public_signature_b64=True,
     )
     _validate_contract(
         gold,
@@ -4535,12 +4573,13 @@ def _parse_context(
     )
 
 
-def _parse_scale_v9(
+def _parse_scale_versioned(
     envelope: Mapping[str, Any],
     *,
     expected_value: Any,
     observed_value: Any,
     record_sha256: str,
+    version: str,
 ) -> dict[str, Any]:
     from benchmarks.v013.scale_qualification_v9 import (
         ACTIVE_GOVERNED_OBJECT_TARGET,
@@ -4548,18 +4587,22 @@ def _parse_scale_v9(
         FRAGMENTS_PER_SOURCE,
         HARD_FAILURE_IDS,
         PROVIDER_HARD_LIMIT_BYTES,
-        RUNNER_RELATIVE_PATH,
         SOURCE_BATCH_COUNT,
         WARM_SAMPLE_TARGET,
-        verify_report,
     )
-    from benchmarks.v013.scale_qualification_v9 import (
-        SCHEMA_VERSION as SCALE_V9_SCHEMA_VERSION,
+    if version == "9":
+        from benchmarks.v013 import scale_qualification_v9 as runner
+    elif version == "10":
+        from benchmarks.v013 import scale_qualification_v10 as runner
+    else:
+        _fail("scale report version is unsupported")
+    plan_version, provider_version, inner_version = (
+        ("6", "2", "1") if version == "9" else ("7", "3", "2")
     )
 
     expected = _require_mapping(
         expected_value,
-        label="scale v9 expected contract",
+        label=f"scale v{version} expected contract",
         keys={
             "schema_version",
             "active_governed_object_count",
@@ -4573,26 +4616,27 @@ def _parse_scale_v9(
         },
     )
     exact_expected = {
-        "schema_version": "deeplaw.v013-scale-qualification-expected/v9",
+        "schema_version": f"deeplaw.v013-scale-qualification-expected/v{version}",
         "active_governed_object_count": ACTIVE_GOVERNED_OBJECT_TARGET,
         "source_file_count": SOURCE_BATCH_COUNT,
         "fragments_per_source": FRAGMENTS_PER_SOURCE,
-        "query_plan_version": "5",
+        "query_plan_version": plan_version,
         "warm_samples": WARM_SAMPLE_TARGET,
         "provider_hard_limit_bytes": PROVIDER_HARD_LIMIT_BYTES,
         "above_10000_status": "experimental_unqualified",
         "deferred_100000": DEFERRED_100000,
     }
     if dict(expected) != exact_expected:
-        _fail("scale v9 expected contract differs from the frozen 10k boundary")
-    observed = _require_mapping(observed_value, label="scale v9 observed report")
-    if observed.get("schema_version") != SCALE_V9_SCHEMA_VERSION:
-        _fail("scale v9 observed report schema is unsupported")
-    verification = verify_report(observed)
+        _fail(f"scale v{version} expected contract differs from the frozen 10k boundary")
+    observed = _require_mapping(observed_value, label=f"scale v{version} observed report")
+    if observed.get("schema_version") != runner.SCHEMA_VERSION:
+        _fail(f"scale v{version} observed report schema is unsupported")
+    verification = runner.verify_report(observed)
     if verification.get("valid") is not True:
         errors = verification.get("errors")
         detail = errors[0] if isinstance(errors, list) and errors else "unknown validation error"
-        _fail(f"scale v9 observed report is invalid: {detail}")
+        _fail(f"scale v{version} observed report is invalid: {detail}")
+    query_context = runner._validate_query_context_observation(observed["query_context"])
 
     candidate = observed["candidate_binding"]
     envelope_candidate = envelope["candidate_binding"]
@@ -4605,19 +4649,19 @@ def _parse_scale_v9(
     )
     for field, observed_binding, expected_binding in candidate_pairs:
         if observed_binding != expected_binding:
-            _fail(f"scale v9 candidate binding mismatch: {field}")
+            _fail(f"scale v{version} candidate binding mismatch: {field}")
     run = observed["run_binding"]
     envelope_run = envelope["run_binding"]
     if (
         run["run_id"] != envelope_run["run_id"]
         or run["workflow_run_id"] != envelope_run["workflow_run_id"]
     ):
-        _fail("scale v9 run binding differs from the typed envelope")
+        _fail(f"scale v{version} run binding differs from the typed envelope")
     if (
-        run["runner"] != RUNNER_RELATIVE_PATH
+        run["runner"] != runner.RUNNER_RELATIVE_PATH
         or run["runner_sha256"] != envelope["runner"]["sha256"]
     ):
-        _fail("scale v9 runner binding differs from the typed envelope")
+        _fail(f"scale v{version} runner binding differs from the typed envelope")
 
     query = observed["warm_samples"]["query"]
     context = observed["warm_samples"]["context"]
@@ -4650,12 +4694,35 @@ def _parse_scale_v9(
         ],
         "query_sample_count": query["sample_count"],
         "context_sample_count": context["sample_count"],
+        f"query_context_plan_v{plan_version}": int(
+            all(
+                observed_version == f"deeplaw.knowledge-query-plan/v{plan_version}"
+                for surface in (query_context["query"], query_context["context"])
+                for observed_version in surface["plan_schema_versions"]
+            )
+        ),
+        f"query_context_provider_projection_v{provider_version}": int(
+            all(
+                observed_version == f"deeplaw.provider-knowledge-capsule/v{provider_version}"
+                for surface in (query_context["query"], query_context["context"])
+                for observed_version in surface["provider_schema_versions"]
+            )
+        ),
+        f"query_context_inner_projection_v{inner_version}": int(
+            all(
+                observed_version == f"deeplaw.knowledge-capsule-projection/v{inner_version}"
+                for surface in (query_context["query"], query_context["context"])
+                for observed_version in surface["provider_inner_schema_versions"]
+            )
+        ),
+        "query_context_sample_count": query_context["query"]["sample_count"]
+        + query_context["context"]["sample_count"],
         "report_sha256": observed["report_sha256"],
     }
     observed_failures = set(observed["hard_failures"])
     unknown_failures = observed_failures - set(HARD_FAILURE_IDS)
     if unknown_failures:
-        _fail("scale v9 report contains an unknown hard failure")
+        _fail(f"scale v{version} report contains an unknown hard failure")
     failures = {
         "scale_not_executed": int(observed["status"] != "executed"),
         **{
@@ -4704,13 +4771,15 @@ def _parse_scale(
         envelope["schema_version"] == SCHEMA_V3_VERSION
         and isinstance(observed_value, Mapping)
         and observed_value.get("schema_version")
-        == "deeplaw.v013-scale-qualification-report/v9"
+        in {"deeplaw.v013-scale-qualification-report/v9",
+            "deeplaw.v013-scale-qualification-report/v10"}
     ):
-        return _parse_scale_v9(
+        return _parse_scale_versioned(
             envelope,
             expected_value=expected_value,
             observed_value=observed_value,
             record_sha256=record_sha256,
+            version=observed_value["schema_version"].rsplit("/v", 1)[1],
         )
     _reject_forbidden_keys(expected_value)
     _reject_forbidden_keys(observed_value)
@@ -5463,6 +5532,23 @@ def parse_typed_evidence(
         for index, ref in enumerate(refs)
     ]
     referenced_paths = [item.path for item in sources]
+    if kind == "host_event_sequence":
+        from benchmarks.hosts.v013_task_service_observation import task_result_service_source
+
+        task_result = _strict_json(sources[4].raw, label="Host task result")
+        try:
+            service_ref = task_result_service_source(task_result)
+        except ValueError as exc:
+            raise TypedQualificationEvidenceError("Host task service reference is invalid") from exc
+        if service_ref is not None:
+            referenced_paths.append(
+                _source_data(
+                    service_ref,
+                    root=evidence_root,
+                    label="Host task service observation",
+                    media_type="application/json",
+                ).path
+            )
     if kind in {"legal_rows", "professional_evidence_rows"}:
         original_refs = envelope_value["payload"]["original_source_refs"]
         if not isinstance(original_refs, list):

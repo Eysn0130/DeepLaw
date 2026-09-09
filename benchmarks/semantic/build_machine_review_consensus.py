@@ -34,7 +34,7 @@ HUMAN_REVIEW_POLICY = {
     "reason": "owner-approved deterministic machine-consensus release scope",
 }
 TRANSLATION_IDENTITY_VERSION = "deeplaw-owner-review-translation/1"
-CANDIDATE_VERSION = "0.12.0"
+CANDIDATE_VERSION = "0.13.0"
 
 
 def _repository() -> Path:

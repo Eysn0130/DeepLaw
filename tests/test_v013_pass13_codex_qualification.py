@@ -540,7 +540,7 @@ def test_seed_vault_uses_owner_mutations_expiry_and_binding_distractors(
 
 
 def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
-    from deeplaw.knowledge_mcp_server import knowledge_tool_definition
+    from deeplaw.knowledge_mcp_server import _v7_input_schema
 
     orchestrator = qualification.QualificationOrchestrator(
         host="codex",
@@ -584,7 +584,7 @@ def test_report_builder_is_schema_bound_and_claim_false(tmp_path: Path) -> None:
             "version": qualification.HISTORICAL_CODEX_VERSION_FIXTURE,
         },
         tool_schema=pass13_evidence.knowledge_support_tool_schema_receipt(
-            [knowledge_tool_definition(autonomous=True)]
+            [{"name": "knowledge_support", "inputSchema": _v7_input_schema()}]
         ),
         runs=[
             qualification._placeholder_run(index, scenario)
@@ -714,6 +714,135 @@ def test_scenario_driver_uses_client_lifecycle_and_rejects_three_calls(
         )
     assert turn_params == [{"outputSchema": qualification._FINAL_RESPONSE_SCHEMA}]
     assert resolved_sessions == ["session-root"]
+
+
+def test_scenario_turn_result_must_match_requested_thread_before_recording() -> None:
+    capsule = {
+        "schema_version": "deeplaw.host-continuity-capsule/v1",
+        "status": "admitted",
+        "statements": [],
+        "gaps": [],
+        "conflicts": [],
+        "write_performed": False,
+    }
+    capsule_text = pass13_evidence.canonical_json(capsule)
+    context = qualification._CONTINUITY_CONTEXT_PREFIX + capsule_text
+    encoded = context.encode("utf-8")
+    expected = {
+        "status": "admitted",
+        "capsule_sha256": hashlib.sha256(capsule_text.encode("utf-8")).hexdigest(),
+        "capsule_bytes": len(capsule_text.encode("utf-8")),
+        "context_sha256": hashlib.sha256(encoded).hexdigest(),
+        "context_bytes": len(encoded),
+        "statement_count": 0,
+        "gap_codes": [],
+        "conflict_count": 0,
+        "_capsule": capsule,
+        "_context_text": context,
+        "_provider_payload": {
+            "operation": "resolve-host-continuity",
+            "provider_bytes": len(encoded),
+            "provider_sha256": hashlib.sha256(encoded).hexdigest(),
+            "structured_output_bytes": None,
+            "structured_output_sha256": None,
+            "delivery_match": True,
+            "write_performed": False,
+            "statement_count": 0,
+            "gap_count": 0,
+            "gap_codes": [],
+            "relevant_chars": 0,
+            "context_chars": len(context),
+            "relevant_chars_context_chars": 0.0,
+            "evidence_count": 0,
+            "duplicate_evidence_count": 0,
+            "duplicate_evidence_rate": None,
+            "conflict_count": 0,
+        },
+    }
+    delivery = {
+        "method": "hook/completed",
+        "hook_event_name": "userPromptSubmit",
+        "hook_status": "completed",
+        "hook_source": "plugin",
+        "hook_handler_type": "command",
+        "continuity_context_sha256": expected["context_sha256"],
+        "continuity_context_bytes": expected["context_bytes"],
+        "continuity_status": "admitted",
+        "continuity_statement_count": 0,
+        "continuity_gap_codes": [],
+        "continuity_conflict_count": 0,
+    }
+    result = {
+        "status": "completed",
+        "thread_id": "thread-requested",
+        "turn_id": "turn-1",
+        "final_text": json.dumps(
+            {
+                "summary": "bounded",
+                "next_step": "next",
+                "preserved_decisions": [],
+                "open_gaps": [],
+            }
+        ),
+        "tool_call_observations": [],
+        "tool_outputs": [],
+        "usage": {
+            "input_tokens": 10,
+            "cached_input_tokens": 2,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 5,
+            "reasoning_output_tokens": 1,
+            "total_tokens": 15,
+        },
+        "events": [delivery],
+    }
+
+    class FakeClient:
+        def __init__(self, returned_thread_id: str) -> None:
+            self.returned_thread_id = returned_thread_id
+            self.sanitized_events: list[dict[str, object]] = []
+
+        def thread_start(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {
+                "thread": {
+                    "id": "thread-requested",
+                    "sessionId": "session-root",
+                    "forkedFromId": None,
+                }
+            }
+
+        def turn_start(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {**result, "thread_id": self.returned_thread_id}
+
+    def run(returned_thread_id: str) -> dict[str, object]:
+        return qualification._run_scenario(
+            client=FakeClient(returned_thread_id),
+            scenario="cold_start",
+            task_binding={"binding_sha256": "a" * 64},
+            prompt="qualification",
+            ledger_head=lambda: "b" * 64,
+            forget_checkpoint=None,
+            expectations={
+                "seed_boundary": {
+                    "kind": "seed_checkpoint",
+                    "owner_enabled": True,
+                    "read_mcp_write_performed": False,
+                    "audit_changed": True,
+                    "audit_head_before": "1" * 64,
+                    "audit_head_after": "2" * 64,
+                    "receipt_sha256": "3" * 64,
+                    "target_sha256": "4" * 64,
+                }
+            },
+            bind_host_session=lambda *_args: {"status": "bound"},
+            resolve_continuity=lambda _session_id: expected,
+        )
+
+    matched = run("thread-requested")
+    assert matched["status"] == "passed"
+    assert len(matched["turns"]) == 1
+    with pytest.raises(qualification.QualificationFailure, match="thread"):
+        run("thread-other")
 
 
 @pytest.mark.parametrize(

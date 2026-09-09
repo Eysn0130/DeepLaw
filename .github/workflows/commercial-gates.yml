@@ -166,22 +166,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          legacy_source="${RUNNER_TEMP}/deeplaw-v060-source"
           legacy_dist="${RUNNER_TEMP}/deeplaw-v060-dist"
-          git worktree add --detach "${legacy_source}" e0f1fe3ff01d3026df12673d57c69014c2c4dca4
-          uv build --project "${legacy_source}" --wheel --out-dir "${legacy_dist}"
-          python - "${legacy_dist}" >> "${GITHUB_ENV}" <<'PY'
-          import hashlib
-          import pathlib
-          import sys
-
-          wheels = list(pathlib.Path(sys.argv[1]).glob("deeplaw-0.6.0-*.whl"))
-          if len(wheels) != 1:
-              raise SystemExit("expected exactly one v0.6.0 wheel")
-          wheel = wheels[0].resolve()
-          print(f"DEEPLAW_V060_WHEEL={wheel}")
-          print(f"DEEPLAW_V060_WHEEL_SHA256={hashlib.sha256(wheel.read_bytes()).hexdigest()}")
-          PY
+          python -m benchmarks.release.historical_migration_fixture build \
+            --repository . --output-dir "${legacy_dist}"
+          python -m benchmarks.release.historical_migration_fixture verify \
+            --fixture-dir "${legacy_dist}" --github-env "${GITHUB_ENV}"
 
       - name: Install mandatory test profile
         run: uv sync --frozen --extra dev --extra discovery

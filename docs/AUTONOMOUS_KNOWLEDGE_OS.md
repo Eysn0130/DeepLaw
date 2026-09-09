@@ -1,6 +1,6 @@
 # DeepLaw Autonomous Knowledge OS
 
-Status: **Current v0.12.0 Beta contract; source candidate**, reviewed 2026-08-17. This document is
+Status: **Current autonomous kernel contract; source candidate**, reconciled 2026-09-09. This document is
 the autonomous kernel contract for three frozen product roles: **Task Continuity / Governed Project
 Knowledge**, **Source-native Evidence Library**, and **Living Wiki**. They share one identity,
 provenance, Ledger, governance and Context Compiler; none is a separate knowledge engine.
@@ -22,16 +22,20 @@ complete editable canonical copy. Task Continuity persists only explicitly autho
 content-minimized Run/Checkpoint/Artifact identities. Transcript, prompt, raw log and hidden
 reasoning are never automatically ingested as memory.
 
-The package and main remain `0.12.0 Beta` with `release_ready=false`. The active qualification
-binding is [`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json):
-`status=machine_evaluation_pending`, `profile=kernel_release_core`, and Gate classification v9.
-Required Core evidence is source-specific and remains `not_executed` until a
-fresh exact candidate, artifact, inputs and receipts are bound. Machine reviewers are not Human
-Gold, legal experts, `human_verified`, or a release decision.
+Public release/main and source-candidate versions are distinct: the release line remains
+`0.12.0 Beta`, while the v0.13 candidate is prepared as `0.13.0` in `pyproject.toml`.
+The repository [active record](../benchmarks/v013/active-qualification-v3.json) is the construction
+input to the [qualification protocol](V0_13_QUALIFICATION_PROTOCOL.md); Candidate Full freezes an
+artifact-bound copy. An unbound repository template does not mean no candidate artifact was built,
+and a frozen artifact does not mean its tasks were executed. Read exact status from the applicable
+artifact and retained evidence, rather than this subsystem contract. Core, optional Capability and
+competitive claims remain separate. Machine reviewers are not Human Gold, legal experts,
+`human_verified`, or a release decision.
 
-The current Provider advertisement is `knowledge-support.input/v7` plus
-`knowledge-support.output/v6`. It advertises only the read operations `query`, `context`, and
-`explain`; input v1-v6 and output v1-v5 remain internal compatibility contracts. Provider output
+The current autonomous-core Provider advertisement is `knowledge-support.input/v9` plus
+`knowledge-support.output/v8`. It advertises only the read operations `query`, `context`, and
+`explain`, plus exact `read`. The new output schema preserves existing response versions for the
+first three operations; `read` uses output/v8. Input v7 remains unchanged. Provider output
 is bounded and contains no paths, session/task identities, receipts beyond opaque joins, raw logs,
 transcripts, reasoning, Secrets or unadmitted material.
 
@@ -239,6 +243,28 @@ change them. Ranking, link count, community membership, feedback, model confiden
 retrieval cannot change these fields. Source-free knowledge defaults to `tentative` and cannot
 self-declare the `supported` epistemic state.
 
+Current source candidate: Query Plan v7 selects active ordinary source-free revisions without
+manufacturing compiled Statements. The separate `knowledge_revisions` partition remains
+`agent_derived`, `tentative`, `legal_authority=false`, `directive_mode=data_only`, with explicit
+unknown freshness and exact revision/body hashes. It shares the ordinary discovery and combined
+item/character/token budgets; token counts are local estimates. Working memory still requires
+its task-line/Run binding. Quote, verification, historical and legal purposes do not use this
+partition to satisfy source-only duties. Explicit v6 retains its Statement-only behavior.
+
+The bounded selection explanation identifies admitted Statements, ordinary revisions and
+source passages omitted by item, source, character or token budget. It states
+`discovery_exhaustive=false`; it is not a full-vault inventory. Denied objects contribute no
+public IDs, titles or counts. At most twenty selection entries are included inline. In the same
+MCP lifespan, `explain` with the Capsule's `receipt_id` reads the first bounded page; pass its
+signed `next_receipt_id` unchanged to read the next page. The existing trace cache bounds bytes,
+entries and lifetime. Tampering, eviction or an input-head change invalidates continuation;
+truncated discovery or retained accounting stays explicitly incomplete.
+Exact reads recheck the complete current
+revision before pagination. Forget/revoke prevents subsequent reads, and v4 Capsule verification
+rejects changed input audit heads. This does not recall copies already delivered to a Host.
+See [ADR 0008](adr/0008-governed-revision-recall.md) for versions and rollback. These source
+behaviors are not formal Host or release qualification.
+
 A preference records `preference_basis=direct_user_statement` or `agent_inference`. A direct-user
 label without a source/run binding is quarantined. External source text never receives instruction
 semantics merely because it resembles a command.
@@ -329,19 +355,19 @@ complete.
 Once a Vault contains an autonomous compilation run or governed Knowledge Object, the v0.13 source
 candidate defaults Python `KnowledgeOS.context.compile`, `deeplaw knowledge context`,
 `deeplaw knowledge autonomy context`, and autonomous-core MCP `operation=context` to additive
-Query Plan v6: statement-level selection, dynamic duty coverage, targeted evidence completion,
+Query Plan v7: statement-level and ordinary-revision selection, dynamic duty coverage, targeted evidence completion,
 exact suppression receipts and bounded local projections. `deeplaw recall` remains the legacy
 `retrieval_fabric` path and is not a v6 Context alias. Ordinary content discovery first selects at
 most 20 governed revisions through the requested lexical/dense/graph controls, then matches a
-maximum of 512 Statement candidates only within those revisions; a fixed global Statement prefix
+maximum of 512 combined Statement and ordinary-revision candidates within those revisions; a fixed global Statement prefix
 is not a retrieval channel. Working checkpoints use a separate bounded, indexed task-route
 admission projection before ordinary content discovery. An exact route therefore cannot be
 displaced by the ordinary Top-20, but it also cannot widen the public ordinary-revision count or
 admit non-checkpoint content. Every projected row is revalidated against its immutable Run,
 Knowledge Revision, and Ledger event; the projection is derived, rebuildable, and capped. The
 shared domain assembler emits local
-`deeplaw.knowledge-capsule/v3` (maximum 262,144 bytes) and its nested
-`deeplaw.provider-knowledge-capsule/v2` projection (Provider content maximum 65,536 bytes). The
+`deeplaw.knowledge-capsule/v4` (maximum 262,144 bytes) and its nested
+`deeplaw.provider-knowledge-capsule/v3` projection (Provider content maximum 65,536 bytes). The
 Provider receives only bounded Statements/evidence, authority/verification/freshness,
 contradiction/limitation/gap state, delivery metadata, and opaque `receipt_id`; it never receives
 the full Query Plan, candidate scores, rejected-candidate text, SQL/cache/parser diagnostics,
@@ -407,15 +433,23 @@ rechecked against current immutable source bytes. Changed or missing bytes fail 
 interval, and bounded evidence references; an endpoint-only contested marker is used only when no
 admitted typed relation represents the selected object.
 
-Provider Capsule v2 and its nested projection use typed Source references and Source evidence. The
-advertised `knowledge_support` wire surface is input v7/output v6 and exposes only `query`,
-`context`, and `explain`; the broader local operation inventory below is internal compatibility,
+Provider Capsule v3 and its nested projection use typed Source references and Source evidence. The
+advertised `knowledge_support` wire surface is input v9/output v8 and exposes only `query`,
+`context`, `explain`, and typed `read`; the broader local operation inventory below is internal compatibility,
 not a second public Provider surface. A
 Source evidence card binds one exact Source Revision, fragment, locator and quote hash. If the
 complete passage cannot fit the evidence budget, the passage is withheld and the applicable duty
-stays an explicit Gap; a truncated excerpt cannot satisfy an exact-evidence duty.
+stays an explicit Gap; a truncated excerpt cannot satisfy an exact-evidence duty. Final byte-budget
+fitting may shorten derived summaries or audit detail, never an exact source excerpt with its
+original hash. If the remaining payload cannot fit, delivery fails closed.
 
-Local Knowledge Capsule v3 partitions (with explicit v2 compatibility):
+Current Query Plan v7 also carries up to eight declared evidence gaps from selected, admitted
+Statements, with a bounded overflow notice. For example, a compiler-declared missing annex remains
+visible alongside the exact passage that cites it. These are declared limitations, not independently
+verified semantic diagnoses. Denied Statements contribute neither gap text nor identifiers. Explicit
+v6 retains its historical projection; neither a citation nor a declaration proves completeness.
+
+Local Knowledge Capsule v4 partitions (with explicit v2/v3 compatibility):
 
 - official evidence (empty in `knowledge_support`; use `law_support`);
 - user-private legal evidence (empty in `knowledge_support`; use `law_support`);
@@ -424,15 +458,15 @@ Local Knowledge Capsule v3 partitions (with explicit v2 compatibility):
 - Agent memory;
 - contradictions, limitations, gaps, and receipts.
 
-The local v3 capsule also retains the complete v6 plan/hash, selected Statement and evidence
+The local v4 capsule also retains the complete v7 plan/hash, selected Statement and evidence
 surfaces, budget, audit head, sealed identity/digest, and `write_performed=false`. Its local audit
 summary contains counts and hashed identities only; candidate scores, rejected-candidate text,
 query plaintext beyond the task/plan contract, hidden reasoning, SQL, cache/parser diagnostics,
-paths, credentials, and secrets are excluded. The nested Provider v2 projection has a hard 64 KiB
+paths, credentials, and secrets are excluded. The nested Provider v3 projection has a hard 64 KiB
 content limit and an opaque `receipt_id`; Source metadata, tags, bodies, graph edges, and histories
 are bounded independently. `restricted` content is never available to MCP hosts. Explicit v5
 compatibility preserves local Capsule v2 for Python/CLI and MCP output/v3 with Capsule v2/Query
-Plan v5 semantics; it is never the default v6 Context path.
+Plan v5 semantics; it is never the default v7 Context path.
 Before either v1 or v3 `knowledge_support` response leaves the process, a recursive projection
 gate fails closed on local absolute paths or recognized secret material; it never reports the
 matched value in its error. Unsafe invisible/bidirectional Unicode is rejected at the same gate,
@@ -468,7 +502,8 @@ a verified reopen. `KnowledgeOS.verify` remains an explicit full verification. R
 Wiki and compatibility APIs retain their existing short-lived behavior rather than silently
 changing their fallback semantics.
 
-The Living Wiki keeps each Markdown page within its 256 KiB read boundary. A current Knowledge
+The local WikiReadService keeps each Markdown page file within a 256 KiB boundary. This is distinct
+from the MCP read lifespan's 256 KiB cumulative response budget. A current Knowledge
 Revision with at most 64 Statements renders those anchors inline. A larger revision renders
 deterministic Statement Evidence shard pages (64 Statements per shard), links them from the stable
 Knowledge page, and registers every shard and Statement anchor in the same v3 Page Registry and
@@ -482,12 +517,17 @@ evidence, Ledger identity, or Authority.
 - separate local stdio process;
 - one leaf named `knowledge_support`;
 - read-only MCP annotations;
-- current advertisement: `contracts/knowledge-support.input.v7.schema.json` plus
-  `contracts/knowledge-support.output.v6.schema.json`;
-- advertised operations are only `query`, `context`, and `explain`;
-- input v1-v6 and output v1-v5 remain internal compatibility contracts for existing callers and
+- current advertisement: `contracts/knowledge-support.input.v9.schema.json` plus
+  `contracts/knowledge-support.output.v8.schema.json`;
+- advertised operations are only `query`, `context`, `explain`, and typed `read`;
+- input v1-v7 and output v1-v6 remain internal compatibility contracts for existing callers and
   persisted receipts; they are not advertised as current product operations;
 - no remember, relation mutation, forget, grant, import, legal-source write, or arbitrary path.
+
+Exact reads use current Source/Wiki governance and the bounded targets, pagination and lifespan
+accounting in [Agent adapters](AGENT_ADAPTERS.md#exact-progressive-read-contract). They do not create
+projections, mutate canonical state, expose arbitrary files, or bypass task-bound memory admission.
+The output schema's version does not relabel the existing operations' response bodies.
 
 ### `knowledge_sink`
 
@@ -665,8 +705,9 @@ retrieval and controlled query backfill described in
 identity, grant, admission, reconciliation and verification primitives; it is not a parallel
 knowledge engine.
 
-The package version is `0.12.0`. Current implementation,
-compatibility and exact gate status are separated in:
+Public release/main remain `0.12.0 Beta`; the source-candidate package is `0.13.0` as declared in
+`pyproject.toml`. The following dated files preserve implementation and acceptance history; they
+do not define the current package or exact gate status:
 
 - [`LIVING_WIKI_IMPLEMENTATION_AUDIT_2026-07-30.md`](LIVING_WIKI_IMPLEMENTATION_AUDIT_2026-07-30.md);
 - [`LIVING_WIKI_COMPATIBILITY.md`](LIVING_WIKI_COMPATIBILITY.md);

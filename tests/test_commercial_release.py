@@ -297,7 +297,7 @@ def test_pull_request_gates_check_out_the_exact_head_commit() -> None:
     exact_ci_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
     assert commercial.count(exact_commercial_ref) == 7
     assert "ref: ${{ inputs.release_ref || github.sha }}" not in commercial
-    assert ci.count(exact_ci_ref) == 2
+    assert ci.count(exact_ci_ref) == 3
     assert "  pull_request:" not in commercial
     assert "qualification and not windows_native" in commercial
     assert 'marker: not qualification' in commercial
@@ -315,6 +315,20 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "timeout-minutes: 20" in ci
     assert "Ubuntu Python 3.12" in ci
     assert "windows-sentinel" in ci
+    macos_inputs = ci.split("  macos-broker-inputs:", 1)[1].split(
+        "  windows-sentinel:", 1
+    )[0]
+    assert "runs-on: macos-latest" in macos_inputs
+    assert "fail-fast: false" in macos_inputs
+    assert 'python: ["3.11", "3.12", "3.13"]' in macos_inputs
+    assert "python-version: ${{ matrix.python }}" in macos_inputs
+    assert "tests/test_v013_broker_interpreter_binding.py" in macos_inputs
+    assert "tests/test_v013_broker_runtime_input.py" in macos_inputs
+    windows_sentinel = ci.split("  windows-sentinel:", 1)[1]
+    assert windows_sentinel.count(
+        "tests/test_v013_no_model_production_registration.py::"
+        "test_no_model_registration_starts_production_launcher_and_lists_tools"
+    ) == 1
     assert "uv lock --check" in ci
     assert "ruff check ." in ci
     assert "git diff --check" in ci
@@ -334,9 +348,17 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "candidate-skip-receipt.json" in candidate
     assert "windows-duration-weights.json" in candidate
 
-    calibration_shards = candidate.split(
-        "  windows-calibration-shards:", 1
-    )[1].split("  windows-calibration:", 1)[0]
+    windows_shards = candidate.split("  windows-shards:", 1)[1].split(
+        "  windows-aggregate:", 1
+    )[0]
+    assert "    timeout-minutes: 240" in windows_shards
+    assert "--maxfail=1" in windows_shards
+
+    calibration_block = candidate.split("  windows-calibration-shards:", 1)[1].split(
+        "  posix-matrix:", 1
+    )[0]
+    calibration_shards = calibration_block.split("  windows-calibration:", 1)[0]
+    assert "    timeout-minutes: 240" in calibration_shards
     assert "Calibrate Windows Python 3.12 shard ${{ matrix.shard }} of 3" in (
         calibration_shards
     )
@@ -344,17 +366,24 @@ def test_candidate_ci_is_current_source_regression_not_release_readiness() -> No
     assert "--duration-weights" not in calibration_shards
     assert "--shard-count 3" in calibration_shards
     assert 'if: matrix.shard == 1' in calibration_shards
+    for windows_run in (calibration_shards, windows_shards):
+        assert "pytest --strict-markers -vv" in windows_run
+        assert '-m "not qualification"' in windows_run
+        assert "--junitxml=" in windows_run
+        assert '"${test_files[@]}"' in windows_run
+        assert " -s" not in windows_run
 
-    calibration = candidate.split("  windows-calibration:", 1)[1].split(
-        "  posix-matrix:", 1
-    )[0]
+    calibration = calibration_block.split("  windows-calibration:", 1)[1]
     assert "needs: windows-calibration-shards" in calibration
     assert "--input-directory" in calibration
     assert "--junit-output" in calibration
     assert "windows-calibration-aggregate.json" in calibration
     assert "windows-duration-weights.json" in calibration
+    assert "--maxfail=1" not in calibration_block
 
-    aggregate = candidate.split("  windows-aggregate:", 1)[1]
+    aggregate = candidate.split("  windows-aggregate:", 1)[1].split(
+        "  aggregate-raw-evidence:", 1
+    )[0]
     assert "setup-uv" not in aggregate
     assert "python -m benchmarks.release.candidate_regression" in aggregate
     assert "--require-eligible" not in candidate

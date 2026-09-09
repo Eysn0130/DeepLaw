@@ -14,10 +14,12 @@ that this adapter cannot create a second interpretation of the v3 contract.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import re
+from collections.abc import Mapping, MutableSet, Sequence
 from copy import deepcopy
 from typing import Any
 
+from benchmarks.hosts import host_process_receipt_v2
 from deeplaw.native_host import (
     NativeHostObservationError,
     derive_native_host_receipt,
@@ -28,6 +30,9 @@ from deeplaw.util import canonical_json, sha256_bytes, strict_json_loads
 SCHEMA_VERSION = "deeplaw.native-host-event/v3"
 OPENCODE_OBSERVATION_SCHEMA_VERSION = "deeplaw.opencode-native-event-observation/v1"
 OPENCODE_MODEL_OBSERVATION_SCHEMA_VERSION = "deeplaw.opencode-model-observation/v1"
+OPENCODE_PUBLIC_FORK_PROOF_SCHEMA_VERSION = (
+    "deeplaw.opencode-public-fork-proof/v1"
+)
 
 CODEX_HOOK_EVENTS = {
     "sessionStart": "SessionStart",
@@ -126,6 +131,57 @@ _FORK_RECEIPT_FIELDS = frozenset(
         "gap_codes",
     }
 )
+_PUBLIC_FORK_PROOF_FIELDS = frozenset(
+    {
+        "schema_version",
+        "route_observation",
+        "request_body",
+        "response",
+        "child_plugin_observation",
+        "event_barrier",
+        "process_binding",
+    }
+)
+_PUBLIC_FORK_ROUTE_FIELDS = frozenset({"method", "path", "status_code"})
+_PUBLIC_FORK_BARRIER_FIELDS = frozenset(
+    {
+        "status",
+        "response_release",
+        "timed_out",
+        "child_plugin_event_count",
+        "event_type",
+        "timeout_seconds",
+        "elapsed_ms",
+        "parent_source",
+    }
+)
+_PUBLIC_FORK_PROCESS_FIELDS = frozenset(
+    {
+        "task_case",
+        "run_id",
+        "candidate_binding",
+        "run_binding",
+        "host_binary",
+        "broker_source",
+        "host_identity_sha256",
+        "host_identity_source_sha256",
+        "process_identity_sha256",
+        "broker_instance_sha256",
+        "nonce_sha256",
+        "issued_at",
+        "expires_at",
+        "validation_reference_time",
+        "selector_source_symlink",
+        "execution_target_regular",
+        "execution_target_single_link",
+        "status",
+        "exit_code",
+        "isolation",
+    }
+)
+_PUBLIC_FORK_SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$")
+
+
 class NativeEventAdapterError(ValueError):
     """An actual Host observation cannot be admitted to the v3 adapter."""
 
@@ -356,9 +412,10 @@ def _validate_codex_hook(
     return canonical_name, ["hook/completed"], thread_id_sha256, session_id_sha256
 
 
-def _validate_opencode_observation(
+def validate_opencode_native_observation(
     observation: Mapping[str, Any] | bytes | bytearray | str,
 ) -> tuple[str, str, str]:
+    """Validate one exact plugin data row without Host attestation."""
     selected = _observation_mapping(observation, label="OpenCode plugin observation")
     _closed_fields(selected, _OPENCODE_FIELDS, label="OpenCode plugin observation", exact=True)
     if selected.get("schema_version") != OPENCODE_OBSERVATION_SCHEMA_VERSION:
@@ -467,6 +524,8 @@ def _validate_fork_receipt(
     parent_session_sha256 = _session(
         selected.get("parent_session_sha256"), label="fork parent"
     )
+    if parent_session_sha256 == child_session_sha256:
+        _fail("OpenCode fork sessions must be distinct")
     if selected.get("gap_codes") != []:
         _fail("OpenCode fork receipt contains gaps")
     expected_request_sha256 = sha256_bytes(
@@ -485,6 +544,457 @@ def _validate_fork_receipt(
     if selected.get("response_sha256") != expected_response_sha256:
         _fail("OpenCode fork receipt response digest differs")
     return parent_session_sha256
+
+
+def _public_fork_bytes(value: Any, *, label: str) -> bytes:
+    """Require the original bounded bytes for a source-specific observation."""
+
+    if isinstance(value, bytearray):
+        value = bytes(value)
+    if type(value) is not bytes or not 1 <= len(value) <= 64 * 1024:
+        _fail(f"{label} must be bounded original bytes")
+    return value
+
+
+def _public_fork_json(value: Any, *, label: str) -> tuple[bytes, Mapping[str, Any]]:
+    raw = _public_fork_bytes(value, label=label)
+    try:
+        decoded = strict_json_loads(raw)
+    except (UnicodeError, TypeError, ValueError) as error:
+        raise NativeEventAdapterError(f"{label} is not strict JSON") from error
+    return raw, _mapping(decoded, label=label)
+
+
+def _validate_public_fork_route(
+    value: Any,
+) -> tuple[str, str, str]:
+    """Validate the actual public fork route and derive its parent identity.
+
+    The route projection deliberately retains no route text in the returned
+    proof.  Its parent session ID is used only in memory to bind the route to
+    the response and plugin event.
+    """
+
+    if isinstance(value, Mapping):
+        selected = _mapping(value, label="OpenCode public fork route observation")
+        _closed_fields(
+            selected,
+            _PUBLIC_FORK_ROUTE_FIELDS,
+            label="OpenCode public fork route observation",
+            exact=True,
+        )
+        raw = canonical_json(dict(selected)).encode("utf-8")
+    else:
+        raw, selected = _public_fork_json(
+            value, label="OpenCode public fork route observation"
+        )
+        _closed_fields(
+            selected,
+            _PUBLIC_FORK_ROUTE_FIELDS,
+            label="OpenCode public fork route observation",
+            exact=True,
+        )
+    if selected.get("method") != "POST":
+        _fail("OpenCode public fork route method is not POST")
+    if type(selected.get("status_code")) is not int or selected["status_code"] != 200:
+        _fail("OpenCode public fork route status is not 200")
+    path = selected.get("path")
+    if not isinstance(path, str):
+        _fail("OpenCode public fork route path is invalid")
+    match = re.fullmatch(
+        r"/session/(?P<parent>[A-Za-z0-9][A-Za-z0-9._:-]{0,199})/fork",
+        path,
+    )
+    if match is None:
+        _fail("OpenCode public fork route is not the actual session fork route")
+    parent_session_id = match.group("parent")
+    parent_session_sha256 = _session(
+        sha256_bytes(parent_session_id.encode("utf-8")), label="fork route parent"
+    )
+    return sha256_bytes(raw), parent_session_id, parent_session_sha256
+
+
+def _validate_public_fork_response(
+    value: Any,
+    *,
+    parent_session_id: str,
+) -> tuple[str, str, str]:
+    """Extract only the child identity from the original fork response."""
+
+    raw, selected = _public_fork_json(
+        value, label="OpenCode public fork response"
+    )
+    identity_fields = [
+        field for field in ("id", "sessionID", "sessionId") if field in selected
+    ]
+    if len(identity_fields) != 1 or not isinstance(selected[identity_fields[0]], str):
+        _fail("OpenCode public fork response child identity is invalid")
+    child_session_id = selected[identity_fields[0]]
+    if _PUBLIC_FORK_SESSION_ID.fullmatch(child_session_id) is None:
+        _fail("OpenCode public fork response child identity is unsafe")
+    if child_session_id == parent_session_id:
+        _fail("OpenCode public fork sessions must be distinct")
+    parent_fields = [
+        field for field in ("parentID", "parentId", "parent_id") if field in selected
+    ]
+    if len(parent_fields) > 1:
+        _fail("OpenCode public fork response contains duplicate parent identity fields")
+    if parent_fields and selected[parent_fields[0]] != parent_session_id:
+        _fail("OpenCode public fork response parent identity differs from the route")
+    child_session_sha256 = _session(
+        sha256_bytes(child_session_id.encode("utf-8")), label="fork response child"
+    )
+    return sha256_bytes(raw), child_session_id, child_session_sha256
+
+
+def _validate_public_fork_barrier(value: Any) -> dict[str, Any]:
+    selected = _mapping(value, label="OpenCode public fork event barrier")
+    _closed_fields(
+        selected,
+        _PUBLIC_FORK_BARRIER_FIELDS,
+        label="OpenCode public fork event barrier",
+        exact=True,
+    )
+    if (
+        selected.get("status") != "satisfied"
+        or selected.get("response_release") != "after_child_plugin_event"
+        or selected.get("timed_out") is not False
+        or selected.get("child_plugin_event_count") != 1
+        or selected.get("event_type") != "session.created"
+        or selected.get("timeout_seconds") != 30
+        or type(selected.get("elapsed_ms")) is not int
+        or not 0 <= selected["elapsed_ms"] <= 30_000
+        or selected.get("parent_source") != "actual_ingress_route"
+    ):
+        _fail("OpenCode public fork event barrier was not satisfied")
+    return dict(selected)
+
+
+def _public_fork_process_binding(value: Any) -> dict[str, Any]:
+    selected = _mapping(value, label="OpenCode public fork process binding")
+    _closed_fields(
+        selected,
+        _PUBLIC_FORK_PROCESS_FIELDS,
+        label="OpenCode public fork process binding",
+        exact=True,
+    )
+    if selected.get("task_case") != "continuity":
+        _fail("OpenCode public fork task case is unsupported")
+    status = selected.get("status")
+    exit_code = selected.get("exit_code")
+    if (status == "running" and exit_code is None) or (status == "exited" and exit_code == 0):
+        pass
+    else:
+        _fail("OpenCode public fork process binding has an invalid lifecycle state")
+    return dict(_copy(selected, label="OpenCode public fork process binding"))
+
+
+def _check_expected_public_fork_process_binding(
+    actual: Mapping[str, Any],
+    expected: Mapping[str, Any] | None,
+) -> None:
+    if expected is None:
+        return
+    selected = _mapping(expected, label="expected OpenCode public fork process binding")
+    allowed = _PUBLIC_FORK_PROCESS_FIELDS | frozenset({"host"})
+    _closed_fields(
+        selected,
+        allowed,
+        label="expected OpenCode public fork process binding",
+    )
+    if "host" in selected and selected["host"] != "opencode":
+        _fail("expected OpenCode public fork Host differs")
+    complete = _public_fork_process_binding(
+        {field: value for field, value in selected.items() if field != "host"}
+    )
+    for field, value in complete.items():
+        if actual.get(field) != value:
+            _fail(f"OpenCode public fork process binding differs for {field}")
+
+
+def _public_fork_native_binding(
+    event: Mapping[str, Any],
+    lifecycle_receipt: Mapping[str, Any],
+) -> dict[str, str]:
+    """Derive the v2 native binding from the provisional v3 event."""
+
+    event_sequence = sha256_bytes(
+        canonical_json(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "events": [
+                    {
+                        "event_type": event["event_type"],
+                        "event_sequence": event["event_sequence"],
+                        "session_sha256": event["session_sha256"],
+                        "parent_session_sha256": event["parent_session_sha256"],
+                    }
+                ],
+            }
+        ).encode("utf-8")
+    )
+    session_identity = sha256_bytes(
+        canonical_json(
+            {
+                "schema_version": "deeplaw.native-opencode-session-binding/v1",
+                "host": event["host"],
+                "session_sha256": event["session_sha256"],
+                "parent_session_sha256": event["parent_session_sha256"],
+            }
+        ).encode("utf-8")
+    )
+    lifecycle_record = _digest(
+        lifecycle_receipt.get("receipt_sha256"),
+        label="OpenCode native lifecycle record",
+    )
+    return {
+        "event_sequence_sha256": event_sequence,
+        "session_identity_sha256": session_identity,
+        "lifecycle_record_sha256": lifecycle_record,
+    }
+
+
+def _public_fork_process_proof(
+    *,
+    process: Mapping[str, Any],
+    route_sha256: str,
+    request_body_sha256: str,
+    response_sha256: str,
+    parent_session_sha256: str,
+    child_session_sha256: str,
+    child_plugin_event_sha256: str,
+    native_binding: Mapping[str, str],
+) -> dict[str, Any]:
+    proof: dict[str, Any] = {
+        "proof_kind": "opencode_public_fork_route_correlation",
+        "process_identity_sha256": process["process_identity_sha256"],
+        "request_method": "POST",
+        "route_observation_sha256": route_sha256,
+        "request_body_sha256": request_body_sha256,
+        "response_sha256": response_sha256,
+        "parent_session_sha256": parent_session_sha256,
+        "child_session_sha256": child_session_sha256,
+        "child_plugin_event_sha256": child_plugin_event_sha256,
+        "child_plugin_session_sha256": child_session_sha256,
+        "native_event_sequence_sha256": native_binding["event_sequence_sha256"],
+        "native_session_identity_sha256": native_binding["session_identity_sha256"],
+        "native_lifecycle_record_sha256": native_binding[
+            "lifecycle_record_sha256"
+        ],
+        "same_process": True,
+        "actual_route_observed": True,
+    }
+    proof["route_correlation_sha256"] = host_process_receipt_v2.correlation_sha256(
+        {
+            key: proof[key]
+            for key in (
+                "process_identity_sha256",
+                "request_method",
+                "route_observation_sha256",
+                "request_body_sha256",
+                "response_sha256",
+                "parent_session_sha256",
+                "child_session_sha256",
+                "child_plugin_event_sha256",
+                "child_plugin_session_sha256",
+                "native_event_sequence_sha256",
+                "native_session_identity_sha256",
+                "native_lifecycle_record_sha256",
+            )
+        }
+    )
+    return proof
+
+
+def adapt_opencode_public_fork_observation(
+    fork_proof: Mapping[str, Any],
+    *,
+    host_identity: Mapping[str, Any],
+    execution_identity: Mapping[str, Any],
+    route: Mapping[str, Any],
+    event_sequence: Mapping[str, Any] | int,
+    expected_process_binding: Mapping[str, Any] | None = None,
+    seen_nonce_sha256s: MutableSet[str] | None = None,
+) -> dict[str, Any]:
+    """Adapt one actual OpenCode public fork and its optional v2 receipt.
+
+    ``fork_proof`` is the source-specific boundary used by an owner-external
+    producer.  It contains original route/body/response/plugin bytes and the
+    already observed process metadata.  The original bytes are hashed only;
+    the returned projection contains no route, session, or Host payload text.
+    A provisional v3 fork event is built before an optional clean-exit v2
+    receipt, which avoids a circular dependency between ``native_event_binding``
+    and the event.  An active process returns only the native event, lifecycle
+    receipt, and safe fork proof.
+    """
+
+    selected = _mapping(fork_proof, label="OpenCode public fork proof")
+    if selected.get("schema_version") != OPENCODE_PUBLIC_FORK_PROOF_SCHEMA_VERSION:
+        _fail("OpenCode public fork proof schema version is unsupported")
+    _closed_fields(
+        selected,
+        _PUBLIC_FORK_PROOF_FIELDS,
+        label="OpenCode public fork proof",
+        exact=True,
+    )
+    route_sha256, parent_session_id, parent_session_sha256 = _validate_public_fork_route(
+        selected["route_observation"]
+    )
+    request_body = _public_fork_bytes(
+        selected["request_body"], label="OpenCode public fork request body"
+    )
+    if request_body != b"{}":
+        _fail("OpenCode public fork request body must be the exact empty object")
+    request_body_sha256 = sha256_bytes(request_body)
+    response_sha256, _child_session_id, response_child_sha256 = _validate_public_fork_response(
+        selected["response"], parent_session_id=parent_session_id
+    )
+    plugin_raw, _plugin_value = _public_fork_json(
+        selected["child_plugin_observation"],
+        label="OpenCode child plugin observation",
+    )
+    source_event, event_type, plugin_child_sha256 = validate_opencode_native_observation(
+        plugin_raw
+    )
+    if source_event != "session.created" or event_type != "session":
+        _fail("OpenCode public fork child plugin event must be session.created")
+    if plugin_child_sha256 != response_child_sha256:
+        _fail("OpenCode public fork response and child plugin identities differ")
+    _validate_public_fork_barrier(selected["event_barrier"])
+    process = _public_fork_process_binding(selected["process_binding"])
+    _check_expected_public_fork_process_binding(process, expected_process_binding)
+
+    event = _build_event(
+        host="opencode",
+        host_identity=host_identity,
+        execution_identity=execution_identity,
+        event_type="fork",
+        event_sequence=event_sequence,
+        session_sha256=plugin_child_sha256,
+        parent_session_sha256=parent_session_sha256,
+        methods_observed=["opencode.plugin.event"],
+        route=route,
+    )
+    base = _result(event)
+    native_binding = _public_fork_native_binding(event, base["receipt"])
+    proof = _public_fork_process_proof(
+        process=process,
+        route_sha256=route_sha256,
+        request_body_sha256=request_body_sha256,
+        response_sha256=response_sha256,
+        parent_session_sha256=parent_session_sha256,
+        child_session_sha256=plugin_child_sha256,
+        child_plugin_event_sha256=sha256_bytes(plugin_raw),
+        native_binding=native_binding,
+    )
+    process_receipt: dict[str, Any] | None = None
+    if process["status"] == "exited":
+        try:
+            process_receipt = host_process_receipt_v2.build_receipt(
+                host="opencode",
+                task_case=process["task_case"],
+                run_id=process["run_id"],
+                candidate_binding=process["candidate_binding"],
+                run_binding=process["run_binding"],
+                host_binary=process["host_binary"],
+                broker_source=process["broker_source"],
+                host_identity_sha256=process["host_identity_sha256"],
+                host_identity_source_sha256=process["host_identity_source_sha256"],
+                process_identity_sha256=process["process_identity_sha256"],
+                broker_instance_sha256=process["broker_instance_sha256"],
+                nonce_sha256=process["nonce_sha256"],
+                issued_at=process["issued_at"],
+                expires_at=process["expires_at"],
+                validation_reference_time=process["validation_reference_time"],
+                selector_source_symlink=process["selector_source_symlink"],
+                execution_target_regular=process["execution_target_regular"],
+                execution_target_single_link=process["execution_target_single_link"],
+                status=process["status"],
+                exit_code=process["exit_code"],
+                native_event_binding=native_binding,
+                proof=proof,
+                isolation=process["isolation"],
+            )
+            expected = expected_process_binding
+            process_receipt = host_process_receipt_v2.validate_receipt(
+                process_receipt,
+                expected_host="opencode",
+                expected_task_case=(
+                    expected.get("task_case") if expected is not None else None
+                ),
+                expected_run_id=(expected.get("run_id") if expected is not None else None),
+                expected_candidate=(
+                    expected.get("candidate_binding") if expected is not None else None
+                ),
+                expected_run_binding=(
+                    expected.get("run_binding") if expected is not None else None
+                ),
+                expected_broker_sha256=(
+                    expected.get("broker_source", {}).get("sha256")
+                    if expected is not None
+                    and isinstance(expected.get("broker_source"), Mapping)
+                    else None
+                ),
+                expected_host_identity_sha256=(
+                    expected.get("host_identity_sha256")
+                    if expected is not None
+                    else None
+                ),
+                expected_host_identity_source_sha256=(
+                    expected.get("host_identity_source_sha256")
+                    if expected is not None
+                    else None
+                ),
+                expected_host_binary=(
+                    expected.get("host_binary") if expected is not None else None
+                ),
+                seen_nonce_sha256s=(
+                    seen_nonce_sha256s if seen_nonce_sha256s is not None else set()
+                ),
+            )
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+            host_process_receipt_v2.HostProcessReceiptV2Error,
+        ) as error:
+            raise NativeEventAdapterError(
+                "OpenCode public fork v2 process receipt was rejected"
+            ) from error
+    elif seen_nonce_sha256s is not None:
+        nonce = _digest(process["nonce_sha256"], label="public fork nonce")
+        if nonce in seen_nonce_sha256s:
+            _fail("OpenCode public fork one-time nonce was replayed")
+        seen_nonce_sha256s.add(nonce)
+    base["public_fork_proof"] = {
+        "schema_version": OPENCODE_PUBLIC_FORK_PROOF_SCHEMA_VERSION,
+        "route_observation_sha256": route_sha256,
+        "request_body_sha256": request_body_sha256,
+        "response_sha256": response_sha256,
+        "parent_session_sha256": parent_session_sha256,
+        "child_session_sha256": plugin_child_sha256,
+        "child_plugin_event_sha256": sha256_bytes(plugin_raw),
+        "event_barrier": dict(selected["event_barrier"]),
+        "process_binding": _copy(
+            process,
+            label="OpenCode public fork process binding projection",
+        ),
+        "process_proof": _copy(
+            proof,
+            label="OpenCode public fork process proof projection",
+        ),
+    }
+    if process_receipt is not None:
+        base["process_receipt"] = process_receipt
+    else:
+        base.pop("process_receipt", None)
+    return base
+
+
+# The proof-oriented spelling is retained as a direct alias so the owner
+# producer can name the source-specific operation without changing the return
+# shape of the existing adapter functions.
+adapt_opencode_public_fork_proof = adapt_opencode_public_fork_observation
 
 
 def _build_event(
@@ -598,7 +1108,7 @@ def adapt_opencode_plugin_observation(
         parent = None
         methods_observed = ["message.updated"]
     else:
-        source_event, event_type, session_sha256 = _validate_opencode_observation(
+        source_event, event_type, session_sha256 = validate_opencode_native_observation(
             selected
         )
         parent = None
@@ -635,14 +1145,19 @@ def adapt_native_observation(
     event_sequence: Mapping[str, Any] | int,
     session_sha256: str | None = None,
     supervisor_parent_observation: Mapping[str, Any] | None = None,
+    public_fork_proof: Mapping[str, Any] | None = None,
+    expected_process_binding: Mapping[str, Any] | None = None,
+    seen_nonce_sha256s: MutableSet[str] | None = None,
 ) -> dict[str, Any]:
-    """Dispatch to one of the two exact current Host observation adapters."""
+    """Dispatch to one exact Host observation or an explicit fork proof."""
 
     if host == "codex":
         if session_sha256 is None:
             _fail("Codex session identity is required outside the hook observation")
         if supervisor_parent_observation is not None:
             _fail("Codex does not accept an OpenCode supervisor parent observation")
+        if public_fork_proof is not None:
+            _fail("Codex does not accept an OpenCode public fork proof")
         return adapt_codex_hook_observation(
             observation,
             host_identity=host_identity,
@@ -652,6 +1167,36 @@ def adapt_native_observation(
             session_sha256=session_sha256,
         )
     if host == "opencode":
+        if public_fork_proof is not None:
+            if supervisor_parent_observation is not None:
+                _fail(
+                    "OpenCode public fork proof cannot carry a legacy parent observation"
+                )
+            proof = _mapping(public_fork_proof, label="OpenCode public fork proof")
+            if proof.get("schema_version") != OPENCODE_PUBLIC_FORK_PROOF_SCHEMA_VERSION:
+                _fail("OpenCode public fork proof schema version is unsupported")
+            plugin_raw = proof.get("child_plugin_observation")
+            if not isinstance(observation, (bytes, bytearray)) or not isinstance(
+                plugin_raw, (bytes, bytearray)
+            ):
+                _fail(
+                    "OpenCode public fork dispatch requires the exact child plugin bytes"
+                )
+            if bytes(observation) != plugin_raw:
+                _fail("OpenCode public fork dispatch child plugin bytes differ")
+            if expected_process_binding is None:
+                _fail("OpenCode public fork dispatch requires expected process binding")
+            if not isinstance(seen_nonce_sha256s, MutableSet):
+                _fail("OpenCode public fork dispatch requires a shared mutable nonce set")
+            return adapt_opencode_public_fork_observation(
+                public_fork_proof,
+                expected_process_binding=expected_process_binding,
+                seen_nonce_sha256s=seen_nonce_sha256s,
+                host_identity=host_identity,
+                execution_identity=execution_identity,
+                route=route,
+                event_sequence=event_sequence,
+            )
         return adapt_opencode_plugin_observation(
             observation,
             host_identity=host_identity,
@@ -753,6 +1298,7 @@ __all__ = [
     "OPENCODE_MODEL_OBSERVATION_SCHEMA_VERSION",
     "OPENCODE_NATIVE_EVENTS",
     "OPENCODE_OBSERVATION_SCHEMA_VERSION",
+    "OPENCODE_PUBLIC_FORK_PROOF_SCHEMA_VERSION",
     "SCHEMA_VERSION",
     "NativeEventAdapterError",
     "adapt_codex_hook_observation",
@@ -760,4 +1306,7 @@ __all__ = [
     "adapt_native_observation",
     "adapt_opencode_plugin_observation",
     "adapt_opencode_plugin_sequence",
+    "adapt_opencode_public_fork_observation",
+    "adapt_opencode_public_fork_proof",
+    "validate_opencode_native_observation",
 ]

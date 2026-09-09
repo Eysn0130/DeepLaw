@@ -70,7 +70,7 @@
       "properties": {
         "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-        "version": {"const": "0.12.0"},
+        "version": {"const": "0.13.0"},
         "gold_canonical_sha256": {"$ref": "#/$defs/sha256"},
         "fixture_manifest_sha256": {"$ref": "#/$defs/sha256"},
         "semantic_gold_schema_sha256": {"$ref": "#/$defs/sha256"},

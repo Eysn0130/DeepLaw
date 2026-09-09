@@ -19,14 +19,27 @@ import stat
 import tempfile
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.hosts.broker_runtime_input import (
+    BROKER_RUNTIME_BOOTSTRAP,
+    BROKER_RUNTIME_BOOTSTRAP_SHA256,
+    RUNTIME_FILE_MAX_BYTES,
+    RUNTIME_MANIFEST_MAX_BYTES,
+    RUNTIME_MANIFEST_MAX_FILES,
+    RUNTIME_TOTAL_MAX_BYTES,
+    BrokerRuntimeInputError,
+    RuntimeManifest,
+    parse_runtime_manifest,
+)
 from benchmarks.hosts.codex_app_server_client import (
     CodexOwnerExternalBrokerError,
+    _closed_broker_environment,
     build_codex_zero_model_preflight_request,
     consume_codex_zero_model_preflight,
 )
@@ -36,6 +49,9 @@ from benchmarks.hosts.host_preflight_receipt import (
     host_identity_sha256,
     inspect_broker_source,
     load_host_identity_input,
+    portable_file_stat_matches,
+    stat_mutation_signature,
+    validate_windows_acl_hardening_report,
 )
 from benchmarks.hosts.pass13_orchestrator import (
     QualificationOrchestrationError,
@@ -47,6 +63,7 @@ from benchmarks.release.typed_qualification_evidence_v3_host_tasks import (
     TASK_OPERATIONS,
     TASK_WRONG_STATES,
 )
+from deeplaw import bounded_subprocess
 from deeplaw.api.knowledge_os import KnowledgeOS
 from deeplaw.read_services import SourceReadService, WikiReadService
 from deeplaw.util import strict_json_loads
@@ -162,16 +179,9 @@ _ACTIVE_QUALIFICATION_SCHEMA_RELATIVE_PATH = Path(
 )
 _CANDIDATE_MANIFEST_MAX_BYTES = 1024 * 1024
 _BROKER_SOURCE_MAX_BYTES = 256 * 1024
-_STABLE_STAT_FIELDS = (
-    "st_dev",
-    "st_ino",
-    "st_size",
-    "st_mode",
-    "st_uid",
-    "st_nlink",
-)
-
-
+_BROKER_INTERPRETER_VERSION_MAX_BYTES = 256
+_BROKER_INTERPRETER_PROBE_TIMEOUT_SECONDS = 5
+_PYTHON_VERSION = re.compile(r"^Python [0-9]+(?:\.[0-9]+){1,3}(?:[-+._A-Za-z0-9]*)?$")
 def _validate_catalog_host_constraints(value: Mapping[str, Any]) -> None:
     if set(value) != set(HOSTS):
         raise HostTaskQualificationError("v0.13 Host coordinates are not closed")
@@ -512,11 +522,7 @@ def validate_external_collector_handoff(
 def _stable_stat_signature(details: os.stat_result) -> tuple[Any, ...]:
     """Return identity and mutation fields for one exact file observation."""
 
-    return (
-        *(getattr(details, field, None) for field in _STABLE_STAT_FIELDS),
-        getattr(details, "st_mtime_ns", getattr(details, "st_mtime", None)),
-        getattr(details, "st_ctime_ns", getattr(details, "st_ctime", None)),
-    )
+    return stat_mutation_signature(details)
 
 
 def _parent_chain_has_symlink(path: Path) -> bool:
@@ -534,6 +540,53 @@ def _parent_chain_has_symlink(path: Path) -> bool:
     return False
 
 
+def _windows_acl_hardening_verified(
+    report: object,
+    *,
+    expected_path: Path | str | None = None,
+    directory: bool | None = None,
+) -> bool:
+    try:
+        validate_windows_acl_hardening_report(
+            report,
+            expected_path=expected_path,
+            expected_kind=(
+                "directory" if directory is True else "file" if directory is False else None
+            ),
+            recursive=directory,
+        )
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _harden_windows_broker_path(
+    path: Path,
+    *,
+    directory: bool,
+    error_message: str,
+) -> None:
+    try:
+        from deeplaw.windows_acl import (
+            harden_windows_private_file,
+            harden_windows_vault,
+        )
+
+        report = (
+            harden_windows_vault(path)
+            if directory
+            else harden_windows_private_file(path)
+        )
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise HostTaskQualificationError(error_message) from exc
+    if not _windows_acl_hardening_verified(
+        report,
+        expected_path=path,
+        directory=directory,
+    ):
+        raise HostTaskQualificationError(error_message)
+
+
 def _read_stable_regular_file(
     path: Path | str,
     *,
@@ -544,6 +597,7 @@ def _read_stable_regular_file(
     owner_only: bool = False,
     retain_bytes: bool = False,
     maximum_bytes: int | None = None,
+    allow_empty: bool = False,
 ) -> tuple[str, bytes | None]:
     """Hash one regular file through a stable FD and unchanged path identity."""
 
@@ -562,7 +616,11 @@ def _read_stable_regular_file(
         raise HostTaskQualificationError(f"{label} must be a regular non-symlink file")
     if before.st_nlink != 1:
         raise HostTaskQualificationError(f"{label} must be a single-link file")
-    if maximum_bytes is not None and not 1 <= before.st_size <= maximum_bytes:
+    if maximum_bytes is not None and (
+        before.st_size < 0
+        or before.st_size > maximum_bytes
+        or (before.st_size == 0 and not allow_empty)
+    ):
         raise HostTaskQualificationError(f"{label} exceeds its byte bound")
     if executable and not os.access(selected, os.X_OK):
         raise HostTaskQualificationError(f"{label} is not executable")
@@ -576,7 +634,11 @@ def _read_stable_regular_file(
     if require_external and inside_repository:
         raise HostTaskQualificationError(f"{label} must be repository-external")
 
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
     descriptor = -1
@@ -586,7 +648,7 @@ def _read_stable_regular_file(
     try:
         descriptor = os.open(selected, flags)
         fd_before = os.fstat(descriptor)
-        if _stable_stat_signature(fd_before) != _stable_stat_signature(before):
+        if not portable_file_stat_matches(fd_before, before):
             raise HostTaskQualificationError(f"{label} changed before it was read")
         while True:
             chunk = os.read(descriptor, 1024 * 1024)
@@ -614,10 +676,517 @@ def _read_stable_regular_file(
         _parent_chain_has_symlink(selected)
         or _stable_stat_signature(fd_before) != _stable_stat_signature(fd_after)
         or _stable_stat_signature(before) != _stable_stat_signature(after)
+        or not portable_file_stat_matches(fd_after, after)
         or total != before.st_size
     ):
         raise HostTaskQualificationError(f"{label} changed while it was read")
     return digest.hexdigest(), b"".join(chunks) if retain_bytes else None
+
+
+def _broker_interpreter_owner_is_trusted(details: os.stat_result) -> bool:
+    trusted_owner_uids = {0}
+    if hasattr(os, "geteuid"):
+        trusted_owner_uids.add(os.geteuid())
+    return (
+        details.st_uid in trusted_owner_uids
+        and not stat.S_IMODE(details.st_mode) & 0o022
+    )
+
+
+def _revalidate_broker_interpreter(
+    selected: Path,
+    *,
+    expected_sha256: str,
+    expected_signature: tuple[Any, ...],
+    repository: Path,
+    label: str,
+) -> tuple[str, tuple[Any, ...]]:
+    """Rebind one interpreter without executing it or probing its version again."""
+
+    try:
+        before = selected.lstat()
+        resolved = selected.resolve(strict=True)
+        repository_root = repository.resolve(strict=True)
+    except OSError as exc:
+        raise HostTaskQualificationError(f"{label} changed") from exc
+    if (
+        not selected.is_absolute()
+        or _parent_chain_has_symlink(selected)
+        or stat.S_ISLNK(before.st_mode)
+        or not stat.S_ISREG(before.st_mode)
+        or before.st_nlink != 1
+        or not os.access(selected, os.X_OK)
+        or not _broker_interpreter_owner_is_trusted(before)
+    ):
+        raise HostTaskQualificationError(f"{label} changed")
+    try:
+        resolved.relative_to(repository_root)
+    except ValueError:
+        pass
+    else:
+        raise HostTaskQualificationError(f"{label} changed")
+    try:
+        observed_sha256, _ = _read_stable_regular_file(
+            selected,
+            label=label,
+            repository=repository,
+            require_external=True,
+            executable=True,
+        )
+        after = selected.lstat()
+    except (HostTaskQualificationError, OSError) as exc:
+        raise HostTaskQualificationError(f"{label} changed") from exc
+    after_signature = _stable_stat_signature(after)
+    if (
+        _stable_stat_signature(before) != expected_signature
+        or after_signature != expected_signature
+        or observed_sha256 != expected_sha256
+    ):
+        raise HostTaskQualificationError(f"{label} changed")
+    return observed_sha256, after_signature
+
+
+@dataclass(frozen=True)
+class _BrokerRuntimeBinding:
+    root: Path
+    manifest_path: Path
+    expected_manifest_sha256: str
+    manifest: RuntimeManifest
+    repository: Path
+    expected_wheel_sha256: str | None
+    expected_lock_sha256: str | None
+    root_signature: tuple[Any, ...]
+    manifest_signature: tuple[Any, ...]
+    file_signatures: Mapping[str, tuple[Any, ...]]
+
+    def revalidate(self) -> None:
+        manifest, root_signature, manifest_signature, _ = _load_broker_runtime_manifest(
+            self.root,
+            self.manifest_path,
+            expected_manifest_sha256=self.expected_manifest_sha256,
+            repository=self.repository,
+            expected_wheel_sha256=self.expected_wheel_sha256,
+            expected_lock_sha256=self.expected_lock_sha256,
+        )
+        file_signatures = _scan_broker_runtime_tree(
+            self.root,
+            manifest,
+            repository=self.repository,
+        )
+        if (
+            manifest != self.manifest
+            or root_signature != self.root_signature
+            or manifest_signature != self.manifest_signature
+            or file_signatures != self.file_signatures
+        ):
+            raise HostTaskQualificationError("broker runtime input changed")
+
+
+def _runtime_directory_metadata(
+    selected: Path,
+    *,
+    repository: Path,
+    label: str,
+) -> tuple[Path, tuple[Any, ...]]:
+    if not selected.is_absolute() or _parent_chain_has_symlink(selected):
+        raise HostTaskQualificationError(f"{label} is outside the closed scope")
+    try:
+        details = selected.lstat()
+        resolved = selected.resolve(strict=True)
+        repository_root = repository.resolve(strict=True)
+    except OSError as exc:
+        raise HostTaskQualificationError(f"{label} is unavailable") from exc
+    if (
+        not stat.S_ISDIR(details.st_mode)
+        or stat.S_ISLNK(details.st_mode)
+        or not _broker_interpreter_owner_is_trusted(details)
+        or stat.S_IMODE(details.st_mode) & 0o222
+    ):
+        raise HostTaskQualificationError(f"{label} is unsafe")
+    try:
+        resolved.relative_to(repository_root)
+    except ValueError:
+        pass
+    else:
+        raise HostTaskQualificationError(f"{label} must be repository-external")
+    return resolved, _stable_stat_signature(details)
+
+
+def _runtime_file_metadata(
+    selected: Path,
+    *,
+    repository: Path,
+    label: str,
+) -> tuple[Path, tuple[Any, ...]]:
+    if not selected.is_absolute() or _parent_chain_has_symlink(selected):
+        raise HostTaskQualificationError(f"{label} is outside the closed scope")
+    try:
+        details = selected.lstat()
+        resolved = selected.resolve(strict=True)
+        repository_root = repository.resolve(strict=True)
+    except OSError as exc:
+        raise HostTaskQualificationError(f"{label} is unavailable") from exc
+    if (
+        stat.S_ISLNK(details.st_mode)
+        or not stat.S_ISREG(details.st_mode)
+        or details.st_nlink != 1
+        or not _broker_interpreter_owner_is_trusted(details)
+        or stat.S_IMODE(details.st_mode) & 0o222
+    ):
+        raise HostTaskQualificationError(f"{label} is unsafe")
+    try:
+        resolved.relative_to(repository_root)
+    except ValueError:
+        pass
+    else:
+        raise HostTaskQualificationError(f"{label} must be repository-external")
+    return resolved, _stable_stat_signature(details)
+
+
+def _load_broker_runtime_manifest(
+    runtime_root: Path,
+    manifest_path: Path,
+    *,
+    expected_manifest_sha256: str,
+    repository: Path,
+    expected_wheel_sha256: str | None = None,
+    expected_lock_sha256: str | None = None,
+) -> tuple[RuntimeManifest, tuple[Any, ...], tuple[Any, ...], str]:
+    root_resolved, root_signature = _runtime_directory_metadata(
+        runtime_root,
+        repository=repository,
+        label="broker runtime root",
+    )
+    manifest_resolved, manifest_signature = _runtime_file_metadata(
+        manifest_path,
+        repository=repository,
+        label="broker runtime manifest",
+    )
+    if manifest_resolved == root_resolved or root_resolved in manifest_resolved.parents:
+        raise HostTaskQualificationError("broker runtime manifest must be outside its root")
+    observed_sha256, raw = _read_stable_regular_file(
+        manifest_path,
+        label="broker runtime manifest",
+        repository=repository,
+        require_external=True,
+        retain_bytes=True,
+        maximum_bytes=RUNTIME_MANIFEST_MAX_BYTES,
+    )
+    if observed_sha256 != expected_manifest_sha256 or raw is None:
+        raise HostTaskQualificationError("broker runtime manifest hash differs")
+    try:
+        manifest = parse_runtime_manifest(raw)
+    except BrokerRuntimeInputError as exc:
+        raise HostTaskQualificationError("broker runtime manifest is invalid") from exc
+    if (
+        expected_wheel_sha256 is not None
+        and manifest.wheel_sha256 != expected_wheel_sha256
+    ) or (
+        expected_lock_sha256 is not None
+        and manifest.lock_sha256 != expected_lock_sha256
+    ):
+        raise HostTaskQualificationError(
+            "broker runtime artifact digest differs from the frozen candidate"
+        )
+    try:
+        after_signature = _stable_stat_signature(manifest_path.lstat())
+    except OSError as exc:
+        raise HostTaskQualificationError("broker runtime manifest changed") from exc
+    if after_signature != manifest_signature:
+        raise HostTaskQualificationError("broker runtime manifest changed")
+    return manifest, root_signature, manifest_signature, observed_sha256
+
+
+def _scan_broker_runtime_tree(
+    runtime_root: Path,
+    manifest: RuntimeManifest,
+    *,
+    repository: Path,
+) -> dict[str, tuple[Any, ...]]:
+    expected = {item.relative_path: item for item in manifest.files}
+    allowed_directories = {"", "source", "site-packages"}
+    entry_bound = RUNTIME_MANIFEST_MAX_FILES * 2 + 128
+    for relative_path in expected:
+        parts = relative_path.split("/")
+        for index in range(1, len(parts)):
+            allowed_directories.add("/".join(parts[:index]))
+            if len(allowed_directories) > entry_bound:
+                raise HostTaskQualificationError(
+                    "broker runtime tree exceeds its entry bound"
+                )
+    if len(allowed_directories) + len(expected) > entry_bound:
+        raise HostTaskQualificationError("broker runtime tree exceeds its entry bound")
+    observed: dict[str, tuple[Any, ...]] = {}
+    total_bytes = 0
+    entry_count = 0
+    top_level_names: set[str] = set()
+
+    def visit(directory: Path, relative_directory: str) -> None:
+        nonlocal entry_count, total_bytes
+        try:
+            entries = os.scandir(directory)
+        except OSError as exc:
+            raise HostTaskQualificationError("broker runtime tree is unavailable") from exc
+        with entries:
+            for entry in entries:
+                entry_count += 1
+                if entry_count > entry_bound:
+                    raise HostTaskQualificationError(
+                        "broker runtime tree exceeds its entry bound"
+                    )
+                if relative_directory:
+                    relative_path = f"{relative_directory}/{entry.name}"
+                else:
+                    relative_path = entry.name
+                if not relative_directory:
+                    top_level_names.add(entry.name)
+                selected = Path(entry.path)
+                try:
+                    details = entry.stat(follow_symlinks=False)
+                except OSError as exc:
+                    raise HostTaskQualificationError(
+                        "broker runtime tree entry is unavailable"
+                    ) from exc
+                if stat.S_ISLNK(details.st_mode):
+                    raise HostTaskQualificationError("broker runtime tree contains a symlink")
+                if stat.S_ISDIR(details.st_mode):
+                    if relative_path not in allowed_directories:
+                        raise HostTaskQualificationError(
+                            "broker runtime tree contains an extra directory"
+                        )
+                    if (
+                        not _broker_interpreter_owner_is_trusted(details)
+                        or stat.S_IMODE(details.st_mode) & 0o222
+                    ):
+                        raise HostTaskQualificationError("broker runtime directory is unsafe")
+                    visit(selected, relative_path)
+                    continue
+                if not stat.S_ISREG(details.st_mode):
+                    raise HostTaskQualificationError("broker runtime tree contains a non-file")
+                item = expected.get(relative_path)
+                if item is None:
+                    raise HostTaskQualificationError(
+                        "broker runtime tree contains an extra file"
+                    )
+                if (
+                    details.st_nlink != 1
+                    or not _broker_interpreter_owner_is_trusted(details)
+                    or stat.S_IMODE(details.st_mode) & 0o222
+                    or details.st_size != item.byte_size
+                ):
+                    raise HostTaskQualificationError("broker runtime file metadata differs")
+                observed_sha256, _ = _read_stable_regular_file(
+                    selected,
+                    label="broker runtime file",
+                    repository=repository,
+                    require_external=True,
+                    maximum_bytes=RUNTIME_FILE_MAX_BYTES,
+                    allow_empty=True,
+                )
+                if observed_sha256 != item.sha256:
+                    raise HostTaskQualificationError("broker runtime file hash differs")
+                total_bytes += details.st_size
+                if total_bytes > RUNTIME_TOTAL_MAX_BYTES:
+                    raise HostTaskQualificationError(
+                        "broker runtime tree exceeds its byte bound"
+                    )
+                try:
+                    after_signature = _stable_stat_signature(selected.lstat())
+                except OSError as exc:
+                    raise HostTaskQualificationError("broker runtime file changed") from exc
+                if after_signature != _stable_stat_signature(details):
+                    raise HostTaskQualificationError("broker runtime file changed")
+                observed[relative_path] = after_signature
+
+    _runtime_directory_metadata(
+        runtime_root,
+        repository=repository,
+        label="broker runtime root",
+    )
+    for module_root in ("source", "site-packages"):
+        _runtime_directory_metadata(
+            runtime_root / module_root,
+            repository=repository,
+            label=f"broker runtime {module_root} root",
+        )
+    visit(runtime_root, "")
+    if top_level_names != {"source", "site-packages"}:
+        raise HostTaskQualificationError("broker runtime root contains an extra entry")
+    if set(observed) != set(expected):
+        raise HostTaskQualificationError("broker runtime tree is missing a manifest file")
+    return observed
+
+
+def _validate_broker_runtime_input(
+    runtime_root: Path | str | None,
+    manifest_path: Path | str | None,
+    expected_manifest_sha256: str | None,
+    *,
+    interpreter: tuple[Path, str, str, tuple[Any, ...]] | None,
+    repository: Path,
+    expected_wheel_sha256: str | None = None,
+    expected_lock_sha256: str | None = None,
+) -> _BrokerRuntimeBinding | None:
+    values = (runtime_root, manifest_path, expected_manifest_sha256)
+    if all(value is None for value in values):
+        return None
+    if os.name != "posix":
+        raise HostTaskQualificationError("broker runtime input construction is POSIX-only")
+    if any(value is None for value in values):
+        raise HostTaskQualificationError(
+            "broker runtime root, manifest, and manifest SHA-256 must be supplied together"
+        )
+    if interpreter is None:
+        raise HostTaskQualificationError(
+            "broker runtime input requires the pinned broker interpreter"
+        )
+    if (
+        not isinstance(expected_manifest_sha256, str)
+        or _SHA256.fullmatch(expected_manifest_sha256) is None
+        or expected_manifest_sha256 == "0" * 64
+    ):
+        raise HostTaskQualificationError("broker runtime manifest identity is invalid")
+    try:
+        selected_root = Path(runtime_root)
+        selected_manifest = Path(manifest_path)
+    except TypeError as exc:
+        raise HostTaskQualificationError("broker runtime input paths are invalid") from exc
+    manifest, root_signature, manifest_signature, _ = _load_broker_runtime_manifest(
+        selected_root,
+        selected_manifest,
+        expected_manifest_sha256=expected_manifest_sha256,
+        repository=repository,
+        expected_wheel_sha256=expected_wheel_sha256,
+        expected_lock_sha256=expected_lock_sha256,
+    )
+    file_signatures = _scan_broker_runtime_tree(
+        selected_root,
+        manifest,
+        repository=repository,
+    )
+    return _BrokerRuntimeBinding(
+        root=selected_root,
+        manifest_path=selected_manifest,
+        expected_manifest_sha256=expected_manifest_sha256,
+        manifest=manifest,
+        repository=repository,
+        expected_wheel_sha256=expected_wheel_sha256,
+        expected_lock_sha256=expected_lock_sha256,
+        root_signature=root_signature,
+        manifest_signature=manifest_signature,
+        file_signatures=file_signatures,
+    )
+
+
+def _validate_broker_interpreter(
+    path: Path | str | None,
+    *,
+    expected_sha256: str | None,
+    expected_version: str | None,
+    repository: Path,
+) -> tuple[Path, str, str, tuple[Any, ...]] | None:
+    """Validate one optional, POSIX-only interpreter binding before launch."""
+
+    values = (path, expected_sha256, expected_version)
+    if all(value is None for value in values):
+        return None
+    if os.name != "posix":
+        raise HostTaskQualificationError(
+            "pinned broker interpreter construction is POSIX-only"
+        )
+    if any(value is None for value in values):
+        raise HostTaskQualificationError(
+            "broker interpreter path, SHA-256, and version must be supplied together"
+        )
+    if (
+        not isinstance(expected_sha256, str)
+        or _SHA256.fullmatch(expected_sha256) is None
+        or expected_sha256 == "0" * 64
+        or not isinstance(expected_version, str)
+        or _PYTHON_VERSION.fullmatch(expected_version) is None
+    ):
+        raise HostTaskQualificationError("broker interpreter identity is invalid")
+
+    selected = Path(path)
+    if not selected.is_absolute() or _parent_chain_has_symlink(selected):
+        raise HostTaskQualificationError("broker interpreter path is outside the closed scope")
+    try:
+        before = selected.lstat()
+        resolved = selected.resolve(strict=True)
+        repository_root = repository.resolve(strict=True)
+    except OSError as exc:
+        raise HostTaskQualificationError("broker interpreter is unavailable") from exc
+    if (
+        stat.S_ISLNK(before.st_mode)
+        or not stat.S_ISREG(before.st_mode)
+        or before.st_nlink != 1
+    ):
+        raise HostTaskQualificationError("broker interpreter must be regular and single-link")
+    if not os.access(selected, os.X_OK):
+        raise HostTaskQualificationError("broker interpreter is not executable")
+    if not _broker_interpreter_owner_is_trusted(before):
+        raise HostTaskQualificationError(
+            "broker interpreter must be owner-controlled and not writable"
+        )
+    try:
+        resolved.relative_to(repository_root)
+    except ValueError:
+        pass
+    else:
+        raise HostTaskQualificationError("broker interpreter must be repository-external")
+
+    before_signature = _stable_stat_signature(before)
+    observed_sha256, _ = _read_stable_regular_file(
+        selected,
+        label="broker interpreter",
+        repository=repository,
+        require_external=True,
+        executable=True,
+    )
+    try:
+        after_read_signature = _stable_stat_signature(selected.lstat())
+    except OSError as exc:
+        raise HostTaskQualificationError("broker interpreter changed while it was read") from exc
+    if after_read_signature != before_signature:
+        raise HostTaskQualificationError("broker interpreter changed while it was read")
+    if observed_sha256 != expected_sha256:
+        raise HostTaskQualificationError("broker interpreter hash differs")
+
+    try:
+        completed = bounded_subprocess.run_bounded_subprocess(
+            [str(selected), "--version"],
+            environment=_closed_broker_environment(),
+            timeout_seconds=_BROKER_INTERPRETER_PROBE_TIMEOUT_SECONDS,
+            max_stdout_bytes=_BROKER_INTERPRETER_VERSION_MAX_BYTES,
+            max_stderr_bytes=_BROKER_INTERPRETER_VERSION_MAX_BYTES,
+        )
+    except (OSError, ValueError, bounded_subprocess.BoundedSubprocessError) as exc:
+        raise HostTaskQualificationError("broker interpreter version probe failed") from exc
+    try:
+        after_probe_signature = _stable_stat_signature(selected.lstat())
+    except OSError as exc:
+        raise HostTaskQualificationError("broker interpreter changed during version probe") from exc
+    if after_probe_signature != before_signature:
+        raise HostTaskQualificationError("broker interpreter changed during version probe")
+    stdout = completed.stdout if isinstance(completed.stdout, bytes) else b""
+    stderr = completed.stderr if isinstance(completed.stderr, bytes) else b""
+    if len(stdout) + len(stderr) > _BROKER_INTERPRETER_VERSION_MAX_BYTES:
+        raise HostTaskQualificationError("broker interpreter version output exceeds its byte bound")
+    try:
+        observed_version = (stdout + stderr).decode("utf-8", errors="strict").strip()
+    except UnicodeError as exc:
+        raise HostTaskQualificationError("broker interpreter version output is invalid") from exc
+    if completed.returncode != 0 or observed_version != expected_version:
+        raise HostTaskQualificationError("broker interpreter version differs")
+
+    _revalidate_broker_interpreter(
+        selected,
+        expected_sha256=observed_sha256,
+        expected_signature=before_signature,
+        repository=repository,
+        label="broker interpreter changed during version probe",
+    )
+    return selected, observed_sha256, observed_version, before_signature
 
 
 @contextmanager
@@ -627,9 +1196,32 @@ def _stage_exact_broker_executable(
     repository: Path,
     host_binary: Path,
     expected_sha256: str,
-) -> Iterator[Path]:
+    broker_interpreter: Path | str | None = None,
+    expected_broker_interpreter_sha256: str | None = None,
+    expected_broker_interpreter_version: str | None = None,
+    broker_runtime_root: Path | str | None = None,
+    broker_runtime_manifest: Path | str | None = None,
+    expected_broker_runtime_manifest_sha256: str | None = None,
+    expected_broker_runtime_wheel_sha256: str | None = None,
+    expected_broker_runtime_lock_sha256: str | None = None,
+) -> Iterator[Path | tuple[str, ...]]:
     """Stage verified broker bytes in one private path immune to source replacement."""
 
+    interpreter = _validate_broker_interpreter(
+        broker_interpreter,
+        expected_sha256=expected_broker_interpreter_sha256,
+        expected_version=expected_broker_interpreter_version,
+        repository=repository,
+    )
+    runtime_binding = _validate_broker_runtime_input(
+        broker_runtime_root,
+        broker_runtime_manifest,
+        expected_broker_runtime_manifest_sha256,
+        interpreter=interpreter,
+        repository=repository,
+        expected_wheel_sha256=expected_broker_runtime_wheel_sha256,
+        expected_lock_sha256=expected_broker_runtime_lock_sha256,
+    )
     source = Path(path)
     inspected = inspect_broker_source(
         source,
@@ -660,14 +1252,25 @@ def _stage_exact_broker_executable(
     with tempfile.TemporaryDirectory(prefix="deeplaw-codex-broker-") as raw_directory:
         directory = Path(raw_directory).resolve(strict=True)
         details = directory.lstat()
-        if (
-            not stat.S_ISDIR(details.st_mode)
-            or stat.S_IMODE(details.st_mode) & 0o077
-            or (os.name != "nt" and details.st_uid != os.geteuid())
-        ):
+        if not stat.S_ISDIR(details.st_mode):
             raise HostTaskQualificationError("Codex broker staging directory is unsafe")
-        staged = directory / "broker-executable"
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if os.name == "nt":
+            _harden_windows_broker_path(
+                directory,
+                directory=True,
+                error_message="Codex broker staging directory is unsafe",
+            )
+        elif stat.S_IMODE(details.st_mode) & 0o077 or details.st_uid != os.geteuid():
+            raise HostTaskQualificationError("Codex broker staging directory is unsafe")
+        staged = directory / (
+            "broker-executable.exe" if os.name == "nt" else "broker-executable"
+        )
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_BINARY", 0)
+        )
         if hasattr(os, "O_CLOEXEC"):
             flags |= os.O_CLOEXEC
         descriptor = os.open(staged, flags, 0o700)
@@ -675,11 +1278,19 @@ def _stage_exact_broker_executable(
             offset = 0
             while offset < len(raw):
                 offset += os.write(descriptor, raw[offset:])
-            os.fchmod(descriptor, 0o500)
+            if os.name != "nt":
+                os.fchmod(descriptor, 0o500)
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
-        os.chmod(directory, 0o500)
+        if os.name == "nt":
+            _harden_windows_broker_path(
+                staged,
+                directory=False,
+                error_message="staged Codex broker ACL is unsafe",
+            )
+        else:
+            os.chmod(directory, 0o500)
         try:
             staged_sha256, _ = _read_stable_regular_file(
                 staged,
@@ -692,9 +1303,47 @@ def _stage_exact_broker_executable(
             )
             if staged_sha256 != expected_sha256:
                 raise HostTaskQualificationError("staged Codex broker bytes differ")
-            yield staged
+            if interpreter is None:
+                yield staged
+            else:
+                _revalidate_broker_interpreter(
+                    interpreter[0],
+                    expected_sha256=interpreter[1],
+                    expected_signature=interpreter[3],
+                    repository=repository,
+                    label="broker interpreter changed before launch",
+                )
+                if runtime_binding is not None:
+                    runtime_binding.revalidate()
+                try:
+                    launcher = [str(interpreter[0]), "-I", "-S"]
+                    if runtime_binding is None:
+                        launcher.append(str(staged))
+                    else:
+                        launcher.extend(
+                            (
+                                "-c",
+                                BROKER_RUNTIME_BOOTSTRAP,
+                                str(runtime_binding.root),
+                                str(staged),
+                            )
+                        )
+                    yield tuple(launcher)
+                finally:
+                    try:
+                        if runtime_binding is not None:
+                            runtime_binding.revalidate()
+                    finally:
+                        _revalidate_broker_interpreter(
+                            interpreter[0],
+                            expected_sha256=interpreter[1],
+                            expected_signature=interpreter[3],
+                            repository=repository,
+                            label="broker interpreter changed after broker execution",
+                        )
         finally:
-            os.chmod(directory, 0o700)
+            if os.name != "nt":
+                os.chmod(directory, 0o700)
 
 
 def load_exact_candidate_binding(
@@ -1145,6 +1794,12 @@ def run_codex_owner_external_zero_model_preflight(
     run_id: str,
     evidence_run_id: int,
     qualification_run_id: int,
+    broker_interpreter: Path | str | None = None,
+    expected_broker_interpreter_sha256: str | None = None,
+    expected_broker_interpreter_version: str | None = None,
+    broker_runtime_root: Path | str | None = None,
+    broker_runtime_manifest: Path | str | None = None,
+    expected_broker_runtime_manifest_sha256: str | None = None,
     repository: Path = REPOSITORY,
     seen_nonce_sha256s: set[str] | None = None,
 ) -> dict[str, Any]:
@@ -1198,12 +1853,23 @@ def run_codex_owner_external_zero_model_preflight(
         issued_at=issued.strftime("%Y-%m-%dT%H:%M:%SZ"),
         expires_at=expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
+    runtime_manifest_for_summary: RuntimeManifest | None = None
     try:
         with _stage_exact_broker_executable(
             codex_broker,
             repository=repository,
             host_binary=Path(codex_binary),
             expected_sha256=expected_broker_sha256,
+            broker_interpreter=broker_interpreter,
+            expected_broker_interpreter_sha256=expected_broker_interpreter_sha256,
+            expected_broker_interpreter_version=expected_broker_interpreter_version,
+            broker_runtime_root=broker_runtime_root,
+            broker_runtime_manifest=broker_runtime_manifest,
+            expected_broker_runtime_manifest_sha256=(
+                expected_broker_runtime_manifest_sha256
+            ),
+            expected_broker_runtime_wheel_sha256=candidate["wheel_sha256"],
+            expected_broker_runtime_lock_sha256=candidate["lock_sha256"],
         ) as broker_executable:
             observation = consume_codex_zero_model_preflight(
                 broker_executable,
@@ -1212,11 +1878,24 @@ def run_codex_owner_external_zero_model_preflight(
                     seen_nonce_sha256s if seen_nonce_sha256s is not None else set()
                 ),
             )
+        if broker_runtime_root is not None:
+            if broker_runtime_manifest is None or expected_broker_runtime_manifest_sha256 is None:
+                raise HostTaskQualificationError(
+                    "broker runtime input is missing its closed control group"
+                )
+            runtime_manifest_for_summary, _, _, _ = _load_broker_runtime_manifest(
+                Path(broker_runtime_root),
+                Path(broker_runtime_manifest),
+                expected_manifest_sha256=expected_broker_runtime_manifest_sha256,
+                repository=repository,
+                expected_wheel_sha256=candidate["wheel_sha256"],
+                expected_lock_sha256=candidate["lock_sha256"],
+            )
     except (CodexOwnerExternalBrokerError, OSError, ValueError) as exc:
         raise HostTaskQualificationError(
             "Codex owner-external zero-model preflight failed closed"
         ) from exc
-    return {
+    result = {
         "status": "passed",
         "evidence_class": "zero_model_preflight_only",
         "formal_admission": False,
@@ -1236,6 +1915,29 @@ def run_codex_owner_external_zero_model_preflight(
         "broker_source_sha256": expected_broker_sha256,
         "receipt_record_sha256": observation["host_process_receipt"]["record_sha256"],
     }
+    if broker_interpreter is not None:
+        result["broker_interpreter"] = {
+            "identity": "python",
+            "sha256": expected_broker_interpreter_sha256,
+            "version": expected_broker_interpreter_version,
+            "execution_mode": "pinned_interpreter",
+            "import_closure_bound": False,
+        }
+    if runtime_manifest_for_summary is not None:
+        result["broker_runtime_input"] = {
+            "manifest_sha256": expected_broker_runtime_manifest_sha256,
+            "bootstrap_sha256": BROKER_RUNTIME_BOOTSTRAP_SHA256,
+            "runtime_root_identity": runtime_manifest_for_summary.runtime_root_identity,
+            "file_count": len(runtime_manifest_for_summary.files),
+            "total_bytes": runtime_manifest_for_summary.total_bytes,
+            "artifact_digests": runtime_manifest_for_summary.artifact_digests,
+            "artifact_provenance": "candidate_and_manifest_digest_match_only",
+            "installation_provenance_bound": False,
+            "nonstdlib_input_bound": True,
+            "stdlib_bound": False,
+            "formal_admission": False,
+        }
+    return result
 
 
 def public_source_read(
@@ -1415,6 +2117,15 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--codex-binary", type=Path, default=None)
     parser.add_argument("--codex-broker", type=Path, default=None)
     parser.add_argument("--expected-codex-broker-sha256", default=None)
+    parser.add_argument("--codex-broker-interpreter", type=Path, default=None)
+    parser.add_argument("--expected-codex-broker-interpreter-sha256", default=None)
+    parser.add_argument("--expected-codex-broker-interpreter-version", default=None)
+    parser.add_argument("--codex-broker-runtime-root", type=Path, default=None)
+    parser.add_argument("--codex-broker-runtime-manifest", type=Path, default=None)
+    parser.add_argument(
+        "--expected-codex-broker-runtime-manifest-sha256",
+        default=None,
+    )
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--evidence-run-id", type=int, default=None)
     parser.add_argument("--qualification-run-id", type=int, default=None)
@@ -1443,6 +2154,16 @@ def _main(argv: list[str] | None = None) -> int:
                 codex_binary=args.codex_binary,
                 codex_broker=args.codex_broker,
                 expected_broker_sha256=args.expected_codex_broker_sha256,
+                broker_interpreter=args.codex_broker_interpreter,
+                expected_broker_interpreter_sha256=(
+                    args.expected_codex_broker_interpreter_sha256
+                ),
+                expected_broker_interpreter_version=args.expected_codex_broker_interpreter_version,
+                broker_runtime_root=args.codex_broker_runtime_root,
+                broker_runtime_manifest=args.codex_broker_runtime_manifest,
+                expected_broker_runtime_manifest_sha256=(
+                    args.expected_codex_broker_runtime_manifest_sha256
+                ),
                 task_case=args.task_case,
                 run_id=args.run_id,
                 evidence_run_id=args.evidence_run_id,
