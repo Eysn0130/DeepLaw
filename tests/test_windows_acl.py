@@ -503,3 +503,27 @@ def test_host_connect_and_launcher_reject_junction_ancestor(tmp_path: Path) -> N
             vault_path=selected_vault,
             owner_home=tmp_path / "owner-home",
         )
+
+
+def test_acl_inventory_stops_discovery_at_its_bound(monkeypatch) -> None:
+    from pathlib import Path
+
+    import deeplaw.windows_acl as acl
+
+    visited = []
+
+    def inventory(self, pattern):
+        assert pattern == "*"
+        for index in range(100):
+            visited.append(index)
+            if len(visited) > 3:
+                raise AssertionError("ACL inventory read beyond the first excluded entry")
+            yield self / f"entry-{index}"
+
+    monkeypatch.setattr(acl, "_MAX_ACL_PATHS", 3)
+    monkeypatch.setattr(Path, "rglob", inventory)
+    paths, complete = acl._protected_paths(Path("synthetic-vault"))
+    assert paths == [Path("synthetic-vault"), Path("synthetic-vault/entry-0"),
+                     Path("synthetic-vault/entry-1")]
+    assert complete is False
+    assert visited == [0, 1, 2]

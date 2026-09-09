@@ -70,6 +70,7 @@ def test_provider_contract_is_closed_and_advertises_versioned_read_operations() 
         "deeplaw.knowledge-support-output/v5",
         "deeplaw.knowledge-support-output/v6",
         "deeplaw.knowledge-support-output/v7",
+        "deeplaw.knowledge-support-output/v8",
     ]
     internal_operation = _load_contract("knowledge-support.output.v6.schema.json")["properties"][
         "operation"

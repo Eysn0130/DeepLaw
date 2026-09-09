@@ -129,7 +129,7 @@ def test_doctor_and_gc_only_repair_removable_state(tmp_path: Path) -> None:
     assert report["canonical_valid"] is True
     assert report["schema_version"] == "deeplaw.knowledge-doctor/v3"
     readiness = report["product_readiness"]
-    assert readiness["schema_version"] == "deeplaw.host-product-readiness/v1"
+    assert readiness["schema_version"] == "deeplaw.host-product-readiness/v2"
     assert readiness["autonomous_vault_ready"] is False
     assert readiness["mcp"]["advertised_operations"] == [
         "query",

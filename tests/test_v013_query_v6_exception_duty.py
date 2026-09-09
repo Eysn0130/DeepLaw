@@ -90,7 +90,13 @@ def _ledger_heads(root: Path) -> tuple[str, str]:
         return store.audit_head, store.legacy_audit_head
 
 
-def _cli_args(root: Path, *, operation: str, task: str) -> tuple[str, ...]:
+def _cli_args(
+    root: Path,
+    *,
+    operation: str,
+    task: str,
+    query_plan_version: str = "6",
+) -> tuple[str, ...]:
     common = (
         "--vault",
         str(root),
@@ -103,7 +109,7 @@ def _cli_args(root: Path, *, operation: str, task: str) -> tuple[str, ...]:
         "--max-sensitivity",
         "public",
         "--query-plan-version",
-        "6",
+        query_plan_version,
         "--applicable-duty",
         _DUTY,
         "--graph-hops",
@@ -123,17 +129,33 @@ def _cli_args(root: Path, *, operation: str, task: str) -> tuple[str, ...]:
 
 
 def _public_result(
-    case: dict[str, Any], *, task: str, surface: str
+    case: dict[str, Any],
+    *,
+    task: str,
+    surface: str,
+    query_plan_version: str = "6",
 ) -> dict[str, Any]:
     fixture = case["fixture"]
     root = case["root"]
     if surface == "cli-query":
         return fixture._run_cli(
-            case["cli_home"], *_cli_args(root, operation="query", task=task)
+            case["cli_home"],
+            *_cli_args(
+                root,
+                operation="query",
+                task=task,
+                query_plan_version=query_plan_version,
+            ),
         )
     if surface == "cli-context":
         return fixture._run_cli(
-            case["cli_home"], *_cli_args(root, operation="context", task=task)
+            case["cli_home"],
+            *_cli_args(
+                root,
+                operation="context",
+                task=task,
+                query_plan_version=query_plan_version,
+            ),
         )
     if surface == "mcp-query":
         return fixture.handle_knowledge_support(
@@ -149,7 +171,7 @@ def _public_result(
             max_sources=12,
             graph_hops=1,
             retrieval_mode="hybrid",
-            query_plan_version="6",
+            query_plan_version=query_plan_version,
             applicable_duties=[_DUTY],
             vault_path=root,
         )
@@ -167,7 +189,7 @@ def _public_result(
             max_sources=12,
             graph_hops=1,
             retrieval_mode="hybrid",
-            query_plan_version="6",
+            query_plan_version=query_plan_version,
             applicable_duties=[_DUTY],
             confirm_no_case_data=True,
             vault_path=root,
@@ -299,19 +321,38 @@ def test_explicit_exception_request_returns_admitted_source_passage(
     surface: str,
 ) -> None:
     root = exception_case["root"]
-    before = _ledger_heads(root)
-    result = _public_result(
-        exception_case,
-        task="Policy Alpha temporary draft exception proviso 但书",
-        surface=surface,
-    )
-    after = _ledger_heads(root)
-    _check_public_bounds(result, surface=surface, root=root)
+    # Check preserved v6 and current v7 routes on the same deterministic fixture.
+    for query_plan_version in ("6", "7"):
+        before = _ledger_heads(root)
+        result = _public_result(
+            exception_case,
+            task="Policy Alpha temporary draft exception proviso 但书",
+            surface=surface,
+            query_plan_version=query_plan_version,
+        )
+        after = _ledger_heads(root)
+        _check_public_bounds(result, surface=surface, root=root)
 
-    body = _provider_body(result, surface=surface)
-    assert _exact_source_items(
-        body,
-        source_revision_id=exception_case["source"]["source_revision_id"],
-    )
-    assert _provider_gap(body)
-    assert before == after
+        if surface.startswith("cli-"):
+            assert result["query_plan"]["schema_version"] == (
+                f"deeplaw.knowledge-query-plan/v{query_plan_version}"
+            )
+        else:
+            expected_output_version = 8 if query_plan_version == "7" else 6
+            expected_provider_version = 3 if query_plan_version == "7" else 2
+            assert result["schema_version"] == (
+                "deeplaw.knowledge-support-output/"
+                f"v{expected_output_version}"
+            )
+            assert result["result"]["schema_version"] == (
+                "deeplaw.provider-knowledge-capsule/"
+                f"v{expected_provider_version}"
+            )
+
+        body = _provider_body(result, surface=surface)
+        assert _exact_source_items(
+            body,
+            source_revision_id=exception_case["source"]["source_revision_id"],
+        )
+        assert _provider_gap(body)
+        assert before == after

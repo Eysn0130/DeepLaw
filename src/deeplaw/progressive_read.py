@@ -7,7 +7,7 @@ from typing import Any
 from .knowledge_autonomy import bounded_source_reference
 from .persistent_read_runtime import PersistentReadSnapshot
 from .read_services import SourceReadService, WikiReadService
-from .util import assert_provider_output_safe, sha256_bytes
+from .util import assert_provider_output_safe, canonical_json, sha256_bytes, strict_json_loads
 
 
 def read_exact(arguments: dict[str, Any], snapshot: PersistentReadSnapshot) -> dict[str, Any]:
@@ -73,7 +73,7 @@ def read_exact(arguments: dict[str, Any], snapshot: PersistentReadSnapshot) -> d
         )
         # Working Checkpoints require task-line admission; exact reads cannot
         # bypass the Context Compiler's task binding with a guessed identity.
-        if item["kind"] == "memory":
+        if item["kind"] == "memory" and item["metadata"].get("memory_type") == "working":
             raise PermissionError("Memory content requires task-bound context")
         checked = 0
         visiting = {item["revision_id"]}
@@ -82,6 +82,33 @@ def read_exact(arguments: dict[str, Any], snapshot: PersistentReadSnapshot) -> d
         def admit_references(current):
             nonlocal checked
             projected = []
+            statement_rows = snapshot.store.connection.execute(
+                "SELECT statement_json FROM knowledge_statements_v1 "
+                "WHERE knowledge_revision_id = ? ORDER BY ordinal LIMIT 4097",
+                (current["revision_id"],),
+            ).fetchall()
+            statements = [strict_json_loads(row[0]) for row in statement_rows]
+            if any(value.get("schema_version") == "deeplaw.knowledge-statement/v2"
+                   for value in statements):
+                from .evidence.support import SupportEvaluator
+
+                evaluator = SupportEvaluator(snapshot.store, scope=scope, sensitivity=sensitivity)
+                seen_refs = set()
+                for value in statements:
+                    support = evaluator.statement(value)
+                    if support["freshness"] != "fresh":
+                        raise KeyError("Knowledge complete support set is unavailable")
+                    for reference in support["support_set"]["source_refs"]:
+                        key = canonical_json(reference)
+                        if key not in seen_refs:
+                            checked += 1
+                            if checked > 32:
+                                raise ValueError(
+                                    "Knowledge lineage admission exceeds the read bound"
+                                )
+                            projected.append(bounded_source_reference(reference))
+                            seen_refs.add(key)
+                return projected
             for reference in current["source_refs"]:
                 checked += 1
                 if checked > 32:
@@ -170,6 +197,8 @@ def read_exact(arguments: dict[str, Any], snapshot: PersistentReadSnapshot) -> d
             )
         }
         governance["temporal_state"] = "current_admitted"
+        governance["epistemic_state"] = item["epistemic_state"]
+        governance["directive_mode"] = "data_only"
         if target["kind"] == "wiki":
             cursor = (
                 WikiReadService._page_cursor_encode(expected_digest, offset) if offset else None

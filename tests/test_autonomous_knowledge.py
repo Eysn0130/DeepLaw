@@ -2157,10 +2157,10 @@ def test_doctor_includes_autonomous_canonical_integrity(tmp_path: Path) -> None:
     readiness = healthy["product_readiness"]
     assert readiness["autonomous_vault_ready"] is True
     assert readiness["mcp"]["input_schema"] == (
-        "deeplaw.knowledge-support-input/v8"
+        "deeplaw.knowledge-support-input/v9"
     )
     assert readiness["mcp"]["output_schema"] == (
-        "deeplaw.knowledge-support-output/v7"
+        "deeplaw.knowledge-support-output/v8"
     )
     assert all(
         item["status"] == "owner_verification_required"

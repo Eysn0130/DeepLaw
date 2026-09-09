@@ -41,6 +41,11 @@ from .knowledge_store import (
 from .knowledge_store import (
     _database_path as _knowledge_database_path,
 )
+from .task_action_state import (
+    action_resume_requirement,
+    normalize_action_state,
+    validate_action_transition,
+)
 from .task_context import (
     normalize_task_context_binding,
     task_route_sha256,
@@ -1227,6 +1232,20 @@ def _tables_sql() -> str:
         ) STRICT;
         CREATE INDEX IF NOT EXISTS knowledge_run_records_v4_time
             ON knowledge_run_records_v4(recorded_at, writer_id);
+
+        CREATE INDEX IF NOT EXISTS knowledge_run_records_v4_action
+            ON knowledge_run_records_v4(
+                json_extract(metadata_json, '$.action_state.action_id'), recorded_at, run_id
+            );
+
+        CREATE INDEX IF NOT EXISTS knowledge_run_records_v4_action_route
+            ON knowledge_run_records_v4(
+                json_extract(metadata_json, '$.task_binding.project_sha256'),
+                json_extract(metadata_json, '$.task_binding.task_lineage_sha256'),
+                json_extract(metadata_json, '$.task_binding.repository_sha256'),
+                json_extract(metadata_json, '$.task_binding.worktree_sha256'),
+                json_extract(metadata_json, '$.action_state.action_id')
+            );
 
         CREATE TABLE IF NOT EXISTS knowledge_aliases_v4 (
             alias_key TEXT NOT NULL,
@@ -3422,7 +3441,6 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             dependency is None
             or dependency_freshness != "fresh"
             or event is None
-            or event["freshness"] != "fresh"
             or event["replacement_source_revision_id"] is None
         ):
             return False
@@ -3432,6 +3450,33 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             legacy_audit_head=legacy_audit_head,
         )
         if successor is None or successor["active"] is not True:
+            return False
+        # Several fragment events share one revision/source and timestamp.
+        # Their hash order cannot choose this fragment's freshness. Bind the
+        # original exact quote and an actual matching fragment in the active
+        # successor, in addition to the fragment-specific dependency above.
+        original = self._source_reference_binding(
+            reference, as_of=as_of, legacy_audit_head=legacy_audit_head
+        )
+        quote_sha256 = reference.get("quote_sha256")
+        if original is None or not isinstance(quote_sha256, str):
+            return False
+        counterpart = self.connection.execute(
+            """SELECT fragments.fragment_id, fragments.locator
+               FROM source_fragments AS fragments
+               JOIN source_revision_bindings_v2 AS bindings
+                 ON bindings.legacy_source_id = fragments.source_id
+               WHERE bindings.source_revision_id = ? AND fragments.text_sha256 = ?
+               ORDER BY fragments.fragment_id LIMIT 1""",
+            (event["replacement_source_revision_id"], quote_sha256),
+        ).fetchone()
+        if counterpart is None or not self._source_reference_is_bound(
+            {"source_revision_id": event["replacement_source_revision_id"],
+             "fragment_id": counterpart["fragment_id"], "locator": counterpart["locator"],
+             "quote_sha256": quote_sha256},
+            scope=scope, max_sensitivity=max_sensitivity, as_of=as_of,
+            legacy_audit_head=legacy_audit_head,
+        ):
             return False
         if scope is not None and successor["scope"] != scope:
             return False
@@ -3499,7 +3544,39 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         """Check current source lifecycle without changing immutable revision history."""
         if as_of is not None:
             as_of = canonical_timestamp(as_of, field="revision provenance as_of")
+        statement_rows = self.connection.execute(
+            "SELECT statement_json FROM knowledge_statements_v1 "
+            "WHERE knowledge_revision_id = ? ORDER BY ordinal LIMIT 4097",
+            (revision.get("revision_id"),),
+        ).fetchall()
+        statements = [strict_json_loads(row[0]) for row in statement_rows]
+        if any(
+            item.get("schema_version") == "deeplaw.knowledge-statement/v2"
+            or item.get("knowledge_revision_refs") or item.get("relation_revision_refs")
+            for item in statements
+        ):
+            from .evidence.support import SupportEvaluator
+            if len(statements) > 4096:
+                return False
+            evaluator = SupportEvaluator(
+                self, scope=revision["scope"], sensitivity=revision["sensitivity"],
+                as_of=as_of, legacy_audit_head=legacy_audit_head
+            )
+            return evaluator.revision(
+                "knowledge_revision", revision["revision_id"]
+            ) == "fresh"
         references = revision.get("source_refs", [])
+        if any(
+            isinstance(reference, dict) and "revision_id" in reference for reference in references
+        ):
+            from .evidence.support import SupportEvaluator
+
+            return SupportEvaluator(
+                self, scope=revision["scope"], sensitivity=revision["sensitivity"],
+                as_of=as_of, legacy_audit_head=legacy_audit_head,
+            ).revision(
+                "knowledge_revision", revision["revision_id"], require_grounded=False,
+            ) == "fresh"
         source_admitted = revision.get("verification") != "source_bound" or (
             bool(references)
             and all(
@@ -3778,6 +3855,20 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         ):
             if digest is not None and not _SHA256.fullmatch(digest):
                 raise ValueError(f"run {field} is invalid")
+        generated_started_at = started_at is None
+        generated_ended_at = ended_at is None
+        if isinstance(metadata, dict) and "action_state" in metadata:
+            prior_response = self.connection.execute(
+                "SELECT response_json FROM mutation_idempotency_v3 "
+                "WHERE grant_id = ? AND idempotency_key = ? AND result_kind = 'run_record'",
+                (grant_id, idempotency_key),
+            ).fetchone()
+            if prior_response is not None:
+                retained = strict_json_loads(prior_response["response_json"])
+                if retained.get("schema_version") == "deeplaw.knowledge-run-record/v2":
+                    # Omitted timestamps are generated fields, not a new action request.
+                    started_at = started_at or retained["started_at"]
+                    ended_at = ended_at or retained["ended_at"]
         started_at = canonical_timestamp(started_at or utc_now(), field="run started_at")
         ended_at = canonical_timestamp(ended_at or utc_now(), field="run ended_at")
         if ended_at < started_at:
@@ -3789,6 +3880,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "artifact_ids",
             "notes_sha256",
             "task_binding",
+            "action_state",
         }
         if not isinstance(selected_metadata, dict) or set(selected_metadata) - allowed_metadata:
             raise ValueError("run metadata does not match its closed contract")
@@ -3802,6 +3894,21 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             selected_metadata["artifact_ids"] = normalize_run_artifact_ids(
                 selected_metadata["artifact_ids"]
             )
+        if "action_state" in selected_metadata:
+            action_state = normalize_action_state(selected_metadata["action_state"])
+            selected_metadata["action_state"] = action_state
+            if "task_binding" not in selected_metadata:
+                raise ValueError("task action state requires an exact task binding")
+            required_status = {
+                "not_executed": "partial", "initiated_unknown": "partial",
+                "succeeded": "succeeded", "failed": "failed",
+            }[action_state["status"]]
+            if (
+                status != required_status
+                or input_sha256 != action_state["request_sha256"]
+                or output_sha256 != action_state["outcome_sha256"]
+            ):
+                raise ValueError("Run result does not match its task action state")
         metadata_bytes = canonical_json(selected_metadata).encode("utf-8")
         if len(metadata_bytes) > _MAX_RUN_METADATA_BYTES or has_instruction_risk(
             metadata_bytes.decode("utf-8")
@@ -3840,7 +3947,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         request_bytes = canonical_json(request).encode("utf-8")
         request_sha256 = sha256_bytes(request_bytes)
         grant = self._grant(grant_id, operation="record_run", request_bytes=len(request_bytes))
-        replay = self._idempotent_response(
+        replay = None if "action_state" in selected_metadata else self._idempotent_response(
             grant_id=grant_id,
             idempotency_key=idempotency_key,
             request_sha256=request_sha256,
@@ -3856,7 +3963,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         )
         recorded_at = self._next_transaction_time(ended_at)
         receipt_body = {
-            "schema_version": "deeplaw.knowledge-run-record/v1",
+            "schema_version": (
+                "deeplaw.knowledge-run-record/v2" if "action_state" in selected_metadata
+                else "deeplaw.knowledge-run-record/v1"
+            ),
             "run_id": selected_run_id,
             "writer_id": grant["writer_id"],
             "host_id": host_id,
@@ -3889,6 +3999,20 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             locked_grant = self._grant(
                 grant_id, operation="record_run", request_bytes=len(request_bytes)
             )
+            if "action_state" in selected_metadata:
+                locked_prior = self.connection.execute(
+                    "SELECT response_json FROM mutation_idempotency_v3 "
+                    "WHERE grant_id = ? AND idempotency_key = ? AND result_kind = 'run_record'",
+                    (grant_id, idempotency_key),
+                ).fetchone()
+                if locked_prior is not None:
+                    retained = strict_json_loads(locked_prior["response_json"])
+                    if retained.get("schema_version") == "deeplaw.knowledge-run-record/v2":
+                        if generated_started_at:
+                            request["started_at"] = retained["started_at"]
+                        if generated_ended_at:
+                            request["ended_at"] = retained["ended_at"]
+                        request_sha256 = sha256_bytes(canonical_json(request).encode("utf-8"))
             locked_replay = self._idempotent_response(
                 grant_id=grant_id,
                 idempotency_key=idempotency_key,
@@ -3898,6 +4022,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 self.connection.rollback()
                 return locked_replay
             self._enforce_grant_limits(locked_grant, enforce_object_capacity=False)
+            if "action_state" in selected_metadata:
+                self._check_action_run_transition(
+                    selected_metadata, scope=scope, sensitivity=sensitivity,
+                )
             if (
                 self.connection.execute(
                     "SELECT 1 FROM knowledge_run_records_v4 WHERE run_id = ?",
@@ -3989,6 +4117,195 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             "legal_authority": False,
         }
 
+    def _latest_action_run(self, action_id: str) -> sqlite3.Row | None:
+        rows = self.connection.execute(
+            """
+            SELECT runs.*, events.sequence AS action_sequence
+            FROM knowledge_run_records_v4 AS runs
+            LEFT JOIN autonomous_events_v3 AS events
+              ON events.event_type = 'knowledge_run_recorded' AND events.object_id = runs.run_id
+            WHERE json_extract(runs.metadata_json, '$.action_state.action_id') = ?
+            ORDER BY events.sequence DESC LIMIT 4
+            """,
+            (action_id,),
+        ).fetchall()
+        if len(rows) > 3 or any(row["action_sequence"] is None for row in rows):
+            raise ValueError("task action Run history is invalid")
+        return rows[0] if rows else None
+
+    def task_action_states(
+        self, *, task_binding: dict[str, Any], scope: Scope,
+        max_sensitivity: Sensitivity, limit: int = 16,
+    ) -> dict[str, Any]:
+        """Read bounded exact-route action facts; never execute or grant an action."""
+
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 16:
+            raise ValueError("task action limit is invalid")
+        binding = normalize_task_context_binding(task_binding, allow_none=False)
+        if scope != self.vault_scope or max_sensitivity not in SENSITIVITIES:
+            raise PermissionError("task action read boundary is invalid")
+        sensitivities = SENSITIVITY_ORDER[:SENSITIVITY_ORDER.index(max_sensitivity) + 1]
+        placeholders = ",".join("?" for _ in sensitivities)
+        identities = self.connection.execute(
+            f"""
+            SELECT DISTINCT json_extract(metadata_json, '$.action_state.action_id') AS action_id
+            FROM knowledge_run_records_v4
+            WHERE json_extract(metadata_json, '$.task_binding.project_sha256') IS ?
+              AND json_extract(metadata_json, '$.task_binding.task_lineage_sha256') IS ?
+              AND json_extract(metadata_json, '$.task_binding.repository_sha256') IS ?
+              AND json_extract(metadata_json, '$.task_binding.worktree_sha256') IS ?
+              AND json_extract(metadata_json, '$.action_state.action_id') IS NOT NULL
+              AND scope = ? AND sensitivity IN ({placeholders})
+            ORDER BY action_id LIMIT ?
+            """,
+            (*[binding[field] for field in (
+                "project_sha256", "task_lineage_sha256", "repository_sha256", "worktree_sha256",
+            )], scope, *sensitivities, limit + 1),
+        ).fetchall()
+        entries = []
+        for identity in identities[:limit]:
+            row = self._latest_action_run(identity["action_id"])
+            if row is None:
+                raise ValueError("task action Run is unavailable")
+            metadata = self._verified_action_run(row)
+            if (
+                task_route_sha256(metadata["task_binding"]) != task_route_sha256(binding)
+                or row["scope"] != scope or row["sensitivity"] not in sensitivities
+            ):
+                raise PermissionError("task action Run is outside the read boundary")
+            entries.append({
+                "state": metadata["action_state"],
+                "run_id": row["run_id"],
+                "receipt_sha256": row["receipt_sha256"],
+                "resume_requirement": action_resume_requirement(metadata["action_state"]),
+                "legal_authority": False,
+            })
+        return {"entries": entries, "truncated": len(identities) > limit}
+
+    def checkpoint_action_gap(
+        self, *, run_id: str, task_binding: dict[str, Any],
+        scope: Scope, max_sensitivity: Sensitivity,
+    ) -> str | None:
+        actions = self.task_action_states(
+            task_binding=task_binding, scope=scope, max_sensitivity=max_sensitivity,
+        )
+        if actions["truncated"]:
+            return "task_action_bound_exceeded"
+        if any(
+            item["resume_requirement"] == "verify_external_state" for item in actions["entries"]
+        ):
+            return "action_outcome_unknown"
+        if not actions["entries"]:
+            return None
+        checkpoint = self.connection.execute(
+            "SELECT sequence FROM autonomous_events_v3 "
+            "WHERE event_type = 'knowledge_run_recorded' AND object_id = ? LIMIT 1", (run_id,),
+        ).fetchone()
+        if checkpoint is None:
+            return "action_state_changed"
+        for action in actions["entries"]:
+            event = self.connection.execute(
+                "SELECT sequence FROM autonomous_events_v3 "
+                "WHERE event_type = 'knowledge_run_recorded' AND object_id = ? LIMIT 1",
+                (action["run_id"],),
+            ).fetchone()
+            if event is None or event["sequence"] > checkpoint["sequence"]:
+                return "action_state_changed"
+        return None
+
+    def _check_action_run_transition(
+        self, metadata: dict[str, Any], *, scope: str, sensitivity: str,
+    ) -> None:
+        """Check the exact predecessor while the existing Run transaction is locked."""
+
+        action = metadata["action_state"]
+        prior = self._latest_action_run(action["action_id"])
+        prior_state = None
+        if prior is not None:
+            prior_metadata = self._verified_action_run(prior)
+            if (
+                task_route_sha256(prior_metadata["task_binding"])
+                != task_route_sha256(metadata["task_binding"])
+                or prior["scope"] != scope or prior["sensitivity"] != sensitivity
+            ):
+                raise PermissionError("task action identity is unavailable in this boundary")
+            if action["expected_prior_run_id"] != prior["run_id"]:
+                raise ValueError("task action predecessor changed")
+            prior_state = prior_metadata["action_state"]
+        validate_action_transition(prior_state, action)
+
+    def _verified_action_run(self, row: sqlite3.Row) -> dict[str, Any]:
+        """Verify at most four immutable Run receipts and their exact state chain."""
+
+        result = None
+        child = None
+        for _ in range(4):
+            metadata = strict_json_loads(row["metadata_json"])
+            action = normalize_action_state(metadata["action_state"])
+            binding = normalize_task_context_binding(metadata["task_binding"], allow_none=False)
+            if action != metadata["action_state"] or binding != metadata["task_binding"]:
+                raise ValueError("task action metadata is not canonical")
+            body = {
+                "schema_version": "deeplaw.knowledge-run-record/v2",
+                **{name: row[name] for name in (
+                    "run_id", "writer_id", "host_id", "model_id", "task_sha256",
+                    "input_sha256", "output_sha256", "tool_results_sha256", "scope",
+                    "sensitivity", "status", "started_at", "ended_at", "recorded_at",
+                )},
+                "metadata": metadata,
+            }
+            expected_status = {
+                "not_executed": "partial", "initiated_unknown": "partial",
+                "succeeded": "succeeded", "failed": "failed",
+            }[action["status"]]
+            event = self.connection.execute(
+                "SELECT payload_json, recorded_at, sequence FROM autonomous_events_v3 "
+                "WHERE event_type = 'knowledge_run_recorded' AND object_id = ? LIMIT 1",
+                (row["run_id"],),
+            ).fetchone()
+            if (
+                sha256_bytes(canonical_json(body).encode()) != row["receipt_sha256"]
+                or row["status"] != expected_status
+                or row["input_sha256"] != action["request_sha256"]
+                or row["output_sha256"] != action["outcome_sha256"]
+                or event is None or event["recorded_at"] != row["recorded_at"]
+                or strict_json_loads(event["payload_json"]).get("receipt_sha256")
+                != row["receipt_sha256"]
+            ):
+                raise ValueError("task action Run receipt is invalid")
+            if result is None:
+                result = metadata
+            if child is not None:
+                child_row, child_metadata, child_sequence = child
+                if (
+                    task_route_sha256(binding)
+                    != task_route_sha256(child_metadata["task_binding"])
+                    or row["scope"] != child_row["scope"]
+                    or row["sensitivity"] != child_row["sensitivity"]
+                    or event["sequence"] >= child_sequence
+                ):
+                    raise ValueError("task action predecessor boundary is invalid")
+                validate_action_transition(action, child_metadata["action_state"])
+            prior = self.connection.execute(
+                """
+                SELECT runs.* FROM knowledge_run_records_v4 AS runs
+                JOIN autonomous_events_v3 AS events
+                  ON events.event_type = 'knowledge_run_recorded' AND events.object_id = runs.run_id
+                WHERE json_extract(runs.metadata_json, '$.action_state.action_id') = ?
+                  AND events.sequence < ?
+                ORDER BY events.sequence DESC LIMIT 1
+                """,
+                (action["action_id"], event["sequence"]),
+            ).fetchone()
+            if prior is None:
+                validate_action_transition(None, action)
+                return result
+            if action["expected_prior_run_id"] != prior["run_id"]:
+                raise ValueError("task action predecessor receipt is invalid")
+            child = row, metadata, event["sequence"]
+            row = prior
+        raise ValueError("task action state chain exceeds its bound")
+
     def run_task_context_binding(self, run_id: str | None) -> dict[str, Any] | None:
         """Return a verified task binding for one successful Run Record."""
 
@@ -4011,7 +4328,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             if row["receipt_sha256"] != sha256_bytes(
                 canonical_json(
                     {
-                        "schema_version": "deeplaw.knowledge-run-record/v1",
+                        "schema_version": (
+                            "deeplaw.knowledge-run-record/v2" if "action_state" in metadata
+                            else "deeplaw.knowledge-run-record/v1"
+                        ),
                         "run_id": row["run_id"],
                         "writer_id": row["writer_id"],
                         "host_id": row["host_id"],
@@ -4131,7 +4451,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             return None
         run = self.connection.execute(
             """
-            SELECT task_sha256, writer_id, scope, sensitivity, status
+            SELECT task_sha256, writer_id, scope, sensitivity, status, metadata_json
             FROM knowledge_run_records_v4
             WHERE run_id = ?
             LIMIT 1
@@ -4141,6 +4461,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         if (
             run is None
             or run["status"] != "succeeded"
+            or "action_state" in strict_json_loads(run["metadata_json"])
             or run["writer_id"] != row["writer_id"]
             or run["scope"] not in SCOPES
             or row["scope"] not in SCOPES
@@ -4839,6 +5160,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
               AND json_extract(metadata_json, '$.task_binding.project_sha256') = ?
               AND json_extract(metadata_json, '$.task_binding.repository_sha256') = ?
               AND json_extract(metadata_json, '$.task_binding.worktree_sha256') = ?
+              AND json_type(metadata_json, '$.action_state') IS NULL
             """
             + scope_clause
             + sensitivity_clause
@@ -5061,7 +5383,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             return False
         row = self.connection.execute(
             """
-            SELECT writer_id, scope, sensitivity, status
+            SELECT writer_id, scope, sensitivity, status, metadata_json
             FROM knowledge_run_records_v4
             WHERE run_id = ?
             """,
@@ -5072,6 +5394,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
             and row["writer_id"] == writer_id
             and row["scope"] == scope
             and row["status"] == "succeeded"
+            and "action_state" not in strict_json_loads(row["metadata_json"])
             and SENSITIVITY_ORDER.index(row["sensitivity"]) <= SENSITIVITY_ORDER.index(sensitivity)
         )
 
@@ -8560,6 +8883,26 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 "WHERE relation_key = ?",
                 (relation_revision_id, recorded_at, relation_key),
             )
+            # Use the same dependency writer as semantic compilation while retaining
+            # the direct Sink origin: no synthetic compilation run is created.
+            from .compilation.coordinator import CompilationCoordinator
+
+            CompilationCoordinator._commit_dependencies(
+                self, compilation_run_id=None, consumer_kind="relation_revision",
+                consumer_object_id=relation_key, consumer_revision_id=relation_revision_id,
+                source_refs=[ref for ref in selected_refs if "source_revision_id" in ref],
+                recorded_at=recorded_at,
+            )
+            CompilationCoordinator._commit_relation_revision_dependencies(
+                self, compilation_run_id=None, value={
+                    "subject_knowledge_id": subject_knowledge_id,
+                    "object_knowledge_id": object_knowledge_id,
+                    "relation_key": relation_key,
+                    "relation_revision_id": relation_revision_id,
+                    "evidence_refs": selected_refs,
+                    "recorded_at": recorded_at,
+                },
+            )
             mutation_id = stable_id("mutation", grant_id, idempotency_key, request_sha256)
             self.connection.execute(
                 "INSERT INTO knowledge_sink_usage_v3 VALUES (?, ?, ?, ?, ?)",
@@ -10010,7 +10353,9 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                     graph_relation_scan_truncated = True
                 relation_rows: list[dict[str, Any]] = []
                 for relation in relation_candidates[:_MAX_GRAPH_RELATION_SCAN]:
-                    if relation["source_free"] or not self.relation_provenance_admitted(relation):
+                    if relation["source_free"] or not self.relation_provenance_admitted(
+                        relation, as_of=as_of
+                    ):
                         continue
                     if (
                         relation["valid_from"] is not None
@@ -10030,7 +10375,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         relation["sensitivity"]
                     ) > SENSITIVITY_ORDER.index(max_sensitivity):
                         continue
-                    if not self.relation_provenance_admitted(relation):
+                    if not self.relation_provenance_admitted(relation, as_of=as_of):
                         continue
                     if (
                         relation["valid_from"] is not None
@@ -10274,7 +10619,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 or relation["scope"] != scope
                 or SENSITIVITY_ORDER.index(relation["sensitivity"])
                 > SENSITIVITY_ORDER.index(max_sensitivity)
-                or not self.relation_provenance_admitted(relation)
+                or not self.relation_provenance_admitted(relation, as_of=as_of)
                 or relation["subject_knowledge_id"] not in selected_id_set
                 or relation["object_knowledge_id"] not in selected_id_set
                 or (
@@ -10688,7 +11033,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         required_tags: tuple[str, ...] = (),
         confirm_no_case_data: bool = False,
         force_canonical_lexical: bool = False,
-        query_plan_version: str = "6",
+        query_plan_version: str = "7",
         query_target: str | dict[str, Any] | None = None,
         applicable_duties: tuple[str, ...] | list[str] | None = None,
         projection: str = "standard",
@@ -10697,7 +11042,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
     ) -> dict[str, Any]:
         """Compile a v6 local capsule; v5 is explicit compatibility only."""
 
-        if query_plan_version not in {"5", "6"}:
+        if query_plan_version not in {"5", "6", "7"}:
             raise ValueError("Knowledge Capsule query plan version is invalid")
         if query_plan_version == "5":
             if (
@@ -10744,6 +11089,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
 
         return build_v6_capsule(
             self,
+            query_plan_version=query_plan_version,
             task=task,
             goal=selected_goal,
             purpose=purpose,
@@ -11441,7 +11787,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
         selection_truncated = False
         for relation in relation_candidates[:_MAX_GRAPH_RELATION_SCAN]:
             candidate_relations_scanned += 1
-            if not self.relation_provenance_admitted(relation):
+            if not self.relation_provenance_admitted(relation, as_of=selected_as_of):
                 rejected.append(
                     {
                         "candidate_sha256": sha256_bytes(relation["relation_key"].encode("utf-8")),
@@ -13669,7 +14015,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 if (
                     not isinstance(metadata, dict)
                     or set(metadata)
-                    - {"task_kind", "tool_ids", "artifact_ids", "notes_sha256", "task_binding"}
+                    - {"task_kind", "tool_ids", "artifact_ids", "notes_sha256",
+                       "task_binding", "action_state"}
                     or len(canonical_json(metadata).encode("utf-8")) > _MAX_RUN_METADATA_BYTES
                 ):
                     raise ValueError("Run Record metadata is invalid")
@@ -13685,6 +14032,8 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 task_binding_sha256 = (
                     task_binding.get("binding_sha256") if task_binding is not None else None
                 )
+                if "action_state" in metadata:
+                    self._verified_action_run(row)
                 for list_field in ("tool_ids", "artifact_ids"):
                     values = metadata.get(list_field, [])
                     if (
@@ -13700,7 +14049,10 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                 if notes_sha256 is not None and not _SHA256.fullmatch(str(notes_sha256)):
                     raise ValueError("Run Record notes digest is invalid")
                 receipt_body = {
-                    "schema_version": "deeplaw.knowledge-run-record/v1",
+                    "schema_version": (
+                        "deeplaw.knowledge-run-record/v2" if "action_state" in metadata
+                        else "deeplaw.knowledge-run-record/v1"
+                    ),
                     "run_id": row["run_id"],
                     "writer_id": row["writer_id"],
                     "host_id": row["host_id"],
@@ -14109,7 +14461,7 @@ class AutonomousKnowledgeStore(AbstractContextManager["AutonomousKnowledgeStore"
                         "run_id",
                         "knowledge_run_records_v4",
                         "run_id",
-                        "deeplaw.knowledge-run-record/v1",
+                        ("deeplaw.knowledge-run-record/v1", "deeplaw.knowledge-run-record/v2"),
                     ),
                     "capture_batch": (
                         "knowledge_capture_recorded",

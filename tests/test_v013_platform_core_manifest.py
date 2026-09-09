@@ -47,11 +47,16 @@ def test_platform_core_manifest_is_closed_frozen_and_digest_bound() -> None:
     assert manifest["selection"]["windows"] == "not qualification"
     assert manifest["inventories"]["common"]["count"] > 1_000
     assert manifest["inventories"]["windows"]["count"] > manifest["inventories"]["common"]["count"]
-    assert len(manifest["classifications"]["qualification"]["cases"]) == 13
     qualification_ids = {
         case["node_id"]
         for case in manifest["classifications"]["qualification"]["cases"]
     }
+    seatbelt_ids = {
+        node_id for node_id in qualification_ids
+        if node_id.startswith("tests/test_macos_slot_isolation.py::")
+    }
+    assert len(seatbelt_ids) == 13
+    assert len(qualification_ids - seatbelt_ids) == 13
     assert (
         "tests/test_v013_pass24_opencode_plugin.py::"
         "test_bun_continuity_resolution_cold_start_and_hard_deadline"

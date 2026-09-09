@@ -173,7 +173,7 @@ def test_host_connect_builds_read_only_config_without_owning_host_or_auth(
             vault_path=vault,
             owner_home=tmp_path / "owner-home",
         )
-        assert plan["schema_version"] == "deeplaw.host-connect-plan/v2"
+        assert plan["schema_version"] == "deeplaw.host-connect-plan/v3"
         assert plan["host"] == host
         assert plan["server_leaf"] == "knowledge_support"
         assert plan["read_only"] is True
@@ -201,15 +201,15 @@ def test_host_connect_builds_read_only_config_without_owning_host_or_auth(
         assert plan["context_preflight"]["write_performed"] is False
         assert plan["context_preflight"]["audit_head_unchanged"] is True
         readiness = plan["readiness"]
-        assert readiness["schema_version"] == "deeplaw.host-product-readiness/v1"
+        assert readiness["schema_version"] == "deeplaw.host-product-readiness/v2"
         assert readiness["autonomous_vault_ready"] is True
         assert readiness["mcp"] == {
             "mode": "compact_current_with_internal_compatibility",
-            "input_schema": "deeplaw.knowledge-support-input/v8",
-            "output_schema": "deeplaw.knowledge-support-output/v7",
+            "input_schema": "deeplaw.knowledge-support-input/v9",
+            "output_schema": "deeplaw.knowledge-support-output/v8",
             "advertised_operations": ["query", "context", "explain", "read"],
-            "compatibility_inputs": ["v1", "v2", "v3", "v4", "v5", "v6", "v7"],
-            "compatibility_outputs": ["v1", "v2", "v3", "v4", "v5", "v6"],
+            "compatibility_inputs": ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"],
+            "compatibility_outputs": ["v1", "v2", "v3", "v4", "v5", "v6", "v7"],
         }
         assert [item["host"] for item in readiness["hosts"]] == [host]
         assert readiness["hosts"][0]["status"] == "owner_verification_required"
@@ -259,7 +259,7 @@ def test_host_connect_help_is_task_neutral_and_legacy_flags_fail_with_migration(
 
 def test_host_connect_v2_contract_forbids_task_bound_static_configuration() -> None:
     schema = json.loads(
-        (REPOSITORY / "contracts/host-connect-plan.v2.schema.json").read_bytes()
+        (REPOSITORY / "contracts/host-connect-plan.v3.schema.json").read_bytes()
     )
     Draft202012Validator.check_schema(schema)
     properties = schema["properties"]
@@ -273,7 +273,7 @@ def test_host_connect_v2_contract_forbids_task_bound_static_configuration() -> N
     assert schema["$defs"]["codexAddCommand"]["maxItems"] == 12
 
     schema = json.loads(
-        (REPOSITORY / "contracts/host-connect-plan.v2.schema.json").read_bytes()
+        (REPOSITORY / "contracts/host-connect-plan.v3.schema.json").read_bytes()
     )
     Draft202012Validator.check_schema(schema)
 
@@ -340,7 +340,7 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
     assert host_connect["product_role"] == "Driver"
     assert host_connect["lifecycle"] == "Active"
     assert "deeplaw knowledge host connect" in host_connect["bindings"]
-    assert "contracts/host-connect-plan.v2.schema.json" in host_connect["bindings"]
+    assert "contracts/host-connect-plan.v3.schema.json" in host_connect["bindings"]
     task_continuity = next(
         item
         for item in manifest["surfaces"]
@@ -363,8 +363,8 @@ def test_product_manifest_records_current_surface_and_preserves_callers() -> Non
     )
     assert knowledge_support["current_bindings"] == [
         "knowledge_support leaf",
-        "contracts/knowledge-support.input.v8.schema.json",
-        "contracts/knowledge-support.output.v7.schema.json",
+        "contracts/knowledge-support.input.v9.schema.json",
+        "contracts/knowledge-support.output.v8.schema.json",
         "advertised operations: query, context, explain, read",
     ]
     assert knowledge_support["compatibility_bindings"] == [

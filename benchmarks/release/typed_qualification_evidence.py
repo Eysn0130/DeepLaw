@@ -130,7 +130,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "cbf347b6a04e72f4382347c223ccb8fd529e16f7077586993c982d2e6682cf2f"
+    "8682b547f2c6c163e0dffe59f5c7646f2d92b1e415634d6346e844afb47e3ccf"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -4573,12 +4573,13 @@ def _parse_context(
     )
 
 
-def _parse_scale_v9(
+def _parse_scale_versioned(
     envelope: Mapping[str, Any],
     *,
     expected_value: Any,
     observed_value: Any,
     record_sha256: str,
+    version: str,
 ) -> dict[str, Any]:
     from benchmarks.v013.scale_qualification_v9 import (
         ACTIVE_GOVERNED_OBJECT_TARGET,
@@ -4586,19 +4587,22 @@ def _parse_scale_v9(
         FRAGMENTS_PER_SOURCE,
         HARD_FAILURE_IDS,
         PROVIDER_HARD_LIMIT_BYTES,
-        RUNNER_RELATIVE_PATH,
         SOURCE_BATCH_COUNT,
         WARM_SAMPLE_TARGET,
-        _validate_query_context_observation,
-        verify_report,
     )
-    from benchmarks.v013.scale_qualification_v9 import (
-        SCHEMA_VERSION as SCALE_V9_SCHEMA_VERSION,
+    if version == "9":
+        from benchmarks.v013 import scale_qualification_v9 as runner
+    elif version == "10":
+        from benchmarks.v013 import scale_qualification_v10 as runner
+    else:
+        _fail("scale report version is unsupported")
+    plan_version, provider_version, inner_version = (
+        ("6", "2", "1") if version == "9" else ("7", "3", "2")
     )
 
     expected = _require_mapping(
         expected_value,
-        label="scale v9 expected contract",
+        label=f"scale v{version} expected contract",
         keys={
             "schema_version",
             "active_governed_object_count",
@@ -4612,27 +4616,27 @@ def _parse_scale_v9(
         },
     )
     exact_expected = {
-        "schema_version": "deeplaw.v013-scale-qualification-expected/v9",
+        "schema_version": f"deeplaw.v013-scale-qualification-expected/v{version}",
         "active_governed_object_count": ACTIVE_GOVERNED_OBJECT_TARGET,
         "source_file_count": SOURCE_BATCH_COUNT,
         "fragments_per_source": FRAGMENTS_PER_SOURCE,
-        "query_plan_version": "6",
+        "query_plan_version": plan_version,
         "warm_samples": WARM_SAMPLE_TARGET,
         "provider_hard_limit_bytes": PROVIDER_HARD_LIMIT_BYTES,
         "above_10000_status": "experimental_unqualified",
         "deferred_100000": DEFERRED_100000,
     }
     if dict(expected) != exact_expected:
-        _fail("scale v9 expected contract differs from the frozen 10k boundary")
-    observed = _require_mapping(observed_value, label="scale v9 observed report")
-    if observed.get("schema_version") != SCALE_V9_SCHEMA_VERSION:
-        _fail("scale v9 observed report schema is unsupported")
-    verification = verify_report(observed)
+        _fail(f"scale v{version} expected contract differs from the frozen 10k boundary")
+    observed = _require_mapping(observed_value, label=f"scale v{version} observed report")
+    if observed.get("schema_version") != runner.SCHEMA_VERSION:
+        _fail(f"scale v{version} observed report schema is unsupported")
+    verification = runner.verify_report(observed)
     if verification.get("valid") is not True:
         errors = verification.get("errors")
         detail = errors[0] if isinstance(errors, list) and errors else "unknown validation error"
-        _fail(f"scale v9 observed report is invalid: {detail}")
-    query_context = _validate_query_context_observation(observed["query_context"])
+        _fail(f"scale v{version} observed report is invalid: {detail}")
+    query_context = runner._validate_query_context_observation(observed["query_context"])
 
     candidate = observed["candidate_binding"]
     envelope_candidate = envelope["candidate_binding"]
@@ -4645,19 +4649,19 @@ def _parse_scale_v9(
     )
     for field, observed_binding, expected_binding in candidate_pairs:
         if observed_binding != expected_binding:
-            _fail(f"scale v9 candidate binding mismatch: {field}")
+            _fail(f"scale v{version} candidate binding mismatch: {field}")
     run = observed["run_binding"]
     envelope_run = envelope["run_binding"]
     if (
         run["run_id"] != envelope_run["run_id"]
         or run["workflow_run_id"] != envelope_run["workflow_run_id"]
     ):
-        _fail("scale v9 run binding differs from the typed envelope")
+        _fail(f"scale v{version} run binding differs from the typed envelope")
     if (
-        run["runner"] != RUNNER_RELATIVE_PATH
+        run["runner"] != runner.RUNNER_RELATIVE_PATH
         or run["runner_sha256"] != envelope["runner"]["sha256"]
     ):
-        _fail("scale v9 runner binding differs from the typed envelope")
+        _fail(f"scale v{version} runner binding differs from the typed envelope")
 
     query = observed["warm_samples"]["query"]
     context = observed["warm_samples"]["context"]
@@ -4690,25 +4694,25 @@ def _parse_scale_v9(
         ],
         "query_sample_count": query["sample_count"],
         "context_sample_count": context["sample_count"],
-        "query_context_plan_v6": int(
+        f"query_context_plan_v{plan_version}": int(
             all(
-                version == "deeplaw.knowledge-query-plan/v6"
+                observed_version == f"deeplaw.knowledge-query-plan/v{plan_version}"
                 for surface in (query_context["query"], query_context["context"])
-                for version in surface["plan_schema_versions"]
+                for observed_version in surface["plan_schema_versions"]
             )
         ),
-        "query_context_provider_projection_v2": int(
+        f"query_context_provider_projection_v{provider_version}": int(
             all(
-                version == "deeplaw.provider-knowledge-capsule/v2"
+                observed_version == f"deeplaw.provider-knowledge-capsule/v{provider_version}"
                 for surface in (query_context["query"], query_context["context"])
-                for version in surface["provider_schema_versions"]
+                for observed_version in surface["provider_schema_versions"]
             )
         ),
-        "query_context_inner_projection_v1": int(
+        f"query_context_inner_projection_v{inner_version}": int(
             all(
-                version == "deeplaw.knowledge-capsule-projection/v1"
+                observed_version == f"deeplaw.knowledge-capsule-projection/v{inner_version}"
                 for surface in (query_context["query"], query_context["context"])
-                for version in surface["provider_inner_schema_versions"]
+                for observed_version in surface["provider_inner_schema_versions"]
             )
         ),
         "query_context_sample_count": query_context["query"]["sample_count"]
@@ -4718,7 +4722,7 @@ def _parse_scale_v9(
     observed_failures = set(observed["hard_failures"])
     unknown_failures = observed_failures - set(HARD_FAILURE_IDS)
     if unknown_failures:
-        _fail("scale v9 report contains an unknown hard failure")
+        _fail(f"scale v{version} report contains an unknown hard failure")
     failures = {
         "scale_not_executed": int(observed["status"] != "executed"),
         **{
@@ -4767,13 +4771,15 @@ def _parse_scale(
         envelope["schema_version"] == SCHEMA_V3_VERSION
         and isinstance(observed_value, Mapping)
         and observed_value.get("schema_version")
-        == "deeplaw.v013-scale-qualification-report/v9"
+        in {"deeplaw.v013-scale-qualification-report/v9",
+            "deeplaw.v013-scale-qualification-report/v10"}
     ):
-        return _parse_scale_v9(
+        return _parse_scale_versioned(
             envelope,
             expected_value=expected_value,
             observed_value=observed_value,
             record_sha256=record_sha256,
+            version=observed_value["schema_version"].rsplit("/v", 1)[1],
         )
     _reject_forbidden_keys(expected_value)
     _reject_forbidden_keys(observed_value)

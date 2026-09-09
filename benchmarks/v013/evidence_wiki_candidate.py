@@ -502,9 +502,12 @@ def _read_facts(
 
 
 def _query_facts(root: Path, *, task: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    # This v1 development fixture and its frozen scorer name Query Plan v6.
+    # It is compatibility evidence, not qualification of the current default.
     with KnowledgeOS.open(root) as osys:
         query = osys.retrieval.query(
             task,
+            query_plan_version="6",
             purpose="answer",
             graph_hops=1,
             retrieval_mode="hybrid",
@@ -516,6 +519,7 @@ def _query_facts(root: Path, *, task: str) -> tuple[dict[str, Any], dict[str, An
         )
         context = osys.context.compile(
             task=task,
+            query_plan_version="6",
             purpose="answer",
             graph_hops=1,
             retrieval_mode="hybrid",

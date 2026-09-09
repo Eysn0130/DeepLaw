@@ -22,15 +22,15 @@ def test_supervised_preflight_requires_queryable_seed(tmp_path, compiled):
     if compiled:
         seed_procedure(vault, checkpoint)
     else:
-        # Preserve the actual old fixture as a negative case: active remember
-        # alone is not enough for the default v6 Statement discovery contract.
+        # Keep the source-free object active but outside the public admission
+        # boundary.  The negative proves no queryable target, not a compiled-only rule.
         with AutonomousKnowledgeStore(vault, read_only=False) as store:
             grant = store.enable_grant(writer_id="supervised-development")
             store.remember(
                 grant_id=grant["grant_id"], idempotency_key="procedure",
                 title="Supervised continuity procedure",
                 body=producer.canonical_json(checkpoint), kind="procedure",
-                scope="project", sensitivity="public", confirm_no_case_data=True,
+                scope="project", sensitivity="private", confirm_no_case_data=True,
             )
     with AutonomousKnowledgeStore(vault, read_only=True) as store:
         before = (store.audit_head, store.legacy_audit_head)

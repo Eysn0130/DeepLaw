@@ -207,10 +207,17 @@ from compiled knowledge to raw Fragments remains bounded and visible in the plan
 receipt, or Gap. Missing or unverifiable evidence is not replaced with model memory, unrelated Web
 content, or a plausible source.
 
-For an autonomous-core Vault, the current public provider advertisement is `knowledge-support.input/v8` /
-`knowledge-support.output/v7` (`knowledge-support input v8/output v7`) and exposes only `query`,
+The current source candidate adds complete support alternatives in Statement v2 and semantic
+publication plan v4 ([ADR 0009](adr/0009-complete-support-sets.md)). Groups are conjunctive and
+alternatives disjunctive; their exact union remains a provenance inventory, not an inferred
+expression. CAS Statements/maps/receipts retain the expression and digest, while existing reverse
+dependency rows drive maintenance. Unknown inputs and ungrounded cycles cannot supply support.
+This bounded implementation is not a claim of automatic semantic dependency discovery.
+
+For an autonomous-core Vault, the current public provider advertisement is `knowledge-support.input/v9` /
+`knowledge-support.output/v8` (`knowledge-support input v9/output v8`) and exposes only `query`,
 `context`, `explain`, and `read`. The new output schema admits existing response versions for the
-first three operations; `read` uses output/v7. Input v7 remains unchanged. Earlier broad operation
+first three operations; `read` uses output/v8. Input v7/v8 remain unchanged; explicit v6 keeps its earlier delivery shapes. Earlier broad operation
 inventories remain compatibility/internal where implemented, not current public capability claims.
 Exact reads reuse Source/Wiki services and current governance admission. Their limited target and
 budget contract is specified in [Agent adapters](AGENT_ADAPTERS.md#exact-progressive-read-contract)
@@ -322,3 +329,12 @@ must not be used as a second release ledger.
 - Security policy: [`../SECURITY.md`](../SECURITY.md)
 - Historical Pass evidence: immutable `V0_13_PASS*.md` records; consult the relevant record only
   for historical evidence, never as the current architecture or release state.
+
+### Task action observations in Run history (current candidate)
+
+Versioned `task-action-state/v1` metadata is appended through the existing Run/Sink transaction,
+with exact predecessor CAS and Ledger-sequence ordering. It preserves not-executed, unknown,
+succeeded and failed observations independently of checkpoint-recording success. No external
+action executor or second canonical store is introduced. Query/context reject unknown or stale
+action-bound checkpoints; finite recovery evidence and rollback limits are in
+[ADR 0010](adr/0010-task-action-state.md).

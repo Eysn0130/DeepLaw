@@ -82,7 +82,7 @@ def test_mcp_only_progressive_read(case):
             from deeplaw.util import canonical_json
 
             assert (
-                result.structuredContent["schema_version"] == "deeplaw.knowledge-support-output/v6"
+                result.structuredContent["schema_version"] == "deeplaw.knowledge-support-output/v8"
             )
             assert result.content[0].text == canonical_json(
                 result.structuredContent["result"]["capsule"]
@@ -244,9 +244,7 @@ def test_source_policy_rechecked_between_pages(case, tmp_path, change):
     from deeplaw.knowledge_store import KnowledgeVault
 
     root = tmp_path / "vault"
-    replacement = tmp_path / "replacement"
     shutil.copytree(case["root"], root)
-    shutil.copytree(case["root"], replacement)
 
     async def exercise():
         async with client(root) as (session, _):
@@ -294,7 +292,9 @@ def test_source_policy_rechecked_between_pages(case, tmp_path, change):
                     }
                 )
             # Explicit owner mutation of this isolated fixture, outside the Agent journey.
-            with KnowledgeVault(replacement, read_only=False) as vault:
+            # Exercise the supported owner write while the read process remains
+            # alive. Replacing an open SQLite directory is not portable to Windows.
+            with KnowledgeVault(root, read_only=False) as vault:
                 source_id = case["source"]["source_id"]
                 if change == "remove":
                     vault.remove_source(source_id, reason="development withdrawal", confirm=True)
@@ -356,8 +356,6 @@ def test_source_policy_rechecked_between_pages(case, tmp_path, change):
                         confirm_reviewed=True,
                         export_allowed=False,
                     )
-            root.rename(tmp_path / "previous")
-            replacement.rename(root)
             for request in requests:
                 denied = await session.call_tool("knowledge_support", request)
                 assert denied.isError, denied
@@ -529,7 +527,20 @@ def test_exact_read_rejects_unsafe_or_task_only_knowledge(tmp_path, boundary):
         if boundary == "expired":
             extra["valid_to"] = "2000-01-01T00:00:00Z"
         if boundary == "memory":
-            extra["memory_type"] = "semantic"
+            from deeplaw.task_context import build_task_context_binding
+            from deeplaw.util import sha256_bytes
+
+            run = store.record_run(
+                grant_id=grant, idempotency_key="read-boundary-run",
+                task="Read boundary", host_id="synthetic", status="succeeded",
+                sensitivity="public", confirm_no_case_data=True,
+                metadata={"task_binding": build_task_context_binding(
+                    sha256_bytes(b"read-project"), sha256_bytes(b"read-task"),
+                )},
+            )
+            extra["memory_type"] = "working"
+            extra["expires_at"] = "2099-01-01T00:00:00Z"
+            extra["run_id"] = run["run_id"]
         body = (
             ("x" * 194 + " /Users/synthetic/private.txt")
             if boundary == "split_path"

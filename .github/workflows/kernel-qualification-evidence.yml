@@ -254,7 +254,7 @@ jobs:
             --repository . --dist "${verified}" \
             --output "${verified}/retained-artifact-manifest.json" --verify
           test -s "${verified}/frozen-active-qualification.json"
-          test -s "${raw}/scale-10000-evidence/v013-scale-qualification-v9.json"
+          test -s "${raw}/scale-10000-evidence/v013-scale-qualification-v10.json"
 
       - name: Build and validate the pre-execution Host task handoff
         shell: bash

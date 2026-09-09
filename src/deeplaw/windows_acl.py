@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import shutil
+from itertools import chain
 from pathlib import Path
 from typing import Any, Literal
 
@@ -354,7 +355,7 @@ def evaluate_windows_acl_payload(payload: Any) -> dict[str, Any]:
 def _protected_paths(root: Path) -> tuple[list[Path], bool]:
     paths: list[Path] = []
     scan_complete = True
-    for path in [root, *root.rglob("*")]:
+    for path in chain((root,), root.rglob("*")):
         if len(paths) >= _MAX_ACL_PATHS:
             scan_complete = False
             break

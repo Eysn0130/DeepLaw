@@ -256,7 +256,7 @@ jobs:
           dist="${RUNNER_TEMP}/verified-dist"
           manifest="${dist}/retained-artifact-manifest.json"
           requirements="${dist}/candidate-requirements.txt"
-          output="${RUNNER_TEMP}/scale-10000/v013-scale-qualification-v9.json"
+          output="${RUNNER_TEMP}/scale-10000/v013-scale-qualification-v10.json"
           venv="${RUNNER_TEMP}/scale-10000-venv"
           uv lock --check
           uv run --frozen python -m benchmarks.release.retained_artifact_manifest \
@@ -277,7 +277,7 @@ jobs:
           uv pip install --python "${venv}/bin/python" \
             --require-hashes --requirements "${requirements}"
           uv pip install --python "${venv}/bin/python" --no-deps "${wheel}"
-          "${venv}/bin/python" -m benchmarks.v013.scale_qualification_v9 \
+          "${venv}/bin/python" -m benchmarks.v013.scale_qualification_v10 \
             --execute-10k \
             --wheel "${wheel}" \
             --sdist "${sdist}" \
@@ -296,7 +296,7 @@ jobs:
           name: scale-10000-evidence
           if-no-files-found: error
           retention-days: 90
-          path: ${{ runner.temp }}/scale-10000/v013-scale-qualification-v9.json
+          path: ${{ runner.temp }}/scale-10000/v013-scale-qualification-v10.json
 
   semantic_scale_ten_thousand:
     name: Enforce semantic 10k scale gate
@@ -333,7 +333,7 @@ jobs:
               raise SystemExit("semantic 10k gate: expected candidate head invalid")
 
           root = Path(os.environ["EVIDENCE_ROOT"])
-          evidence = tuple(root.rglob("v013-scale-qualification-v9.json"))
+          evidence = tuple(root.rglob("v013-scale-qualification-v10.json"))
           if len(evidence) != 1:
               raise SystemExit("semantic 10k gate: evidence cardinality invalid")
           try:
@@ -359,7 +359,7 @@ jobs:
               raise SystemExit("semantic 10k gate: candidate binding shape invalid")
           if candidate_binding.get("commit") != expected_candidate_head_sha:
               raise SystemExit("semantic 10k gate: candidate head mismatch")
-          if report.get("schema_version") != "deeplaw.v013-scale-qualification-report/v9":
+          if report.get("schema_version") != "deeplaw.v013-scale-qualification-report/v10":
               raise SystemExit("semantic 10k gate: schema version mismatch")
           if report.get("status") != "executed":
               raise SystemExit("semantic 10k gate: execution status is not executed")
@@ -878,7 +878,7 @@ jobs:
             test -s "${verified}/${required}"
           done
           test -s "${raw}/exact-wheel-evidence/exact-wheel-execution.json"
-          test -s "${raw}/scale-10000-evidence/v013-scale-qualification-v9.json"
+          test -s "${raw}/scale-10000-evidence/v013-scale-qualification-v10.json"
           test "$(find "${raw}/platform-artifacts" -type f -name 'candidate-tests.xml' | wc -l | tr -d ' ')" = 14
           test "$(find "${raw}/windows-duration-calibration" -type f -name 'windows-calibration.xml' | wc -l | tr -d ' ')" = 1
           test "$(find "${raw}/platform-artifacts" -type f -name 'windows-aggregate.json' | wc -l | tr -d ' ')" = 2

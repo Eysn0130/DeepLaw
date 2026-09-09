@@ -50,10 +50,10 @@ def _run_semantic_gate(
 ) -> subprocess.CompletedProcess[str]:
     evidence_root = tmp_path / "scale-10000-evidence"
     evidence_root.mkdir()
-    (evidence_root / "v013-scale-qualification-v9.json").write_text(
+    (evidence_root / "v013-scale-qualification-v10.json").write_text(
         json.dumps(
             {
-                "schema_version": "deeplaw.v013-scale-qualification-report/v9",
+                "schema_version": "deeplaw.v013-scale-qualification-report/v10",
                 "status": "executed",
                 "release_gate_passed": True,
                 "hard_failures": [],
@@ -211,7 +211,7 @@ def test_candidate_full_runs_the_exact_10k_public_path_once() -> None:
 
     assert "needs: verified-artifact" in block
     assert "verified-candidate-artifacts" in block
-    assert "benchmarks.v013.scale_qualification_v9" in block
+    assert "benchmarks.v013.scale_qualification_v10" in block
     assert "--execute-10k" in block
     assert "--workflow-run-id \"${GITHUB_RUN_ID}\"" in block
     assert "--candidate-wheel-sha256" in block
@@ -221,7 +221,7 @@ def test_candidate_full_runs_the_exact_10k_public_path_once() -> None:
 
     aggregate = workflow.split("\n  aggregate-raw-evidence:\n", maxsplit=1)[1]
     assert "needs['scale_ten_thousand'].result == 'success'" in aggregate
-    assert "v013-scale-qualification-v9.json" in aggregate
+    assert "v013-scale-qualification-v10.json" in aggregate
 
 
 def test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate() -> None:
@@ -247,7 +247,7 @@ def test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate() 
         "from pathlib import Path",
         "json.load",
         'report.get("schema_version")',
-        '"deeplaw.v013-scale-qualification-report/v9"',
+        '"deeplaw.v013-scale-qualification-report/v10"',
         'report.get("status")',
         'report.get("release_gate_passed") is not True',
         'report.get("hard_failures") != []',
@@ -272,7 +272,7 @@ def test_candidate_full_semantically_gates_10k_without_blocking_raw_aggregate() 
     assert "needs['semantic_scale_ten_thousand'].result" not in aggregate_block
     assert "needs['scale_ten_thousand'].result == 'success'" in aggregate_block
     assert "scale-10000-evidence" in aggregate_block
-    assert "v013-scale-qualification-v9.json" in aggregate_block
+    assert "v013-scale-qualification-v10.json" in aggregate_block
 
 
 def test_external_dispatch_requires_only_candidate_run_id() -> None:
@@ -537,7 +537,7 @@ def test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding(
     assert "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7" not in workflow
     assert '"gpt-5.6-luna"' in workflow
     assert '"deepseek/deepseek-v4-flash"' in workflow
-    assert "scale-10000-evidence/v013-scale-qualification-v9.json" in workflow
+    assert "scale-10000-evidence/v013-scale-qualification-v10.json" in workflow
     assert "kernel_qualification_bundle_v1 build" in workflow
     assert "sentinel=9223372036854775807" in workflow
     assert 'rm "${root}/bundle-manifest.json"' in workflow

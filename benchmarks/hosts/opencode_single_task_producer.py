@@ -38,7 +38,7 @@ from deeplaw.util import (
 )
 
 CONTROL = "deeplaw.opencode-supervised-task-control/v1"
-OBSERVATION = "deeplaw.host-mcp-observation/v1"
+OBSERVATION = "deeplaw.host-mcp-observation/v2"
 RESULT = "deeplaw.v013-host-task-result/v3"
 ROOT = Path(__file__).resolve().parents[2]
 MAX_BYTES = 4 * 1024 * 1024
@@ -47,6 +47,15 @@ TOOL = "deeplaw_knowledge_knowledge_support"
 
 class ProducerError(ValueError):
     """A bounded producer observation could not be established."""
+
+
+def _owner_only(path: Path) -> bool:
+    if os.name == "nt":
+        from deeplaw.windows_acl import native_windows_path_acl_report
+
+        return native_windows_path_acl_report(path)["permissions_verified"] is True
+    details = path.stat()
+    return details.st_mode & 0o077 == 0 and details.st_uid == os.getuid()
 
 
 # Owner-local diagnostics only: never retain exception text or transport payloads.
@@ -331,11 +340,11 @@ def advertised_receipt(tools: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         branch.get("$ref", "").rsplit("/", 1)[-1] for branch in schema.get("oneOf", [])
     )
     require(operations == ["context", "explain", "query", "read"], "advertised operations differ")
-    require(schema.get("title") == "DeepLaw Knowledge Support Provider Input v8", "input is not v8")
-    require(len(encoded(tool)) <= 12288, "tool definition exceeds v8 bound")
+    require(schema.get("title") == "DeepLaw Knowledge Support Provider Input v9", "input is not v9")
+    require(len(encoded(tool)) <= 12288, "tool definition exceeds provider bound")
     return {
-        "input_schema_version": "v8",
-        "output_schema_version": "v7",
+        "input_schema_version": "v9",
+        "output_schema_version": "v8",
         "operations": operations,
         "input_schema_bytes": len(encoded(schema)),
         "input_schema_sha256": digest(schema),
@@ -348,7 +357,7 @@ def visible_targets(value: Any) -> list[dict[str, str]]:
     result: list[dict[str, str]] = []
     if isinstance(value, dict):
         knowledge = value.get("knowledge_id")
-        revision = value.get("knowledge_revision_id")
+        revision = value.get("knowledge_revision_id") or value.get("revision_id")
         if isinstance(knowledge, str) and isinstance(revision, str):
             result.append({"kind": "knowledge", "knowledge_id": knowledge, "revision_id": revision})
         for child in value.values():
@@ -371,7 +380,7 @@ class ReadBudget:
 
     def request(self, arguments: Mapping[str, Any]) -> None:
         require(not self.failed and self.count < 2, "turn tool budget exhausted")
-        contract("knowledge-support.input.v8.schema.json", arguments)
+        contract("knowledge-support.input.v9.schema.json", arguments)
         operation = arguments.get("operation")
         require(arguments.get("scope") == "project", "read scope differs")
         require(arguments.get("max_sensitivity") == "public", "read sensitivity differs")
@@ -402,7 +411,7 @@ class ReadBudget:
         require(isinstance(text, str), "MCP text is unavailable")
         outer = result.get("structuredContent")
         require(isinstance(outer, dict), "MCP structured result is unavailable")
-        contract("knowledge-support.output.v7.schema.json", outer)
+        contract("knowledge-support.output.v8.schema.json", outer)
         safe(outer)
         raw = text.encode("utf-8")
         self.content_bytes += len(raw)
@@ -1014,7 +1023,11 @@ def validate_host_observation(
     events: Sequence[Mapping[str, Any]],
 ) -> None:
     """Reopen source evidence; never promote the local service-driver seam."""
-    contract("host-mcp-observation.v1.schema.json", value)
+    version = {"deeplaw.host-mcp-observation/v1": 1, OBSERVATION: 2}.get(
+        value.get("schema_version")
+    )
+    require(version is not None, "Host observation schema is unsupported")
+    contract(f"host-mcp-observation.v{version}.schema.json", value)
     safe(value)
     control = value["control"]
     require(control["run_id"] == result["run_id"], "Host observation run differs")
@@ -1220,11 +1233,11 @@ def guard_process(config_path: Path) -> None:
     )
     details = key_file.stat()
     require(
-        key_file.is_file() and details.st_nlink == 1 and details.st_mode & 0o077 == 0,
+        key_file.is_file() and details.st_nlink == 1 and _owner_only(key_file),
         "guard key file is not owner-only",
     )
     require(
-        details.st_uid == os.getuid() and 0 < details.st_size <= 4096,
+        0 < details.st_size <= 4096,
         "guard key file ownership or size differs",
     )
     # This private deployment input is a single raw API key, not a shell/env file.
@@ -1457,6 +1470,10 @@ def install(destination: Path) -> None:
         "deployment must be a fresh external directory",
     )
     destination.mkdir(mode=0o700)
+    if os.name == "nt":
+        from deeplaw.windows_acl import harden_windows_vault
+
+        harden_windows_vault(destination)
     files = []
     for source in deployment_sources():
         require(not source.is_symlink(), "source closure contains a symlink")
@@ -1487,7 +1504,7 @@ def install(destination: Path) -> None:
 
 def verify_deployment() -> dict[str, Any]:
     require(
-        ROOT.stat().st_mode & 0o077 == 0 and ROOT.stat().st_uid == os.getuid(),
+        _owner_only(ROOT),
         "deployment root is not owner-only",
     )
     require(ROOT.resolve() == ROOT, "deployment has a symlink ancestor")
@@ -2154,7 +2171,7 @@ def run(prepared_path: Path) -> None:
             "measurement_scope": "host_turn_visible_process_tree_sampled_rss_guard_route_only",
             "claim_eligible": False,
         }
-        contract("host-mcp-observation.v1.schema.json", observation)
+        contract("host-mcp-observation.v2.schema.json", observation)
         write_sources(root / "evidence", prepared, observation, events, lifecycle, fork_receipts)
     except BaseException as error:
         failure.capture(error, stage)

@@ -24,6 +24,7 @@ from .host_runtime import resolve_knowledge_vault, safe_directory_path
 from .knowledge_autonomy import AutonomousKnowledgeStore, normalize_run_artifact_ids
 from .knowledge_sink_mcp_server import handle_knowledge_sink
 from .knowledge_store import KnowledgeVault
+from .task_action_state import normalize_action_state
 from .task_context import (
     build_task_context_binding,
     task_route_sha256,
@@ -37,7 +38,7 @@ from .util import (
 )
 
 TASK_HANDLE_SCHEMA_VERSION = "deeplaw.task-handle/v1"
-TASK_CONTINUITY_SCHEMA_VERSION = "deeplaw.task-continuity-result/v2"
+TASK_CONTINUITY_SCHEMA_VERSION = "deeplaw.task-continuity-result/v3"
 HOST_SESSION_ROUTE_SCHEMA_VERSION = "deeplaw.host-session-route-result/v2"
 HOST_CONTINUITY_CAPSULE_SCHEMA_VERSION = "deeplaw.host-continuity-capsule/v1"
 WORKSPACE_SNAPSHOT_SCHEMA_VERSION = "deeplaw.workspace-snapshot-receipt/v1"
@@ -1127,6 +1128,39 @@ def _project_host_continuity(provider: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _with_host_action_states(result: dict[str, Any], resumed: dict[str, Any]) -> dict[str, Any]:
+    """Project action facts without internal Run identities or increasing the byte bound."""
+
+    entries = resumed.get("action_states", [])
+    if not entries and not resumed.get("action_states_truncated"):
+        return result
+    states = []
+    for entry in entries[:4]:
+        state = entry["state"]
+        states.append({
+            "action_id": state["action_id"], "status": state["status"],
+            "resume_requirement": entry["resume_requirement"],
+            "evidence_level": "host_reported", "legal_authority": False,
+        })
+    if len(entries) > 4 or resumed.get("action_states_truncated"):
+        result = _host_continuity_gap("task_action_bound_exceeded")
+    projected = {
+        **result, "schema_version": "deeplaw.host-continuity-capsule/v2", "action_states": states,
+    }
+    try:
+        assert_provider_output_safe(projected, interface="Host continuity action state")
+    except PermissionError:
+        return _host_continuity_gap("sensitive_content_blocked")
+    if _HOST_CONTINUITY_SHA256_TEXT.search(canonical_json(projected)):
+        return _host_continuity_gap("internal_identity_blocked")
+    if len(canonical_json(projected).encode()) > _HOST_CONTINUITY_CAPSULE_MAX_BYTES:
+        projected = {
+            **_host_continuity_gap("continuity_capsule_bound"),
+            "schema_version": "deeplaw.host-continuity-capsule/v2", "action_states": states,
+        }
+    return projected
+
+
 def resolve_host_continuity_capsule(
     *,
     vault_path: str | Path | None,
@@ -1165,12 +1199,13 @@ def resolve_host_continuity_capsule(
     provider = resumed.get("provider_capsule")
     if resumed.get("status") != "admitted" or not isinstance(provider, dict):
         codes = resumed.get("gap_codes")
-        return _host_continuity_gap(
+        projected = _host_continuity_gap(
             *(str(code) for code in codes)
             if isinstance(codes, list)
             else ("continuity_unavailable",)
         )
-    return _host_continuity_projection(provider)
+        return _with_host_action_states(projected, resumed)
+    return _with_host_action_states(_host_continuity_projection(provider), resumed)
 
 
 def locate_task(
@@ -1380,6 +1415,9 @@ def resume_task(
     with AutonomousKnowledgeStore(selected, read_only=True) as store:
         audit_before = store.audit_head
         scope = store.vault_scope
+        action_states = store.task_action_states(
+            task_binding=binding, scope=scope, max_sensitivity="private",
+        )
         route_lookup = store.lookup_checkpoint_route_projection(
             task_sha256=sha256_bytes(_RESUME_TASK.encode()),
             task_binding=binding,
@@ -1442,6 +1480,16 @@ def resume_task(
         and selected_knowledge_ids == {expected_knowledge_id}
         else "gap"
     )
+    gap_codes = _provider_gap_codes(provider)
+    if action_states["truncated"]:
+        status = "gap"
+        gap_codes.append("task_action_bound_exceeded")
+    if any(
+        item["resume_requirement"] == "verify_external_state"
+        for item in action_states["entries"]
+    ):
+        status = "gap"
+        gap_codes.append("action_outcome_unknown")
     return {
         **_base_result(
             handle,
@@ -1450,9 +1498,11 @@ def resume_task(
             write_performed=False,
         ),
         "status": status,
+        "action_states": action_states["entries"],
+        "action_states_truncated": action_states["truncated"],
         "binding_sha256": binding["binding_sha256"],
         "checkpoint_route_status": route_lookup.get("status", "invalid"),
-        "gap_codes": _provider_gap_codes(provider),
+        "gap_codes": sorted(set(gap_codes)),
         "provider_capsule": provider,
         "deterministic_data_plane_recovery": True,
     }
@@ -1607,6 +1657,58 @@ def _bounded_artifact_refs(values: Sequence[str]) -> list[str]:
         ) from None
 
 
+def record_task_action(
+    *, vault_path: str | Path | None, task_handle: str, workspace: str | Path,
+    grant_id: str, idempotency_key: str, action_id: str, request_sha256: str,
+    status: str, expected_prior_run_id: str | None = None,
+    outcome_sha256: str | None = None, host_id: str,
+    confirm_no_case_data: bool,
+) -> dict[str, Any]:
+    """Record Host-reported action state; this command never invokes the action."""
+
+    if confirm_no_case_data is not True:
+        raise PermissionError("task action requires explicit no-case-data confirmation")
+    state = normalize_action_state({
+        "schema_version": "deeplaw.task-action-state/v1",
+        "action_id": action_id, "request_sha256": request_sha256, "status": status,
+        "outcome_sha256": outcome_sha256, "expected_prior_run_id": expected_prior_run_id,
+        "evidence_level": "host_reported",
+    })
+    key = _normalized_label(idempotency_key, label="idempotency key", maximum=180)
+    preliminary = decode_task_handle(task_handle)
+    selected, vault_id = _vault(vault_path, expected_vault_id=preliminary["vault_id"])
+    handle, binding = _binding(task_handle, vault_id=vault_id, workspace=workspace)
+    run_id = "taskaction_" + sha256_bytes(
+        f"{handle['task_handle_sha256']}\0{key}".encode()
+    )[:24]
+    request: dict[str, Any] = {
+        "operation": "record_run", "idempotency_key": f"action:{key}",
+        "confirm_no_case_data": True, "run_id": run_id,
+        "task": "Record the exact task action observation without executing an action.",
+        "host_id": _normalized_label(host_id, label="action host", maximum=200),
+        "status": status if status in {"succeeded", "failed"} else "partial",
+        "input_sha256": request_sha256,
+        "run_metadata": {"task_binding": binding, "action_state": state},
+    }
+    if outcome_sha256 is not None:
+        request["output_sha256"] = outcome_sha256
+    with AutonomousKnowledgeStore(selected, read_only=True) as store:
+        try:
+            existing = store.get_run(run_id)
+        except KeyError:
+            existing = None
+    if existing is not None:
+        request.update({"started_at": existing["started_at"], "ended_at": existing["ended_at"]})
+    recorded = handle_knowledge_sink(request, grant_id=grant_id, vault_path=selected)["result"]
+    return {
+        **_base_result(
+            handle, task_handle=task_handle, operation="record-action", write_performed=True,
+        ),
+        "status": "recorded", "sink_leaf": "knowledge_sink", "run_id": recorded["run_id"],
+        "action_state": state, "idempotent_replay": recorded["idempotent_replay"],
+    }
+
+
 def checkpoint_task(
     *,
     vault_path: str | Path | None,
@@ -1691,6 +1793,10 @@ def checkpoint_task(
         vault_path=selected,
     )
     recorded_run = run_response["result"]
+    with AutonomousKnowledgeStore(selected, read_only=True) as store:
+        actions = store.task_action_states(
+            task_binding=binding, scope=store.vault_scope, max_sensitivity="private",
+        )
     body_lines = [
         f"GOAL: {selected_summary}",
         *(f"CONFIRMED_DECISION: {item}" for item in selected_decisions),
@@ -1700,6 +1806,13 @@ def checkpoint_task(
             "for this task route after a succeeded task-bound Run."
         ),
         *(f"OPEN_GAP: {item}" for item in selected_gaps),
+        *(
+            f"CONFIRMED_DECISION: Host-reported action {item['state']['action_id']} "
+            f"has state {item['state']['status']}; resume requirement {item['resume_requirement']}."
+            for item in actions["entries"]
+        ),
+        *(["OPEN_GAP: Task action inventory exceeded its bound; inspect before continuing."]
+          if actions["truncated"] else []),
         f"NEXT_ACTION: {selected_next}",
         *(f"ARTIFACT_REF: {item}" for item in body_artifacts),
     ]
@@ -1847,6 +1960,7 @@ __all__ = [
     "fork_task",
     "inspect_task",
     "locate_task",
+    "record_task_action",
     "resolve_host_session",
     "resume_task",
     "start_task",

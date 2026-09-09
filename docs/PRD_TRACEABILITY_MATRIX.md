@@ -115,8 +115,8 @@ operation response versions plus output/v7 for read. Older broad operation inven
 current advertisements.
 
 The source candidate closes a bounded no-shell Agent read journey under `PRD-PRINCIPLE-005`,
-`PRD-WIKI-014..015` and `PRD-CTX-010..012`: `progressive_read.py`, Source/Wiki services, input v8,
-output v7 and `tests/test_mcp_progressive_read.py` cover current non-memory knowledge, its Wiki page
+`PRD-WIKI-014..015` and `PRD-CTX-010..012`: `progressive_read.py`, Source/Wiki services, input v9,
+output v8 and `tests/test_mcp_progressive_read.py` cover current ordinary knowledge, its Wiki page
 and exact source fragments. Aggregate navigation, historical exact reads and task-memory direct
 reads are not included. Public stdio regression is development evidence, not native Host or release
 qualification. Internal service existence alone is not product reachability.
@@ -135,6 +135,23 @@ boundary is distinct from the isolated `law_support` query implementation and it
 | `PRD-SEC-005..008` | Client/case exclusion, release-blocking leakage/scope/mutation failures, non-malleable origin, cross-boundary deny-by-default | Sensitivity, provenance, lifecycle, scope, and process controls | Canary, ACL/mount/IPC, origin-transform, cross-Vault/worktree/task negative tests | No credential, case data, private path, transcript, or raw secret is admissible |
 | `PRD-OPS-001..004` | One Coordinator, verifiable backup, rebuildable derived state, post-commit recovery | `KA`, `KS`, `KC`, snapshot/recovery services | Coordinator, backup, migration, replay, fault-injection, rebuild-equivalence tests, and `UPC` development receipt | Canonical state remains valid while derived work is pending |
 | `PRD-OPS-005..009` | Interchange-only adapters, exact-hash exports, explicit forget/erasure, no pointer-rewind semantic restore, bounded operational Timeline | Export, lifecycle, Wiki, `TC/TR`, snapshot services | Export disclosure, forget, GC, restore/recovery, timeline-bound tests | Semantic restore and external owner time-to-locate remain distinct qualification tasks |
+
+## Six-capability 0.13 acceptance attachment
+
+This finite development attachment supplements the original thirteen Core and six real Host
+slots. It neither replaces those gates nor makes target research behavior current. A capability
+is not complete merely because one of its linked regression slices passes. These finite states
+refer to focused development scenarios; full source verification and exact-artifact qualification
+remain separate requirements. C2 uses compiler-declared gaps where no domain oracle exists.
+
+| Capability | PRD binding and candidate seam | Current acceptance state |
+| --- | --- | --- |
+| C1 complete dependency maintenance | `PRD-KNOW-009,011`; Statement v2/publication v4, Coordinator, `evidence/support.py`, `test_complete_support_sets.py` | 有限场景通过: AND/OR support, source successor, unchanged reimport, bounded unknown, concurrent-head rejection, unchanged independent revisions and rebuild/snapshot slices |
+| C2 evidence duties | `PRD-EVID-004..009`, `PRD-CTX-001..012`; shared duty planner and exception/source/version regressions | 有限场景通过: current v7 exact passages, missing definition/exception, declared missing annex, unknown time, rejected wrong revision, truncation and denied-scope gaps; no semantic completeness claim |
+| C3 continuity and ordinary recall | `PRD-CTX-014..016`; shared v7 kernel, task routes, ADR 0010, `test_governed_revision_recall.py`, `test_task_action_ledger.py` | 有限场景通过: ordinary recall plus four-state Run/CAS, synthetic A-to-B response-loss recovery, fork/constraint/route and failed/unknown snapshot slices; six native Host slots remain open |
+| C4 accountable omissions | `PRD-CTX-013,017`; v7 selection explanation, admitted receipt v2, signed bounded pages and combined item/character/estimated-token budgets | 有限场景通过: admitted-only omissions, public denied-scope/token budgets, signed 20-item pagination, tamper rejection and shared cache/head/lifespan invalidation; discovery remains explicitly non-exhaustive |
+| C5 selective repair/forget | `PRD-KNOW-007,012`, `PRD-OPS-005..009`; shared lifecycle, support admission, Wiki/rebuild and Capsule verification | 有限场景通过: transitive claim/Wiki/checkpoint withdrawal, independent support retention, exact read/capsule denial, rebuild/snapshot, denied-write invariance and process exit before/after commit with ordinary lease-expiry recovery |
+| C6 subsequent-task outcomes | `PRD-KNOW-008,013`; development maintenance evaluator and typed environment-event scorer | 有限场景通过: nine fixed development cases across eight outcome families, three configurations and typed environment-event scoring; no model run or comparative superiority claim |
 
 ## Qualification and historical evidence links
 

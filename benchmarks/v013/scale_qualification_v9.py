@@ -26,6 +26,7 @@ import time
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
@@ -81,8 +82,97 @@ class ScaleQualificationError(ValueError):
     """Raised when a scale report or candidate binding is unsafe."""
 
 
-def _schema_path() -> Path:
-    return Path(__file__).resolve().parents[2] / SCHEMA_RELATIVE_PATH
+@dataclass(frozen=True)
+class ScaleQualificationProfile:
+    """Immutable version profile shared by the v9 and v10 runners."""
+
+    version: str
+    report_schema_version: str
+    report_profile: str
+    runner_relative_path: str
+    schema_relative_path: str
+    query_context_observation_schema: str
+    query_plan_version: str
+    query_plan_schema_version: str
+    provider_schema_version: str
+    provider_inner_schema_version: str
+    query_result_schema_version: str
+    context_result_schema_version: str
+    semantic_key: str
+    run_id_prefix: str
+    default_command: str
+
+
+V9_PROFILE = ScaleQualificationProfile(
+    version="v9",
+    report_schema_version=SCHEMA_VERSION,
+    report_profile=PROFILE,
+    runner_relative_path=RUNNER_RELATIVE_PATH,
+    schema_relative_path=SCHEMA_RELATIVE_PATH,
+    query_context_observation_schema=QUERY_CONTEXT_OBSERVATION_SCHEMA,
+    query_plan_version="6",
+    query_plan_schema_version=QUERY_PLAN_SCHEMA_V6,
+    provider_schema_version=PROVIDER_CAPSULE_SCHEMA_V2,
+    provider_inner_schema_version=PROVIDER_INNER_SCHEMA_V1,
+    query_result_schema_version="deeplaw.purpose-aware-retrieval/v3",
+    context_result_schema_version="deeplaw.knowledge-capsule/v3",
+    semantic_key=SCALE_SEMANTIC_KEY,
+    run_id_prefix="scale-v9-",
+    default_command=(
+        "uv run --frozen python -m benchmarks.v013.scale_qualification_v9 "
+        "--execute-10k"
+    ),
+)
+
+V10_PROFILE = ScaleQualificationProfile(
+    version="v10",
+    report_schema_version="deeplaw.v013-scale-qualification-report/v10",
+    report_profile=PROFILE,
+    runner_relative_path="benchmarks/v013/scale_qualification_v10.py",
+    schema_relative_path="contracts/v013-scale-qualification-report.v10.schema.json",
+    query_context_observation_schema="deeplaw.v013-scale-query-context-observation/v2",
+    query_plan_version="7",
+    query_plan_schema_version="deeplaw.knowledge-query-plan/v7",
+    provider_schema_version="deeplaw.provider-knowledge-capsule/v3",
+    provider_inner_schema_version="deeplaw.knowledge-capsule-projection/v2",
+    query_result_schema_version="deeplaw.purpose-aware-retrieval/v4",
+    context_result_schema_version="deeplaw.knowledge-capsule/v4",
+    semantic_key="v013-scale-qualification-v10:00000",
+    run_id_prefix="scale-v10-",
+    default_command=(
+        "uv run --frozen python -m benchmarks.v013.scale_qualification_v10 "
+        "--execute-10k"
+    ),
+)
+
+_SUPPORTED_PROFILES = (V9_PROFILE, V10_PROFILE)
+
+
+def profile_for_version(version: str) -> ScaleQualificationProfile:
+    """Return one known profile and reject unsupported report versions."""
+
+    if version in {"9", "v9"}:
+        return V9_PROFILE
+    if version in {"10", "v10"}:
+        return V10_PROFILE
+    raise ScaleQualificationError("scale qualification profile version is unsupported")
+
+
+def _resolve_profile(
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
+) -> ScaleQualificationProfile:
+    if isinstance(profile, str):
+        return profile_for_version(profile)
+    if isinstance(profile, ScaleQualificationProfile) and profile in _SUPPORTED_PROFILES:
+        return profile
+    raise ScaleQualificationError("scale qualification profile is unsupported")
+
+
+def _schema_path(
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
+) -> Path:
+    selected = _resolve_profile(profile)
+    return Path(__file__).resolve().parents[2] / selected.schema_relative_path
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -384,7 +474,12 @@ def _candidate_binding(value: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _run_binding(value: Mapping[str, Any]) -> dict[str, Any]:
+def _run_binding(
+    value: Mapping[str, Any],
+    *,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
+) -> dict[str, Any]:
+    selected_profile = _resolve_profile(profile)
     required = {
         "run_id",
         "workflow_run_id",
@@ -398,7 +493,7 @@ def _run_binding(value: Mapping[str, Any]) -> dict[str, Any]:
     }
     if set(value) != required:
         raise ScaleQualificationError("run binding keys are not closed")
-    if value["runner"] != RUNNER_RELATIVE_PATH:
+    if value["runner"] != selected_profile.runner_relative_path:
         raise ScaleQualificationError("run binding points at a different runner")
     if not isinstance(value["run_id"], str) or not value["run_id"]:
         raise ScaleQualificationError("run_id is invalid")
@@ -503,30 +598,37 @@ def _observe_query_context_sample(
     *,
     expected_semantic_key: str,
     surface: str,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
 ) -> dict[str, Any]:
+    selected_profile = _resolve_profile(profile)
     if surface not in {"query", "context"}:
         raise ScaleQualificationError("query/context observation surface is invalid")
     expected_result_schema = (
-        "deeplaw.purpose-aware-retrieval/v3"
+        selected_profile.query_result_schema_version
         if surface == "query"
-        else "deeplaw.knowledge-capsule/v3"
+        else selected_profile.context_result_schema_version
     )
     if result.get("schema_version") != expected_result_schema:
         raise ScaleQualificationError("query/context result schema is invalid")
     plan = result.get("query_plan")
-    if not isinstance(plan, Mapping) or plan.get("schema_version") != QUERY_PLAN_SCHEMA_V6:
-        raise ScaleQualificationError("query/context did not return the default v6 plan")
+    if (
+        not isinstance(plan, Mapping)
+        or plan.get("schema_version") != selected_profile.query_plan_schema_version
+    ):
+        raise ScaleQualificationError(
+            f"query/context did not return the default {selected_profile.query_plan_version} plan"
+        )
     observed_plan_sha256 = result.get("query_plan_sha256")
     computed_plan_sha256 = _sha256_bytes(_canonical_bytes(plan))
     if observed_plan_sha256 != computed_plan_sha256:
         raise ScaleQualificationError("query/context plan hash is not bound to canonical bytes")
-    if provider.get("schema_version") != PROVIDER_CAPSULE_SCHEMA_V2:
+    if provider.get("schema_version") != selected_profile.provider_schema_version:
         raise ScaleQualificationError("query/context Provider wrapper schema is invalid")
     inner = provider.get("capsule")
     delivery = provider.get("delivery")
     if not isinstance(inner, Mapping) or not isinstance(delivery, Mapping):
         raise ScaleQualificationError("query/context Provider projection is incomplete")
-    if inner.get("schema_version") != PROVIDER_INNER_SCHEMA_V1:
+    if inner.get("schema_version") != selected_profile.provider_inner_schema_version:
         raise ScaleQualificationError("query/context Provider inner schema is invalid")
     provider_bytes = delivery.get("provider_content_bytes")
     if (
@@ -552,10 +654,10 @@ def _observe_query_context_sample(
         expected_semantic_key=expected_semantic_key,
     )
     return {
-        "plan_schema_version": QUERY_PLAN_SCHEMA_V6,
+        "plan_schema_version": selected_profile.query_plan_schema_version,
         "query_plan_sha256": computed_plan_sha256,
-        "provider_schema_version": PROVIDER_CAPSULE_SCHEMA_V2,
-        "provider_inner_schema_version": PROVIDER_INNER_SCHEMA_V1,
+        "provider_schema_version": selected_profile.provider_schema_version,
+        "provider_inner_schema_version": selected_profile.provider_inner_schema_version,
         "provider_content_bytes": provider_bytes,
         "provider_inner_sha256": _sha256_bytes(_canonical_bytes(inner)),
         "source_binding_sha256": source_binding_sha256,
@@ -589,10 +691,15 @@ def _query_context_surface(samples: Sequence[Mapping[str, Any]]) -> dict[str, An
     }
 
 
-def _validate_query_context_observation(value: Mapping[str, Any]) -> dict[str, Any]:
+def _validate_query_context_observation(
+    value: Mapping[str, Any],
+    *,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
+) -> dict[str, Any]:
+    selected_profile = _resolve_profile(profile)
     if set(value) != {"schema_version", "query", "context"}:
         raise ScaleQualificationError("query/context observation keys are not closed")
-    if value["schema_version"] != QUERY_CONTEXT_OBSERVATION_SCHEMA:
+    if value["schema_version"] != selected_profile.query_context_observation_schema:
         raise ScaleQualificationError("query/context observation schema is invalid")
     required_surface = {
         "sample_count",
@@ -630,11 +737,17 @@ def _validate_query_context_observation(value: Mapping[str, Any]) -> dict[str, A
             for items in arrays.values()
         ):
             raise ScaleQualificationError(f"{surface_name} observation arrays are invalid")
-        if surface["plan_schema_versions"] != [QUERY_PLAN_SCHEMA_V6] * (WARM_SAMPLE_TARGET + 1):
-            raise ScaleQualificationError(f"{surface_name} observation is not default v6")
-        if surface["provider_schema_versions"] != [PROVIDER_CAPSULE_SCHEMA_V2] * (
+        if surface["plan_schema_versions"] != [selected_profile.query_plan_schema_version] * (
             WARM_SAMPLE_TARGET + 1
-        ) or surface["provider_inner_schema_versions"] != [PROVIDER_INNER_SCHEMA_V1] * (
+        ):
+            raise ScaleQualificationError(
+                f"{surface_name} observation is not default {selected_profile.query_plan_version}"
+            )
+        if surface["provider_schema_versions"] != [selected_profile.provider_schema_version] * (
+            WARM_SAMPLE_TARGET + 1
+        ) or surface["provider_inner_schema_versions"] != [
+            selected_profile.provider_inner_schema_version
+        ] * (
             WARM_SAMPLE_TARGET + 1
         ):
             raise ScaleQualificationError(f"{surface_name} Provider schemas are invalid")
@@ -656,9 +769,7 @@ def _validate_query_context_observation(value: Mapping[str, Any]) -> dict[str, A
             for item in surface["source_ref_counts"]
         ):
             raise ScaleQualificationError(f"{surface_name} source reference counts are invalid")
-        if any(
-            item != SCALE_SEMANTIC_KEY for item in surface["selected_semantic_keys"]
-        ):
+        if any(item != selected_profile.semantic_key for item in surface["selected_semantic_keys"]):
             raise ScaleQualificationError(f"{surface_name} selected semantic keys are invalid")
         if surface["write_performed"] != [False] * (WARM_SAMPLE_TARGET + 1):
             raise ScaleQualificationError(f"{surface_name} observation claims a write")
@@ -686,9 +797,11 @@ def _measure_query_context(
     *,
     query_text: str,
     expected_semantic_key: str,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
 ) -> dict[str, Any]:
-    """Measure the default v6 query/context surfaces and their Provider projection."""
+    """Measure one profile's query/context surfaces and Provider projection."""
 
+    selected_profile = _resolve_profile(profile)
     from deeplaw.retrieval.capsule import provider_capsule_from_v6
 
     def measure_query() -> tuple[float, dict[str, Any]]:
@@ -701,6 +814,7 @@ def _measure_query_context(
             limit=8,
             max_chars=8_000,
             max_tokens=4_000,
+            query_plan_version=selected_profile.query_plan_version,
         )
         provider = provider_capsule_from_v6(result)
         elapsed_ms = (time.perf_counter() - started) * 1000
@@ -709,6 +823,7 @@ def _measure_query_context(
             provider,
             expected_semantic_key=expected_semantic_key,
             surface="query",
+            profile=selected_profile,
         )
 
     def measure_context() -> tuple[float, dict[str, Any]]:
@@ -722,6 +837,7 @@ def _measure_query_context(
             max_chars=8_000,
             max_tokens=4_000,
             confirm_no_case_data=True,
+            query_plan_version=selected_profile.query_plan_version,
         )
         elapsed_ms = (time.perf_counter() - started) * 1000
         provider = result.get("provider_capsule")
@@ -732,6 +848,7 @@ def _measure_query_context(
             provider,
             expected_semantic_key=expected_semantic_key,
             surface="context",
+            profile=selected_profile,
         )
 
     query_warmup_ms, query_warmup_sample = measure_query()
@@ -749,10 +866,11 @@ def _measure_query_context(
         context_samples.append(context_sample)
     query_context = _validate_query_context_observation(
         {
-            "schema_version": QUERY_CONTEXT_OBSERVATION_SCHEMA,
+            "schema_version": selected_profile.query_context_observation_schema,
             "query": _query_context_surface(query_samples),
             "context": _query_context_surface(context_samples),
-        }
+        },
+        profile=selected_profile,
     )
     provider_bytes: list[int] = []
     for index in range(WARM_SAMPLE_TARGET + 1):
@@ -918,6 +1036,7 @@ def build_scale_qualification_report(
     status: str = "executed",
     above_10000_status: str = "experimental_unqualified",
     deferred_100000: str = DEFERRED_100000,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
 ) -> dict[str, Any]:
     """Build one canonical report from observed, non-derived measurements.
 
@@ -926,10 +1045,11 @@ def build_scale_qualification_report(
     claimed equivalence into observed evidence.
     """
 
+    selected_profile = _resolve_profile(profile)
     if status not in {"executed", "failed", "not_executed"}:
         raise ScaleQualificationError("scale status is invalid")
     candidate = _candidate_binding(candidate_binding)
-    run = _run_binding(run_binding)
+    run = _run_binding(run_binding, profile=selected_profile)
     if (
         isinstance(active_governed_object_count, bool)
         or not isinstance(active_governed_object_count, int)
@@ -1010,7 +1130,10 @@ def build_scale_qualification_report(
         raise ScaleQualificationError("semantic batch measurements are invalid")
     normalized_rebuild = {key: dict(value) for key, value in rebuild.items()}
     normalized_source_compile = dict(source_compile)
-    normalized_query_context = _validate_query_context_observation(query_context)
+    normalized_query_context = _validate_query_context_observation(
+        query_context,
+        profile=selected_profile,
+    )
     expected_warmup_payload_bytes = {
         "query": normalized_query_context["query"]["provider_content_bytes"][0],
         "context": normalized_query_context["context"]["provider_content_bytes"][0],
@@ -1053,8 +1176,8 @@ def build_scale_qualification_report(
         )
     max_provider_bytes = max(provider_sample_bytes)
     report: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "profile": PROFILE,
+        "schema_version": selected_profile.report_schema_version,
+        "profile": selected_profile.report_profile,
         "status": status,
         "release_gate_passed": False,
         "candidate_binding": candidate,
@@ -1122,9 +1245,14 @@ def build_scale_qualification_report(
     return report
 
 
-def _schema_errors(report: Mapping[str, Any]) -> list[str]:
+def _schema_errors(
+    report: Mapping[str, Any],
+    *,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
+) -> list[str]:
+    selected_profile = _resolve_profile(profile)
     validator = Draft202012Validator(
-        json.loads(_schema_path().read_text(encoding="utf-8")),
+        json.loads(_schema_path(selected_profile).read_text(encoding="utf-8")),
         format_checker=FormatChecker(),
     )
     return [
@@ -1133,12 +1261,17 @@ def _schema_errors(report: Mapping[str, Any]) -> list[str]:
     ]
 
 
-def verify_report(report: Mapping[str, Any]) -> dict[str, Any]:
+def verify_report(
+    report: Mapping[str, Any],
+    *,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
+) -> dict[str, Any]:
     """Fail-closed structural and semantic verification of a scale report."""
 
+    selected_profile = _resolve_profile(profile)
     if not isinstance(report, Mapping):
         return {"valid": False, "errors": ["report must be an object"]}
-    errors = _schema_errors(report)
+    errors = _schema_errors(report, profile=selected_profile)
     if errors:
         return {"valid": False, "errors": errors}
     try:
@@ -1164,7 +1297,10 @@ def verify_report(report: Mapping[str, Any]) -> dict[str, Any]:
         )
         if report["provider"]["sample_count"] != expected_provider_sample_count:
             errors.append("provider sample count does not include both warmup payloads")
-        query_context = _validate_query_context_observation(report["query_context"])
+        query_context = _validate_query_context_observation(
+            report["query_context"],
+            profile=selected_profile,
+        )
         expected_query_context_warmup = {
             kind: query_context[kind]["provider_content_bytes"][0]
             for kind in ("query", "context")
@@ -1220,10 +1356,14 @@ def verify_report(report: Mapping[str, Any]) -> dict[str, Any]:
     return {"valid": not errors, "errors": errors}
 
 
-def verify_scale_qualification_report(report: Mapping[str, Any]) -> dict[str, Any]:
+def verify_scale_qualification_report(
+    report: Mapping[str, Any],
+    *,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
+) -> dict[str, Any]:
     """Compatibility-friendly alias for callers that name the report explicitly."""
 
-    return verify_report(report)
+    return verify_report(report, profile=profile)
 
 
 def _git_binding() -> tuple[str, str]:
@@ -1401,9 +1541,11 @@ def _public_semantic_compile(
     global_offset: int = 0,
     batch_index: int = 0,
     knowledge_os_handle: Any | None = None,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
 ) -> dict[str, Any]:
     """Publish one bounded Source IR batch through the public compiler seam."""
 
+    selected_profile = _resolve_profile(profile)
     from deeplaw.api.knowledge_os import KnowledgeOS
     from deeplaw.compilation.models import SEMANTIC_COMPILER_GRANT_OPERATIONS
     from deeplaw.compilation.semantic import SemanticCompilationService
@@ -1441,7 +1583,10 @@ def _public_semantic_compile(
         profile = knowledge_os.compilations.profile(version="3")
         with AutonomousKnowledgeStore(vault, read_only=False) as store:
             grant_id = store.enable_grant(
-                writer_id=f"v013-scale-qualification-v9:batch:{batch_index:03d}",
+                writer_id=(
+                    f"v013-scale-qualification-{selected_profile.version}"
+                    f":batch:{batch_index:03d}"
+                ),
                 max_sensitivity="public",
                 operations=SEMANTIC_COMPILER_GRANT_OPERATIONS,
                 max_request_bytes=MAX_COMPILATION_REQUEST_BYTES,
@@ -1456,7 +1601,7 @@ def _public_semantic_compile(
             source_revision_id=source_revision_id,
             compiler_profile=profile["compiler_profile"],
             compiler_profile_version=profile["compiler_profile_version"],
-            host_identity="v013-scale-qualification-v9",
+            host_identity=f"v013-scale-qualification-{selected_profile.version}",
             model_identity=None,
             prompt_template_id=profile["prompt_template_id"],
             prompt_config_sha256=profile["prompt_config_sha256"],
@@ -1483,7 +1628,9 @@ def _public_semantic_compile(
                     "quote_sha256": fragment["text_sha256"],
                 }
                 ordinal = global_offset + observed_count
-                semantic_key = f"v013-scale-qualification-v9:{ordinal:05d}"
+                semantic_key = (
+                    f"v013-scale-qualification-{selected_profile.version}:{ordinal:05d}"
+                )
                 title = str(fragment.get("title") or f"Scale Object {ordinal:05d}")
                 body = str(fragment["text"]).strip()
                 observation = {
@@ -1749,6 +1896,8 @@ def run_scale_qualification(
     workspace: Path | None = None,
     execute_10k: bool = False,
     command: str | None = None,
+    profile: ScaleQualificationProfile | str = V9_PROFILE,
+    runner_path: Path | None = None,
 ) -> dict[str, Any]:
     """Execute the exact 10k lane using the first-party source/query/context paths.
 
@@ -1757,6 +1906,7 @@ def run_scale_qualification(
     produce qualification evidence.
     """
 
+    selected_profile = _resolve_profile(profile)
     if not execute_10k:
         raise ScaleQualificationError("exact 10k qualification requires --execute-10k")
     wheel = Path(wheel_path).expanduser().absolute()
@@ -1792,9 +1942,13 @@ def run_scale_qualification(
             raise ScaleQualificationError(
                 f"candidate {field} binding does not match the observed candidate"
             )
-    runner_path = Path(__file__).resolve()
+    selected_runner_path = (
+        Path(runner_path).expanduser().absolute()
+        if runner_path is not None
+        else Path(__file__).resolve()
+    )
     started = _utc_now()
-    run_id = f"scale-v9-{uuid.uuid4().hex[:24]}"
+    run_id = f"{selected_profile.run_id_prefix}{uuid.uuid4().hex[:24]}"
     query_times: list[float] = []
     context_times: list[float] = []
     provider_bytes: list[int] = []
@@ -1861,6 +2015,7 @@ def run_scale_qualification(
                     global_offset=batch_index * FRAGMENTS_PER_SOURCE,
                     batch_index=batch_index,
                     knowledge_os_handle=compilation_knowledge_os,
+                    profile=selected_profile,
                 )
                 semantic_batches.append(
                     {
@@ -1919,7 +2074,8 @@ def run_scale_qualification(
             measurement = _measure_query_context(
                 knowledge_os,
                 query_text="Bounded scale evidence 000-000",
-                expected_semantic_key=SCALE_SEMANTIC_KEY,
+                expected_semantic_key=selected_profile.semantic_key,
+                profile=selected_profile,
             )
             query_times = measurement["query_samples_ms"]
             context_times = measurement["context_samples_ms"]
@@ -1984,11 +2140,10 @@ def run_scale_qualification(
             "finished_at_utc": finished,
             "platform": platform.platform(),
             "python_version": platform.python_version(),
-            "runner": RUNNER_RELATIVE_PATH,
-            "runner_sha256": _sha256_path(runner_path),
+            "runner": selected_profile.runner_relative_path,
+            "runner_sha256": _sha256_path(selected_runner_path),
             "command": command
-            or "uv run --frozen python -m benchmarks.v013.scale_qualification_v9 "
-            "--execute-10k",
+            or selected_profile.default_command,
         },
         active_governed_object_count=active_count,
         query_samples_ms=query_times,
@@ -2019,6 +2174,7 @@ def run_scale_qualification(
         semantic_batches=semantic_batches,
         user_files=[user_receipt],
         provider_sample_bytes=provider_bytes,
+        profile=selected_profile,
     )
     return report
 

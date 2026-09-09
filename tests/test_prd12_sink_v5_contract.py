@@ -79,7 +79,7 @@ def test_v5_schema_remains_valid_and_v6_tool_accepts_both_run_shapes() -> None:
     Draft202012Validator.check_schema(schema)
 
     tool = knowledge_sink_tool_definition()
-    assert tool.inputSchema["$id"].endswith("knowledge-sink.input.v6.schema.json")
+    assert tool.inputSchema["$id"].endswith("knowledge-sink.input.v7.schema.json")
     validator = Draft202012Validator(tool.inputSchema, format_checker=FormatChecker())
     validator.validate(_record_run(key="legacy"))
     validator.validate(
@@ -115,8 +115,8 @@ def test_v5_schema_remains_valid_and_v6_tool_accepts_both_run_shapes() -> None:
         (("remember",), "v2", "v2"),
         (("begin_compilation",), "v3", "v3"),
         (("stage_semantic_observations",), "v4", "v4"),
-        (("record_run",), "v6", "v2"),
-        (("record_run", "stage_semantic_observations"), "v6", "v4"),
+        (("record_run",), "v7", "v5"),
+        (("record_run", "stage_semantic_observations"), "v7", "v5"),
     ],
 )
 def test_grant_operation_selection_is_additive(

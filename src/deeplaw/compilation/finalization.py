@@ -238,7 +238,9 @@ class SemanticFinalizer:
     ) -> dict[str, Any]:
         if (
             isinstance(plan, dict)
-            and plan.get("schema_version") == "deeplaw.semantic-publication-plan/v3"
+            and plan.get("schema_version") in {
+                "deeplaw.semantic-publication-plan/v3", "deeplaw.semantic-publication-plan/v4"
+            }
         ):
             return self._stage_publication_v3(
                 grant_id=grant_id,
@@ -568,7 +570,11 @@ class SemanticFinalizer:
             raise ValueError(
                 "semantic finalization requires confirmation that no case data is present"
             )
-        _validate_contract("semantic-publication-plan.v3.schema.json", plan)
+        _validate_contract(
+            "semantic-publication-plan.v4.schema.json"
+            if plan.get("schema_version") == "deeplaw.semantic-publication-plan/v4"
+            else "semantic-publication-plan.v3.schema.json", plan
+        )
         payload = canonical_json(plan).encode("utf-8")
         if len(payload) > MAX_COMPILATION_REQUEST_BYTES:
             raise ValueError("semantic publication plan exceeds its request byte limit")

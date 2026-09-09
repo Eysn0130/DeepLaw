@@ -142,6 +142,97 @@
       "cases": [
         {
           "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_backend_spawn_and_child_marker_do_not_attest_isolation"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_backend_spawn_and_child_marker_do_not_attest_isolation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_configuration_rejects_non_loopback_and_unbounded_limits"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_configuration_rejects_non_loopback_and_unbounded_limits"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_configuration_rejects_relative_symlink_and_wide_boundaries"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_configuration_rejects_relative_symlink_and_wide_boundaries"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_dry_run_is_path_free_and_never_observed"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_dry_run_is_path_free_and_never_observed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_endpoint_declares_dual_stack_outbound_only"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_endpoint_declares_dual_stack_outbound_only"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_group_cleanup_failure_is_explicit_and_bounded"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_group_cleanup_failure_is_explicit_and_bounded"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_non_macos_never_falls_back_to_unsandboxed_execution"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_non_macos_never_falls_back_to_unsandboxed_execution"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_profile_is_closed_and_path_escaping_is_literal"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_profile_is_closed_and_path_escaping_is_literal"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_real_sandbox_defaults_to_network_denial_and_allows_one_loopback_port"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_real_sandbox_defaults_to_network_denial_and_allows_one_loopback_port"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_real_sandbox_observes_filesystem_denials_and_preserves_allowed_write"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_real_sandbox_observes_filesystem_denials_and_preserves_allowed_write"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_real_sandbox_uses_closed_environment_and_fixed_output_timeout_bounds"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_real_sandbox_uses_closed_environment_and_fixed_output_timeout_bounds"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_staging_hardlinks_are_rejected_before_launch[read]"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_staging_hardlinks_are_rejected_before_launch[read]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_staging_hardlinks_are_rejected_before_launch[write]"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_staging_hardlinks_are_rejected_before_launch[write]"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_pass24_opencode_plugin",
             "name": "test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys"
           },
@@ -248,6 +339,20 @@
   "inventories": {
     "common": {
       "cases": [
+        {
+          "junit": {
+            "classname": "tests.test_admitted_selection_explanation",
+            "name": "test_public_query_explain_accounts_only_for_admitted_memory"
+          },
+          "node_id": "tests/test_admitted_selection_explanation.py::test_public_query_explain_accounts_only_for_admitted_memory"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_admitted_selection_explanation",
+            "name": "test_selection_pages_are_bounded_authenticated_and_expire_with_receipt"
+          },
+          "node_id": "tests/test_admitted_selection_explanation.py::test_selection_pages_are_bounded_authenticated_and_expire_with_receipt"
+        },
         {
           "junit": {
             "classname": "tests.test_architecture_boundaries",
@@ -684,6 +789,20 @@
         },
         {
           "junit": {
+            "classname": "tests.test_checkpoint_support_repair",
+            "name": "test_checkpoint_transitive_support_withdrawal_and_benign_restore"
+          },
+          "node_id": "tests/test_checkpoint_support_repair.py::test_checkpoint_transitive_support_withdrawal_and_benign_restore"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_checkpoint_support_repair",
+            "name": "test_corrupt_cyclic_lineage_is_unknown_instead_of_recursive_support"
+          },
+          "node_id": "tests/test_checkpoint_support_repair.py::test_corrupt_cyclic_lineage_is_unknown_instead_of_recursive_support"
+        },
+        {
+          "junit": {
             "classname": "tests.test_closed_mcp_launcher",
             "name": "test_closed_environment_maps_windows_home_without_codex_home"
           },
@@ -887,6 +1006,97 @@
         },
         {
           "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_and_support_rejects_partial_successor_with_same_flat_refs"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_and_support_rejects_partial_successor_with_same_flat_refs"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_and_vs_or_support_grouping_changes_input_digest"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_and_vs_or_support_grouping_changes_input_digest"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_forgetting_knowledge_support_invalidates_dependent_but_keeps_or_branch"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_forgetting_knowledge_support_invalidates_dependent_but_keeps_or_branch"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_invalid_support_set_groupings_are_rejected[duplicate group-source_refs2-support_sets2-duplicate alternatives]"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_invalid_support_set_groupings_are_rejected[duplicate group-source_refs2-support_sets2-duplicate alternatives]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_invalid_support_set_groupings_are_rejected[empty group-source_refs1-support_sets1-empty support set]"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_invalid_support_set_groupings_are_rejected[empty group-source_refs1-support_sets1-empty support set]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_invalid_support_set_groupings_are_rejected[missing union-source_refs0-support_sets0-support set union]"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_invalid_support_set_groupings_are_rejected[missing union-source_refs0-support_sets0-support set union]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_invalid_support_set_groupings_are_rejected[over 256 members-source_refs3-support_sets3-support (?:source refs|set members) exceed]"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_invalid_support_set_groupings_are_rejected[over 256 members-source_refs3-support_sets3-support (?:source refs|set members) exceed]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_invalidated_support_stays_invalid_after_snapshot_restore_and_rebuild"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_invalidated_support_stays_invalid_after_snapshot_restore_and_rebuild"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_or_support_survives_partial_successor_and_projects_valid_witness"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_or_support_survives_partial_successor_and_projects_valid_witness"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_tampered_support_grouping_is_rejected"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_tampered_support_grouping_is_rejected"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_v1_statement_bytes_and_digest_remain_unchanged"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_v1_statement_bytes_and_digest_remain_unchanged"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_v4_publication_rejects_tampered_support_grouping"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_v4_publication_rejects_tampered_support_grouping"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_complete_support_sets",
+            "name": "test_v4_stage_commit_and_snapshot_restore_preserve_exact_support_sets"
+          },
+          "node_id": "tests/test_complete_support_sets.py::test_v4_stage_commit_and_snapshot_restore_preserve_exact_support_sets"
+        },
+        {
+          "junit": {
             "classname": "tests.test_context_compiler",
             "name": "test_autonomous_capsule_is_verified_by_first_party_dispatch"
           },
@@ -1045,6 +1255,41 @@
             "name": "test_context_turns_open_questions_into_uri_only_review_actions"
           },
           "node_id": "tests/test_context_compiler.py::test_context_turns_open_questions_into_uri_only_review_actions"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_current_evidence_duty_gaps",
+            "name": "test_current_query_preserves_missing_definition_annex_and_denied_evidence"
+          },
+          "node_id": "tests/test_current_evidence_duty_gaps.py::test_current_query_preserves_missing_definition_annex_and_denied_evidence"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_current_evidence_duty_gaps",
+            "name": "test_large_projection_never_truncates_hash_bound_source_evidence"
+          },
+          "node_id": "tests/test_current_evidence_duty_gaps.py::test_large_projection_never_truncates_hash_bound_source_evidence"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_direct_relation_dependency_migration",
+            "name": "test_dependency_migration_foreign_key_failure_rolls_back_before_commit"
+          },
+          "node_id": "tests/test_direct_relation_dependency_migration.py::test_dependency_migration_foreign_key_failure_rolls_back_before_commit"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_direct_relation_dependency_migration",
+            "name": "test_dependency_migration_preserves_rows_and_allows_only_direct_relation_null_run"
+          },
+          "node_id": "tests/test_direct_relation_dependency_migration.py::test_dependency_migration_preserves_rows_and_allows_only_direct_relation_null_run"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_direct_relation_support",
+            "name": "test_direct_relation_pins_endpoints_and_missing_dependencies_are_unknown"
+          },
+          "node_id": "tests/test_direct_relation_support.py::test_direct_relation_pins_endpoints_and_missing_dependencies_are_unknown"
         },
         {
           "junit": {
@@ -1979,6 +2224,62 @@
         },
         {
           "junit": {
+            "classname": "tests.test_governed_revision_recall",
+            "name": "test_active_source_free_remember_is_visible_to_default_query"
+          },
+          "node_id": "tests/test_governed_revision_recall.py::test_active_source_free_remember_is_visible_to_default_query"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_governed_revision_recall",
+            "name": "test_ordinary_revision_does_not_bypass_evidence_or_policy[legal]"
+          },
+          "node_id": "tests/test_governed_revision_recall.py::test_ordinary_revision_does_not_bypass_evidence_or_policy[legal]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_governed_revision_recall",
+            "name": "test_ordinary_revision_does_not_bypass_evidence_or_policy[quote]"
+          },
+          "node_id": "tests/test_governed_revision_recall.py::test_ordinary_revision_does_not_bypass_evidence_or_policy[quote]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_governed_revision_recall",
+            "name": "test_ordinary_revision_does_not_bypass_evidence_or_policy[scope]"
+          },
+          "node_id": "tests/test_governed_revision_recall.py::test_ordinary_revision_does_not_bypass_evidence_or_policy[scope]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_governed_revision_recall",
+            "name": "test_ordinary_revision_does_not_bypass_evidence_or_policy[sensitivity]"
+          },
+          "node_id": "tests/test_governed_revision_recall.py::test_ordinary_revision_does_not_bypass_evidence_or_policy[sensitivity]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_governed_revision_recall",
+            "name": "test_ordinary_revision_does_not_bypass_evidence_or_policy[v6]"
+          },
+          "node_id": "tests/test_governed_revision_recall.py::test_ordinary_revision_does_not_bypass_evidence_or_policy[v6]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_governed_revision_recall",
+            "name": "test_ordinary_revision_does_not_bypass_evidence_or_policy[verify]"
+          },
+          "node_id": "tests/test_governed_revision_recall.py::test_ordinary_revision_does_not_bypass_evidence_or_policy[verify]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_governed_revision_recall",
+            "name": "test_semantic_memory_uses_ordinary_partition_with_bounded_body"
+          },
+          "node_id": "tests/test_governed_revision_recall.py::test_semantic_memory_uses_ordinary_partition_with_bounded_body"
+        },
+        {
+          "junit": {
             "classname": "tests.test_identity_migration_v060",
             "name": "test_real_v060_wheel_additive_migration_verification_and_rollback"
           },
@@ -2756,6 +3057,62 @@
         },
         {
           "junit": {
+            "classname": "tests.test_knowledge_maintenance_outcomes",
+            "name": "test_context_records_v7_projection_and_observed_budget"
+          },
+          "node_id": "tests/test_knowledge_maintenance_outcomes.py::test_context_records_v7_projection_and_observed_budget"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_knowledge_maintenance_outcomes",
+            "name": "test_failure_and_unknown_are_terminal_without_being_success"
+          },
+          "node_id": "tests/test_knowledge_maintenance_outcomes.py::test_failure_and_unknown_are_terminal_without_being_success"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_knowledge_maintenance_outcomes",
+            "name": "test_feedback_is_bound_only_to_selected_knowledge_and_self_report"
+          },
+          "node_id": "tests/test_knowledge_maintenance_outcomes.py::test_feedback_is_bound_only_to_selected_knowledge_and_self_report"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_knowledge_maintenance_outcomes",
+            "name": "test_frozen_and_governed_configurations_expose_maintenance_boundaries"
+          },
+          "node_id": "tests/test_knowledge_maintenance_outcomes.py::test_frozen_and_governed_configurations_expose_maintenance_boundaries"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_knowledge_maintenance_outcomes",
+            "name": "test_report_is_frozen_bounded_and_fail_closed"
+          },
+          "node_id": "tests/test_knowledge_maintenance_outcomes.py::test_report_is_frozen_bounded_and_fail_closed"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_knowledge_maintenance_outcomes",
+            "name": "test_run_feedback_records_use_verified_capsule_and_typed_observation"
+          },
+          "node_id": "tests/test_knowledge_maintenance_outcomes.py::test_run_feedback_records_use_verified_capsule_and_typed_observation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_knowledge_maintenance_outcomes",
+            "name": "test_scorer_uses_exact_typed_values_and_rejects_bad_or_repeated_actions"
+          },
+          "node_id": "tests/test_knowledge_maintenance_outcomes.py::test_scorer_uses_exact_typed_values_and_rejects_bad_or_repeated_actions"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_knowledge_maintenance_outcomes",
+            "name": "test_verifier_rejects_score_cost_and_claim_tampering"
+          },
+          "node_id": "tests/test_knowledge_maintenance_outcomes.py::test_verifier_rejects_score_cost_and_claim_tampering"
+        },
+        {
+          "junit": {
             "classname": "tests.test_knowledge_markdown",
             "name": "test_markdown_export_refuses_to_overwrite_without_explicit_replace"
           },
@@ -3383,6 +3740,27 @@
             "name": "test_local_reranker_is_pinned_offline_bounded_and_candidate_only"
           },
           "node_id": "tests/test_local_reranker.py::test_local_reranker_is_pinned_offline_bounded_and_candidate_only"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_maintenance_budget",
+            "name": "test_direct_dependency_budget_fails_before_canonical_mutation"
+          },
+          "node_id": "tests/test_maintenance_budget.py::test_direct_dependency_budget_fails_before_canonical_mutation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_maintenance_budget",
+            "name": "test_fragment_inventory_budget_fails_before_canonical_mutation"
+          },
+          "node_id": "tests/test_maintenance_budget.py::test_fragment_inventory_budget_fails_before_canonical_mutation"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_maintenance_budget",
+            "name": "test_transitive_consumer_budget_fails_before_canonical_mutation"
+          },
+          "node_id": "tests/test_maintenance_budget.py::test_transitive_consumer_budget_fails_before_canonical_mutation"
         },
         {
           "junit": {
@@ -4143,9 +4521,9 @@
         {
           "junit": {
             "classname": "tests.test_opencode_single_task_producer",
-            "name": "test_live_tool_definition_is_v8_and_old_schema_remains_rejected"
+            "name": "test_live_tool_definition_is_v9_and_old_schema_remains_rejected"
           },
-          "node_id": "tests/test_opencode_single_task_producer.py::test_live_tool_definition_is_v8_and_old_schema_remains_rejected"
+          "node_id": "tests/test_opencode_single_task_producer.py::test_live_tool_definition_is_v9_and_old_schema_remains_rejected"
         },
         {
           "junit": {
@@ -4850,16 +5228,16 @@
         {
           "junit": {
             "classname": "tests.test_prd12_sink_v5_contract",
-            "name": "test_grant_operation_selection_is_additive[operations3-v6-v2]"
+            "name": "test_grant_operation_selection_is_additive[operations3-v7-v5]"
           },
-          "node_id": "tests/test_prd12_sink_v5_contract.py::test_grant_operation_selection_is_additive[operations3-v6-v2]"
+          "node_id": "tests/test_prd12_sink_v5_contract.py::test_grant_operation_selection_is_additive[operations3-v7-v5]"
         },
         {
           "junit": {
             "classname": "tests.test_prd12_sink_v5_contract",
-            "name": "test_grant_operation_selection_is_additive[operations4-v6-v4]"
+            "name": "test_grant_operation_selection_is_additive[operations4-v7-v5]"
           },
-          "node_id": "tests/test_prd12_sink_v5_contract.py::test_grant_operation_selection_is_additive[operations4-v6-v4]"
+          "node_id": "tests/test_prd12_sink_v5_contract.py::test_grant_operation_selection_is_additive[operations4-v7-v5]"
         },
         {
           "junit": {
@@ -8038,6 +8416,335 @@
             "name": "test_supervised_preflight_requires_queryable_seed[True]"
           },
           "node_id": "tests/test_supervised_procedure_fixture.py::test_supervised_preflight_requires_queryable_seed[True]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_support_forget_process_recovery",
+            "name": "test_forget_process_exit_preserves_atomic_support_state[after_commit]"
+          },
+          "node_id": "tests/test_support_forget_process_recovery.py::test_forget_process_exit_preserves_atomic_support_state[after_commit]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_support_forget_process_recovery",
+            "name": "test_forget_process_exit_preserves_atomic_support_state[before_commit]"
+          },
+          "node_id": "tests/test_support_forget_process_recovery.py::test_forget_process_exit_preserves_atomic_support_state[before_commit]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_support_maintenance_boundaries",
+            "name": "test_forget_commit_failure_rolls_back_and_reopen_preserves_support"
+          },
+          "node_id": "tests/test_support_maintenance_boundaries.py::test_forget_commit_failure_rolls_back_and_reopen_preserves_support"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_support_maintenance_boundaries",
+            "name": "test_identical_source_reimport_preserves_compiled_revision_identity"
+          },
+          "node_id": "tests/test_support_maintenance_boundaries.py::test_identical_source_reimport_preserves_compiled_revision_identity"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_support_maintenance_boundaries",
+            "name": "test_refresh_leaves_unrelated_knowledge_and_relation_revisions_unchanged"
+          },
+          "node_id": "tests/test_support_maintenance_boundaries.py::test_refresh_leaves_unrelated_knowledge_and_relation_revisions_unchanged"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_support_maintenance_boundaries",
+            "name": "test_refresh_rejects_a_changed_audit_head_before_commit"
+          },
+          "node_id": "tests/test_support_maintenance_boundaries.py::test_refresh_rejects_a_changed_audit_head_before_commit"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_support_maintenance_boundaries",
+            "name": "test_source_evidence_duty_requires_a_delivered_complete_passage"
+          },
+          "node_id": "tests/test_support_maintenance_boundaries.py::test_source_evidence_duty_requires_a_delivered_complete_passage"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_support_maintenance_boundaries",
+            "name": "test_support_exhaustion_and_missing_revision_remain_unknown"
+          },
+          "node_id": "tests/test_support_maintenance_boundaries.py::test_support_exhaustion_and_missing_revision_remain_unknown"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_ledger",
+            "name": "test_action_predecessor_cas_and_route_boundary_leave_no_partial_run"
+          },
+          "node_id": "tests/test_task_action_ledger.py::test_action_predecessor_cas_and_route_boundary_leave_no_partial_run"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_ledger",
+            "name": "test_action_replay_recovers_generated_fields_after_concurrent_commit"
+          },
+          "node_id": "tests/test_task_action_ledger.py::test_action_replay_recovers_generated_fields_after_concurrent_commit"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_ledger",
+            "name": "test_action_state_snapshot_and_projection_rebuild_preserve_outcome[None]"
+          },
+          "node_id": "tests/test_task_action_ledger.py::test_action_state_snapshot_and_projection_rebuild_preserve_outcome[None]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_ledger",
+            "name": "test_action_state_snapshot_and_projection_rebuild_preserve_outcome[failed]"
+          },
+          "node_id": "tests/test_task_action_ledger.py::test_action_state_snapshot_and_projection_rebuild_preserve_outcome[failed]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_ledger",
+            "name": "test_action_unknown_survives_restart_and_terminal_state_is_not_repeated"
+          },
+          "node_id": "tests/test_task_action_ledger.py::test_action_unknown_survives_restart_and_terminal_state_is_not_repeated"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_ledger",
+            "name": "test_cli_action_resume_checkpoint_and_host_projection"
+          },
+          "node_id": "tests/test_task_action_ledger.py::test_cli_action_resume_checkpoint_and_host_projection"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_ledger",
+            "name": "test_host_reported_success_cannot_verify_a_working_checkpoint"
+          },
+          "node_id": "tests/test_task_action_ledger.py::test_host_reported_success_cannot_verify_a_working_checkpoint"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_ledger",
+            "name": "test_raw_sink_action_replay_retains_generated_timestamps"
+          },
+          "node_id": "tests/test_task_action_ledger.py::test_raw_sink_action_replay_retains_generated_timestamps"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_action_resume_requirement_is_data_only[failed-review_failure]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_action_resume_requirement_is_data_only[failed-review_failure]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_action_resume_requirement_is_data_only[initiated_unknown-verify_external_state]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_action_resume_requirement_is_data_only[initiated_unknown-verify_external_state]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_action_resume_requirement_is_data_only[not_executed-not_started]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_action_resume_requirement_is_data_only[not_executed-not_started]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_action_resume_requirement_is_data_only[succeeded-do_not_repeat]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_action_resume_requirement_is_data_only[succeeded-do_not_repeat]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[action_id-../escape]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[action_id-../escape]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[action_id-]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[action_id-]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[action_id-a/b]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[action_id-a/b]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[action_id-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[action_id-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[evidence_level-model_reported]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[evidence_level-model_reported]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[expected_prior_run_id-../run]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[expected_prior_run_id-../run]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[expected_prior_run_id-]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[expected_prior_run_id-]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[outcome_sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[outcome_sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[request_sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[request_sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[request_sha256-gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[request_sha256-gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[schema_version-deeplaw.task-action-state/v0]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[schema_version-deeplaw.task-action-state/v0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_invalid_fields[status-running]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_invalid_fields[status-running]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_rejects_open_fields_and_terminal_missing_outcome"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_rejects_open_fields_and_terminal_missing_outcome"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_returns_exact_closed_shape_for_each_status[failed-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_returns_exact_closed_shape_for_each_status[failed-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_returns_exact_closed_shape_for_each_status[initiated_unknown-None]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_returns_exact_closed_shape_for_each_status[initiated_unknown-None]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_returns_exact_closed_shape_for_each_status[not_executed-None]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_returns_exact_closed_shape_for_each_status[not_executed-None]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_normalize_returns_exact_closed_shape_for_each_status[succeeded-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_normalize_returns_exact_closed_shape_for_each_status[succeeded-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_points_to_the_immediately_preceding_run"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_points_to_the_immediately_preceding_run"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_rejects_changed_request_identity[action_id]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_rejects_changed_request_identity[action_id]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_rejects_changed_request_identity[request_sha256]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_rejects_changed_request_identity[request_sha256]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_rejects_invalid_status_progressions[previous0-current0]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_rejects_invalid_status_progressions[previous0-current0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_rejects_invalid_status_progressions[previous1-current1]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_rejects_invalid_status_progressions[previous1-current1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_rejects_invalid_status_progressions[previous2-current2]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_rejects_invalid_status_progressions[previous2-current2]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_rejects_invalid_status_progressions[previous3-current3]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_rejects_invalid_status_progressions[previous3-current3]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_rejects_invalid_status_progressions[previous4-current4]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_rejects_invalid_status_progressions[previous4-current4]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_rejects_invalid_status_progressions[previous5-current5]"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_rejects_invalid_status_progressions[previous5-current5]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_task_action_state",
+            "name": "test_transition_requires_first_not_executed_and_then_prior_run"
+          },
+          "node_id": "tests/test_task_action_state.py::test_transition_requires_first_not_executed_and_then_prior_run"
         },
         {
           "junit": {
@@ -14881,6 +15588,13 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_codex_hooks",
+            "name": "test_action_capsule_preserves_unknown_outcome_without_authority"
+          },
+          "node_id": "tests/test_v013_pass24_codex_hooks.py::test_action_capsule_preserves_unknown_outcome_without_authority"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_codex_hooks",
             "name": "test_admitted_core_capsule_is_injected_without_local_identity"
           },
           "node_id": "tests/test_v013_pass24_codex_hooks.py::test_admitted_core_capsule_is_injected_without_local_identity"
@@ -18143,16 +18857,44 @@
         {
           "junit": {
             "classname": "tests.test_v013_query_v6",
-            "name": "test_v6_evidence_admission_rejects_missing_or_wrong_quote[0000000000000000000000000000000000000000000000000000000000000000]"
+            "name": "test_v6_evidence_admission_rejects_missing_or_wrong_quote[6-0000000000000000000000000000000000000000000000000000000000000000]"
           },
-          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_rejects_missing_or_wrong_quote[0000000000000000000000000000000000000000000000000000000000000000]"
+          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_rejects_missing_or_wrong_quote[6-0000000000000000000000000000000000000000000000000000000000000000]"
         },
         {
           "junit": {
             "classname": "tests.test_v013_query_v6",
-            "name": "test_v6_evidence_admission_rejects_missing_or_wrong_quote[None]"
+            "name": "test_v6_evidence_admission_rejects_missing_or_wrong_quote[6-None]"
           },
-          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_rejects_missing_or_wrong_quote[None]"
+          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_rejects_missing_or_wrong_quote[6-None]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_evidence_admission_rejects_missing_or_wrong_quote[6-wrong_revision]"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_rejects_missing_or_wrong_quote[6-wrong_revision]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_evidence_admission_rejects_missing_or_wrong_quote[7-0000000000000000000000000000000000000000000000000000000000000000]"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_rejects_missing_or_wrong_quote[7-0000000000000000000000000000000000000000000000000000000000000000]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_evidence_admission_rejects_missing_or_wrong_quote[7-None]"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_rejects_missing_or_wrong_quote[7-None]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_evidence_admission_rejects_missing_or_wrong_quote[7-wrong_revision]"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_evidence_admission_rejects_missing_or_wrong_quote[7-wrong_revision]"
         },
         {
           "junit": {
@@ -18199,9 +18941,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_query_v6",
-            "name": "test_v6_quote_returns_gap_instead_of_truncated_source_passage"
+            "name": "test_v6_quote_returns_gap_instead_of_truncated_source_passage[6]"
           },
-          "node_id": "tests/test_v013_query_v6.py::test_v6_quote_returns_gap_instead_of_truncated_source_passage"
+          "node_id": "tests/test_v013_query_v6.py::test_v6_quote_returns_gap_instead_of_truncated_source_passage[6]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_quote_returns_gap_instead_of_truncated_source_passage[7]"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_quote_returns_gap_instead_of_truncated_source_passage[7]"
         },
         {
           "junit": {
@@ -18213,9 +18962,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_query_v6",
-            "name": "test_v6_statement_and_map_tamper_fail_closed"
+            "name": "test_v6_statement_and_map_tamper_fail_closed[6]"
           },
-          "node_id": "tests/test_v013_query_v6.py::test_v6_statement_and_map_tamper_fail_closed"
+          "node_id": "tests/test_v013_query_v6.py::test_v6_statement_and_map_tamper_fail_closed[6]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_statement_and_map_tamper_fail_closed[7]"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_statement_and_map_tamper_fail_closed[7]"
         },
         {
           "junit": {
@@ -18234,16 +18990,30 @@
         {
           "junit": {
             "classname": "tests.test_v013_query_v6",
-            "name": "test_v6_temporal_duty_requires_temporal_coordinates"
+            "name": "test_v6_temporal_duty_requires_temporal_coordinates[6]"
           },
-          "node_id": "tests/test_v013_query_v6.py::test_v6_temporal_duty_requires_temporal_coordinates"
+          "node_id": "tests/test_v013_query_v6.py::test_v6_temporal_duty_requires_temporal_coordinates[6]"
         },
         {
           "junit": {
             "classname": "tests.test_v013_query_v6",
-            "name": "test_v6_verify_and_quote_materialize_exact_statement_evidence"
+            "name": "test_v6_temporal_duty_requires_temporal_coordinates[7]"
           },
-          "node_id": "tests/test_v013_query_v6.py::test_v6_verify_and_quote_materialize_exact_statement_evidence"
+          "node_id": "tests/test_v013_query_v6.py::test_v6_temporal_duty_requires_temporal_coordinates[7]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_verify_and_quote_materialize_exact_statement_evidence[6]"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_verify_and_quote_materialize_exact_statement_evidence[6]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_query_v6",
+            "name": "test_v6_verify_and_quote_materialize_exact_statement_evidence[7]"
+          },
+          "node_id": "tests/test_v013_query_v6.py::test_v6_verify_and_quote_materialize_exact_statement_evidence[7]"
         },
         {
           "junit": {
@@ -18255,16 +19025,16 @@
         {
           "junit": {
             "classname": "tests.test_v013_query_v6_context_parity",
-            "name": "test_cli_autonomy_context_defaults_to_v6"
+            "name": "test_cli_autonomy_context_defaults_to_v7"
           },
-          "node_id": "tests/test_v013_query_v6_context_parity.py::test_cli_autonomy_context_defaults_to_v6"
+          "node_id": "tests/test_v013_query_v6_context_parity.py::test_cli_autonomy_context_defaults_to_v7"
         },
         {
           "junit": {
             "classname": "tests.test_v013_query_v6_context_parity",
-            "name": "test_cli_context_defaults_to_v6"
+            "name": "test_cli_context_defaults_to_v7"
           },
-          "node_id": "tests/test_v013_query_v6_context_parity.py::test_cli_context_defaults_to_v6"
+          "node_id": "tests/test_v013_query_v6_context_parity.py::test_cli_context_defaults_to_v7"
         },
         {
           "junit": {
@@ -18276,9 +19046,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_query_v6_context_parity",
-            "name": "test_cli_query_defaults_to_v6"
+            "name": "test_cli_query_defaults_to_v7"
           },
-          "node_id": "tests/test_v013_query_v6_context_parity.py::test_cli_query_defaults_to_v6"
+          "node_id": "tests/test_v013_query_v6_context_parity.py::test_cli_query_defaults_to_v7"
         },
         {
           "junit": {
@@ -18297,9 +19067,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_query_v6_context_parity",
-            "name": "test_mcp_query_and_context_default_to_v6"
+            "name": "test_mcp_query_and_context_default_to_v7"
           },
-          "node_id": "tests/test_v013_query_v6_context_parity.py::test_mcp_query_and_context_default_to_v6"
+          "node_id": "tests/test_v013_query_v6_context_parity.py::test_mcp_query_and_context_default_to_v7"
         },
         {
           "junit": {
@@ -18311,9 +19081,9 @@
         {
           "junit": {
             "classname": "tests.test_v013_query_v6_context_parity",
-            "name": "test_python_query_and_context_default_to_v6"
+            "name": "test_python_query_and_context_default_to_v7"
           },
-          "node_id": "tests/test_v013_query_v6_context_parity.py::test_python_query_and_context_default_to_v6"
+          "node_id": "tests/test_v013_query_v6_context_parity.py::test_python_query_and_context_default_to_v7"
         },
         {
           "junit": {
@@ -18521,6 +19291,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_runtime_retrieval_regressions",
+            "name": "test_current_provider_contract_and_instructions_recommend_one_read_path"
+          },
+          "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_current_provider_contract_and_instructions_recommend_one_read_path"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_runtime_retrieval_regressions",
+            "name": "test_default_query_uses_current_provider_receipt"
+          },
+          "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_default_query_uses_current_provider_receipt"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_runtime_retrieval_regressions",
             "name": "test_eight_independent_readers_do_not_share_snapshots_or_block_writer"
           },
           "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_eight_independent_readers_do_not_share_snapshots_or_block_writer"
@@ -18531,20 +19315,6 @@
             "name": "test_persistent_read_runtime_reuses_verified_snapshot_without_nested_legacy_verify"
           },
           "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_persistent_read_runtime_reuses_verified_snapshot_without_nested_legacy_verify"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_runtime_retrieval_regressions",
-            "name": "test_provider_v7_contract_and_instructions_recommend_one_read_path"
-          },
-          "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_provider_v7_contract_and_instructions_recommend_one_read_path"
-        },
-        {
-          "junit": {
-            "classname": "tests.test_v013_runtime_retrieval_regressions",
-            "name": "test_query_without_explicit_plan_version_uses_v6_provider_receipt"
-          },
-          "node_id": "tests/test_v013_runtime_retrieval_regressions.py::test_query_without_explicit_plan_version_uses_v6_provider_receipt"
         },
         {
           "junit": {
@@ -18713,6 +19483,34 @@
             "name": "test_scale_report_schema_and_closed_inventory_use_a_real_temporary_vault"
           },
           "node_id": "tests/test_v013_scale_performance.py::test_scale_report_schema_and_closed_inventory_use_a_real_temporary_vault"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v10",
+            "name": "test_v10_profile_exposes_current_contract_and_rejects_unknown_versions"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v10.py::test_v10_profile_exposes_current_contract_and_rejects_unknown_versions"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v10",
+            "name": "test_v10_public_batch_smoke_uses_current_v7_provider3_and_inner2"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v10.py::test_v10_public_batch_smoke_uses_current_v7_provider3_and_inner2"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v10",
+            "name": "test_v10_query_context_observation_rejects_v6_and_v9_rejects_v7"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v10.py::test_v10_query_context_observation_rejects_v6_and_v9_rejects_v7"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_scale_qualification_v10",
+            "name": "test_v10_report_uses_v10_schema_and_v9_verifier_rejects_it"
+          },
+          "node_id": "tests/test_v013_scale_qualification_v10.py::test_v10_report_uses_v10_schema_and_v9_verifier_rejects_it"
         },
         {
           "junit": {
@@ -20992,6 +21790,13 @@
         {
           "junit": {
             "classname": "tests.test_windows_acl",
+            "name": "test_acl_inventory_stops_discovery_at_its_bound"
+          },
+          "node_id": "tests/test_windows_acl.py::test_acl_inventory_stops_discovery_at_its_bound"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_windows_acl",
             "name": "test_read_stores_harden_only_their_sqlite_sidecars_on_close"
           },
           "node_id": "tests/test_windows_acl.py::test_read_stores_harden_only_their_sqlite_sidecars_on_close"
@@ -21067,9 +21872,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2974,
+      "count": 3076,
       "selection": "not qualification and not windows_native",
-      "sha256": "8eacf8cf310770ab3840a5ab5938c9d0f55b65aeaac04a093b7af09eb8aa635e"
+      "sha256": "b379a6b849f500f74a27836232ce1925c4308fa42021cc829253709ac19a5604"
     },
     "windows": {
       "additional_cases": [
@@ -21109,13 +21914,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2979,
+      "count": 3081,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "9a43265b6de0e41ae4fed87b6418e01ef6e899d40fe0dea461d79a2076d9cd23"
+      "sha256": "da0a353c3667baef538ab2ff8aca0b206a19d8c1e2502625929d5b8da887c05f"
     }
   },
-  "manifest_sha256": "71eff4519f0d02c7f2d4dd60a2ef8f0cd61f3377d473dd36605431b55a830291",
+  "manifest_sha256": "3a126ee3df1e3d3783ed5f6b55114024040e0b767139f6eb619f227e61b064a4",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

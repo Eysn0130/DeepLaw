@@ -2,7 +2,9 @@
 
 This module is a collector seam, not a Host harness. A collector supplies a
 frozen seed and an already prepared Knowledge Vault; this driver only performs
-bounded source, Wiki, and public v7 knowledge_support reads. It never creates
+bounded source, Wiki, and public knowledge_support reads with explicit Query Plan v6.
+The frozen task-source format retains that compatibility projection; it does not
+qualify the current default v7 projection. This driver never creates
 task evidence, invokes a model, or writes a Ledger.
 """
 
@@ -822,8 +824,8 @@ async def _public_v7_reads(
                 if len(tools.tools) != 1 or tools.tools[0].name != "knowledge_support":
                     raise TaskDomainDriverError("public knowledge_support inventory is not closed")
                 schema = tools.tools[0].inputSchema
-                if schema.get("title") != "DeepLaw Knowledge Support Provider Input v8":
-                    raise TaskDomainDriverError("public knowledge_support input is not v8")
+                if schema.get("title") != "DeepLaw Knowledge Support Provider Input v9":
+                    raise TaskDomainDriverError("public knowledge_support input is not v9")
                 if {
                     branch.get("$ref", "").rsplit("/", maxsplit=1)[-1]
                     for branch in schema.get("oneOf", [])
@@ -956,7 +958,7 @@ async def _public_v7_reads(
         except TaskDomainDriverError:
             raise
         except Exception as error:
-            raise TaskDomainDriverError("public knowledge_support v7 read failed") from error
+            raise TaskDomainDriverError("public knowledge_support read failed") from error
 
 
 def collect_task_domain(

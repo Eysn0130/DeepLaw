@@ -766,7 +766,7 @@ def test_semantic_v2_observes_across_packets_and_publishes_atomically(
 
     support_tool = knowledge_tool_definition(autonomous=True)
     assert support_tool.inputSchema["title"] == (
-        "DeepLaw Knowledge Support Provider Input v8"
+        "DeepLaw Knowledge Support Provider Input v9"
     )
     support_validator = _compatibility_input_validator()
     for request in (
@@ -2557,8 +2557,8 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
     )["result"]
 
     assert result["policy_id"] == "compiled-first-v1"
-    assert result["schema_version"] == "deeplaw.purpose-aware-retrieval/v3"
-    assert result["query_plan"]["schema_version"] == "deeplaw.knowledge-query-plan/v6"
+    assert result["schema_version"] == "deeplaw.purpose-aware-retrieval/v4"
+    assert result["query_plan"]["schema_version"] == "deeplaw.knowledge-query-plan/v7"
     assert result["statements"] == []
     assert result["evidence"] == []
     assert result["query_plan"]["fallback"]["used"] is False
@@ -2606,21 +2606,21 @@ def test_purpose_aware_query_is_compiled_first_and_read_only(tmp_path: Path) -> 
         "authority_changed": False,
         "stored_evidence_changed": False,
     }
-    assert api_capsule["schema_version"] == "deeplaw.knowledge-capsule/v3"
-    assert cli_capsule["schema_version"] == "deeplaw.knowledge-capsule/v3"
+    assert api_capsule["schema_version"] == "deeplaw.knowledge-capsule/v4"
+    assert cli_capsule["schema_version"] == "deeplaw.knowledge-capsule/v4"
     assert api_capsule["query_plan"]["schema_version"] == (
-        "deeplaw.knowledge-query-plan/v6"
+        "deeplaw.knowledge-query-plan/v7"
     )
     assert cli_capsule["query_plan"]["schema_version"] == (
-        "deeplaw.knowledge-query-plan/v6"
+        "deeplaw.knowledge-query-plan/v7"
     )
     assert api_capsule["write_performed"] is False
     assert cli_capsule["write_performed"] is False
     assert api_capsule["statements"] == cli_capsule["statements"]
     assert any(gap["code"] == "no_answer" for gap in api_capsule["gaps"])
-    assert mcp_capsule["schema_version"] == "deeplaw.provider-knowledge-capsule/v2"
+    assert mcp_capsule["schema_version"] == "deeplaw.provider-knowledge-capsule/v3"
     assert mcp_capsule["capsule"]["schema_version"] == (
-        "deeplaw.knowledge-capsule-projection/v1"
+        "deeplaw.knowledge-capsule-projection/v2"
     )
     assert mcp_capsule["delivery"]["hard_limit_bytes"] == 65_536
     assert mcp_capsule["delivery"]["provider_content_bytes"] <= 65_536
@@ -3413,11 +3413,15 @@ def test_identity_target_evidence_survives_single_item_provider_budget(
         max_chars=1_000,
         max_tokens=1_000,
         max_sources=1,
-        query_plan_version="6",
         query_target={"knowledge_id": target["knowledge_id"]},
         vault_path=root,
     )
     wide_capsule = wide_response["result"]["capsule"]
+    assert wide_response["schema_version"] == "deeplaw.knowledge-support-output/v8"
+    assert wide_response["result"]["schema_version"] == (
+        "deeplaw.provider-knowledge-capsule/v3"
+    )
+    assert wide_capsule["schema_version"] == "deeplaw.knowledge-capsule-projection/v2"
     assert wide_capsule["selected_statement_count"] == 1
     assert wide_capsule["selected_source_count"] == 1
 
@@ -3430,13 +3434,15 @@ def test_identity_target_evidence_survives_single_item_provider_budget(
         max_chars=1_000,
         max_tokens=1_000,
         max_sources=1,
-        query_plan_version="6",
         query_target={"knowledge_id": target["knowledge_id"]},
         vault_path=root,
     )
     result = response["result"]
 
     capsule = result["capsule"]
+    assert response["schema_version"] == "deeplaw.knowledge-support-output/v8"
+    assert result["schema_version"] == "deeplaw.provider-knowledge-capsule/v3"
+    assert capsule["schema_version"] == "deeplaw.knowledge-capsule-projection/v2"
     assert capsule["selected_statement_count"] == 0
     assert capsule["selected_source_count"] == 1
     assert (
@@ -3476,10 +3482,10 @@ def test_identity_target_evidence_survives_single_item_provider_budget(
     )
     assert wrong_target["statements"] == []
     assert wrong_target["evidence"] == []
-    assert any(
-        item["reason"] == "query_target_mismatch"
-        for item in wrong_target["local_audit"]["rejections"]
+    assert wrong_target["local_audit"]["schema_version"] == (
+        "deeplaw.query-audit-receipt/v2"
     )
+    assert wrong_target["local_audit"]["selection_entries"] == []
 
     with AutonomousKnowledgeStore(root, read_only=True) as store:
         claim_revision = store.connection.execute(
@@ -3849,7 +3855,7 @@ def test_compilation_capable_sink_reuses_the_domain_coordinator(tmp_path: Path) 
     support_schema = json.loads(
         (
             Path(__file__).resolve().parents[1]
-            / "contracts/knowledge-support.output.v6.schema.json"
+            / "contracts/knowledge-support.output.v8.schema.json"
         ).read_text(
             encoding="utf-8"
         )
@@ -3870,11 +3876,14 @@ def test_compilation_capable_sink_reuses_the_domain_coordinator(tmp_path: Path) 
         vault_path=root,
     )
     assert query["result"]["policy_id"] == "compiled-first-v1"
-    assert query["schema_version"] == "deeplaw.knowledge-support-output/v6"
+    assert query["schema_version"] == "deeplaw.knowledge-support-output/v8"
+    assert query["result"]["schema_version"] == (
+        "deeplaw.provider-knowledge-capsule/v3"
+    )
     assert set(query["result"]["receipt"]) == {"receipt_id"}
     assert query["result"]["receipt"]["receipt_id"].startswith("queryreceipt_")
     assert query["result"]["capsule"]["schema_version"] == (
-        "deeplaw.knowledge-capsule-projection/v1"
+        "deeplaw.knowledge-capsule-projection/v2"
     )
     Draft202012Validator(support_schema).validate(status)
     Draft202012Validator(support_schema).validate(query)

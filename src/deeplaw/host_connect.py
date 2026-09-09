@@ -35,7 +35,7 @@ def _permission_error_categories(permission_report: dict[str, Any]) -> list[str]
 
 
 def _contract() -> dict[str, Any]:
-    name = "host-connect-plan.v2.schema.json"
+    name = "host-connect-plan.v3.schema.json"
     packaged = Path(__file__).resolve().parent / "contracts" / name
     repository = Path(__file__).resolve().parents[2] / "contracts" / name
     path = packaged if packaged.is_file() else repository
@@ -172,9 +172,10 @@ def build_host_connect_plan(
         )
         provider_payload_bytes = provider_delivery.get("provider_content_bytes")
         read_seam_callable = bool(
-            context.get("schema_version") == "deeplaw.knowledge-capsule/v3"
+            context.get("schema_version")
+            in {"deeplaw.knowledge-capsule/v3", "deeplaw.knowledge-capsule/v4"}
             and provider.get("schema_version")
-            == "deeplaw.provider-knowledge-capsule/v2"
+            in {"deeplaw.provider-knowledge-capsule/v2", "deeplaw.provider-knowledge-capsule/v3"}
             and context.get("write_performed") is False
             and provider_delivery.get("write_performed") is False
             and isinstance(provider_payload_bytes, int)
@@ -308,7 +309,7 @@ def build_host_connect_plan(
         equivalent_command = []
         verification_command = ["opencode", "mcp", "list"]
     plan = {
-        "schema_version": "deeplaw.host-connect-plan/v2",
+        "schema_version": "deeplaw.host-connect-plan/v3",
         "host": selected_host,
         "server_leaf": "knowledge_support",
         "read_only": True,

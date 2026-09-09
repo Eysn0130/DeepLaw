@@ -9,6 +9,7 @@ from ..compilation.artifacts import read_compilation_artifact
 from ..evidence.statements import (
     MAX_STATEMENT_TEXT_CHARS,
     build_input_set_sha256,
+    evidence_contract_name,
     statement_id,
     statement_sha256,
     validate_statement,
@@ -21,6 +22,7 @@ from ..knowledge_autonomy import (
 from ..knowledge_intelligence import normalize_identity_text
 from ..knowledge_models import utc_now
 from ..knowledge_store import KnowledgeVault
+from ..retrieval_fabric import estimate_tokens
 from ..task_context import (
     normalize_task_context_binding,
     task_route_sha256,
@@ -288,7 +290,7 @@ def _statement_map_is_valid(
     if row is None:
         return False
     value = _artifact_value(store, row["map_artifact_sha256"], "statement_map")
-    _validate_contract("statement-evidence-map.v1.schema.json", value)
+    _validate_contract(evidence_contract_name("statement-evidence-map", value), value)
     if (
         row["map_sha256"] != row["map_artifact_sha256"]
         or canonical_json(value) != row["map_json"]
@@ -311,6 +313,7 @@ def _statement_map_is_valid(
         or value.get("knowledge_revision_refs") != statement.get("knowledge_revision_refs")
         or value.get("relation_revision_refs") != statement.get("relation_revision_refs")
         or value.get("gaps") != statement.get("gaps")
+        or value.get("support_sets") != statement.get("support_sets")
     ):
         raise RuntimeError("statement evidence map identity is inconsistent")
     return True
@@ -760,6 +763,66 @@ def _discover_statement_revisions(
     return revision_ids, graph_revision_ids, summary
 
 
+def _load_governed_revisions(store, revision_ids, *, target, scope, max_sensitivity):
+    """Re-admit ordinary source-free revisions from the shared bounded discovery."""
+    result = []
+    instant = utc_now()
+    for revision_id in revision_ids:
+        row = store.connection.execute(
+            "SELECT knowledge_id FROM knowledge_revisions_v3 WHERE revision_id = ?",
+            (revision_id,),
+        ).fetchone()
+        if row is None:
+            continue
+        try:
+            item = store.get_current(row["knowledge_id"])
+        except KeyError:
+            continue
+        if (
+            item["revision_id"] != revision_id
+            or item["lifecycle"] != "active"
+            or item["scope"] != scope
+            or item["sensitivity"] == "restricted"
+            or _SENSITIVITY_ORDER.index(item["sensitivity"])
+            > _SENSITIVITY_ORDER.index(max_sensitivity)
+            or not item["source_free"] or item["source_refs"]
+            or item["epistemic_state"] != "tentative"
+            or item["metadata"].get("memory_type") == "working"
+            or not store.revision_provenance_admitted(item)
+            or (item["expires_at"] is not None and item["expires_at"] <= instant)
+            or (item["valid_from"] is not None and item["valid_from"] > instant)
+            or (item["valid_to"] is not None and item["valid_to"] <= instant)
+        ):
+            continue
+        if any(target.get(key) is not None and item.get(key) != target[key]
+               for key in ("knowledge_id", "revision_id", "semantic_key", "kind")):
+            continue
+        if store.connection.execute(
+            "SELECT 1 FROM knowledge_statements_v1 WHERE knowledge_revision_id = ? LIMIT 1",
+            (revision_id,),
+        ).fetchone() is not None:
+            continue
+        body = item["body"]
+        from ..util import assert_provider_output_safe
+
+        assert_provider_output_safe({"content": body, "title": item["title"]},
+                                    interface="knowledge_support")
+        result.append({
+            "knowledge_id": item["knowledge_id"], "revision_id": revision_id,
+            "kind": item["kind"], "title": item["title"][:500],
+            "content": body[:2000], "content_sha256": sha256_bytes(body.encode("utf-8")),
+            "content_truncated": len(body) > 2000,
+            "origin": "agent_derived", "authority": "agent_derived",
+            "legal_authority": False, "source_free": True, "source_refs": [],
+            "epistemic_state": "tentative", "verification": item["verification"],
+            "lifecycle": "active", "directive_mode": "data_only", "freshness": "unknown",
+            "valid_from": item["valid_from"], "valid_to": item["valid_to"],
+            "expires_at": item["expires_at"],
+            "selection_reason": "admitted_governed_revision",
+        })
+    return result
+
+
 def _load_statement_candidates(
     store: AutonomousKnowledgeStore,
     *,
@@ -773,6 +836,7 @@ def _load_statement_candidates(
     purpose: str,
     as_of: str | None,
     kinds: tuple[str, ...],
+    support_sets_enabled: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], int, bool]:
     if not revision_ids:
         return _load_working_memory_candidates(
@@ -786,6 +850,7 @@ def _load_statement_candidates(
             purpose=purpose,
             as_of=as_of,
             kinds=kinds,
+            allow_bound_sources=support_sets_enabled,
         )
     revision_placeholders = ",".join("?" for _ in revision_ids)
     filters = [f"statements.knowledge_revision_id IN ({revision_placeholders})"]
@@ -861,16 +926,34 @@ def _load_statement_candidates(
         item_ref = {"statement_id": statement_id}
         try:
             value = _artifact_value(store, row["statement_artifact_sha256"], "statement")
-            _validate_contract("knowledge-statement.v1.schema.json", value)
+            _validate_contract(evidence_contract_name("knowledge-statement", value), value)
             if canonical_json(value) != row["statement_json"]:
                 raise ValueError("statement row/artifact mismatch")
             validate_statement(value, require_statement_id=True)
+            support = None
+            if "support_sets" in value:
+                if not support_sets_enabled or as_of is not None or purpose == "historical":
+                    rejections.append({**item_ref, "reason": "unsupported_statement"})
+                    continue
+                from ..evidence.support import SupportEvaluator
+
+                support = SupportEvaluator(
+                    store, scope=scope, sensitivity=max_sensitivity
+                ).statement(value)
+            elif value.get("knowledge_revision_refs") or value.get("relation_revision_refs"):
+                from ..evidence.support import SupportEvaluator
+
+                support = SupportEvaluator(
+                    store, scope=scope, sensitivity=max_sensitivity
+                ).statement(value)
             references = value.get("source_refs", [])
             freshness = _freshness(
                 store,
                 revision_id=row["knowledge_revision_id"],
                 source_refs=references,
             )
+            if support is not None:
+                freshness = support["freshness"]
             is_current = row["current_revision_id"] == row["knowledge_revision_id"]
             if not is_current and purpose != "historical":
                 rejections.append({**item_ref, "reason": "historical_statement"})
@@ -954,6 +1037,9 @@ def _load_statement_candidates(
             if purpose != "historical" and not store.revision_provenance_admitted(revision):
                 rejections.append({**item_ref, "reason": "provenance_not_admitted"})
                 continue
+            witness = support["support_set"] if support is not None else None
+            if witness is not None:
+                references = witness["source_refs"]
             text = str(value["statement_text"])
             metadata = strict_json_loads(row["metadata_json"])
             if not isinstance(metadata, dict):
@@ -1011,8 +1097,8 @@ def _load_statement_candidates(
                     "statement_type": value["statement_type"],
                     "support_status": value["support_status"],
                     "source_refs": references,
-                    "knowledge_revision_refs": value["knowledge_revision_refs"],
-                    "relation_revision_refs": value["relation_revision_refs"],
+                    "knowledge_revision_refs": (witness or value)["knowledge_revision_refs"],
+                    "relation_revision_refs": (witness or value)["relation_revision_refs"],
                     "valid_from": value["valid_from"],
                     "valid_to": value["valid_to"],
                     "limitation": value["limitation"],
@@ -1035,6 +1121,10 @@ def _load_statement_candidates(
                     "legal_authority": False,
                     "source_free": bool(row["source_free"]),
                     "applicability": metadata.get("applicability"),
+                    "_support_set_sha256": (
+                        support["support_set_sha256"]
+                        if support is not None and "support_sets" in value else None
+                    ),
                     "_query_search_terms": tuple(searchable),
                     "_identity_lexical_terms": tuple(identity_lexical_terms),
                     "_anchor_hint_match": anchor_hint_match,
@@ -1065,6 +1155,7 @@ def _load_statement_candidates(
             purpose=purpose,
             as_of=as_of,
             kinds=kinds,
+            allow_bound_sources=support_sets_enabled,
         )
     )
     rejections.extend(working_rejections)
@@ -1095,6 +1186,7 @@ def _load_working_memory_candidates(
     purpose: str,
     as_of: str | None,
     kinds: tuple[str, ...],
+    allow_bound_sources: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], int, bool]:
     """Project current run-bound working memory into bounded v6 interpretations."""
 
@@ -1160,12 +1252,18 @@ def _load_working_memory_candidates(
             if row["current_revision_id"] != revision["revision_id"]:
                 rejections.append({**candidate_ref, "reason": "historical_working_memory"})
                 continue
+            references = revision.get("source_refs", [])
+            bound_lineage = bool(
+                allow_bound_sources and references
+                and all(set(reference) == {"revision_id"} for reference in references)
+                and revision.get("verification") == "source_bound"
+            )
             if (
                 revision.get("origin") != "agent_derived"
                 or revision.get("authority") != "agent_derived"
-                or revision.get("verification") != "run_bound"
+                or (revision.get("verification") != "run_bound" and not bound_lineage)
                 or revision.get("epistemic_state") != "supported"
-                or revision.get("source_refs")
+                or (references and not bound_lineage)
             ):
                 rejections.append({**candidate_ref, "reason": "working_memory_not_run_bound"})
                 continue
@@ -1175,6 +1273,21 @@ def _load_working_memory_candidates(
                 if isinstance(generation, dict)
                 else metadata.get("run_id")
             )
+            if bound_lineage and not store._run_binding_admitted(
+                run_id, scope=scope, sensitivity=revision["sensitivity"],
+                writer_id=revision["writer_id"],
+            ):
+                rejections.append({**candidate_ref, "reason": "working_memory_not_run_bound"})
+                continue
+            if bound_lineage:
+                from ..evidence.support import SupportEvaluator
+
+                if SupportEvaluator(store, scope=scope, sensitivity=max_sensitivity).revision(
+                    "knowledge_revision", revision["revision_id"]
+                ) != "fresh":
+                    rejections.append({**candidate_ref, "reason": "admission_policy"})
+                    continue
+            lineage_ids = sorted({reference["revision_id"] for reference in references})
             if task_binding is None:
                 rejections.append({**candidate_ref, "reason": "task_binding_required"})
                 continue
@@ -1188,6 +1301,13 @@ def _load_working_memory_candidates(
                 != task_snapshot_sha256(task_binding)
             ):
                 rejections.append({**candidate_ref, "reason": "task_binding_mismatch"})
+                continue
+            action_gap = store.checkpoint_action_gap(
+                run_id=run_id, task_binding=task_binding, scope=scope,
+                max_sensitivity=max_sensitivity,
+            )
+            if action_gap is not None:
+                rejections.append({**candidate_ref, "reason": action_gap})
                 continue
             target_values = {
                 "semantic_key": revision.get("semantic_key"),
@@ -1256,7 +1376,7 @@ def _load_working_memory_candidates(
                     "statement_type": "interpretation",
                     "support_status": "supported",
                     "source_refs": [],
-                    "knowledge_revision_refs": [],
+                    "knowledge_revision_refs": lineage_ids,
                     "relation_revision_refs": [],
                     "valid_from": revision.get("valid_from"),
                     "valid_to": revision.get("valid_to"),
@@ -1264,7 +1384,7 @@ def _load_working_memory_candidates(
                     "gaps": [],
                     "input_set_sha256": build_input_set_sha256(
                         source_refs=[],
-                        knowledge_revision_refs=[],
+                        knowledge_revision_refs=lineage_ids,
                         relation_revision_refs=[],
                         valid_from=revision.get("valid_from"),
                         valid_to=revision.get("valid_to"),
@@ -1314,6 +1434,7 @@ def _source_evidence(
     represented_keys: set[str],
     deduplications: list[dict[str, str]],
     suppressions: list[dict[str, str]],
+    admitted: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     selected: list[dict[str, Any]] = []
     selected_chars = sum(len(str(item.get("excerpt", ""))) for item in seen.values())
@@ -1349,6 +1470,8 @@ def _source_evidence(
         evidence_id = stable_id(
             "queryevidence", source_revision_id, normalized["fragment_id"]
         )
+        if admitted is not None:
+            admitted.setdefault(evidence_id, "duplicate_source_reference")
         if evidence_id in seen:
             deduplications.append({"source_key": key, "reason": "duplicate_source_reference"})
             continue
@@ -1362,19 +1485,27 @@ def _source_evidence(
             )
             continue
         if key in represented_keys:
+            if admitted is not None:
+                admitted[evidence_id] = "represented_source_reference"
             deduplications.append(
                 {"source_key": key, "reason": "represented_source_reference"}
             )
             continue
         if len(seen) >= max_sources:
+            if admitted is not None:
+                admitted[evidence_id] = "source_budget"
             suppressions.append({"candidate_id": key, "reason": "source_budget"})
             continue
         remaining = max_chars - selected_chars
         if remaining <= 0:
+            if admitted is not None:
+                admitted[evidence_id] = "character_budget"
             suppressions.append({"candidate_id": key, "reason": "character_budget"})
             continue
         excerpt = str(row["text"])
         if len(excerpt) > _MAX_EVIDENCE_TEXT or len(excerpt) > remaining:
+            if admitted is not None:
+                admitted[evidence_id] = "exact_source_passage_budget"
             suppressions.append(
                 {"candidate_id": key, "reason": "exact_source_passage_budget"}
             )
@@ -1470,6 +1601,7 @@ def _duty_reports(
     contradictions: list[dict[str, Any]],
     residual_gaps: list[dict[str, Any]],
     before: bool,
+    strict_source_evidence: bool = False,
 ) -> list[dict[str, Any]]:
     working_memory_ids = [
         str(item["statement_id"])
@@ -1574,7 +1706,10 @@ def _duty_reports(
         elif duty == "limitation":
             refs = limitation_ids
         elif duty == "source_evidence":
-            refs = source_ids
+            refs = (
+                [f"source:{item['source_revision_id']}:{item['fragment_id']}" for item in evidence]
+                if strict_source_evidence else source_ids
+            )
         else:
             refs = unresolved_ids
         refs = list(dict.fromkeys(refs))[:64]
@@ -1628,6 +1763,8 @@ def _projection_item(item: dict[str, Any], *, compact: bool) -> dict[str, Any]:
         "legal_authority": False,
         "source_refs": item["source_refs"][:2],
     }
+    if item.get("_support_set_sha256") is not None:
+        result["support_set_sha256"] = item["_support_set_sha256"]
     if not compact:
         result.update(
             {
@@ -1657,9 +1794,8 @@ def _fit_projection(value: dict[str, Any]) -> dict[str, Any]:
     for item in statements:
         if isinstance(item, dict) and isinstance(item.get("statement_text"), str):
             item["statement_text"] = item["statement_text"][:512]
-    for item in value.get("evidence", []):
-        if isinstance(item, dict) and isinstance(item.get("excerpt"), str):
-            item["excerpt"] = item["excerpt"][:512]
+    # Exact source excerpts must keep their bound bytes/hash at every fitting
+    # stage. If summary/audit reductions cannot fit, fail closed below.
     audit = value.get("audit")
     if isinstance(audit, dict):
         audit["candidates"] = audit.get("candidates", [])[:64]
@@ -1690,7 +1826,7 @@ def _fit_projection(value: dict[str, Any]) -> dict[str, Any]:
         audit["deduplications"] = []
         audit["fallback"] = audit.get("fallback", [])[:4]
     if len(canonical_json(value).encode("utf-8")) > _MAX_EMBEDDED_PROJECTION_BYTES:
-        raise RuntimeError("v6 Knowledge Capsule projection exceeds its hard 64 KiB budget")
+        raise RuntimeError("Knowledge Capsule projection exceeds its hard 64 KiB budget")
     return value
 
 
@@ -1704,6 +1840,8 @@ def _projection(
     receipt_id: str,
     plan: dict[str, Any],
     audit: dict[str, Any],
+    knowledge_revisions: list[dict[str, Any]] | None = None,
+    selection_explanation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     compact = projection == "compact"
     result: dict[str, Any] = {
@@ -1734,7 +1872,14 @@ def _projection(
             "deduplications": audit.get("deduplications", []),
             "suppressions": audit.get("suppressions", []),
         }
-    _validate_contract("knowledge-capsule-projection.v1.schema.json", _fit_projection(result))
+    if knowledge_revisions is not None:
+        result["schema_version"] = "deeplaw.knowledge-capsule-projection/v2"
+        result["knowledge_revisions"] = knowledge_revisions
+        result["selection_explanation"] = selection_explanation
+    _validate_contract(
+        f"knowledge-capsule-projection.v{2 if knowledge_revisions is not None else 1}.schema.json",
+        _fit_projection(result),
+    )
     return result
 
 
@@ -1762,7 +1907,10 @@ def execute_v6(
     projection: str,
     task_binding: dict[str, Any] | None = None,
     task_route_query: str | None = None,
+    query_plan_version: str = "6",
 ) -> dict[str, Any]:
+    mixed = query_plan_version == "7"
+    governed_candidates = []
     if projection not in V6_PROJECTIONS:
         raise ValueError("query projection is invalid")
     normalized_task_binding = normalize_task_context_binding(
@@ -1875,8 +2023,17 @@ def execute_v6(
                 purpose=purpose,
                 as_of=as_of,
                 kinds=kinds,
+                support_sets_enabled=mixed,
             )
         )
+        if mixed and as_of is None:
+            governed_candidates = _load_governed_revisions(
+                knowledge_store, revision_ids, target=target, scope=scope,
+                max_sensitivity=max_sensitivity,
+            )
+            remaining = _MAX_STATEMENT_CANDIDATES - len(governed_candidates)
+            scan_truncated = scan_truncated or len(candidates) > remaining
+            candidates = candidates[:remaining]
         discovery["statement_candidate_truncated"] = scan_truncated
     statement_budget, evidence_budget = service._partition_budget(
         policy,
@@ -1912,6 +2069,7 @@ def execute_v6(
     content_relevance_suppressions: list[dict[str, str]] = []
     budget_suppressions: list[dict[str, str]] = []
     selected_statement_characters = 0
+    selected_content_tokens = 0
     query_terms = _meaningful_query_terms(target["terms"])
     structured_query_terms = {
         term
@@ -1959,8 +2117,40 @@ def execute_v6(
                 }
             )
             continue
+        item_tokens = estimate_tokens(str(item.get("statement_text", "")))
+        if mixed and selected_content_tokens + item_tokens > max_tokens:
+            budget_suppressions.append(
+                {"candidate_id": str(item["statement_id"]), "reason": "token_budget"}
+            )
+            continue
         selected.append(item)
         selected_statement_characters += item_characters
+        selected_content_tokens += item_tokens
+    selected_revisions = []
+    omitted_revisions = []
+    for item in governed_candidates:
+        reason = None
+        if purpose in {"verify", "quote", "historical", "legal"}:
+            reason = "source_only_purpose"
+        elif len(selected) + len(selected_revisions) >= statement_item_limit:
+            reason = "selection_budget"
+        elif selected_statement_characters + len(item["content"]) > statement_character_limit:
+            reason = "character_budget"
+        elif selected_content_tokens + estimate_tokens(item["content"]) > max_tokens:
+            reason = "token_budget"
+        if reason:
+            omitted_revisions.append({"revision_id": item["revision_id"], "reason": reason})
+            continue
+        selected_revisions.append(item)
+        selected_statement_characters += len(item["content"])
+        selected_content_tokens += estimate_tokens(item["content"])
+    revision_explanation = {
+        "discovery_exhaustive": False,
+        "selected_revision_ids": [item["revision_id"] for item in selected_revisions],
+        "omitted_revisions": omitted_revisions[:20],
+        "scope": "bounded_admitted_candidates_only",
+        "truncated": len(omitted_revisions) > 20,
+    }
     budget_suppressed_ids = {
         item["candidate_id"] for item in budget_suppressions
     }
@@ -1989,6 +2179,7 @@ def execute_v6(
         )
     deduplications: list[dict[str, str]] = []
     evidence_seen: dict[str, dict[str, Any]] = {}
+    admitted_evidence: dict[str, str] = {}
     citation_seen: set[str] = set()
     for item in selected:
         for reference in item.get("source_refs", []):
@@ -2079,6 +2270,7 @@ def execute_v6(
                     represented_keys=set(),
                     deduplications=deduplications,
                     suppressions=suppressions,
+                    admitted=admitted_evidence,
                 )
             else:
                 initial = service._evidence(
@@ -2105,6 +2297,7 @@ def execute_v6(
             evidence = []
             historical_characters = 0
             for item in historical_candidates:
+                admitted_evidence.setdefault(item["evidence_id"], "selection_budget")
                 if len(evidence) >= evidence_item_limit:
                     suppressions.append(
                         {
@@ -2165,6 +2358,7 @@ def execute_v6(
                 represented_keys=set(),
                 deduplications=deduplications,
                 suppressions=suppressions,
+                admitted=admitted_evidence,
             )
             statement_refs = [
                 reference
@@ -2185,6 +2379,7 @@ def execute_v6(
                 represented_keys=set(),
                 deduplications=deduplications,
                 suppressions=suppressions,
+                admitted=admitted_evidence,
             )
             evidence.extend(statement_evidence)
     contradictions = [
@@ -2197,6 +2392,24 @@ def execute_v6(
         for item in selected
         if item.get("support_status") == "contested"
     ]
+    def apply_evidence_token_budget() -> None:
+        if not mixed:
+            return
+        remaining_tokens = max_tokens - selected_content_tokens
+        retained_evidence = []
+        for item in evidence:
+            item_tokens = estimate_tokens(str(item.get("excerpt", "")))
+            if item_tokens > remaining_tokens:
+                admitted_evidence[item["evidence_id"]] = "token_budget"
+                suppressions.append(
+                    {"candidate_id": item["evidence_id"], "reason": "token_budget"}
+                )
+                continue
+            retained_evidence.append(item)
+            remaining_tokens -= item_tokens
+        evidence[:] = retained_evidence
+
+    apply_evidence_token_budget()
     before_reports = _duty_reports(
         applicable=applicable,
         statements=selected,
@@ -2204,6 +2417,7 @@ def execute_v6(
         contradictions=contradictions,
         residual_gaps=[],
         before=True,
+        strict_source_evidence=mixed,
     )
     uncovered = [
         report["duty"]
@@ -2267,6 +2481,7 @@ def execute_v6(
             extra = []
             selected_historical_characters = 0
             for item in historical_candidates:
+                admitted_evidence.setdefault(item["evidence_id"], "selection_budget")
                 key = _source_key(item["source_refs"][0])
                 evidence_id = item["evidence_id"]
                 if evidence_id in evidence_seen:
@@ -2311,6 +2526,7 @@ def execute_v6(
                 represented_keys=citation_seen,
                 deduplications=deduplications,
                 suppressions=suppressions,
+                admitted=admitted_evidence,
             )
         evidence.extend(extra)
         fallback_events.append(
@@ -2324,7 +2540,38 @@ def execute_v6(
                 ],
             }
         )
+    apply_evidence_token_budget()
     residual_gaps: list[dict[str, Any]] = []
+    if mixed:
+        declared_gap_count = 0
+        for item in selected:
+            for gap in item.get("gaps", []):
+                declared_gap_count += 1
+                if declared_gap_count > 8:
+                    continue
+                residual_gaps.append({
+                    "gap_id": stable_id(
+                        "querygap", item["statement_id"], gap["gap_id"], gap["reason"],
+                    ),
+                    "code": "declared_evidence_gap",
+                    "duty": "unresolved_gap",
+                    "message": gap["reason"],
+                    "knowledge_revision_id": item["knowledge_revision_id"],
+                })
+        if declared_gap_count > 8:
+            residual_gaps.append({
+                "gap_id": stable_id(
+                    "querygap", target["query_sha256"], "declared_evidence_gap_bound",
+                    knowledge_store.audit_head,
+                ),
+                "code": "declared_evidence_gap_bound",
+                "duty": "unresolved_gap",
+                "message": (
+                    "Additional declared gaps in selected statements exceed the delivery bound."
+                ),
+                "count": declared_gap_count,
+                "limit": 8,
+            })
     if route_gap_status in _ROUTE_GAP_DETAILS:
         route_code, route_message = _ROUTE_GAP_DETAILS[route_gap_status]
         residual_gaps.append(
@@ -2381,6 +2628,15 @@ def execute_v6(
             }
         )
         break
+    for code in ("action_outcome_unknown", "action_state_changed", "task_action_bound_exceeded"):
+        if any(item.get("reason") == code for item in rejections):
+            residual_gaps.append({
+                "gap_id": stable_id(
+                    "querygap", target["query_sha256"], code, knowledge_store.audit_head,
+                ),
+                "code": code, "duty": "current_state",
+                "message": "Task action state requires verification or a fresh exact checkpoint.",
+            })
     if scan_truncated:
         residual_gaps.append(
             {
@@ -2469,6 +2725,7 @@ def execute_v6(
         contradictions=contradictions,
         residual_gaps=[],
         before=False,
+        strict_source_evidence=mixed,
     )
     for report in after_reports:
         if report["applicable"] and report["status"] == "unresolved":
@@ -2549,6 +2806,7 @@ def execute_v6(
         contradictions=contradictions,
         residual_gaps=residual_gaps,
         before=False,
+        strict_source_evidence=mixed,
     )
     coverage_before = {
         "applicable_count": sum(1 for item in before_reports if item["applicable"]),
@@ -2564,6 +2822,42 @@ def execute_v6(
             item["duty"] for item in after_reports if item["status"] == "unresolved"
         ],
     }
+    selection_entries = []
+    if mixed:
+        statement_reasons = {item["candidate_id"]: item["reason"] for item in suppressions}
+        selected_ids = {item["statement_id"] for item in selected}
+        for item in candidates:
+            identity = item["statement_id"]
+            selection_entries.append({
+                "candidate_id": identity, "kind": "statement",
+                "state": "selected" if identity in selected_ids else "omitted",
+                "reason": ("selected" if identity in selected_ids
+                           else statement_reasons.get(identity, "selection_budget")),
+            })
+        revision_reasons = {item["revision_id"]: item["reason"] for item in omitted_revisions}
+        for item in governed_candidates:
+            identity = item["revision_id"]
+            selection_entries.append({
+                "candidate_id": identity, "kind": "knowledge_revision",
+                "state": "omitted" if identity in revision_reasons else "selected",
+                "reason": revision_reasons.get(identity, "selected"),
+            })
+        evidence_ids = {item["evidence_id"] for item in evidence}
+        for identity in evidence_ids:
+            admitted_evidence[identity] = "selected"
+        for identity, reason in sorted(admitted_evidence.items()):
+            selection_entries.append({
+                "candidate_id": identity, "kind": "evidence",
+                "state": "selected" if identity in evidence_ids else "omitted", "reason": reason,
+            })
+        selection_truncated = len(selection_entries) > 1024
+        selection_entries = selection_entries[:1024]
+        revision_explanation.update({
+            "selection_entries": selection_entries[:20],
+            "selection_truncated": len(selection_entries) > 20 or selection_truncated,
+            "selection_sha256": sha256_bytes(canonical_json(selection_entries).encode("utf-8")),
+            "continuation_operation": "explain",
+        })
     plan_core = {
         "schema_version": "deeplaw.knowledge-query-plan/v6",
         "intent": "purpose_aware_knowledge_retrieval",
@@ -2628,11 +2922,14 @@ def execute_v6(
         "deduplicated_evidence_count": len(deduplications),
         "ranking_authority_changed": False,
     }
+    if mixed:
+        plan_core["schema_version"] = "deeplaw.knowledge-query-plan/v7"
+        plan_core["knowledge_revision_selection"] = revision_explanation
     seed_sha256 = sha256_bytes(canonical_json(plan_core).encode("utf-8"))
     receipt_id = stable_id("queryreceipt", seed_sha256, knowledge_store.audit_head)
     query_sha256 = sha256_bytes(query.encode("utf-8"))
     plan = {**plan_core, "query_sha256": query_sha256, "receipt_id": receipt_id}
-    _validate_contract("knowledge-query-plan.v6.schema.json", plan)
+    _validate_contract(f"knowledge-query-plan.v{7 if mixed else 6}.schema.json", plan)
     plan_sha256 = sha256_bytes(canonical_json(plan).encode("utf-8"))
     for item in candidates:
         item.pop("_query_search_terms", None)
@@ -2677,9 +2974,23 @@ def execute_v6(
                 break
         else:
             raise RuntimeError("v6 local query audit exceeds its 256 KiB bound")
+    if mixed:
+        audit_body = {
+            "schema_version": "deeplaw.query-audit-receipt/v2",
+            **{key: audit_body[key] for key in (
+                "receipt_id", "query_plan_sha256", "query_sha256",
+                "input_audit_head", "input_legacy_audit_head",
+                "ranking_authority_changed", "write_performed",
+            )},
+            "selection_entries": selection_entries,
+            "selection_sha256": revision_explanation["selection_sha256"],
+            "discovery_exhaustive": False,
+            "selection_truncated": selection_truncated,
+            "scope": "bounded_admitted_candidates_only",
+        }
     audit_digest = sha256_bytes(canonical_json(audit_body).encode("utf-8"))
     audit_receipt = {**audit_body, "receipt_sha256": audit_digest}
-    _validate_contract("query-audit-receipt.v1.schema.json", audit_receipt)
+    _validate_contract(f"query-audit-receipt.v{2 if mixed else 1}.schema.json", audit_receipt)
     local_audit = audit_receipt
     capsule = _projection(
         projection=projection,
@@ -2690,6 +3001,8 @@ def execute_v6(
         receipt_id=receipt_id,
         plan=plan,
         audit=local_audit,
+        knowledge_revisions=selected_revisions if mixed else None,
+        selection_explanation=revision_explanation,
     )
     result = {
         "schema_version": "deeplaw.purpose-aware-retrieval/v3",
@@ -2737,7 +3050,18 @@ def execute_v6(
         "authority_changed_by_ranking": False,
         "write_performed": False,
     }
-    _validate_contract("purpose-aware-retrieval.v3.schema.json", result)
+    if mixed:
+        result["schema_version"] = "deeplaw.purpose-aware-retrieval/v4"
+        result["knowledge_revisions"] = selected_revisions
+        result["budget"]["selected_tokens"] = selected_content_tokens + sum(
+            estimate_tokens(str(item.get("excerpt", ""))) for item in evidence
+        )
+        result["budget"]["token_count_mode"] = "estimated"
+        result["budget"]["selected_items"] += len(selected_revisions)
+        result["budget"]["selected_characters"] += sum(
+            len(item["content"]) for item in selected_revisions
+        )
+    _validate_contract(f"purpose-aware-retrieval.v{4 if mixed else 3}.schema.json", result)
     if len(canonical_json(result["capsule"]).encode("utf-8")) > _MAX_PROJECTION_BYTES:
         raise RuntimeError("v6 Knowledge Capsule exceeds its hard 64 KiB budget")
     return result

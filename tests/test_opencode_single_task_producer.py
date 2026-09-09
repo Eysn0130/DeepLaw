@@ -59,7 +59,7 @@ def test_control_rejects_expiry_unknown_fields_and_widened_budget():
         producer.validate_control(value, now=datetime.now(UTC) + timedelta(hours=1))
 
 
-def test_live_tool_definition_is_v8_and_old_schema_remains_rejected():
+def test_live_tool_definition_is_v9_and_old_schema_remains_rejected():
     from deeplaw.knowledge_mcp_server import _v7_input_schema, knowledge_tool_definition
 
     tool = knowledge_tool_definition(autonomous=True).model_dump(by_alias=True, exclude_none=True)
@@ -1132,11 +1132,14 @@ def test_guard_process_emits_failed_cleanup_receipt(tmp_path, monkeypatch, capsy
     import io
     from unittest.mock import Mock
 
+    from deeplaw.windows_acl import harden_windows_private_file
+
     task = tmp_path / "task"
     task.mkdir()
     key = tmp_path / "synthetic-key"
     key.write_text("synthetic-key-for-test-only")
     key.chmod(0o600)
+    harden_windows_private_file(key)
     monkeypatch.setattr(producer, "read_json", lambda path: {
         "key_file": str(key), "nonce": "synthetic-nonce",
     })

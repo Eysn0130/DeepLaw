@@ -956,7 +956,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     context.add_argument("--kind", action="append", default=[])
     context.add_argument("--memory-tier", action="append", default=[])
     context.add_argument(
-        "--query-plan-version", choices=("5", "6"), default="6"
+        "--query-plan-version", choices=("5", "6", "7"), default="7"
     )
     context.add_argument(
         "--task-binding",
@@ -1517,7 +1517,7 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     )
     autonomy_context.add_argument("--as-of")
     autonomy_context.add_argument(
-        "--query-plan-version", choices=("5", "6"), default="6"
+        "--query-plan-version", choices=("5", "6", "7"), default="7"
     )
     autonomy_context.add_argument(
         "--task-binding",
@@ -1846,8 +1846,8 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     purpose_query.add_argument("--as-of")
     purpose_query.add_argument(
         "--query-plan-version",
-        choices=("4", "5", "6"),
-        default="6",
+        choices=("4", "5", "6", "7"),
+        default="7",
     )
     purpose_query.add_argument(
         "--task-binding",
@@ -2041,6 +2041,23 @@ def add_knowledge_parser(commands: argparse._SubParsersAction[argparse.ArgumentP
     task_checkpoint.add_argument("--gap", action="append", default=[])
     task_checkpoint.add_argument("--artifact-ref", action="append", default=[])
     task_checkpoint.add_argument("--confirm-no-case-data", action="store_true")
+    task_action = task_commands.add_parser(
+        "record-action", help="Record Host-reported action state without executing the action",
+    )
+    task_action.add_argument("--vault", type=Path, default=default_knowledge_vault())
+    task_action.add_argument("--task-handle", required=True)
+    task_action.add_argument("--workspace", type=Path, default=Path.cwd())
+    task_action.add_argument("--grant-id", required=True)
+    task_action.add_argument("--idempotency-key", required=True)
+    task_action.add_argument("--action-id", required=True)
+    task_action.add_argument("--request-sha256", required=True)
+    task_action.add_argument("--status", required=True, choices=(
+        "not_executed", "initiated_unknown", "succeeded", "failed",
+    ))
+    task_action.add_argument("--expected-prior-run-id")
+    task_action.add_argument("--outcome-sha256")
+    task_action.add_argument("--host-id", required=True)
+    task_action.add_argument("--confirm-no-case-data", action="store_true")
     task_bind_host = task_commands.add_parser("bind-host-session")
     task_bind_host.add_argument("--vault", type=Path, default=default_knowledge_vault())
     task_bind_host.add_argument("--host", choices=("codex", "opencode"), required=True)
@@ -2525,6 +2542,17 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                 decisions=tuple(args.decision),
                 gaps=tuple(args.gap),
                 artifact_refs=tuple(args.artifact_ref),
+                confirm_no_case_data=args.confirm_no_case_data,
+            )
+        if args.task_command == "record-action":
+            from .task_continuity import record_task_action
+
+            return record_task_action(
+                vault_path=args.vault, task_handle=args.task_handle, workspace=args.workspace,
+                grant_id=args.grant_id, idempotency_key=args.idempotency_key,
+                action_id=args.action_id, request_sha256=args.request_sha256,
+                status=args.status, expected_prior_run_id=args.expected_prior_run_id,
+                outcome_sha256=args.outcome_sha256, host_id=args.host_id,
                 confirm_no_case_data=args.confirm_no_case_data,
             )
         if args.task_command == "bind-host-session":
@@ -4308,12 +4336,12 @@ def handle_knowledge_command(args: argparse.Namespace) -> dict[str, Any] | None:
                         ).fetchone()[0]
                     )
                 use_autonomous_context = bool(
-                    args.query_plan_version == "6" or workspace_has_autonomous_state
+                    args.query_plan_version in {"6", "7"} or workspace_has_autonomous_state
                 )
             if (
                 not use_autonomous_context
                 and (
-                    args.query_plan_version == "6"
+                    args.query_plan_version in {"6", "7"}
                     or args.query_target is not None
                     or args.applicable_duty
                     or args.capsule_projection != "standard"

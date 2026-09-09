@@ -143,7 +143,7 @@ def test_codex_events_delegate_to_continuity_and_emit_path_free_receipts(
         assert receipt["write_performed"] is False
         assert receipt["claim_eligible"] is False
         assert receipt["task_continuity_result_schema"] == (
-            "deeplaw.task-continuity-result/v2"
+            "deeplaw.task-continuity-result/v3"
         )
         receipts.append(receipt)
     with AutonomousKnowledgeStore(vault, read_only=True) as store:
@@ -322,7 +322,7 @@ def test_codex_adapter_process_accepts_only_closed_event_and_emits_receipt(
         text=True,
     )
     receipt = json.loads(completed.stdout)
-    assert receipt["schema_version"] == "deeplaw.native-host-lifecycle-receipt/v1"
+    assert receipt["schema_version"] == "deeplaw.native-host-lifecycle-receipt/v4"
     assert receipt["native_seam_received"] is True
     assert receipt["write_performed"] is False
     assert receipt["claim_eligible"] is False
