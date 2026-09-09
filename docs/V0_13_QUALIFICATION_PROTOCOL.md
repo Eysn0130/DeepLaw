@@ -414,6 +414,10 @@ requests are rejected. It returns only a closed account-type/auth-required proje
 plan, account identifiers, credentials, raw frames, or their hashes. Existing diagnostic clients
 retain their previous behavior; the wire-hashing transport observer above must not be substituted
 for this account-readiness client. Byte limits and fail-closed cleanup still apply.
+The installed Codex 0.153.4 protocol also emits `remoteControl/status/changed` after
+initialization. The readiness client discards this known status notification without reading
+or hashing its installation, server, or environment identity. Unknown notifications and all
+server requests remain rejected; accepting a status envelope does not enable remote control.
 
 The installed-version public account handler uses cached auth, but its config reload and App
 Server startup also load managed cloud policy, whose normal Host-owned auth path may refresh.

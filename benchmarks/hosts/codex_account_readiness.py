@@ -19,7 +19,12 @@ from benchmarks.hosts.codex_app_server_client import (
 
 _ACCOUNT_READ_PARAMS = {"refreshToken": False}
 _ALLOWED_NOTIFICATIONS = frozenset(
-    {"configWarning", "account/updated", "account/rateLimits/updated"}
+    {
+        "configWarning",
+        "account/updated",
+        "account/rateLimits/updated",
+        "remoteControl/status/changed",
+    }
 )
 _ALLOWED_ACCOUNT_TYPES = {
     "chatgpt": "chatgpt",
@@ -115,7 +120,7 @@ class CodexAccountReadinessClient(CodexAppServerClient):
         return {}
 
     def _handle_notification(self, message: Mapping[str, Any]) -> None:
-        """Drain one known warning envelope without touching its payload."""
+        """Drain a known status envelope without projecting its private payload."""
 
         if not isinstance(message, Mapping) or message.get("method") not in _ALLOWED_NOTIFICATIONS:
             self._fail_closed()

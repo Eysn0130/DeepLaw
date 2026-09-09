@@ -87,6 +87,13 @@ def _server(
                 assert "params" not in request_value
             elif method == "account/read":
                 assert request_value["params"] == {"refreshToken": False}
+                if MODE == "account-updated":
+                    send({"method": "remoteControl/status/changed", "params": {
+                        "installationId": "synthetic-private-installation-marker",
+                        "serverName": "synthetic-private-server-marker",
+                        "status": "disabled",
+                        "environmentId": None,
+                    }})
                 if MODE == "server-request":
                     send({"id": 99, "method": "item/tool/call", "params": {
                         "tool": "secret-tool",
