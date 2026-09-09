@@ -15686,6 +15686,27 @@
         {
           "junit": {
             "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_invalid_installed_contract_does_not_fall_back_to_checkout"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_invalid_installed_contract_does_not_fall_back_to_checkout"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_native_receipt_uses_installed_contracts_without_checkout[event0]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_native_receipt_uses_installed_contracts_without_checkout[event0]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
+            "name": "test_native_receipt_uses_installed_contracts_without_checkout[event1]"
+          },
+          "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_native_receipt_uses_installed_contracts_without_checkout[event1]"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_pass24_native_host_receipt",
             "name": "test_opencode_event_vocabulary_requires_observed_artifact_identity[chat.message-message]"
           },
           "node_id": "tests/test_v013_pass24_native_host_receipt.py::test_opencode_event_vocabulary_requires_observed_artifact_identity[chat.message-message]"
@@ -21046,9 +21067,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 2971,
+      "count": 2974,
       "selection": "not qualification and not windows_native",
-      "sha256": "ec73d8f6bc53490006ea85d9f02a2a4cc4b1fa3b060e97312ec2bce1e2dfb2ac"
+      "sha256": "8eacf8cf310770ab3840a5ab5938c9d0f55b65aeaac04a093b7af09eb8aa635e"
     },
     "windows": {
       "additional_cases": [
@@ -21088,13 +21109,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 2976,
+      "count": 2979,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "5d36fcda79ff79d4e3b48b37d270b5690e43c8426a4f2e97603c18908764140c"
+      "sha256": "9a43265b6de0e41ae4fed87b6418e01ef6e899d40fe0dea461d79a2076d9cd23"
     }
   },
-  "manifest_sha256": "18a850ff37df50467522e9a238bec7e19ed1ec6347c9e1eb6096b8ca83064803",
+  "manifest_sha256": "71eff4519f0d02c7f2d4dd60a2ef8f0cd61f3377d473dd36605431b55a830291",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

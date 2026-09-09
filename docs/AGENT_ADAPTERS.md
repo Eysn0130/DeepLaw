@@ -78,6 +78,9 @@ does not establish a latency percentile or an across-platform performance guaran
 The supervised agent uses `steps=4` so query, exact read, and the final response occur before
 OpenCode's fixed-version `step >= steps` forced-summary boundary. Its two-tool-call and six-total-
 request guard budgets remain independently enforced; the fourth step is not extra tool permission.
+Native event and lifecycle receipt validation loads the wheel's `deeplaw/contracts/` resources.
+Source-checkout contracts are used only when the packaged resource is absent; a present invalid
+or symlinked packaged resource fails closed. Installed Host collection must not require a checkout.
 Configuration installed, no-model handshake, actual hook execution, checkpoint commit, correct
 revision restored and correct next action are different observations. Missing native measurements
 remain unavailable. Planned automatic/guided/manual integration reporting is discussed in the

@@ -132,6 +132,37 @@ def test_current_identity_marked_as_historical_v2_fails_before_typed_admission()
         parse_native_host_event(event)
 
 
+@pytest.mark.parametrize("event", [_opencode_event(), _current_codex_event()])
+def test_native_receipt_uses_installed_contracts_without_checkout(tmp_path, monkeypatch, event):
+    import shutil
+
+    from deeplaw import native_host
+
+    package = tmp_path / "site-packages" / "deeplaw"
+    package.mkdir(parents=True)
+    source_contracts = Path(__file__).resolve().parents[1] / "contracts"
+    shutil.copytree(source_contracts, package / "contracts")
+    monkeypatch.setattr(native_host, "__file__", str(package / "native_host.py"))
+    receipt = observe_native_host_event(event)
+    assert receipt["claim_eligible"] is False
+    assert receipt["write_performed"] is False
+    assert receipt["session_sha256"] == event["session_sha256"]
+
+
+def test_invalid_installed_contract_does_not_fall_back_to_checkout(tmp_path, monkeypatch):
+    import shutil
+
+    from deeplaw import native_host
+
+    package = tmp_path / "site-packages" / "deeplaw"
+    (package / "contracts").mkdir(parents=True)
+    shutil.copytree(Path(__file__).resolve().parents[1] / "contracts", tmp_path / "contracts")
+    (package / "contracts/native-host-event.v3.schema.json").write_bytes(b"invalid-json")
+    monkeypatch.setattr(native_host, "__file__", str(package / "native_host.py"))
+    with pytest.raises(NativeHostObservationError, match="contract is invalid"):
+        observe_native_host_event(_current_codex_event())
+
+
 @pytest.mark.parametrize(
     ("field", "replacement"),
     (
