@@ -43,6 +43,10 @@ RESULT = "deeplaw.v013-host-task-result/v3"
 ROOT = Path(__file__).resolve().parents[2]
 MAX_BYTES = 4 * 1024 * 1024
 TOOL = "deeplaw_knowledge_knowledge_support"
+GUARD_TOOL_PROFILES = {
+    "continuity": TOOL,
+    "maintenance": "maintenance_environment_maintenance_task",
+}
 
 
 class ProducerError(ValueError):
@@ -785,7 +789,10 @@ class RequestGuard:
     environments. This is a limit on this route, not an OS network sandbox.
     """
 
-    def __init__(self, *, key: str, nonce: str, forward: bool = False) -> None:
+    def __init__(self, *, key: str, nonce: str, forward: bool = False,
+                 tool_profile: str = "continuity") -> None:
+        require(tool_profile in GUARD_TOOL_PROFILES, "guard tool profile differs")
+        self.tool_name = GUARD_TOOL_PROFILES[tool_profile]
         self.key = key
         self.nonce = nonce
         self.forward = forward
@@ -851,7 +858,7 @@ class RequestGuard:
             guard_require(
                 isinstance(function, dict)
                 and set(function) <= {"name", "description", "parameters", "strict"}
-                and function.get("name") == TOOL,
+                and function.get("name") == self.tool_name,
                 "tool_name",
             )
             guard_require(isinstance(function.get("parameters"), dict), "tool_schema")
@@ -892,7 +899,7 @@ class RequestGuard:
                 )
                 guard_require(
                     set(call["function"]) == {"name", "arguments"}
-                    and call["function"]["name"] == TOOL,
+                    and call["function"]["name"] == self.tool_name,
                     "call_name",
                 )
                 guard_safe(
@@ -1220,6 +1227,8 @@ def install_privacy_wrapper(repository: Path) -> dict[str, str]:
 def guard_process(config_path: Path) -> None:
     """The sole process that reads the owner-external credential file."""
     config = read_json(config_path)
+    require(config.get("tool_profile", "continuity") in GUARD_TOOL_PROFILES,
+            "guard tool profile differs")
     key_file = Path(config["key_file"])
     require(key_file.is_absolute() and not key_file.is_symlink(), "guard key file differs")
     require(key_file.resolve(strict=True) == key_file, "guard key file has an indirect ancestor")
@@ -1243,7 +1252,10 @@ def guard_process(config_path: Path) -> None:
     # This private deployment input is a single raw API key, not a shell/env file.
     key = key_file.read_text().strip()
     require(bool(re.fullmatch(r"[A-Za-z0-9_-]{16,256}", key)), "guard key syntax differs")
-    guard = RequestGuard(key=key, nonce=config["nonce"], forward=True)
+    guard = RequestGuard(
+        key=key, nonce=config["nonce"], forward=True,
+        tool_profile=config.get("tool_profile", "continuity"),
+    )
     failure = FailureEvidence()
     stage = "guard_start"
     try:

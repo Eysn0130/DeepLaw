@@ -1,0 +1,392 @@
+diff --git a/packages/opencode/script/build.ts b/packages/opencode/script/build.ts
+index ce45f770f..e40e7bc9c 100755
+--- a/packages/opencode/script/build.ts
++++ b/packages/opencode/script/build.ts
+@@ -22,6 +22,9 @@ const skipInstall = process.argv.includes("--skip-install")
+ const sourcemapsFlag = process.argv.includes("--sourcemaps")
+ const plugin = createSolidTransformPlugin()
+ const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
++const targetFlag = process.argv.find((value) => value.startsWith("--target="))?.slice(9)
++const executablePath = process.argv.find((value) => value.startsWith("--compile-executable-path="))?.slice(26)
++if (targetFlag && singleFlag) throw new Error("Choose either --target or --single")
+ 
+ const createEmbeddedWebUIBundle = async () => {
+   console.log(`Building Web UI to embed in the binary`)
+@@ -113,26 +116,32 @@ const allTargets: {
+   },
+ ]
+ 
+-const targets = singleFlag
+-  ? allTargets.filter((item) => {
+-      if (item.os !== process.platform || item.arch !== process.arch) {
+-        return false
+-      }
++const targets = targetFlag
++  ? allTargets.filter(
++      (item) => [item.os, item.arch, item.abi].filter(Boolean).join("-") === targetFlag && item.avx2 !== false,
++    )
++  : singleFlag
++    ? allTargets.filter((item) => {
++        if (item.os !== process.platform || item.arch !== process.arch) {
++          return false
++        }
+ 
+-      // When building for the current platform, prefer a single native binary by default.
+-      // Baseline binaries require additional Bun artifacts and can be flaky to download.
+-      if (item.avx2 === false) {
+-        return baselineFlag
+-      }
++        // When building for the current platform, prefer a single native binary by default.
++        // Baseline binaries require additional Bun artifacts and can be flaky to download.
++        if (item.avx2 === false) {
++          return baselineFlag
++        }
+ 
+-      // also skip abi-specific builds for the same reason
+-      if (item.abi !== undefined) {
+-        return false
+-      }
++        // also skip abi-specific builds for the same reason
++        if (item.abi !== undefined) {
++          return false
++        }
+ 
+-      return true
+-    })
+-  : allTargets
++        return true
++      })
++    : allTargets
++
++if (targetFlag && targets.length !== 1) throw new Error("Unknown or ambiguous build target")
+ 
+ await $`rm -rf dist`
+ 
+@@ -175,6 +184,7 @@ for (const item of targets) {
+       autoloadTsconfig: true,
+       autoloadPackageJson: true,
+       target: name.replace(pkg.name, "bun") as any,
++      ...(executablePath ? { executablePath } : {}),
+       outfile: `dist/${name}/bin/opencode`,
+       execArgv: [`--user-agent=opencode/${Script.version}`, "--use-system-ca", "--"],
+       windows: {},
+diff --git a/packages/opencode/src/cli/cmd/serve.ts b/packages/opencode/src/cli/cmd/serve.ts
+index c0f62b3ca..9dff327ba 100644
+--- a/packages/opencode/src/cli/cmd/serve.ts
++++ b/packages/opencode/src/cli/cmd/serve.ts
+@@ -1,8 +1,39 @@
+-import { Effect } from "effect"
+-import { effectCmd } from "../effect-cmd"
++import { Duration, Effect } from "effect"
++import { CliError, effectCmd } from "../effect-cmd"
+ import { withNetworkOptions, resolveNetworkOptions } from "../network"
+ import { Flag } from "@opencode-ai/core/flag/flag"
+ 
++const SERVE_SIGNALS = ["SIGTERM", "SIGINT"] as const
++const SERVE_SHUTDOWN_TIMEOUT: Duration.Input = "5 seconds"
++
++export type ServeSignal = (typeof SERVE_SIGNALS)[number]
++
++export type ServeListener = {
++  readonly hostname: string
++  readonly port: number
++  readonly stop: (close?: boolean) => Promise<void>
++}
++
++export type ServeSignalSource = {
++  readonly on: (signal: ServeSignal, listener: () => void) => void
++  readonly off: (signal: ServeSignal, listener: () => void) => void
++}
++
++export type ServeLifecycleOptions = {
++  readonly signalSource?: ServeSignalSource
++  readonly shutdownTimeout?: Duration.Input
++  readonly onReady?: (listener: ServeListener) => void
++}
++
++const processSignalSource: ServeSignalSource = {
++  on(signal, listener) {
++    process.on(signal, listener)
++  },
++  off(signal, listener) {
++    process.off(signal, listener)
++  },
++}
++
+ export const ServeCommand = effectCmd({
+   command: "serve",
+   builder: (yargs) => withNetworkOptions(yargs),
+@@ -16,9 +47,75 @@ export const ServeCommand = effectCmd({
+       console.log("Warning: OPENCODE_SERVER_PASSWORD is not set; server is unsecured.")
+     }
+     const opts = yield* resolveNetworkOptions(args)
+-    const server = yield* Effect.promise(() => Server.listen(opts))
+-    console.log(`opencode server listening on http://${server.hostname}:${server.port}`)
+-
+-    yield* Effect.never
++    yield* runServeLifecycle(
++      Effect.promise(() => Server.listen(opts)),
++      {
++        onReady: (server) => console.log(`opencode server listening on http://${server.hostname}:${server.port}`),
++      },
++    ).pipe(
++      Effect.mapError((error) => new CliError({ message: error instanceof Error ? error.message : String(error) })),
++    )
+   }),
+ })
++
++export const runServeLifecycle = Effect.fn("Cli.serve.lifecycle")(function* (
++  acquire: Effect.Effect<ServeListener, unknown>,
++  options: ServeLifecycleOptions = {},
++) {
++  const signalSource = options.signalSource ?? processSignalSource
++  const shutdownTimeout = options.shutdownTimeout ?? SERVE_SHUTDOWN_TIMEOUT
++
++  yield* Effect.acquireUseRelease(
++    Effect.gen(function* () {
++      const listener = yield* acquire
++      const stop = yield* Effect.cached(stopServeListener(listener, shutdownTimeout))
++      return { listener, stop }
++    }),
++    (resource) => waitForServeSignal(signalSource, () => options.onReady?.(resource.listener), resource.stop),
++    (resource) => resource.stop,
++  )
++})
++
++function stopServeListener(listener: ServeListener, timeout: Duration.Input) {
++  return Effect.promise(() => listener.stop(true)).pipe(
++    Effect.timeoutOrElse({
++      duration: timeout,
++      orElse: () => Effect.fail(new Error("Timed out waiting for opencode server shutdown")),
++    }),
++  )
++}
++
++function waitForServeSignal(source: ServeSignalSource, onRegistered: () => void, stop: Effect.Effect<void, unknown>) {
++  let cleanup = () => {}
++  const waiting = Effect.callback<ServeSignal>((resume) => {
++    let received = false
++    let cleaned = false
++    const complete = (signal: ServeSignal) => {
++      if (received || cleaned) return
++      received = true
++      resume(Effect.succeed(signal))
++    }
++    const onSigterm = () => complete("SIGTERM")
++    const onSigint = () => complete("SIGINT")
++
++    cleanup = () => {
++      if (cleaned) return
++      cleaned = true
++      source.off("SIGTERM", onSigterm)
++      source.off("SIGINT", onSigint)
++    }
++
++    source.on("SIGTERM", onSigterm)
++    source.on("SIGINT", onSigint)
++    onRegistered()
++
++    return Effect.sync(cleanup)
++  })
++
++  // Keep both handlers installed until the forced stop has settled so a second
++  // signal cannot fall through to the process default while shutdown is active.
++  return waiting.pipe(
++    Effect.flatMap(() => stop),
++    Effect.ensuring(Effect.sync(() => cleanup())),
++  )
++}
+diff --git a/packages/opencode/test/cli/serve-lifecycle.test.ts b/packages/opencode/test/cli/serve-lifecycle.test.ts
+new file mode 100644
+index 000000000..6ee2d5304
+--- /dev/null
++++ b/packages/opencode/test/cli/serve-lifecycle.test.ts
+@@ -0,0 +1,188 @@
++import { describe, expect } from "bun:test"
++import { EventEmitter } from "node:events"
++import { Cause, Duration, Effect, Exit, Fiber } from "effect"
++import { runServeLifecycle, type ServeListener, type ServeSignal, type ServeSignalSource } from "@/cli/cmd/serve"
++import { it } from "../lib/effect"
++
++type TestSignals = {
++  readonly source: ServeSignalSource
++  readonly registered: Promise<void>
++  readonly emit: (signal: ServeSignal) => void
++  readonly listenerCount: (signal: ServeSignal) => number
++}
++
++function testSignals(): TestSignals {
++  const emitter = new EventEmitter()
++  let registrations = 0
++  let resolveRegistered: (() => void) | undefined
++  const registered = new Promise<void>((resolve) => {
++    resolveRegistered = resolve
++  })
++
++  const source = {
++    on(signal: ServeSignal, listener: () => void) {
++      emitter.on(signal, listener)
++      registrations += 1
++      if (registrations === 2) resolveRegistered?.()
++    },
++    off(signal: ServeSignal, listener: () => void) {
++      emitter.off(signal, listener)
++    },
++  } satisfies ServeSignalSource
++
++  return {
++    source,
++    registered,
++    emit: (signal) => {
++      emitter.emit(signal)
++    },
++    listenerCount: (signal) => emitter.listenerCount(signal),
++  }
++}
++
++function listener(stop: ServeListener["stop"]): ServeListener {
++  return {
++    hostname: "127.0.0.1",
++    port: 4096,
++    stop,
++  }
++}
++
++function lifecycle(listenerValue: ServeListener, signals: TestSignals, shutdownTimeout?: Duration.Input) {
++  return runServeLifecycle(Effect.succeed(listenerValue), {
++    signalSource: signals.source,
++    shutdownTimeout,
++  })
++}
++
++function startLifecycle(effect: Effect.Effect<void, unknown>, signals: TestSignals) {
++  return effect
++    .pipe(Effect.exit, Effect.forkScoped({ startImmediately: true }))
++    .pipe(Effect.tap(() => Effect.promise(() => signals.registered)))
++}
++
++describe("serve lifecycle", () => {
++  it.live("stops the listener forcefully and removes both signal handlers", () =>
++    Effect.gen(function* () {
++      const signals = testSignals()
++      const closeArguments: Array<boolean | undefined> = []
++      const running = yield* startLifecycle(
++        lifecycle(
++          listener(async (close) => {
++            closeArguments.push(close)
++          }),
++          signals,
++        ),
++        signals,
++      )
++
++      signals.emit("SIGTERM")
++      const exit = yield* Fiber.join(running)
++
++      expect(Exit.isSuccess(exit)).toBe(true)
++      expect(closeArguments).toEqual([true])
++      expect(signals.listenerCount("SIGTERM")).toBe(0)
++      expect(signals.listenerCount("SIGINT")).toBe(0)
++    }),
++  )
++
++  it.live("returns listener stop failures as a failed lifecycle", () =>
++    Effect.gen(function* () {
++      const signals = testSignals()
++      const stopError = new Error("listener stop failed")
++      const closeArguments: Array<boolean | undefined> = []
++      const running = yield* startLifecycle(
++        lifecycle(
++          listener(async (close) => {
++            closeArguments.push(close)
++            throw stopError
++          }),
++          signals,
++        ),
++        signals,
++      )
++
++      signals.emit("SIGINT")
++      const exit = yield* Fiber.join(running)
++
++      expect(Exit.isFailure(exit)).toBe(true)
++      if (Exit.isFailure(exit)) {
++        expect(Cause.pretty(exit.cause)).toContain("listener stop failed")
++      }
++      expect(closeArguments).toEqual([true])
++      expect(signals.listenerCount("SIGTERM")).toBe(0)
++      expect(signals.listenerCount("SIGINT")).toBe(0)
++    }),
++  )
++
++  it.live("fails within the shutdown timeout when listener stop hangs", () =>
++    Effect.gen(function* () {
++      const signals = testSignals()
++      const startedAt = Date.now()
++      const closeArguments: Array<boolean | undefined> = []
++      const running = yield* startLifecycle(
++        lifecycle(
++          listener((close) => {
++            closeArguments.push(close)
++            return new Promise<void>(() => {})
++          }),
++          signals,
++          "25 millis",
++        ),
++        signals,
++      )
++
++      signals.emit("SIGTERM")
++      const exit = yield* Fiber.join(running)
++
++      expect(Exit.isFailure(exit)).toBe(true)
++      if (Exit.isFailure(exit)) {
++        expect(Cause.pretty(exit.cause)).toContain("Timed out waiting for opencode server shutdown")
++      }
++      expect(Date.now() - startedAt).toBeLessThan(1_000)
++      expect(closeArguments).toEqual([true])
++      expect(signals.listenerCount("SIGTERM")).toBe(0)
++      expect(signals.listenerCount("SIGINT")).toBe(0)
++    }),
++  )
++
++  it.live("ignores repeated signals while one forced stop is in flight", () =>
++    Effect.gen(function* () {
++      const signals = testSignals()
++      let resolveStop: (() => void) | undefined
++      let resolveStopStarted: (() => void) | undefined
++      const stopStarted = new Promise<void>((resolve) => {
++        resolveStopStarted = resolve
++      })
++      const closeArguments: Array<boolean | undefined> = []
++      const running = yield* startLifecycle(
++        lifecycle(
++          listener((close) => {
++            closeArguments.push(close)
++            resolveStopStarted?.()
++            return new Promise<void>((resolve) => {
++              resolveStop = resolve
++            })
++          }),
++          signals,
++        ),
++        signals,
++      )
++
++      signals.emit("SIGTERM")
++      yield* Effect.promise(() => stopStarted)
++      signals.emit("SIGINT")
++      signals.emit("SIGTERM")
++      expect(signals.listenerCount("SIGTERM")).toBe(1)
++      expect(signals.listenerCount("SIGINT")).toBe(1)
++      resolveStop?.()
++
++      const exit = yield* Fiber.join(running)
++
++      expect(Exit.isSuccess(exit)).toBe(true)
++      expect(closeArguments).toEqual([true])
++      expect(signals.listenerCount("SIGTERM")).toBe(0)
++      expect(signals.listenerCount("SIGINT")).toBe(0)
++    }),
++  )
++})

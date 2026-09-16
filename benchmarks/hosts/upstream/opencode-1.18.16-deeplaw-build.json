@@ -1,0 +1,26 @@
+{
+  "status": "candidate_host_build_not_formal_admission",
+  "upstream_repository": "https://github.com/anomalyco/opencode",
+  "upstream_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+  "license": "MIT",
+  "patch_sha256": "3a15ab2105dfe09e19c3b29bfa83d438a5f53b80a8285000a81939f25d7130ba",
+  "source_commit": "9f3a8e505a3926cc80aa1037aea8836a19d58afd",
+  "bun_version": "1.3.14",
+  "bun_lock_sha256": "ad8ab55c5d899a00e155ada0da82a07d9623d9159ec370ab6df7885fc135363a",
+  "linux_musl_build": {
+    "version": "1.18.16-deeplaw.2",
+    "sha256": "261ed2c03b5bc60c7d0a9615d16b0d929bf2657e1394abfb852de8723d311729"
+  },
+  "closed_environment": {
+    "OPENCODE_DISABLE_MODELS_FETCH": "1"
+  },
+  "observed_zero_model_lifecycle": {
+    "healthy": true,
+    "actual_host_exit_code": 0,
+    "forced_kill": false
+  },
+  "formal_admission": false,
+  "source_tree": "a717cc39c8d340ea45af704aaa1e3ca4ac2b8292",
+  "models_snapshot_sha256": "4b4bcfa6a8c69dc591224fa7848fcb1c5a8ec8ce9128ad0c5a1e103b64e45cc8",
+  "bun_linux_archive_sha256": "b98e0ad3625c5c00d1d5b5ff55605c7adddbfae151861e68ade57b2d3b8703bb"
+}

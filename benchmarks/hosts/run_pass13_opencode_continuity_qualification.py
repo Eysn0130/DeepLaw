@@ -214,6 +214,7 @@ EXPECTED_HOST_ENVIRONMENT_NAMES = frozenset(
         "OPENCODE_DISABLE_AUTOUPDATE",
         "OPENCODE_DISABLE_CLAUDE_CODE",
         "OPENCODE_DISABLE_DEFAULT_PLUGINS",
+        "OPENCODE_DISABLE_MODELS_FETCH",
         "NO_COLOR",
         "GIT_TERMINAL_PROMPT",
         "DEEPLAW_KNOWLEDGE_VAULT",
@@ -461,6 +462,7 @@ def build_host_environment(
         "OPENCODE_DISABLE_AUTOUPDATE": "1",
         "OPENCODE_DISABLE_CLAUDE_CODE": "1",
         "OPENCODE_DISABLE_DEFAULT_PLUGINS": "1",
+        "OPENCODE_DISABLE_MODELS_FETCH": "1",
         "NO_COLOR": "1",
         "GIT_TERMINAL_PROMPT": "0",
         "DEEPLAW_KNOWLEDGE_VAULT": "vault",
@@ -3249,9 +3251,20 @@ def _validate_opencode_package(
     version = host_item.get("version")
     source_commit = host_item.get("source_commit")
     expected_sha256 = host_item.get("package_sha256")
+    historical_release = (
+        version == HISTORICAL_OPENCODE_VERSION_FIXTURE and source_commit == OPENCODE_SOURCE_COMMIT
+    )
+    # Exact owner-directed lifecycle build, recorded in upstream/
+    # opencode-1.18.16-deeplaw-build.json. This only admits static preflight
+    # inputs; it does not establish broker authority or a formal Host slot.
+    shutdown_build = (
+        version == "1.18.16-deeplaw.2"
+        and source_commit == "9f3a8e505a3926cc80aa1037aea8836a19d58afd"
+        and host_item.get("executable_sha256")
+        == "261ed2c03b5bc60c7d0a9615d16b0d929bf2657e1394abfb852de8723d311729"
+    )
     if (
-        version != HISTORICAL_OPENCODE_VERSION_FIXTURE
-        or source_commit != OPENCODE_SOURCE_COMMIT
+        not (historical_release or shutdown_build)
         or not isinstance(expected_sha256, str)
         or _SHA256.fullmatch(expected_sha256) is None
         or expected_sha256 == "0" * 64

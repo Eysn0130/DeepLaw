@@ -16,3 +16,6 @@
 *.sqlite3 binary
 *.tar binary
 *.whl binary
+
+# Preserve the frozen upstream diff's single-space empty context lines.
+benchmarks/hosts/upstream/opencode-1.18.16-deeplaw.patch whitespace=-blank-at-eol

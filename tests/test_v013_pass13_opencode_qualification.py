@@ -590,6 +590,7 @@ def test_owner_dotenv_is_metadata_only_and_reaches_launcher_environment(
         repository=repository,
     )
     assert environment[runner._OWNER_DOTENV_ENV_NAME] == str(dotenv.resolve())
+    assert environment["OPENCODE_DISABLE_MODELS_FETCH"] == "1"
     assert runner._OWNER_DOTENV_ENV_NAME not in runner._build_mcp_environment(
         tmp_path, node_binary=tmp_path / "bin" / "node"
     )
@@ -1220,6 +1221,32 @@ def _assert_zero_model_static_package_binding_rejects_unpinned_release(
             identity=identity,
             repository=_REPOSITORY,
         )
+
+
+def test_zero_model_package_accepts_only_exact_declared_shutdown_build(tmp_path: Path) -> None:
+    package = (tmp_path / "opencode-package").resolve()
+    package.write_bytes(b"owner frozen patched package")
+    item = {
+        **_ZERO_MODEL_HOST_ITEM,
+        "version": "1.18.16-deeplaw.2",
+        "source_commit": "9f3a8e505a3926cc80aa1037aea8836a19d58afd",
+        "executable_sha256": "261ed2c03b5bc60c7d0a9615d16b0d929bf2657e1394abfb852de8723d311729",
+        "package_sha256": hashlib.sha256(package.read_bytes()).hexdigest(),
+    }
+    identity = {"hosts": {"opencode": item}}
+    result = runner._validate_opencode_package(package, identity=identity, repository=_REPOSITORY)
+    assert result["version"] == "1.18.16-deeplaw.2"
+    assert result["source_commit"] == item["source_commit"]
+    for field, invalid in (
+        ("version", "1.18.16-unreviewed"),
+        ("source_commit", "a" * 40),
+        ("executable_sha256", "b" * 64),
+    ):
+        changed = {"hosts": {"opencode": {**item, field: invalid}}}
+        with pytest.raises(runner.QualificationError, match="pinned release"):
+            runner._validate_opencode_package(
+                package, identity=changed, repository=_REPOSITORY,
+            )
 
 
 def _assert_zero_model_cli_requires_no_dotenv_or_formal_output(

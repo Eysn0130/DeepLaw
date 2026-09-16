@@ -464,6 +464,10 @@ def test_external_install_closure_is_hash_checked_and_importable(tmp_path, monke
     monkeypatch.setattr(producer, "ROOT", destination)
     receipt = producer.verify_deployment()
     assert all(not row["path"].startswith(("src/", "var/")) for row in receipt["files"])
+    environment = {"PATH": os.defpath, "PYTHONPATH": str(destination)}
+    if os.name == "nt":
+        # Windows needs SystemRoot to initialize asyncio's native Winsock provider.
+        environment["SYSTEMROOT"] = os.environ["SYSTEMROOT"]
     check = subprocess.run(
         [
             sys.executable,
@@ -473,7 +477,7 @@ def test_external_install_closure_is_hash_checked_and_importable(tmp_path, monke
             "from benchmarks.release import typed_qualification_evidence; p.verify_deployment()",
         ],
         cwd=destination,
-        env={"PATH": os.defpath, "PYTHONPATH": str(destination)},
+        env=environment,
         capture_output=True,
         timeout=20,
         check=False,
@@ -1475,3 +1479,37 @@ def test_privacy_metadata_survives_primary_cleanup_and_guard_ipc(tmp_path, monke
     with pytest.raises(producer.DiagnosticError) as propagated:
         failure.raise_if_failed()
     assert propagated.value.record == error.record
+
+
+@pytest.mark.parametrize("profile", ["continuity", "maintenance"])
+def test_guard_tool_profiles_are_explicit_and_do_not_widen_each_other(profile):
+    guard = producer.RequestGuard(key="synthetic", nonce="synthetic", tool_profile=profile)
+    guard.active = True
+    value = json.loads(_guard_body())
+    value["tools"] = [{"type": "function", "function": {
+        "name": producer.GUARD_TOOL_PROFILES[profile],
+        "parameters": {"type": "object"},
+    }}]
+    def inspect():
+        return guard.inspect(
+            json.dumps(value).encode(), path="/chat/completions",
+            authorization="Bearer synthetic",
+        )
+    assert inspect()["tools"] == value["tools"]
+    other = "maintenance" if profile == "continuity" else "continuity"
+    value["tools"][0]["function"]["name"] = producer.GUARD_TOOL_PROFILES[other]
+    with pytest.raises(producer.ProducerError):
+        inspect()
+    value.pop("tools")
+    value["messages"].append({"role": "assistant", "content": None, "tool_calls": [{
+        "id": "call-one", "type": "function", "function": {
+            "name": producer.GUARD_TOOL_PROFILES[other], "arguments": "{}",
+        },
+    }]})
+    with pytest.raises(producer.ProducerError):
+        inspect()
+
+
+def test_guard_unknown_profile_is_rejected_before_any_forwarding():
+    with pytest.raises(producer.ProducerError, match="profile"):
+        producer.RequestGuard(key="synthetic", nonce="synthetic", tool_profile="arbitrary")

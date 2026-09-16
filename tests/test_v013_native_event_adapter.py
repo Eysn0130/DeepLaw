@@ -551,6 +551,46 @@ def test_opencode_public_fork_adds_v2_receipt_only_after_clean_exit() -> None:
     assert result["process_receipt"]["exit_code"] == 0
 
 
+@pytest.mark.parametrize("exit_code", [0, -9])
+def test_guest_private_source_uses_existing_adapter_without_retaining_bytes(exit_code) -> None:
+    from benchmarks.hosts.linux_guest_slot_control import GuestSlotControl, GuestSlotControlError
+
+    proof = _public_fork_proof()
+    process = proof["process_binding"]
+    process.update(status="exited", exit_code=exit_code)
+    source = {key: proof[key] for key in (
+        "route_observation", "request_body", "response", "child_plugin_observation",
+    )}
+    instance = GuestSlotControl(observe_fork=True, retain_fork_source=True)
+    instance._callback_returned = True
+    instance._stop_requested = True
+    instance._private_fork_sources.append(source)
+    instance._fork_observations.append({
+        "child_event": {"observed_at_ns": 100, "elapsed_ms": 12},
+        "control_reply_sent_at_ns": 101,
+    })
+    arguments = {
+        "process_binding": process, "host_identity": OPENCODE_IDENTITY,
+        "execution_identity": OPENCODE_EXECUTION, "route": EXACT_ROUTE,
+        "event_sequence": 0,
+    }
+    try:
+        if exit_code:
+            with pytest.raises(NativeEventAdapterError):
+                instance.adapt_fork_source(**arguments)
+        else:
+            result = instance.adapt_fork_source(**arguments)
+            assert result["process_receipt"]["exit_code"] == 0
+            assert result["receipt"]["claim_eligible"] is False
+            assert "child-session" not in json.dumps(result)
+        assert source == {}
+        assert not instance._private_fork_sources
+        with pytest.raises(GuestSlotControlError, match="fork_source_not_ready"):
+            instance.adapt_fork_source(**arguments)
+    finally:
+        instance.close()
+
+
 def test_opencode_public_fork_dispatch_requires_the_same_child_plugin_bytes() -> None:
     proof = _public_fork_proof()
     with pytest.raises(NativeEventAdapterError, match="child plugin bytes differ"):

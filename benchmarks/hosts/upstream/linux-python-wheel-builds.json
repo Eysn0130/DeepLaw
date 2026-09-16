@@ -1,0 +1,52 @@
+{
+  "status": "intermediate_guest_runtime_build",
+  "formal_admission": false,
+  "platform": "Linux aarch64 musl",
+  "python": "3.12.14",
+  "locked_dependency_versions_unchanged": true,
+  "network_devices_during_build": [
+    "lo"
+  ],
+  "source_completion": [
+    {
+      "package": "tree_sitter_java-0.23.5",
+      "original_sdist_sha256": "f5cd57b8f1270a7f0438878750d02ccc79421d45cca65ff284f1527e9ef02e38",
+      "completed_source_sha256": "e243d9bd701ed4d3ffac91d444fc1e50012d958745ecf20307ffad6f3dc3d30e",
+      "upstream_commit": "94703d5a6bed02b98e438d7cad1136c01a60ba2c",
+      "headers": {
+        "src/tree_sitter/parser.h": "a1f6ef161fbaf48a0e10fca90ef5290a062462b307b3898aa562993853b9f80a"
+      },
+      "license": "MIT",
+      "source_c_files_unchanged": true
+    },
+    {
+      "package": "tree_sitter_typescript-0.23.2",
+      "original_sdist_sha256": "7b167b5827c882261cb7a50dfa0fb567975f9b315e87ed87ad0a0a3aedb3834d",
+      "completed_source_sha256": "c7e72d30cb0eb8c5392944aaafe7b92dcd8c03c864b6d9f733544c923e03a5d1",
+      "upstream_commit": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
+      "headers": {
+        "typescript/src/tree_sitter/parser.h": "a1f6ef161fbaf48a0e10fca90ef5290a062462b307b3898aa562993853b9f80a",
+        "common/scanner.h": "da66ef2bd14a3f7ea743e25ba068c6c9aae2c3509db200ff80c4a0e6116e564c"
+      },
+      "license": "MIT",
+      "source_c_files_unchanged": true
+    }
+  ],
+  "wheels": [
+    {
+      "filename": "tree_sitter-0.26.0-cp312-cp312-linux_aarch64.whl",
+      "sha256": "462375a2a1740a76e71ca97aa3dcebd90ba4cd9a2529a0656b786671933716f4",
+      "bytes": 154520
+    },
+    {
+      "filename": "tree_sitter_java-0.23.5-cp39-abi3-linux_aarch64.whl",
+      "sha256": "b81f35faffb1e787aaa18e309bb34e1decec2cfab5bf45e667c93f03cce75eab",
+      "bytes": 59754
+    },
+    {
+      "filename": "tree_sitter_typescript-0.23.2-cp39-abi3-linux_aarch64.whl",
+      "sha256": "51193f855d21120e9c26fe8e0e028bb70ec45d96f659ec6ae21655a6f9edc3ad",
+      "bytes": 284617
+    }
+  ]
+}
