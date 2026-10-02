@@ -142,7 +142,7 @@
         "classification_id": {"const": "deeplaw-v013-commercial-gates-v9"},
         "schema_version": {"const": "deeplaw.v013-release-gate-classification/v9"},
         "relative_path": {"const": "benchmarks/release/v013-gate-classification-v9.json"},
-        "sha256": {"const": "edfd7b344e9f91b7ef18a6fefa8f113dd3263308990b15c832610e9cf237d9d5"}
+        "sha256": {"const": "d036f8311ce8d9872c35c97442704bf62e09f0bff283313acb4e8a41ee4645cb"}
       }
     },
     "protocolBinding": {
@@ -252,8 +252,8 @@
         "source_commit": {"const": null},
         "executable_sha256": {"const": null},
         "package_sha256": {"const": null},
-        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
-        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "config_selector": {"const": "deepseek/deepseek-flash"},
+        "expected_response_model_id": {"const": "deepseek-flash"},
         "runtime": {"const": "host_bun_runtime_only"},
         "dotenv_policy": {"const": "owner_only_external_strict_parser"},
         "secret_visibility": {"const": "forbidden"}

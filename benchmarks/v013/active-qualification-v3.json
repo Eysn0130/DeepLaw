@@ -11,13 +11,13 @@
     "classification_id": "deeplaw-v013-commercial-gates-v9",
     "schema_version": "deeplaw.v013-release-gate-classification/v9",
     "relative_path": "benchmarks/release/v013-gate-classification-v9.json",
-    "sha256": "edfd7b344e9f91b7ef18a6fefa8f113dd3263308990b15c832610e9cf237d9d5"
+    "sha256": "d036f8311ce8d9872c35c97442704bf62e09f0bff283313acb4e8a41ee4645cb"
   },
   "protocol_binding": {
     "protocol_id": "deeplaw-v013-source-candidate-qualification",
     "schema_version": "deeplaw.v013-qualification-protocol/v3",
     "relative_path": "benchmarks/v013/qualification-protocol-v3.json",
-    "sha256": "7438f4ebe0eb23f64050e15bebe0ec30f2a2fa96cd6ff9d919a00db6f4aa0a1e"
+    "sha256": "4f8efa6c7092b01c737bf997c0183feafc4bc0e01f0777065862abec7767ecee"
   },
   "candidate_binding": {
     "package_version": "0.13.0",
@@ -224,8 +224,8 @@
       "source_commit": null,
       "executable_sha256": null,
       "package_sha256": null,
-      "config_selector": "deepseek/deepseek-v4-flash",
-      "expected_response_model_id": "deepseek-v4-flash",
+      "config_selector": "deepseek/deepseek-flash",
+      "expected_response_model_id": "deepseek-flash",
       "runtime": "host_bun_runtime_only",
       "dotenv_policy": "owner_only_external_strict_parser",
       "secret_visibility": "forbidden"

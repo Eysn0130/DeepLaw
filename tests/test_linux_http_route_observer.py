@@ -110,6 +110,38 @@ def test_open_connection_is_a_gap_even_with_complete_http():
         finish(capture)
 
 
+@pytest.mark.parametrize("server_port", [4096, 4100])
+def test_reset_after_captured_request_preserves_bytes_and_closes_window(server_port):
+    raw = b"GET /global/health HTTP/1.1\r\n\r\n"
+    capture = observer.RouteCapture(model_probe=server_port == 4100)
+    options = {"server_port": server_port}
+    capture.feed(packet(100, 2, **options), ADDRESS)
+    capture.feed(packet(101, 24, raw, **options), ADDRESS)
+    capture.feed(packet(201, 17, client=False, **options), ADDRESS)
+    capture.feed(packet(101 + len(raw), 4, **options), ADDRESS)
+    result = finish(capture)
+    assert observer.validate_observation(result) == result
+    assert result["formal_admission"] is False
+    if server_port == 4100:
+        flow = result["auxiliary_flows"][0]
+        assert flow["client_bytes"] == len(raw)
+        assert flow["client_sha256"] == hashlib.sha256(raw).hexdigest()
+        assert flow["reset"] is True
+    else:
+        assert len(result["requests"]) == 1
+    with pytest.raises(observer.RouteObservationGap, match="tcp_closed_data_gap"):
+        capture.feed(packet(101 + len(raw), 24, b"later", **options), ADDRESS)
+
+
+def test_reset_does_not_make_incomplete_host_request_admissible():
+    capture = observer.RouteCapture()
+    capture.feed(packet(100, 2), ADDRESS)
+    capture.feed(packet(101, 24, b"GET"), ADDRESS)
+    capture.feed(packet(104, 4), ADDRESS)
+    with pytest.raises(observer.RouteObservationGap, match="http_header_gap"):
+        finish(capture)
+
+
 @pytest.mark.parametrize("raw,code", [
     (b"GET /global/health HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n", "http_header_gap"),
     (b"POST /session HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n", "http_transfer_encoding_gap"),
@@ -368,7 +400,8 @@ def test_cli_model_profile_is_explicit(monkeypatch):
      "route_receipt_auxiliary_gap"),
     (lambda value: value["auxiliary_flows"][0].update(server_fin=1),
      "route_receipt_auxiliary_gap"),
-    (lambda value: value["auxiliary_flows"][0].update(reset=True), "route_receipt_auxiliary_gap"),
+    (lambda value: value["auxiliary_flows"][0].update(reset=True, server_fin=False),
+     "route_receipt_auxiliary_gap"),
 ])
 def test_v2_validator_fails_closed_even_with_recomputed_record_digest(change, code):
     value = auxiliary_result()

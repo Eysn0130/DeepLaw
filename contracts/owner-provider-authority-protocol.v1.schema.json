@@ -62,7 +62,7 @@
           ]
         },
         "model_pin": {
-          "const": "deepseek/deepseek-v4-flash"
+          "const": "deepseek/deepseek-flash"
         },
         "execution_binding_sha256": {
           "type": "string",
@@ -476,7 +476,7 @@
           ]
         },
         "model_pin": {
-          "const": "deepseek/deepseek-v4-flash"
+          "const": "deepseek/deepseek-flash"
         },
         "execution_binding_sha256": {
           "type": "string",

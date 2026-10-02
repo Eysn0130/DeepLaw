@@ -38,8 +38,8 @@ def test_manifest_and_readme_freeze_exact_candidate_identity() -> None:
     assert native == {
         "version": "1.18.16",
         "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
-        "config_selector": "deepseek/deepseek-v4-flash",
-        "expected_response_model_id": "deepseek-v4-flash",
+        "config_selector": "deepseek/deepseek-flash",
+        "expected_response_model_id": "deepseek-flash",
         "entrypoint": "plugins/deeplaw-native.ts",
         "status": "candidate_requires_owner_review",
     }
@@ -47,7 +47,7 @@ def test_manifest_and_readme_freeze_exact_candidate_identity() -> None:
     for required in (
         "1.18.16",
         "a3647eb025c7615159d417dcc49fc39fdaeba65b",
-        "deepseek/deepseek-v4-flash",
+        "deepseek/deepseek-flash",
         "checkpoint_grant_missing",
         "resolve-host-continuity",
         "candidate seam",
@@ -174,7 +174,7 @@ def test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams() -> N
               sessionID: 'chat-session',
               role: 'assistant',
               providerID: 'deepseek',
-              modelID: 'deepseek-v4-flash',
+              modelID: 'deepseek-flash',
               summary: false,
               finish: 'stop',
               tokens: {
@@ -297,7 +297,7 @@ def test_bun_helpers_cover_parent_identity_and_provider_safe_native_seams() -> N
     )
     assert isinstance(model_observation, dict)
     assert model_observation["provider_id"] == "deepseek"
-    assert model_observation["model_id"] == "deepseek-v4-flash"
+    assert model_observation["model_id"] == "deepseek-flash"
     assert model_observation["session_sha256"] == hashlib.sha256(
         b"chat-session"
     ).hexdigest()

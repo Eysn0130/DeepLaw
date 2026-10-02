@@ -21,7 +21,7 @@ def _assistant(*, output=4, reasoning=0, completed=1234):
     return {
         "info": {
             "role": "assistant", "id": "message-1", "sessionID": "session-1",
-            "providerID": "deepseek", "modelID": "deepseek-v4-flash", "finish": "stop",
+            "providerID": "deepseek", "modelID": "deepseek-flash", "finish": "stop",
             "time": {"completed": completed},
             "tokens": {"input": 8, "output": output, "reasoning": reasoning,
                        "cache": {"read": 0, "write": 0}},
@@ -272,6 +272,23 @@ def _headers():
     ]
 
 
+def test_fixed_host_session_headers_require_same_observed_native_session():
+    headers = [*_headers(), ("x-session-affinity", "session-1"),
+               ("X-Session-Id", "session-1")]
+    assert bridge.validate_provider_ingress(
+        "POST", "/chat/completions", headers, "synthetic-nonce",
+        expected_session_id="session-1",
+    ) == 12
+    for changed, binding in ((headers, None), (headers, "session-2"),
+                             (headers[:-1], "session-1"),
+                             ([*headers, ("x-parent-session-id", "session-1")], "session-1")):
+        with pytest.raises(bridge.ProviderBridgeError):
+            bridge.validate_provider_ingress(
+                "POST", "/chat/completions", changed, "synthetic-nonce",
+                expected_session_id=binding,
+            )
+
+
 def test_proxy_loopback_server_binds_without_dns_and_closes_socket(monkeypatch):
     reverse_dns = Mock(side_effect=AssertionError("reverse DNS forbidden"))
     monkeypatch.setattr(socket, "getfqdn", reverse_dns)
@@ -300,7 +317,7 @@ def test_proxy_header_allowlist_and_fixed_probe_route():
     ) == 12
     body = json.loads(bridge.fixed_probe_body("session-1"))
     assert body == {
-        "model": {"providerID": "deepseek", "modelID": "deepseek-v4-flash"},
+        "model": {"providerID": "deepseek", "modelID": "deepseek-flash"},
         "parts": [{"type": "text", "text": bridge.PROBE_PROMPT}], "tools": {},
     }
 

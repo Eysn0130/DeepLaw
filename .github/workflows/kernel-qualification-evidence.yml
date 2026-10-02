@@ -452,7 +452,7 @@ jobs:
             --opencode-binary "${DEEPLAW_OPENCODE_BINARY}" \
             --opencode-package "${DEEPLAW_OPENCODE_PACKAGE}" \
             --opencode-version "$(uv run --frozen python -c 'from benchmarks.hosts.host_preflight_receipt import load_host_identity_input; import os; from pathlib import Path; print(load_host_identity_input(Path(os.environ["DEEPLAW_FROZEN_HOST_IDENTITY"]), repository=Path.cwd(), require_external=False)["hosts"]["opencode"]["version"])')" \
-            --opencode-model "deepseek/deepseek-v4-flash" \
+            --opencode-model "deepseek/deepseek-flash" \
             --opencode-broker "${DEEPLAW_OPENCODE_CREDENTIAL_BROKER}" \
             --opencode-dotenv "${DEEPLAW_OPENCODE_DOTENV}" \
             --host-identity-input "${frozen_identity}" \

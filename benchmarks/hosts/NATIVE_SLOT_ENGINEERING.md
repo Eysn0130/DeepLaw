@@ -133,7 +133,7 @@ digest only after the guest confirms that fresh challenge. It is available only
 to the explicit model entry, and a callback failure closes the native slot before
 health or Provider dispatch. The zero-model entry rejects authority-hook injection.
 
-The fixed public probe selects `deepseek/deepseek-v4-flash`, denies tools and
+The fixed public probe selects `deepseek/deepseek-flash`, denies tools and
 limits output to 256 tokens. The frozen Host config schema requires both model
 context and output limits; its context limit is the public snapshot's 1,000,000.
 The guest's HTTP proxy is confined to 127.0.0.1:4100. A single VSOCK reader accepts
@@ -150,7 +150,9 @@ socket regression forbids resolver calls and verifies closure and rebinding.
 
 The model route observer uses a closed v2 profile: 4096 control requests remain
 separate from the single permitted 4100 auxiliary flow. Unknown ports, capture
-loss and open flow windows remain gaps. Auxiliary fields contain client byte
+loss and open flow windows remain gaps. A nonempty auxiliary stream may close by
+client reset only after an observed server FIN; its captured bytes remain bound.
+Incomplete Host HTTP requests still fail framing validation. Auxiliary fields contain client byte
 counts, hashes and TCP closure only; they do not prove Provider response body
 completeness. This profile has a fixed 190-second capture budget, while the
 zero-model profile keeps 60 seconds. The owner requires the matching profile.
@@ -169,9 +171,12 @@ The dry probe's final finite classification was `host_log_model`. The frozen
 models.dev snapshot marks `deepseek-v4-flash` deprecated, which the exact Host
 provider implementation excludes. The [DeepSeek change log](https://api-docs.deepseek.com/updates/)
 records retirement of V4 Flash on 2026-09-10 and temporary routing of that old
-name to V4.1 Flash. The current selector must therefore remain unexecuted until
-the acceptance identity is explicitly refrozen; changing catalog status cannot
-restore the retired model. No actual Provider request has been issued.
+name to V4.1 Flash. That failure predates the explicit successor freeze. Current
+v3/v9 inputs pin `deepseek/deepseek-flash` / `deepseek-flash`; retained v2 inputs
+remain unchanged. One bounded engineering request independently observed the new
+response model, but its fixed reply was truncated at the existing 256-token limit
+and failed. It was not repeated or admitted as formal qualification. See
+`docs/CTRL011_CONTINUATION.md` for exact response and later no-forward route hashes.
 
 Observer completion now consumes an already-emitted bounded route gap even if
 the capture process closed its control pipe first. It neither repeats control
@@ -273,7 +278,7 @@ Original event, argv, environment and 3/5/15-second assertions remain. Cache war
 from the prerequisite and a focused pass cannot establish cold-start acceptance
 or prove the intermittent root cause.
 
-The latest complete run failed earlier, in that direct fake-CLI prerequisite's
+The predecessor complete run failed earlier, in that direct fake-CLI prerequisite's
 three-second timeout, before any OpenCode server was started. The prerequisite
 skips both oracle files, so their absence cannot show which Python stage stalled.
 One bounded direct/staged-import comparison with the same four environment
@@ -283,6 +288,18 @@ earlier resolver failures. The failing complete check is preserved; no further
 full retry or deadline expansion was made. The `.3` engineering archive was
 separately reopened and passed static package validation against its exact
 executable bytes; this remains engineering input evidence.
+
+The successor fixture removes the added standalone interpreter prerequisite and
+uses the same test interpreter with `-S`, retaining the event, argv, environment
+and original deadlines. Its complete check still failed after observing the
+native session event, before the resolver's first statement: 4,445 passed, one
+failed, 11 skipped. The retained JUnit SHA-256 is
+`8caf49794b06a9c8473a27ae6ad3281430c5fe84da84fc78c64f86c8eda979e6`.
+A complete focused spawn/output/exit diagnostic took 136 ms; neither that pass
+nor disabling site hooks establishes the root cause or complete-suite acceptance.
+No evidence of an unrestored parent resource limit, signal handler or environment
+mutation was found in a bounded code/JUnit-order investigation. No further full
+retry, interpreter substitution or deadline expansion followed.
 
 ## Remaining qualification work
 

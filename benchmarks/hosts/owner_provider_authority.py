@@ -39,7 +39,7 @@ from benchmarks.hosts.native_provider_bridge import (
 )
 
 SCHEMA_VERSION: Final = "deeplaw.owner-provider-authority-protocol/v1"
-MODEL_PIN: Final = "deepseek/deepseek-v4-flash"
+MODEL_PIN: Final = "deepseek/deepseek-flash"
 PROFILES: Final = MappingProxyType({"fixed_probe": (1, 120.0), "maintenance": (6, 180.0)})
 MAX_METADATA_BYTES: Final = 4096
 MAX_ENTRY_BYTES: Final = 65536

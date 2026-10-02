@@ -40,10 +40,11 @@ PROXY_PORT: Final = 4100
 PROBE_PROMPT: Final = "Reply with exactly DEEPLAW_NATIVE_PROBE_OK."
 PROBE_REPLY: Final = "DEEPLAW_NATIVE_PROBE_OK"
 PROVIDER_ID: Final = "deepseek"
-MODEL_ID: Final = "deepseek-v4-flash"
+MODEL_ID: Final = "deepseek-flash"
 ALLOWED_HEADERS: Final = frozenset({
     "host", "content-type", "content-length", "authorization", "accept", "user-agent",
     "connection", "accept-encoding",
+    "x-session-affinity", "x-session-id",
 })
 _REPLY_HEADER: Final = struct.Struct("!4sHHI")
 _REPLY_MAGIC: Final = b"DPR1"
@@ -296,7 +297,8 @@ def fixed_probe_body(session_id: str) -> bytes:
 
 
 def validate_provider_ingress(method: str, path: str,
-                              headers: Sequence[tuple[str, str]], dummy_nonce: str) -> int:
+                              headers: Sequence[tuple[str, str]], dummy_nonce: str, *,
+                              expected_session_id: str | None = None) -> int:
     """Return a bounded content length; no header value appears in failures."""
     if method != "POST" or path != "/chat/completions":
         _fail("proxy_route_forbidden")
@@ -315,6 +317,13 @@ def validate_provider_ingress(method: str, path: str,
     if values.get("host") != f"127.0.0.1:{PROXY_PORT}":
         _fail("proxy_headers_invalid")
     if values.get("authorization") != "Bearer " + dummy_nonce:
+        _fail("proxy_association_invalid")
+    session_headers = {"x-session-affinity", "x-session-id"} & values.keys()
+    if session_headers and (
+        expected_session_id is None
+        or session_headers != {"x-session-affinity", "x-session-id"}
+        or any(values[key] != _session(expected_session_id) for key in session_headers)
+    ):
         _fail("proxy_association_invalid")
     if re.fullmatch(r"application/json(?:;\s*charset=UTF-8)?",
                     values.get("content-type", ""), re.IGNORECASE) is None:
@@ -498,7 +507,8 @@ class _LoopbackHTTPServer(HTTPServer):
 
 
 def _proxy_child(host_pid: int, connection: object, endpoint: socket.socket,
-                 unwanted: Sequence[socket.socket], nonce: str, deadline: float) -> None:
+                 unwanted: Sequence[socket.socket], nonce: str, deadline: float,
+                 session_id: str) -> None:
     server: HTTPServer | None = None
     counters = {"admitted": 0, "rejected": 0}
     success = False
@@ -530,6 +540,7 @@ def _proxy_child(host_pid: int, connection: object, endpoint: socket.socket,
                 try:
                     length = validate_provider_ingress(
                         self.command, self.path, list(self.headers.items()), nonce,
+                        expected_session_id=session_id,
                     )
                     if counters["admitted"] >= 1:
                         _fail("proxy_request_budget")
@@ -713,7 +724,8 @@ def run_fixed_model_probe(host: RoleHandle, connection: object, *, session_id: s
         pid = os.fork()
         if pid == 0:
             _proxy_child(host.pid, connection, proxy_child,
-                         (proxy_parent, client_parent, client_child), dummy_nonce, deadline)
+                         (proxy_parent, client_parent, client_child), dummy_nonce, deadline,
+                         session_id)
             os._exit(1)
         children["proxy"] = pid
         _close(proxy_child)

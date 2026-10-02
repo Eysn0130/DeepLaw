@@ -23,7 +23,7 @@ re-verified before qualification; this README and local adapter tests are not re
 
 `plugins/deeplaw-native.ts` is a thin, local candidate for OpenCode `1.18.16` at source commit
 `a3647eb025c7615159d417dcc49fc39fdaeba65b`, with config selector
-`deepseek/deepseek-v4-flash` and expected response model ID `deepseek-v4-flash`. It binds the
+`deepseek/deepseek-flash` and expected response model ID `deepseek-flash`. It binds the
 native `chat.message`, `event`, `experimental.chat.system.transform`, and
 `experimental.session.compacting` seams. The `event` seam accepts only
 `session.created`, `session.updated`, and `session.compacted` lifecycle events.

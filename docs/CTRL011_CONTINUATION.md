@@ -7,6 +7,69 @@ history below does not authorize treating incomplete producers as formal evidenc
 
 ## Current continuation record
 
+The successor follow-up resumed from clean `533682dec03dcf5a2475da9c078f954c3b8af82c`
+on 2026-10-02. Current v3/v9 qualification inputs now explicitly pin OpenCode
+`deepseek/deepseek-flash` and response model `deepseek-flash`; Codex remains
+`gpt-5.6-luna`/`max`. Historical v2 schemas and retained evidence keep their original
+model identity and hashes. No gate status has been promoted.
+The existing inventory generator now freezes 4,426 common and 4,431 Windows
+cases, original-file SHA-256
+`17d8df53769546f2411f54752c5eefaf3ac4e2616d7873bdde4386cc2579f7a8`
+and intrinsic digest
+`d57a43ff38abd7d4461f433d230698b3c1109924949ac611ffcc1ec9e2b5beaa`.
+Its complete, non-overlapping inventory checks passed locally.
+
+One bounded engineering Provider request independently reported `deepseek-flash`
+in the response stream. Its response SHA-256 is
+`3a486b57d48a8fc165a2f12251a14582a2bb70dce6025c0075d9267e311225ad`.
+The 256-token limit truncated the fixed reply, so that score failed; no retry or
+budget expansion followed. The authority child alone loaded the existing key,
+reported it unchanged, completed one outbound request, and confirmed cleanup.
+The engineering run used retained checkpoint packages and is not final-candidate
+or functional-MCP qualification evidence.
+
+The existing proxy now binds OpenCode's two session headers to the observed native
+session. A separate no-forward native regression after the TCP reset repair
+observed four control requests, one auxiliary flow, zero kernel drops and clean
+VM/authority exits. The original observation SHA-256 is
+`a5a7f6690a9129b892b4abc4b29d65d05d856a24518707292ad5f9b090d7ea82`.
+Its expected terminal gap is `model_probe_not_observed`; no credential was loaded
+and no outbound request was attempted.
+
+The loader fixture no longer adds a standalone Python preflight to the native
+loader contract and uses a stdlib-only interpreter invocation. The production
+3-second CLI deadline and original 5/15-second test bounds remain intact. A final
+finite diagnostic measured the complete spawn/output/exit chain at 136 ms, but
+neither it nor other focused passes explains the earlier intermittent missing
+resolver. That failure remains unresolved.
+
+The successor complete check finished with 4,445 passed, one failed and 11
+skipped in 1,251.58 seconds. The sole failure is
+`test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event`:
+the actual `session.created` was observed, but the resolver did not enter.
+Disabling Python site hooks therefore did not close the failure. The original
+JUnit SHA-256 is
+`8caf49794b06a9c8473a27ae6ad3281430c5fe84da84fc78c64f86c8eda979e6`;
+the frozen check-input record SHA-256 is
+`eba91a1da2097f784cab7d0f8b6e91870d85cbe31ca48d734dd37a72732da968`.
+All recorded source hashes stayed unchanged during that check. Focused current
+and historical contract checks passed, as did `uv lock --check`,
+`uv run ruff check .` and `git diff --check`. A bounded read-only investigation
+found no preceding test that left a parent resource limit, signal handler or
+environment mutation unrestored; it does not exclude transient resource pressure.
+The failed complete check remains a delivery blocker, separate from native
+qualification authority. It was not rerun as a diagnostic.
+
+Formal owner-process observation is blocked by a measured external prerequisite:
+the actual EndpointSecurity capability probe reports `endpoint_security_root_required`,
+and `sudo -n` reports that authentication is required. No root credential was
+requested or read. Entitlement and system authorization are still unobserved;
+root alone is not asserted sufficient. The repository has no registered self-hosted
+qualification runner. Six formal Host slots, 15 real C6 tasks, final bundles and
+release remain unexecuted. `formal_admission=false` and `release_ready=false`.
+
+The checkpoint observations below predate this follow-up.
+
 P0 OBSERVED on 2026-10-02: dd2a was clean at
 `c5b55d7c2149e81ad480cc2bbbd4dc2efd607cc8`, tree
 `309544e4aebc5d6a1f64196972680bd2ed1534d0`. The remote PR #42 branch has the
@@ -37,7 +100,7 @@ unexecuted real C6 tasks, and final-candidate qualification/release inputs. Opti
 Capability and Competitive/Research evidence remain non-gating under classification v9.
 P1 inventory reconciliation and its focused regressions passed locally; new tests
 must be included in the next manifest freeze. Actual supported-platform CI remains
-pending. No real model execution has been observed in this continuation.
+pending. No real model execution had been observed at that checkpoint.
 The first full-suite attempt was stopped after
 `test_platform_gate_accepts_no_skip_suite_and_rejects_a_skip` exposed a changed
 legacy error message. That entry still rejected skips; the smallest repair
@@ -299,7 +362,8 @@ retain `formal_admission=false` and cannot establish native qualification alone.
    and 10k, 13 Core gates and six real Codex/OpenCode Host slots; produce and
    offline-reopen Kernel/Commercial qualification bundles. Keep fixed acceptance
    model identities: Codex `gpt-5.6-luna`/`max`, OpenCode
-   `deepseek/deepseek-v4-flash`. Construction model is a separate choice.
+   `deepseek/deepseek-flash` after the explicit successor freeze above. Construction
+   model is a separate choice.
 5. Once all actual release gates pass, review/merge PR #42, handle any merge-tree
    identity change, use existing authorized signing/release tooling and immutable
    tags, publish verified artifacts, and verify clean post-release installation.

@@ -476,7 +476,7 @@ def _validate_outcomes(store: AutonomousKnowledgeStore) -> None:
             or row["sensitivity"] != "public"
             or row["task_sha256"] not in tasks
             or row["host_id"] not in {"opencode", "synthetic-host"}
-            or row["model_id"] not in {"deepseek-v4-flash", "synthetic-test"}
+            or row["model_id"] not in {"deepseek-v4-flash", "deepseek-flash", "synthetic-test"}
             or row["status"] not in {"succeeded", "partial"}
             or set(metadata) != {"task_kind", "artifact_ids", "task_binding"}
             or metadata["task_kind"] != "actual_host_public_maintenance"

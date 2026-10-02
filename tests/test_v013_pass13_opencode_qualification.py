@@ -1335,6 +1335,12 @@ def test_permission_and_config_are_exactly_read_only() -> None:
     assert "every response string non-empty and at most 200 characters" in prompt
     assert "each response array to one through three items" in prompt
     assert set(config["mcp"]) == {"deeplaw_knowledge"}  # type: ignore[arg-type]
+    successor = runner.build_opencode_config(model_id="deepseek-flash")
+    assert successor["model"] == successor["small_model"] == "deepseek/deepseek-flash"
+    assert successor["agent"]["qualification"]["model"] == successor["model"]
+    assert successor["permission"] == permission
+    with pytest.raises(runner.QualificationError, match="model pin"):
+        runner.build_opencode_config(model_id="unfrozen-model")
 
 
 def test_project_plugin_mode_has_no_legacy_pure_or_project_config_bypass(

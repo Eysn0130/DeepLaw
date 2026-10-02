@@ -154,12 +154,12 @@ def test_accepted_dispatch_without_observation_is_not_execution(
 
 
 @pytest.mark.parametrize("session,model,output,observed", [
-    ("mock-session", "deepseek-v4-flash", 1, True),
-    ("other-session", "deepseek-v4-flash", 1, False),
+    ("mock-session", "deepseek-flash", 1, True),
+    ("other-session", "deepseek-flash", 1, False),
     ("mock-session", "other-model", 1, False),
-    ("mock-session", "deepseek-v4-flash", 0, False),
-    ("mock-session", "deepseek-v4-flash", None, False),
-    ("mock-session", "deepseek-v4-flash", True, False),
+    ("mock-session", "deepseek-flash", 0, False),
+    ("mock-session", "deepseek-flash", None, False),
+    ("mock-session", "deepseek-flash", True, False),
 ])
 def test_model_execution_requires_bound_completed_response(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

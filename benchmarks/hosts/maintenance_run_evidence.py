@@ -113,7 +113,7 @@ def _outcome_claim(value: Any, context: dict, trace: dict, score: dict, binding:
     expected = {
         "schema_version": "deeplaw.knowledge-run-record/v1",
         "writer_id": "owner-host-maintenance-fixture", "host_id": "opencode",
-        "model_id": "deepseek-v4-flash", "scope": "project", "sensitivity": "public",
+        "model_id": "deepseek-flash", "scope": "project", "sensitivity": "public",
         "status": "succeeded" if score["passed"] else "partial",
         "task_sha256": sha256_bytes(trace["task"]["task"].encode()),
         "input_sha256": context["capsule"]["capsule_digest"], "output_sha256": trace_sha,
@@ -185,7 +185,7 @@ def _native(raw: bytes) -> list[dict]:
         else:
             raise ValueError("native event projection differs")
     if not any(item.get("event") == "message.updated" and item.get("finished") is True
-               and item.get("provider") == "deepseek" and item.get("model") == "deepseek-v4-flash"
+               and item.get("provider") == "deepseek" and item.get("model") == "deepseek-flash"
                and any(type(item["tokens"].get(key)) in (int, float) and item["tokens"][key] > 0
                        for key in ("output", "reasoning")) for item in records):
         raise ValueError("completed response projection is missing")

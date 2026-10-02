@@ -43,8 +43,8 @@ config.write_text(
             "share": "disabled",
             "autoupdate": False,
             **({
-                "model": "deepseek/deepseek-v4-flash",
-                "small_model": "deepseek/deepseek-v4-flash",
+                "model": "deepseek/deepseek-flash",
+                "small_model": "deepseek/deepseek-flash",
                 "default_agent": "native_probe",
                 "subagent_depth": 0,
                 "snapshot": False,
@@ -56,12 +56,12 @@ config.write_text(
                         "apiKey": "{env:DEEPSEEK_API_KEY}",
                     },
                     "models": {
-                        "deepseek-v4-flash": {"limit": {"context": 1_000_000, "output": 256}}
+                        "deepseek-flash": {"limit": {"context": 1_000_000, "output": 256}}
                     },
                 }},
                 "permission": {"*": "deny"},
                 "agent": {"native_probe": {
-                    "mode": "primary", "model": "deepseek/deepseek-v4-flash",
+                    "mode": "primary", "model": "deepseek/deepseek-flash",
                     "variant": "max", "steps": 1, "permission": {"*": "deny"},
                     "prompt": "Answer the public probe directly without any tool.",
                 }},

@@ -104,8 +104,8 @@
       "properties": {
         "version": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._+:-]{0,99}$"},
         "source_commit": {"$ref": "#/$defs/git"},
-        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
-        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "config_selector": {"const": "deepseek/deepseek-flash"},
+        "expected_response_model_id": {"const": "deepseek-flash"},
         "executable_sha256": {"$ref": "#/$defs/sha256"},
         "package_sha256": {"$ref": "#/$defs/sha256"},
         "runtime": {"const": "host_bun_runtime_only"},
@@ -195,7 +195,7 @@
         "workflow_run_id": {"type": "integer", "minimum": 1},
         "task_case": {"$ref": "#/$defs/taskCase"},
         "host": {"$ref": "#/$defs/host"},
-        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash"]},
+        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash", "deepseek-flash"]},
         "events": {"type": "array", "minItems": 1, "maxItems": 1000000, "items": {"$ref": "#/$defs/event"}}
       }
     },
@@ -210,7 +210,7 @@
         "workflow_run_id": {"type": "integer", "minimum": 1},
         "task_case": {"$ref": "#/$defs/taskCase"},
         "host": {"$ref": "#/$defs/host"},
-        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash"]},
+        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash", "deepseek-flash"]},
         "receipts": {"type": "array", "minItems": 1, "maxItems": 1000000, "items": {"type": "object", "additionalProperties": false, "required": ["schema_version", "provenance_level", "host", "host_identity", "event_type", "operation", "event_sequence", "raw_observation_digest", "session_sha256", "parent_session_sha256", "route_binding_provenance", "observed_methods", "status", "gap", "claim_eligible", "write_performed", "receipt_sha256"], "properties": {
           "schema_version": {"enum": ["deeplaw.native-host-lifecycle-receipt/v2", "deeplaw.native-host-lifecycle-receipt/v3"]},
           "provenance_level": {"enum": ["native_plugin_hook", "compatibility_bridge"]},
@@ -261,7 +261,7 @@
         "workflow_run_id": {"type": "integer", "minimum": 1},
         "task_case": {"$ref": "#/$defs/taskCase"},
         "host": {"$ref": "#/$defs/host"},
-        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash"]},
+        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash", "deepseek-flash"]},
         "host_identity_sha256": {"$ref": "#/$defs/sha256"},
         "candidate_commit": {"$ref": "#/$defs/git"},
         "candidate_tree": {"$ref": "#/$defs/git"},
@@ -289,7 +289,7 @@
         "workflow_run_id": {"type": "integer", "minimum": 1},
         "task_case": {"$ref": "#/$defs/taskCase"},
         "host": {"$ref": "#/$defs/host"},
-        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash"]},
+        "actual_response_model_id": {"enum": ["gpt-5.6-luna", "deepseek-v4-flash", "deepseek-flash"]},
         "rows": {"type": "array", "minItems": 1, "maxItems": 1000000, "items": {"$ref": "#/$defs/usageRow"}}
       }
     },

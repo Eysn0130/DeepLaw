@@ -877,10 +877,14 @@ class RequestGuard:
     """
 
     def __init__(self, *, key: str, nonce: str, forward: bool = False,
-                 tool_profile: str = "continuity", max_requests: int = 6) -> None:
+                 tool_profile: str = "continuity", max_requests: int = 6,
+                 model_id: str = "deepseek-v4-flash") -> None:
         require(tool_profile in GUARD_TOOL_PROFILES, "guard tool profile differs")
         require(type(max_requests) is int and 1 <= max_requests <= 6,
                 "guard request budget differs")
+        require(model_id in {"deepseek-v4-flash", "deepseek-flash"},
+                "guard model identity differs")
+        self.model_id = model_id
         self.tool_name = GUARD_TOOL_PROFILES[tool_profile]
         self.key = key
         self.nonce = nonce
@@ -934,7 +938,7 @@ class RequestGuard:
         )
         if "reasoning_effort" in value:
             guard_require(value["reasoning_effort"] == "max", "reasoning_effort_invalid")
-        guard_require(value.get("model") == "deepseek-v4-flash", "model_mismatch")
+        guard_require(value.get("model") == self.model_id, "model_mismatch")
         guard_require(isinstance(value.get("messages"), list), "messages_missing")
         guard_require(1 <= len(value["messages"]) <= 32, "message_count")
         if "tools" in value:
@@ -1432,7 +1436,7 @@ def guard_process(config_path: Path) -> None:
     require(bool(re.fullmatch(r"[A-Za-z0-9_-]{16,256}", key)), "guard key syntax differs")
     guard = RequestGuard(
         key=key, nonce=config["nonce"], forward=True,
-        tool_profile=config.get("tool_profile", "continuity"),
+        tool_profile=config.get("tool_profile", "continuity"), model_id="deepseek-flash",
     )
     failure = FailureEvidence()
     stage = "guard_start"
@@ -1782,6 +1786,7 @@ def prepare(input_path: Path) -> None:
     base = legacy.build_host_environment(root=root, opencode_binary=binary, node_binary=node)
     environment, _, plugin = legacy._prepare_scenario_state(
         base_environment=base,
+        model_id=host["expected_response_model_id"],
         run_root=root / "runtime",
         repository=repository,
         deeplaw_executable=deeplaw,
@@ -1940,7 +1945,7 @@ def measure_usage(
                 continue
             require(
                 item.get("provider_id") == "deepseek"
-                and item.get("model_id") == "deepseek-v4-flash",
+                and item.get("model_id") == "deepseek-flash",
                 "response model identity differs",
             )
             require(item.get("summary") is False, "unexpected summary model turn")
@@ -2206,7 +2211,7 @@ def run(prepared_path: Path) -> None:
                     f"/session/{session}/message",
                     {
                         "agent": "qualification",
-                        "model": {"providerID": "deepseek", "modelID": "deepseek-v4-flash"},
+                        "model": {"providerID": "deepseek", "modelID": "deepseek-flash"},
                         "parts": [
                             {
                                 "type": "text",
@@ -2528,7 +2533,7 @@ def write_sources(
         "hard_failure_ids": list(typed.HARD_FAILURE_IDS),
     }
     expected_ref = source_ref(root, "expected.json", expected)
-    model_meta = {**meta, "actual_response_model_id": "deepseek-v4-flash"}
+    model_meta = {**meta, "actual_response_model_id": "deepseek-flash"}
     event_ref = source_ref(
         root, "events.json", {**model_meta, "artifact_kind": "event_sequence", "events": events}
     )
@@ -2551,7 +2556,7 @@ def write_sources(
         rows.append(
             {
                 **{key: meta[key] for key in ("run_id", "workflow_run_id", "task_case", "host")},
-                "actual_response_model_id": "deepseek-v4-flash",
+                "actual_response_model_id": "deepseek-flash",
                 "host_identity_sha256": control["host_identity_sha256"],
                 "candidate_commit": control["candidate_binding"]["commit"],
                 "candidate_tree": control["candidate_binding"]["tree"],

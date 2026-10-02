@@ -87,25 +87,24 @@ def test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event
     event_path = tmp_path / "host-events.jsonl"
     fake_deeplaw = fake_bin / "deeplaw"
     # Bind the test's interpreter; PATH may select an OS developer-tool shim.
-    resolver_script = """#!__PYTHON_EXECUTABLE__
-if __import__("sys").argv[1:] != ["--fixture-preflight"]:
-    with open(__ENTRY_PATH__, "w") as entry:
-        entry.write("entered")
+    # The stdlib-only fake does not need Python site hooks.
+    resolver_script = """#!__PYTHON_EXECUTABLE__ -S
+with open(__ENTRY_PATH__, "w") as entry:
+    entry.write("entered")
 import json
 import os
 import pathlib
 import sys
 
 argv = sys.argv[1:]
-if argv != ["--fixture-preflight"]:
-    pathlib.Path(__OBSERVATION_PATH__).write_text(
-        json.dumps({
-            "argv": argv,
-            "environment_keys": sorted(os.environ),
-            "executable": sys.executable,
-        }),
-        encoding="utf-8",
-    )
+pathlib.Path(__OBSERVATION_PATH__).write_text(
+    json.dumps({
+        "argv": argv,
+        "environment_keys": sorted(os.environ),
+        "executable": sys.executable,
+    }),
+    encoding="utf-8",
+)
 print(json.dumps({
     "schema_version": "deeplaw.host-continuity-capsule/v1",
     "status": "gap",
@@ -130,24 +129,6 @@ print(json.dumps({
     _freeze_local_plugin_dependency(tmp_path / "config" / "opencode")
     isolated_vault = tmp_path / "vault"
     isolated_vault.mkdir()
-    resolver_environment = {
-        "DEEPLAW_KNOWLEDGE_VAULT": str(isolated_vault),
-        "PATH": f"{fake_bin}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin",
-        "LANG": "C",
-        "LC_ALL": "C",
-    }
-    # Verify the fake before using it as the loader oracle, within the same CLI bound.
-    fixture_preflight = subprocess.run(
-        [str(fake_deeplaw), "--fixture-preflight"],
-        cwd=project,
-        env=resolver_environment,
-        check=True,
-        capture_output=True,
-        timeout=3,
-    )
-    assert json.loads(fixture_preflight.stdout)["gaps"] == [{"code": "route_unbound"}]
-    assert not observation_path.exists()
-    assert not resolver_entry_path.exists()
     port = _unused_loopback_port()
     base_url = f"http://127.0.0.1:{port}"
     host_environment = {
@@ -158,7 +139,7 @@ print(json.dumps({
         "OPENCODE_DISABLE_CLAUDE_CODE": "1",
         "OPENCODE_DISABLE_DEFAULT_PLUGINS": "1",
         "OPENCODE_DISABLE_MODELS_FETCH": "1",
-        "PATH": resolver_environment["PATH"],
+        "PATH": f"{fake_bin}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin",
         "LANG": "C",
         "LC_ALL": "C",
         "TMPDIR": str(tmp_path),

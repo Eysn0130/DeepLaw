@@ -81,7 +81,7 @@ def public_run(tmp_path_factory):
             session_sha = sha256_bytes(run_id.encode())
             native = [
                 {"event": "message.updated", "session_sha256": session_sha, "provider": "deepseek",
-                 "model": "deepseek-v4-flash", "finished": True, "cost": None,
+                 "model": "deepseek-flash", "finished": True, "cost": None,
                  "tokens": {"input": 1, "output": 1, "reasoning": 0, "cache_read": 0}},
                 {"event": "session.idle", "session_sha256": session_sha},
             ]
@@ -96,7 +96,7 @@ def public_run(tmp_path_factory):
                 # Only the existing public test-fixture owner entry creates/revokes its grant.
                 outcome = runner.record_host_outcome(
                     vault, setup["grant_id"], configuration=configuration, scenario=scenario,
-                    host_run_id=run_id, host_id="opencode", model_id="deepseek-v4-flash",
+                    host_run_id=run_id, host_id="opencode", model_id="deepseek-flash",
                     context=context, trace_payload=trace, score=score,
                     candidate_id="synthetic-candidate",
                 )

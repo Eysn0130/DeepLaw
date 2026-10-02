@@ -173,7 +173,12 @@ class RouteCapture:
         _require(key in self.streams, "tcp_start_gap")
         stream = self.streams[key]
         if flags & 4:
-            _require(not payload and not stream.data, "tcp_reset_gap")
+            # A peer may reset after the server closes a completed response.
+            # Preserve captured request bytes; HTTP framing is checked at finish.
+            # The opaque auxiliary flow needs the observed server FIN as well.
+            _require(not payload and (
+                not stream.data or server_port != AUXILIARY_PORT or stream.server_fin
+            ), "tcp_reset_gap")
             stream.reset = True
             return
         if client:
@@ -313,7 +318,7 @@ def validate_observation(value: object) -> dict[str, object]:
                      "route_receipt_auxiliary_gap")
             _require(all(type(flow[key]) is bool for key in ("client_fin", "server_fin", "reset"))
                      and (flow["reset"] or (flow["client_fin"] and flow["server_fin"]))
-                     and (not flow["reset"] or flow["client_bytes"] == 0)
+                     and (not flow["reset"] or flow["client_bytes"] == 0 or flow["server_fin"])
                      and (flow["client_bytes"] != 0 or flow["client_sha256"] == _digest(b"")),
                      "route_receipt_auxiliary_gap")
     rows = value["requests"]

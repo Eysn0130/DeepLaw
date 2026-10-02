@@ -343,7 +343,7 @@ def _model_execution_observed(observations: list[dict[str, Any]], session_sha: s
         if (session_sha is not None and item.get("session_sha256") == session_sha
                 and item.get("event") == "message.updated" and item.get("finished") is True
                 and item.get("provider") == "deepseek"
-                and item.get("model") == "deepseek-v4-flash" and isinstance(tokens, dict)
+                and item.get("model") == "deepseek-flash" and isinstance(tokens, dict)
                 and any(type(tokens.get(key)) in (int, float)
                         and math.isfinite(tokens[key]) and tokens[key] > 0
                         for key in ("output", "reasoning"))):
@@ -440,7 +440,7 @@ def execute_case(
         stage = "host"
         guard.start()
         environment["DEEPSEEK_API_KEY"] = nonce
-        config = host.build_opencode_config()
+        config = host.build_opencode_config(model_id="deepseek-flash")
         permission = {"*": "deny", TOOL: "allow"}
         config["permission"] = permission
         config["agent"]["qualification"].update({
@@ -493,7 +493,7 @@ def execute_case(
             dispatch_attempted = True
             _control(base_url, "POST", f"/session/{session}/prompt_async", {
                 "agent": "qualification",
-                "model": {"providerID": "deepseek", "modelID": "deepseek-v4-flash"},
+                "model": {"providerID": "deepseek", "modelID": "deepseek-flash"},
                 "parts": [{"type": "text", "text":
                            "Inspect the finite maintenance task and complete it."}],
             })
@@ -515,7 +515,7 @@ def execute_case(
                 raise TimeoutError("Host task deadline")
             completed = [item for item in matching if item.get("finished") is True]
             if not completed or any(
-                item.get("provider") != "deepseek" or item.get("model") != "deepseek-v4-flash"
+                item.get("provider") != "deepseek" or item.get("model") != "deepseek-flash"
                 for item in completed
             ):
                 raise ValueError("actual response model identity differs")
@@ -658,7 +658,7 @@ def main() -> None:
                         result["knowledge_outcome"] = record_host_outcome(
                             vault, setup["grant_id"], configuration=configuration,
                             scenario=scenario,
-                            host_run_id=run_id, host_id="opencode", model_id="deepseek-v4-flash",
+                            host_run_id=run_id, host_id="opencode", model_id="deepseek-flash",
                             context=context, trace_payload=result["trace"], score=result["score"],
                             candidate_id=value["candidate_id"],
                         )

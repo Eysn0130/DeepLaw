@@ -4,8 +4,8 @@ import { dirname, resolve, sep } from "node:path"
 
 export const OPENCODE_VERSION = "1.18.16"
 export const OPENCODE_SOURCE_COMMIT = "a3647eb025c7615159d417dcc49fc39fdaeba65b"
-export const CONFIG_SELECTOR = "deepseek/deepseek-v4-flash"
-export const EXPECTED_RESPONSE_MODEL_ID = "deepseek-v4-flash"
+export const CONFIG_SELECTOR = "deepseek/deepseek-flash"
+export const EXPECTED_RESPONSE_MODEL_ID = "deepseek-flash"
 export const MAX_CONTEXT_BYTES = 2048
 
 export const NATIVE_EVENTS = [

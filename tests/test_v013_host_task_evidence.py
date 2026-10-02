@@ -163,6 +163,8 @@ def _host_identity(host: str, *, current: bool = False) -> dict[str, Any]:
     }
     if current:
         value.update(
+            config_selector="deepseek/deepseek-flash",
+            expected_response_model_id="deepseek-flash",
             runtime="host_bun_runtime_only",
             dotenv_policy="owner_only_external_strict_parser",
             secret_visibility="forbidden",
@@ -389,7 +391,9 @@ def _manifest(
     receipts = [derive_native_host_receipt(event) for event in events]
     expected = _expected(tmp_path, host=host, task=task, run_id=run_id, workflow=workflow)
     expected_ref = _source(tmp_path, f"{host}/{task}/expected.json", expected)
-    model = "gpt-5.6-luna" if host == "codex" else "deepseek-v4-flash"
+    model = "gpt-5.6-luna" if host == "codex" else (
+        "deepseek-flash" if current else "deepseek-v4-flash"
+    )
     event_meta = {
         "artifact_kind": "event_sequence",
         "schema_version": "deeplaw.v013-host-task-evidence/v1",
@@ -769,6 +773,32 @@ def test_v013_host_task_manifest_accepts_current_native_v3_codex_identity(
     assert result["metrics"]["host_identity_sha256"] == _sha(
         _canonical(_host_identity("codex", current=True))
     )
+
+
+def test_current_opencode_evidence_binds_successor_response_and_rejects_legacy_alias(
+    tmp_path: Path,
+) -> None:
+    manifest = _manifest(tmp_path, host="opencode", task="continuity", current=True)
+    result = parse_typed_evidence(
+        manifest,
+        root=tmp_path,
+        expected_corpus_sha256=_expected_sha(tmp_path, "opencode", "continuity"),
+    )
+    assert result["status"] == "passed"
+    assert result["metrics"]["host_identity_sha256"] == _sha(
+        _canonical(_host_identity("opencode", current=True))
+    )
+    usage_path = tmp_path / "opencode/continuity/usage.json"
+    usage = json.loads(usage_path.read_text())
+    usage["actual_response_model_id"] = "deepseek-v4-flash"
+    usage_path.write_bytes(_canonical(usage))
+    _refresh_source_ref(manifest, "usage_source", usage_path)
+    with pytest.raises(TypedQualificationEvidenceError):
+        parse_typed_evidence(
+            manifest,
+            root=tmp_path,
+            expected_corpus_sha256=_expected_sha(tmp_path, "opencode", "continuity"),
+        )
 
 
 def test_v013_host_task_schema_and_frozen_catalog_are_closed(

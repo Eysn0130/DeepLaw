@@ -23,7 +23,7 @@ from benchmarks.hosts.native_provider_bridge import (
 )
 
 _BINDING = "b" * 64
-_BODY = b'{ "model": "deepseek-v4-flash", "messages": [{"role":"user","content":"public"}] }'
+_BODY = b'{ "model": "deepseek-flash", "messages": [{"role":"user","content":"public"}] }'
 _POSIX = pytest.mark.skipif(
     os.name != "posix", reason="owner authority pipe/kill/reap is POSIX-only",
 )
@@ -105,7 +105,7 @@ def test_original_body_response_hash_closed_environment_and_fresh_binding(
             "schema_version", "message_kind", "profile", "model_pin", "nonce",
             "execution_binding_sha256", "deadline_monotonic_ns", "binding_sha256",
         }
-        assert config["model_pin"] == "deepseek/deepseek-v4-flash"
+        assert config["model_pin"] == "deepseek/deepseek-flash"
         assert owner.forward.__name__ == "forward"
         receipt = owner.close()
         _validate(receipt)

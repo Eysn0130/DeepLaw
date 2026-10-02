@@ -108,10 +108,10 @@ def test_budget_rejects_scope_revision_and_extra_calls(mutation):
         budget.request(request)
 
 
-def _guard_body(content="Use only the exact governed context."):
+def _guard_body(content="Use only the exact governed context.", model="deepseek-v4-flash"):
     return json.dumps(
         {
-            "model": "deepseek-v4-flash",
+            "model": model,
             "messages": [
                 {"role": "system", "content": content},
                 {"role": "user", "content": "Continue."},
@@ -141,6 +141,20 @@ def test_guard_requires_active_exact_route_and_does_not_infer_global_zero():
         with pytest.raises(producer.ProducerError):
             guard.inspect(_guard_body(), path=path, authorization=auth)
     assert guard.requests == []  # inspect alone is not a forwarded network observation.
+
+
+def test_guard_successor_requires_explicit_model_and_rejects_legacy_alias():
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce",
+                                  model_id="deepseek-flash")
+    guard.active = True
+    assert guard.inspect(_guard_body(model="deepseek-flash"), path="/chat/completions",
+                         authorization="Bearer synthetic-nonce")["model"] == "deepseek-flash"
+    with pytest.raises(producer.ProducerError, match="model_mismatch"):
+        guard.inspect(_guard_body(), path="/chat/completions",
+                      authorization="Bearer synthetic-nonce")
+    with pytest.raises(producer.ProducerError, match="guard model identity differs"):
+        producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce",
+                              model_id="unfrozen-model")
 
 
 @pytest.mark.parametrize(
@@ -446,7 +460,7 @@ def test_missing_usage_is_not_observed_zero():
         "session_sha256": producer.digest(b"ses_synthetic"),
         "message_sha256": "a" * 64,
         "provider_id": "deepseek",
-        "model_id": "deepseek-v4-flash",
+        "model_id": "deepseek-flash",
         "summary": False,
         "tokens": {"input": None, "output": 0, "reasoning": 0, "cache": {"read": 0}},
     }
@@ -498,7 +512,7 @@ def test_fork_cloned_messages_do_not_count_as_new_usage():
             "session_sha256": producer.digest(session.encode()),
             "message_sha256": producer.digest(message.encode()),
             "provider_id": "deepseek",
-            "model_id": "deepseek-v4-flash",
+            "model_id": "deepseek-flash",
             "summary": False,
             "tokens": {"input": count, "output": count, "reasoning": 0, "cache": {"read": 0}},
         }

@@ -66,8 +66,8 @@ HOST_IDENTITY = {
         "opencode": {
             "version": HOST_BINARY["opencode"][0],
             "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
-            "config_selector": "deepseek/deepseek-v4-flash",
-            "expected_response_model_id": "deepseek-v4-flash",
+            "config_selector": "deepseek/deepseek-flash",
+            "expected_response_model_id": "deepseek-flash",
             "executable_sha256": HOST_BINARY["opencode"][1],
             "package_sha256": "d40af2479740f8ad3a32b700e9a907794ba4314c926d0e805c20fe39751d8722",
             "runtime": "host_bun_runtime_only",

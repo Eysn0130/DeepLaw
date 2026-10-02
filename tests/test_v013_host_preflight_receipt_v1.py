@@ -50,8 +50,8 @@ def _host_identity(*, codex_version: str = "codex-cli moving") -> dict[str, obje
             "opencode": {
                 "version": "1.18.16",
                 "source_commit": "b" * 40,
-                "config_selector": "deepseek/deepseek-v4-flash",
-                "expected_response_model_id": "deepseek-v4-flash",
+                "config_selector": "deepseek/deepseek-flash",
+                "expected_response_model_id": "deepseek-flash",
                 "executable_sha256": "c" * 64,
                 "package_sha256": "d" * 64,
                 "runtime": "host_bun_runtime_only",

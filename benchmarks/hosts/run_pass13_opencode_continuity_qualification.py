@@ -367,9 +367,14 @@ def build_permission() -> dict[str, str]:
     return {"*": "deny", TOOL_NAME: "allow"}
 
 
-def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any]:
+def build_opencode_config(
+    *, agent_name: str = "qualification", model_id: str = "deepseek-v4-flash"
+) -> dict[str, Any]:
     if agent_name not in {"qualification", "development"}:
         raise QualificationError("OpenCode agent mode is invalid")
+    if model_id not in {"deepseek-v4-flash", "deepseek-flash"}:
+        raise QualificationError("OpenCode model pin is invalid")
+    model = "deepseek/" + model_id
     permission = build_permission()
     agent_prompt = (
         "Use only the bounded continuity capsule supplied by the native Host context; "
@@ -388,8 +393,8 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
     )
     return {
         "$schema": "https://opencode.ai/config.json",
-        "model": MODEL,
-        "small_model": MODEL,
+        "model": model,
+        "small_model": model,
         "default_agent": agent_name,
         "subagent_depth": 0,
         "enabled_providers": ["deepseek"],
@@ -407,7 +412,7 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
                     else "Pass 17 source-free development diagnostic"
                 ),
                 "mode": "primary",
-                "model": MODEL,
+                "model": model,
                 "variant": VARIANT,
                 "steps": 4,
                 "permission": permission,
@@ -4291,6 +4296,7 @@ def _prepare_scenario_state(
     node_binary: Path,
     expected_version: str = HISTORICAL_OPENCODE_VERSION_FIXTURE,
     agent_name: str = "qualification",
+    model_id: str = "deepseek-v4-flash",
 ) -> tuple[dict[str, str], Path, dict[str, Any]]:
     """Give each scenario a distinct OpenCode state tree and MCP wrapper."""
 
@@ -4314,7 +4320,7 @@ def _prepare_scenario_state(
         receipt_path=receipt,
         node_binary=node_binary,
     )
-    config = build_opencode_config(agent_name=agent_name)
+    config = build_opencode_config(agent_name=agent_name, model_id=model_id)
     if os.name == "nt":
         config["mcp"]["deeplaw_knowledge"]["command"] = [  # type: ignore[index]
             sys.executable,

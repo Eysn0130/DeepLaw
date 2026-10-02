@@ -536,7 +536,7 @@ def test_kernel_evidence_executes_only_core_tasks_and_defers_bundle_run_binding(
     assert "codex-cli 0.148.0-alpha.15" not in workflow
     assert "7645c3caf5607e4528eb3a15b12496c284c2a918939aed34e863c760c1b421e7" not in workflow
     assert '"gpt-5.6-luna"' in workflow
-    assert '"deepseek/deepseek-v4-flash"' in workflow
+    assert '"deepseek/deepseek-flash"' in workflow
     assert "scale-10000-evidence/v013-scale-qualification-v10.json" in workflow
     assert "kernel_qualification_bundle_v1 build" in workflow
     assert "sentinel=9223372036854775807" in workflow
@@ -714,6 +714,7 @@ def _assert_kernel_workflow_gates_opencode_on_transient_zero_model_broker_prefli
         "--opencode-dotenv",
         "--opencode-model",
         "deepseek/deepseek-v4-flash",
+        "deepseek/deepseek-flash",
         "host_process_receipt",
         "process-receipt",
         "host-task-handoff",
@@ -724,7 +725,7 @@ def _assert_kernel_workflow_gates_opencode_on_transient_zero_model_broker_prefli
     formal = workflow.split(formal_marker, 1)[1].split(
         "      - name: Reopen every typed receipt with the repository validator", 1
     )[0]
-    assert '--opencode-model "deepseek/deepseek-v4-flash"' in formal
+    assert '--opencode-model "deepseek/deepseek-flash"' in formal
     assert '--opencode-dotenv "${DEEPLAW_OPENCODE_DOTENV}"' in formal
 
 

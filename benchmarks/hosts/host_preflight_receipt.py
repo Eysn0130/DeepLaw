@@ -379,9 +379,9 @@ def _validate_host_identity_document(value: Mapping[str, Any]) -> dict[str, Any]
         opencode.get("executable_sha256"), label="OpenCode executable_sha256"
     )
     package_sha = _identity_sha(opencode.get("package_sha256"), label="OpenCode package_sha256")
-    if opencode.get("config_selector") != "deepseek/deepseek-v4-flash":
+    if opencode.get("config_selector") != "deepseek/deepseek-flash":
         _identity_fail("OpenCode selector is not fixed")
-    if opencode.get("expected_response_model_id") != "deepseek-v4-flash":
+    if opencode.get("expected_response_model_id") != "deepseek-flash":
         _identity_fail("OpenCode response model is not fixed")
     if opencode.get("runtime") != "host_bun_runtime_only":
         _identity_fail("OpenCode runtime policy is not fixed")
@@ -404,8 +404,8 @@ def _validate_host_identity_document(value: Mapping[str, Any]) -> dict[str, Any]
             "opencode": {
                 "version": opencode_version,
                 "source_commit": source_commit,
-                "config_selector": "deepseek/deepseek-v4-flash",
-                "expected_response_model_id": "deepseek-v4-flash",
+                "config_selector": "deepseek/deepseek-flash",
+                "expected_response_model_id": "deepseek-flash",
                 "executable_sha256": executable_sha,
                 "package_sha256": package_sha,
                 "runtime": "host_bun_runtime_only",

@@ -210,9 +210,9 @@ def _validate_catalog_host_constraints(value: Mapping[str, Any]) -> None:
         opencode["tool_version"] is not None
         or opencode["binary_sha256"] is not None
         or opencode["source_commit"] is not None
-        or opencode["config_selector"] != "deepseek/deepseek-v4-flash"
-        or opencode["model_id"] != "deepseek-v4-flash"
-        or opencode["expected_response_model_id"] != "deepseek-v4-flash"
+        or opencode["config_selector"] != "deepseek/deepseek-flash"
+        or opencode["model_id"] != "deepseek-flash"
+        or opencode["expected_response_model_id"] != "deepseek-flash"
         or opencode["reasoning_effort"] is not None
         or opencode["argv_prefix"] != ["opencode", "run", "--format", "json"]
     ):

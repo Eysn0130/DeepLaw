@@ -382,7 +382,7 @@ def _model_probe_evidence(*, output=3, reasoning=0, completed=1234):
     native = {
         "info": {
             "role": "assistant", "id": "message-probe", "sessionID": "session-probe",
-            "providerID": "deepseek", "modelID": "deepseek-v4-flash", "finish": "stop",
+            "providerID": "deepseek", "modelID": "deepseek-flash", "finish": "stop",
             "time": {"completed": completed},
             "tokens": {"input": 8, "output": output, "reasoning": reasoning,
                        "cache": {"read": 0, "write": 0}},

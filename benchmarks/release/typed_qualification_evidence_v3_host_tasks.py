@@ -142,7 +142,7 @@ CONTINUITY_LIFECYCLE = (
     "forget",
     "resume_after_forget",
 )
-HOST_MODELS = {"codex": "gpt-5.6-luna", "opencode": "deepseek-v4-flash"}
+HOST_MODELS = {"codex": "gpt-5.6-luna", "opencode": "deepseek-flash"}
 
 
 def _host_identity_shape(
@@ -201,7 +201,7 @@ def _host_identity_shape(
         and isinstance(value["source_commit"], str)
         and _GIT.fullmatch(value["source_commit"]) is not None
         and value["config_selector"] == "deepseek/deepseek-v4-flash"
-        and value["expected_response_model_id"] == HOST_MODELS[host]
+        and value["expected_response_model_id"] == "deepseek-v4-flash"
         and isinstance(value["executable_sha256"], str)
         and _SHA256.fullmatch(value["executable_sha256"]) is not None
         and isinstance(value["package_sha256"], str)
@@ -219,7 +219,7 @@ def _host_identity_shape(
         is not None
         and isinstance(value["source_commit"], str)
         and _GIT.fullmatch(value["source_commit"]) is not None
-        and value["config_selector"] == "deepseek/deepseek-v4-flash"
+        and value["config_selector"] == "deepseek/deepseek-flash"
         and value["expected_response_model_id"] == HOST_MODELS[host]
         and isinstance(value["executable_sha256"], str)
         and _SHA256.fullmatch(value["executable_sha256"]) is not None
@@ -472,7 +472,11 @@ def _metadata(value: Mapping[str, Any], *, artifact: str) -> tuple[str, int, str
     if host not in HOSTS:
         _fail(f"{artifact}.host is unsupported")
     model = value.get("actual_response_model_id", HOST_MODELS[host])
-    if model != HOST_MODELS[host]:
+    # Historical v2 evidence remains readable; native-v3 identity stays successor-only.
+    allowed_models = {HOST_MODELS[host]}
+    if host == "opencode":
+        allowed_models.add("deepseek-v4-flash")
+    if model not in allowed_models:
         _fail(f"{artifact}.actual_response_model_id is not pinned")
     return run_id, workflow, task_case, host, model
 
@@ -795,7 +799,12 @@ def _task_result(value: Mapping[str, Any], *, envelope: Mapping[str, Any]) -> Ma
                 ) from error
             if observation_ref is None:
                 _fail("v3 continuity task result Host observation source is unavailable")
-    metadata = _metadata(value, artifact="task_result")
+    # Legacy task results omit the model; bind that omission to their event
+    # identity rather than silently applying the current qualification pin.
+    metadata = _metadata(
+        {"actual_response_model_id": envelope["actual_response_model_id"], **value},
+        artifact="task_result",
+    )
     if value["claim_eligible"] is not False:
         _fail("task result cannot claim qualification eligibility")
     expected = (
