@@ -33,6 +33,32 @@ def digest(value: Any) -> str:
     return sha256_bytes(canonical_json(value).encode())
 
 
+class OutcomeGrantClosureError(ValueError):
+    """Keep mutation and capability cleanup failures separately bounded."""
+
+    def __init__(self, mutation: BaseException | None, cleanup: BaseException) -> None:
+        super().__init__("outcome grant closure failed")
+        self.mutation_failure = type(mutation).__name__ if mutation is not None else None
+        self.cleanup_failure = type(cleanup).__name__
+
+
+def assert_context_grants_closed(vault: Path) -> None:
+    """A captured fixture must have no live capability or recovery material."""
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        inspection = store.inspect()
+    if (inspection["counts"]["active_grants"] != 0
+            or inspection["verification"]["valid"] is not True):
+        raise ValueError("maintenance fixture grant or integrity gap")
+    for name in ("capabilities", "staging"):
+        directory = vault / ".deeplaw" / name
+        if directory.is_symlink() or not directory.is_dir():
+            raise ValueError("maintenance fixture capability or staging gap")
+        for entry in directory.iterdir():
+            if (name != "staging" or entry.name != "conflicts" or entry.is_symlink()
+                    or not entry.is_dir() or any(entry.iterdir())):
+                raise ValueError("maintenance fixture capability or staging gap")
+
+
 def prepare_context_vault(vault: Path, configuration: str) -> dict[str, Any]:
     if configuration not in CONFIGURATION_ORDER or vault.exists():
         raise ValueError("context configuration must use a fresh vault")
@@ -41,7 +67,7 @@ def prepare_context_vault(vault: Path, configuration: str) -> dict[str, Any]:
     with AutonomousKnowledgeStore(vault, read_only=False) as store:
         grant = store.enable_grant(
             writer_id="owner-host-maintenance-fixture",
-            operations=("remember", "forget", "record_run", "record_feedback"),
+            operations=("remember", "forget"),
             allowed_scope="project", max_sensitivity="public",
             evaluator_types=("external_check",),
         )["grant_id"]
@@ -102,7 +128,12 @@ def prepare_context_vault(vault: Path, configuration: str) -> dict[str, Any]:
             "expected_revision_id": forgotten["revision_id"],
             "reason": "Owner requested forgetting before the subsequent Host tasks.",
         })
+    with AutonomousKnowledgeStore(vault, read_only=False) as store:
+        store.disable_grant(grant)
+        vault_id = store.vault_id
+    assert_context_grants_closed(vault)
     return {"configuration_id": configuration, "grant_id": grant,
+            "vault_id": vault_id, "grant_status": "revoked_after_fixture_setup",
             "maintenance_mode": "explicit_owner_fixture_setup",
             "memory_provenance": "source_free_synthetic_fixture",
             "source_binding": "none",
@@ -110,6 +141,7 @@ def prepare_context_vault(vault: Path, configuration: str) -> dict[str, Any]:
 
 
 def capture_context(vault: Path, configuration: str, scenario: str) -> dict[str, Any]:
+    assert_context_grants_closed(vault)
     task = public_task_projection(configuration, scenario)
     with KnowledgeOS.open(vault) as knowledge:
         response = knowledge.context.compile(
@@ -134,16 +166,17 @@ def capture_context(vault: Path, configuration: str, scenario: str) -> dict[str,
             "context_provenance": "source_free_synthetic_memory_compile"}
 
 
-def record_host_outcome(
-    vault: Path, grant_id: str, *, configuration: str, scenario: str,
-    host_run_id: str, host_id: str, model_id: str, context: dict[str, Any],
+def validate_host_outcome(
+    vault: Path, *, configuration: str, scenario: str,
+    host_run_id: str, context: dict[str, Any],
     trace_payload: Mapping[str, Any], candidate_id: str, score: dict[str, Any],
 ) -> dict[str, Any]:
-    """Bind a verified persisted Host trace to the delivered public Capsule.
+    """Revalidate outcome inputs against an actual Vault using read-only stores.
 
-    The post-hoc ``record_run`` is a task outcome record.  It deliberately does
-    not reconstruct the v2 action-state ledger for actions that already
-    happened; the complete MCP trace remains the evidence for those actions.
+    Offline callers need the exact pre-outcome Vault snapshot, including its
+    Ledger and registered revision objects. Capsule or receipt hashes alone
+    cannot replace those bytes. Return a detached validated trace without
+    recording a run, feedback, grant, path, or new evidence.
     """
     if not isinstance(trace_payload, Mapping):
         raise ValueError("Host trace payload must be a persisted object")
@@ -195,10 +228,76 @@ def record_host_outcome(
     if (score != reopened_score or not score["event_chain_valid"]
             or not score["state_transition_valid"]):
         raise ValueError("Host action trace or independent score differs")
+    return persisted
+
+
+def record_host_outcome(
+    vault: Path, grant_id: str, *, configuration: str, scenario: str,
+    host_run_id: str, host_id: str, model_id: str, context: dict[str, Any],
+    trace_payload: Mapping[str, Any], candidate_id: str, score: dict[str, Any],
+) -> dict[str, Any]:
+    """Bind a verified persisted Host trace to the delivered public Capsule.
+
+    The post-hoc ``record_run`` is a task outcome record.  It deliberately does
+    not reconstruct the v2 action-state ledger for actions that already
+    happened; the complete MCP trace remains the evidence for those actions.
+    """
+    persisted = validate_host_outcome(
+        vault, configuration=configuration, scenario=scenario, host_run_id=host_run_id,
+        context=context, trace_payload=trace_payload, candidate_id=candidate_id, score=score,
+    )
+    assert_context_grants_closed(vault)
+    with AutonomousKnowledgeStore(vault, read_only=False) as store:
+        fixture = store.connection.execute(
+            "SELECT writer_id, allowed_scope, max_sensitivity, revoked_at "
+            "FROM knowledge_sink_grants_v3 WHERE grant_id = ?", (grant_id,),
+        ).fetchone()
+        if (fixture is None or fixture["revoked_at"] is None
+                or fixture["writer_id"] != "owner-host-maintenance-fixture"
+                or fixture["allowed_scope"] != "project"
+                or fixture["max_sensitivity"] != "public"):
+            raise ValueError("outcome fixture grant binding differs")
+        outcome_grant = store.enable_grant(
+            writer_id="owner-host-maintenance-fixture",
+            operations=("record_run", "record_feedback"),
+            allowed_scope="project", max_sensitivity="public",
+            evaluator_types=("external_check",),
+        )["grant_id"]
+    result = None
+    mutation_error = None
+    try:
+        result = _write_host_outcome(
+            vault, outcome_grant, persisted=persisted, configuration=configuration,
+            host_run_id=host_run_id, host_id=host_id, model_id=model_id,
+            context=context, score=score,
+        )
+    except BaseException as error:
+        mutation_error = error
+    try:
+        with AutonomousKnowledgeStore(vault, read_only=False) as store:
+            store.disable_grant(outcome_grant)
+        assert_context_grants_closed(vault)
+    except BaseException as error:
+        raise OutcomeGrantClosureError(mutation_error, error) from error
+    if mutation_error is not None:
+        raise mutation_error
+    assert result is not None
+    return result
+
+
+def _write_host_outcome(
+    vault: Path, grant_id: str, *, persisted: dict[str, Any], configuration: str,
+    host_run_id: str, host_id: str, model_id: str, context: dict[str, Any],
+    score: dict[str, Any],
+) -> dict[str, Any]:
+    task = persisted["task"]
+    events = persisted["events"]
+    capsule = context["capsule"]
     binding = build_task_context_binding(digest(configuration), digest(task["task_id"]))
     trace_digest = digest(dict(persisted))
     result = handle_knowledge_sink({
-        "operation": "record_run", "idempotency_key": host_run_id,
+        "operation": "record_run",
+        "idempotency_key": "host-maintenance-run:" + digest(host_run_id),
         "confirm_no_case_data": True, "task": task["task"],
         "host_id": host_id, "model_id": model_id,
         "status": "succeeded" if score["passed"] else "partial",
@@ -228,7 +327,9 @@ def record_host_outcome(
                 continue
             feedback.append(handle_knowledge_sink({
                 "operation": "record_feedback",
-                "idempotency_key": host_run_id + "-" + revision["knowledge_id"],
+                "idempotency_key": "host-maintenance-feedback:" + digest(
+                    [host_run_id, revision["knowledge_id"]]
+                ),
                 "confirm_no_case_data": True,
                 "knowledge_id": revision["knowledge_id"],
                 "expected_revision_id": revision["revision_id"],

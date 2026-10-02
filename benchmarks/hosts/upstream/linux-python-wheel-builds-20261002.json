@@ -1,0 +1,101 @@
+{
+  "status": "intermediate_guest_runtime_build",
+  "reconstruction_date": "2026-10-02",
+  "formal_admission": false,
+  "platform": "Linux aarch64 musl",
+  "python": "3.12.15",
+  "lock_sha256": "a8e33e7d390bb7f94528c75827176b46b85f7539d27c51923700f38ccaf732d7",
+  "locked_dependency_versions_unchanged": true,
+  "native_network_devices": 0,
+  "source_completion": [
+    {
+      "package": "tree-sitter",
+      "original_sdist_sha256": "b40c219edccc4564530c96f8f1556f6202b37cda964d1cbd7bd2b7e68b40a245",
+      "completed_source_sha256": "7fcec66ebcfc459b5d337b5aac35a69338868ac333b3c79d7705b79a4e786dd8",
+      "source_c_files_unchanged": true,
+      "c_source_inventory_sha256": "6b84c3ed486145c6365c9ab69382e6808d410b30bad0d2af5c9f93512ac4dd0d",
+      "archive": "tree-sitter-completed.tar.gz"
+    },
+    {
+      "package": "tree-sitter-java",
+      "original_sdist_sha256": "f5cd57b8f1270a7f0438878750d02ccc79421d45cca65ff284f1527e9ef02e38",
+      "completed_source_sha256": "0181295627be70a156043cbd42cabb681e9837b47bf07d60feaa0159dbfeff36",
+      "source_c_files_unchanged": true,
+      "c_source_inventory_sha256": "ce677888de0341205f195251d633744601bef4795385bb37d875a22b33faf861",
+      "archive": "tree-sitter-java-completed.tar.gz"
+    },
+    {
+      "package": "tree-sitter-typescript",
+      "original_sdist_sha256": "7b167b5827c882261cb7a50dfa0fb567975f9b315e87ed87ad0a0a3aedb3834d",
+      "completed_source_sha256": "910254f2ba3c933bf68ae27922ace07ed8f7b02322b6d5c3d1bb00b47e1e1839",
+      "source_c_files_unchanged": true,
+      "c_source_inventory_sha256": "00c5fcb4e35225a7b700538c1ed9ce171c1b283f3032879cf87574fddea06020",
+      "archive": "tree-sitter-typescript-completed.tar.gz"
+    }
+  ],
+  "source_headers": [
+    {
+      "name": "java-parser.h",
+      "url": "https://raw.githubusercontent.com/tree-sitter/tree-sitter-java/94703d5a6bed02b98e438d7cad1136c01a60ba2c/src/tree_sitter/parser.h",
+      "sha256": "a1f6ef161fbaf48a0e10fca90ef5290a062462b307b3898aa562993853b9f80a",
+      "bytes": 7039,
+      "license": "MIT"
+    },
+    {
+      "name": "typescript-parser.h",
+      "url": "https://raw.githubusercontent.com/tree-sitter/tree-sitter-typescript/f975a621f4e7f532fe322e13c4f79495e0a7b2e7/typescript/src/tree_sitter/parser.h",
+      "sha256": "a1f6ef161fbaf48a0e10fca90ef5290a062462b307b3898aa562993853b9f80a",
+      "bytes": 7039,
+      "license": "MIT"
+    },
+    {
+      "name": "typescript-scanner.h",
+      "url": "https://raw.githubusercontent.com/tree-sitter/tree-sitter-typescript/f975a621f4e7f532fe322e13c4f79495e0a7b2e7/common/scanner.h",
+      "sha256": "da66ef2bd14a3f7ea743e25ba068c6c9aae2c3509db200ff80c4a0e6116e564c",
+      "bytes": 10097,
+      "license": "MIT"
+    }
+  ],
+  "wheels": [
+    {
+      "bytes": 653427,
+      "name": "tree_sitter-0.26.0-cp312-cp312-linux_aarch64.whl",
+      "sha256": "89e83a06a27ebaaa081b71dfa495ca6344b8418f4026fa010a3ac1938d77bee3"
+    },
+    {
+      "bytes": 86347,
+      "name": "tree_sitter_java-0.23.5-cp39-abi3-linux_aarch64.whl",
+      "sha256": "29b7136ebcbe4df49117047bfe904a12c08be504fdfe3389f8fc4fcadddbcf69"
+    },
+    {
+      "bytes": 356851,
+      "name": "tree_sitter_typescript-0.23.2-cp39-abi3-linux_aarch64.whl",
+      "sha256": "d3c3fc7a58251c1d36603b0a0fe703a053bdb1e25cbf17d8751f84b9ae9c9da6"
+    }
+  ],
+  "offline_build": {
+    "native_exit_code": 0,
+    "input_manifest_sha256": "31021c9a3ba2926440fe78360e1ed0a238ce947ea372331eac2c311d9f287497",
+    "import_smoke_passed": true,
+    "apk_signature_verification": "native_apk_passed",
+    "network_acquisition_during_build": false
+  },
+  "kernel": {
+    "original_sha256": "06196d2cf51e9a2bac421564bb64c63a8b7146c9a22755dd22a713e337023013",
+    "original_bytes": 10387968,
+    "kernel_release": "6.18.52-0-virt",
+    "method": "linux_efi_zboot_header_gzip_payload",
+    "payload_offset": 51832,
+    "payload_bytes": 10326983,
+    "image_bytes": 36241408,
+    "image_sha256": "8dfe2ce7e5bfe4d0efcf2fed0a01a692b5a5d5217e9a55587a17d92203ab7b0d",
+    "arm64_image_magic_valid": true,
+    "format_source": {
+      "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/firmware/efi/libstub/zboot-header.S",
+      "sha256": "4af094225b43895c8aabe1cf9831c5e6e117b3509902be50bc4c6dcabf16b647",
+      "license": "GPL-2.0"
+    },
+    "formal_admission": false
+  },
+  "supersedes_for_current_reconstruction": "linux-python-wheel-builds.json"
+}

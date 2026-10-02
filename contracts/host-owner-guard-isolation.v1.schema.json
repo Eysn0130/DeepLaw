@@ -1,0 +1,482 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/host-owner-guard-isolation.v1.schema.json",
+  "title": "DeepLaw owner external guard isolation source v1",
+  "description": "Closed, role-bound external producer declarations for OpenCode only. Booleans and process digests require independent native collector reopening and do not establish source authenticity or formal admission. Raw public request and native response inspection is memory-only. Store reads refer to on-disk private Host authentication, transcript, and reasoning stores; they do not describe the authority's authorized access to its existing broker credential. This candidate source is not enabled in the current qualification consumer and grants no credential authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_kind",
+    "candidate_binding",
+    "run_binding",
+    "corpus",
+    "runner",
+    "scorer",
+    "host",
+    "task_case",
+    "actors",
+    "credential_observation",
+    "inspection_observation",
+    "process_boundary",
+    "write_observation",
+    "claim_eligible",
+    "observation_binding_sha256",
+    "challenge_nonce_sha256",
+    "native_process_receipt_sha256",
+    "execution_binding_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.host-owner-guard-isolation/v1"
+    },
+    "artifact_kind": {
+      "const": "isolation_receipt"
+    },
+    "candidate_binding": {
+      "$ref": "#/$defs/candidateBinding"
+    },
+    "run_binding": {
+      "$ref": "#/$defs/runBinding"
+    },
+    "corpus": {
+      "$ref": "#/$defs/corpusBinding"
+    },
+    "runner": {
+      "$ref": "#/$defs/identityBinding"
+    },
+    "scorer": {
+      "$ref": "#/$defs/identityBinding"
+    },
+    "host": {
+      "const": "opencode"
+    },
+    "task_case": {
+      "enum": [
+        "continuity",
+        "living_wiki",
+        "professional_evidence"
+      ]
+    },
+    "actors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "credential_authority",
+        "host",
+        "mcp",
+        "observer",
+        "runner",
+        "scorer"
+      ],
+      "properties": {
+        "credential_authority": {
+          "$ref": "#/$defs/actor"
+        },
+        "host": {
+          "$ref": "#/$defs/actor"
+        },
+        "mcp": {
+          "$ref": "#/$defs/actor"
+        },
+        "observer": {
+          "$ref": "#/$defs/actor"
+        },
+        "runner": {
+          "$ref": "#/$defs/actor"
+        },
+        "scorer": {
+          "$ref": "#/$defs/actor"
+        }
+      }
+    },
+    "credential_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "authority_key_present",
+        "key_received"
+      ],
+      "properties": {
+        "mode": {
+          "const": "owner_external_guard_host_nonce_mcp_no_key"
+        },
+        "authority_key_present": {
+          "type": "boolean",
+          "const": true
+        },
+        "key_received": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "mcp",
+            "observer",
+            "runner",
+            "scorer"
+          ],
+          "properties": {
+            "host": {
+              "type": "boolean",
+              "const": false
+            },
+            "mcp": {
+              "type": "boolean",
+              "const": false
+            },
+            "observer": {
+              "type": "boolean",
+              "const": false
+            },
+            "runner": {
+              "type": "boolean",
+              "const": false
+            },
+            "scorer": {
+              "type": "boolean",
+              "const": false
+            }
+          }
+        }
+      }
+    },
+    "inspection_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_public_request_inspected",
+        "observer_public_native_response_inspected",
+        "raw_request_retained",
+        "raw_native_response_retained",
+        "store_reads"
+      ],
+      "properties": {
+        "authority_public_request_inspected": {
+          "type": "boolean",
+          "const": true
+        },
+        "observer_public_native_response_inspected": {
+          "type": "boolean"
+        },
+        "raw_request_retained": {
+          "type": "boolean",
+          "const": false
+        },
+        "raw_native_response_retained": {
+          "type": "boolean",
+          "const": false
+        },
+        "store_reads": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "credential_authority",
+            "host",
+            "mcp",
+            "observer",
+            "runner",
+            "scorer"
+          ],
+          "properties": {
+            "credential_authority": {
+              "$ref": "#/$defs/storeReadObservation"
+            },
+            "host": {
+              "$ref": "#/$defs/storeReadObservation"
+            },
+            "mcp": {
+              "$ref": "#/$defs/storeReadObservation"
+            },
+            "observer": {
+              "$ref": "#/$defs/storeReadObservation"
+            },
+            "runner": {
+              "$ref": "#/$defs/storeReadObservation"
+            },
+            "scorer": {
+              "$ref": "#/$defs/storeReadObservation"
+            }
+          }
+        }
+      }
+    },
+    "process_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "native_receipt_observed",
+        "host_process_separated",
+        "mcp_process_separated"
+      ],
+      "properties": {
+        "native_receipt_observed": {
+          "type": "boolean",
+          "const": true
+        },
+        "host_process_separated": {
+          "type": "boolean",
+          "const": true
+        },
+        "mcp_process_separated": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "write_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hidden_mutation",
+        "write_performed",
+        "authorized_mutation",
+        "audit_head_before_sha256",
+        "audit_head_after_sha256"
+      ],
+      "properties": {
+        "hidden_mutation": {
+          "type": "boolean",
+          "const": false
+        },
+        "write_performed": {
+          "type": "boolean"
+        },
+        "authorized_mutation": {
+          "$ref": "#/$defs/authorizedMutation"
+        },
+        "audit_head_before_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "audit_head_after_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "claim_eligible": {
+      "type": "boolean",
+      "const": false
+    },
+    "observation_binding_sha256": {
+      "$ref": "#/$defs/nonzeroSha256"
+    },
+    "challenge_nonce_sha256": {
+      "$ref": "#/$defs/nonzeroSha256"
+    },
+    "native_process_receipt_sha256": {
+      "$ref": "#/$defs/nonzeroSha256"
+    },
+    "execution_binding_sha256": {
+      "$ref": "#/$defs/nonzeroSha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "minLength": 64,
+      "maxLength": 64
+    },
+    "nonzeroSha256": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "not": {
+            "const": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    "git": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      }
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "tree",
+        "lock_sha256",
+        "wheel_sha256",
+        "sdist_sha256"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/git"
+        },
+        "tree": {
+          "$ref": "#/$defs/git"
+        },
+        "lock_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "wheel_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sdist_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "runBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "workflow_run_id"
+      ],
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "workflow_run_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "corpusBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "role"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "role": {
+          "const": "host_qualification"
+        }
+      }
+    },
+    "identityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "sha256"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/identifier"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "process_identity_sha256",
+        "source_sha256",
+        "instance_sha256"
+      ],
+      "properties": {
+        "process_identity_sha256": {
+          "$ref": "#/$defs/nonzeroSha256"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/nonzeroSha256"
+        },
+        "instance_sha256": {
+          "$ref": "#/$defs/nonzeroSha256"
+        }
+      }
+    },
+    "storeReadObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "auth_store_read",
+        "transcript_store_read",
+        "reasoning_store_read"
+      ],
+      "properties": {
+        "auth_store_read": {
+          "type": "boolean",
+          "const": false
+        },
+        "transcript_store_read": {
+          "type": "boolean",
+          "const": false
+        },
+        "reasoning_store_read": {
+          "type": "boolean",
+          "const": false
+        }
+      }
+    },
+    "authorizedMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observed",
+        "operation",
+        "owner_authorized",
+        "receipt_sha256"
+      ],
+      "properties": {
+        "observed": {
+          "type": "boolean"
+        },
+        "operation": {
+          "enum": [
+            "owner_forget",
+            null
+          ]
+        },
+        "owner_authorized": {
+          "type": "boolean"
+        },
+        "receipt_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$",
+          "maxLength": 64
+        }
+      }
+    },
+    "expectedBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_binding_sha256",
+        "challenge_nonce_sha256",
+        "native_process_receipt_sha256",
+        "execution_binding_sha256"
+      ],
+      "properties": {
+        "observation_binding_sha256": {
+          "$ref": "#/$defs/nonzeroSha256"
+        },
+        "challenge_nonce_sha256": {
+          "$ref": "#/$defs/nonzeroSha256"
+        },
+        "native_process_receipt_sha256": {
+          "$ref": "#/$defs/nonzeroSha256"
+        },
+        "execution_binding_sha256": {
+          "$ref": "#/$defs/nonzeroSha256"
+        }
+      }
+    }
+  }
+}

@@ -3263,8 +3263,14 @@ def _validate_opencode_package(
         and host_item.get("executable_sha256")
         == "261ed2c03b5bc60c7d0a9615d16b0d929bf2657e1394abfb852de8723d311729"
     )
+    reconstructed_build = (
+        version == "1.18.16-deeplaw.3"
+        and source_commit == "aa469eef695b03a0243744a3e11355cb321133e7"
+        and host_item.get("executable_sha256")
+        == "c893abe5862b49258e27d4ebc0adfe976d5f6c1b8e9928f7feb94d845d048486"
+    )
     if (
-        not (historical_release or shutdown_build)
+        not (historical_release or shutdown_build or reconstructed_build)
         or not isinstance(expected_sha256, str)
         or _SHA256.fullmatch(expected_sha256) is None
         or expected_sha256 == "0" * 64

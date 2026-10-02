@@ -1223,19 +1223,27 @@ def _assert_zero_model_static_package_binding_rejects_unpinned_release(
         )
 
 
-def test_zero_model_package_accepts_only_exact_declared_shutdown_build(tmp_path: Path) -> None:
+@pytest.mark.parametrize("version,source_commit,executable_sha256", [
+    ("1.18.16-deeplaw.2", "9f3a8e505a3926cc80aa1037aea8836a19d58afd",
+     "261ed2c03b5bc60c7d0a9615d16b0d929bf2657e1394abfb852de8723d311729"),
+    ("1.18.16-deeplaw.3", "aa469eef695b03a0243744a3e11355cb321133e7",
+     "c893abe5862b49258e27d4ebc0adfe976d5f6c1b8e9928f7feb94d845d048486"),
+], ids=["historical-v2", "reconstructed-v3"])
+def test_zero_model_package_accepts_only_exact_declared_shutdown_build(
+    tmp_path: Path, version: str, source_commit: str, executable_sha256: str,
+) -> None:
     package = (tmp_path / "opencode-package").resolve()
     package.write_bytes(b"owner frozen patched package")
     item = {
         **_ZERO_MODEL_HOST_ITEM,
-        "version": "1.18.16-deeplaw.2",
-        "source_commit": "9f3a8e505a3926cc80aa1037aea8836a19d58afd",
-        "executable_sha256": "261ed2c03b5bc60c7d0a9615d16b0d929bf2657e1394abfb852de8723d311729",
+        "version": version,
+        "source_commit": source_commit,
+        "executable_sha256": executable_sha256,
         "package_sha256": hashlib.sha256(package.read_bytes()).hexdigest(),
     }
     identity = {"hosts": {"opencode": item}}
     result = runner._validate_opencode_package(package, identity=identity, repository=_REPOSITORY)
-    assert result["version"] == "1.18.16-deeplaw.2"
+    assert result["version"] == version
     assert result["source_commit"] == item["source_commit"]
     for field, invalid in (
         ("version", "1.18.16-unreviewed"),

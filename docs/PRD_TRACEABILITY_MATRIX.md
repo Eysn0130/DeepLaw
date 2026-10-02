@@ -108,11 +108,11 @@ standard profile, while communities and all Canvas families require the explicit
 | `PRD-CTX-010..012` | Downstream task/evidence-duty quality, stateless retry, machine-readable capability discovery | Query plan, duty planner, MCP capabilities | Quality, retry, version, tool-list, and no-write tests | Retrieval metrics do not establish Authority; native Provider usage is required for qualification |
 | `PRD-CTX-013..015` | Order-independent eligibility, exact input-head binding/staleness, fail-closed ambiguity | `Q`, `CAP`, `TC`, `TR`, admission | Tail/position, stale-head, changed-worktree, and ambiguity tests | Resource truncation and ambiguity remain explicit; no silent broader-scope search |
 
-The current autonomous-core Provider advertisement is `knowledge-support.input/v8` /
-`knowledge-support.output/v7` (`knowledge-support input v8/output v7`) with only `query`, `context`,
-`explain`, and typed `read`. Input v7 remains unchanged; the new output schema accepts existing
-operation response versions plus output/v7 for read. Older broad operation inventories are not
-current advertisements.
+The current autonomous-core Provider advertisement is `knowledge-support.input/v9` /
+`knowledge-support.output/v8` (`knowledge-support input v9/output v8`) with only `query`, `context`,
+`explain`, and typed `read`. The current read schema adds bounded progressive navigation and exact
+fragment reads. Historical input/output schemas remain unchanged; older broad operation inventories
+are not current advertisements.
 
 The source candidate closes a bounded no-shell Agent read journey under `PRD-PRINCIPLE-005`,
 `PRD-WIKI-014..015` and `PRD-CTX-010..012`: `progressive_read.py`, Source/Wiki services, input v9,

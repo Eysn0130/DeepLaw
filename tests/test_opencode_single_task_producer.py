@@ -917,12 +917,507 @@ def _guard_handler(monkeypatch, guard, opener, body=None):
     raw = _guard_body() if body is None else body
     handler.headers = {"Content-Length": str(len(raw)), "Authorization": "Bearer synthetic-nonce"}
     handler.path = "/chat/completions"
+    handler.connection = Mock()
     handler.rfile = io.BytesIO(raw)
     handler.wfile = io.BytesIO()
     handler.send_response = Mock()
     handler.send_header = Mock()
     handler.end_headers = Mock()
     return handler
+
+
+def _guard_response(opener, body=b"{}"):
+    import io
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    response = opener.open.return_value.__enter__.return_value
+    stream = io.BytesIO(body)
+    response.status = 200
+    response.headers = {}
+    response.fp = SimpleNamespace(
+        raw=SimpleNamespace(_sock=Mock()), read1=Mock(side_effect=stream.read1),
+        close=stream.close, flush=stream.flush,
+    )
+    response.read1.side_effect = lambda size: response.fp.read1(size)
+
+    def closed(*_args):
+        response.fp.close()
+        return False
+
+    opener.open.return_value.__exit__.side_effect = closed
+    return response
+
+
+def test_guard_owner_forward_is_transport_neutral_and_uses_fixed_route(monkeypatch):
+    from unittest.mock import MagicMock, Mock
+
+    opener = MagicMock()
+    response = _guard_response(opener, b"data: public response\n\n")
+    response.headers = {"Content-Type": "text/event-stream; charset=utf-8"}
+    builder = Mock(return_value=opener)
+    monkeypatch.setattr(producer.urllib.request, "build_opener", builder)
+    guard = producer.RequestGuard(
+        key="private-test-key", nonce="synthetic-nonce", forward=True, max_requests=1,
+    )
+    guard.active = True
+    body = _guard_body()
+
+    def opened(*args, **kwargs):
+        assert guard.snapshot()["in_flight"] == 1
+        assert guard.transport_observation()["outbound_in_flight"] == 1
+        return opener.open.return_value
+
+    opener.open.side_effect = opened
+    assert guard.forward_request(
+        body, path="/chat/completions", authorization="Bearer synthetic-nonce",
+    ) == (200, "text/event-stream; charset=utf-8", b"data: public response\n\n")
+    request = opener.open.call_args.args[0]
+    assert request.full_url == "https://api.deepseek.com/chat/completions"
+    assert request.data == body
+    assert request.get_header("Authorization") == "Bearer private-test-key"
+    assert request.get_header("Content-type") == "application/json"
+    assert 0 < opener.open.call_args.kwargs["timeout"] <= 300
+    assert [call.args for call in response.read1.call_args_list] == [(65536,), (65536,)]
+    response.read.assert_not_called()
+    proxy, redirects = builder.call_args.args
+    assert isinstance(proxy, producer.urllib.request.ProxyHandler) and proxy.proxies == {}
+    with pytest.raises(producer.DiagnosticError, match="provider_open:redirect_forbidden"):
+        redirects.redirect_request(None, None, None, None, None, None)
+    assert producer.validate_guard_snapshot(guard.snapshot()) == {
+        "requests": [{"sha256": producer.digest(body), "bytes": len(body)}],
+        "rejected": 0, "in_flight": 0, "first_failure": None,
+        "cleanup_confirmed": None, "cleanup_failure": None,
+    }
+    assert guard.transport_observation() == {
+        "admitted": 1, "outbound_attempted": 1, "outbound_completed": 1,
+        "outbound_failed": 0, "outbound_in_flight": 0,
+    }
+    assert guard.server is None and guard.thread is None
+
+
+@pytest.mark.parametrize("maximum", [0, 7, True, 1.5])
+def test_guard_owner_request_budget_cannot_widen_or_use_noninteger(maximum):
+    with pytest.raises(producer.ProducerError, match="request budget"):
+        producer.RequestGuard(key="synthetic", nonce="synthetic", max_requests=maximum)
+
+
+@pytest.mark.parametrize("timeout_seconds", [0.25, 12, 300.0])
+def test_guard_owner_forward_uses_bounded_caller_timeout(monkeypatch, timeout_seconds):
+    from unittest.mock import MagicMock
+
+    opener = MagicMock()
+    response = _guard_response(opener)
+    response.headers = {}
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    assert guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+        timeout_seconds=timeout_seconds,
+    ) == (200, "application/json", b"{}")
+    assert 0 < opener.open.call_args.kwargs["timeout"] <= timeout_seconds
+    assert guard.transport_observation()["outbound_completed"] == 1
+
+
+def test_owner_forward_decreases_socket_timeout_for_each_small_read(monkeypatch):
+    from unittest.mock import MagicMock, Mock
+
+    opener = MagicMock()
+    response = _guard_response(opener)
+    original = response.fp
+    clock = [10.0]
+    chunks = iter([(b"a", 14.0), (b"b", 17.0), (b"", 18.0)])
+
+    def read1(_size):
+        data, clock[0] = next(chunks)
+        return data
+
+    def opened(*_args, **_kwargs):
+        clock[0] = 12.0  # Opening consumes the same total read budget.
+        return opener.open.return_value
+
+    original.read1.side_effect = read1
+    original.close = Mock()
+    opener.open.side_effect = opened
+    monkeypatch.setattr(producer.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *_args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    assert guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+        timeout_seconds=10,
+    ) == (200, "application/json", b"ab")
+    assert [call.args for call in original.raw._sock.settimeout.call_args_list] == [
+        (8.0,), (6.0,), (3.0,),
+    ]
+    original.close.assert_called_once()
+    response.read.assert_not_called()
+
+
+def test_owner_forward_times_out_continuous_small_reads_and_closes_response(monkeypatch):
+    from unittest.mock import MagicMock, Mock
+
+    opener = MagicMock()
+    response = _guard_response(opener)
+    original = response.fp
+    original.close = Mock()
+    clock = [10.0]
+
+    def read1(_size):
+        clock[0] += 1.0
+        return b"x"
+
+    original.read1.side_effect = read1
+    monkeypatch.setattr(producer.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *_args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    assert guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+        timeout_seconds=3,
+    )[0] == 403
+    assert original.read1.call_count == 3
+    assert [call.args for call in original.raw._sock.settimeout.call_args_list] == [
+        (3.0,), (2.0,), (1.0,),
+    ]
+    original.close.assert_called_once()
+    assert guard.snapshot()["first_failure"] == {"stage": "provider_read", "code": "timeout"}
+    assert guard.transport_observation()["outbound_failed"] == 1
+    assert guard.transport_observation()["outbound_completed"] == 0
+
+
+@pytest.mark.parametrize("body", [b"abcde", b"abcdefprivate-extra"])
+def test_owner_forward_caps_reads_at_existing_bound_plus_one_detection_byte(monkeypatch, body):
+    import io
+    from unittest.mock import MagicMock, Mock
+
+    opener = MagicMock()
+    response = _guard_response(opener)
+    original = response.fp
+    stream = io.BytesIO(body)
+    original.read1.side_effect = stream.read1
+    original.close = Mock()
+    monkeypatch.setattr(producer, "MAX_BYTES", 5)
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *_args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    result = guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+    )
+    assert result[0] == (200 if body == b"abcde" else 403)
+    assert stream.tell() == min(len(body), 6)
+    assert [call.args for call in response.read1.call_args_list] == (
+        [(6,), (1,)] if body == b"abcde" else [(6,)]
+    )
+    original.close.assert_called_once()
+    if result[0] == 403:
+        assert guard.snapshot()["first_failure"] == {
+            "stage": "provider_read", "code": "response_bound",
+        }
+
+
+@pytest.mark.parametrize("metadata,timeout", [
+    (b"1\r\nx\r\n0\r\n\r\n", 2.5),
+    (b"0\r\nX-Private: canary\r\n\r\n", 4.5),
+])
+def test_real_http_response_chunk_metadata_obeys_absolute_deadline(monkeypatch, metadata, timeout):
+    import http.client
+    import io
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock, Mock
+
+    clock = [10.0]
+    wire = io.BytesIO(
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+        b"Transfer-Encoding: chunked\r\n\r\n" + metadata,
+    )
+    transport = Mock()
+
+    def read1(size):
+        clock[0] += 1.0
+        return wire.read(size)
+
+    original = SimpleNamespace(
+        raw=SimpleNamespace(_sock=transport), readline=wire.readline,
+        read1=Mock(side_effect=read1), close=Mock(), flush=Mock(),
+    )
+    transport.makefile.return_value = original
+    response = http.client.HTTPResponse(transport)
+    response.begin()  # Already-buffered HTTP headers are never discarded.
+    body_start = wire.tell()
+    opener = MagicMock()
+    opener.open.return_value = response
+    monkeypatch.setattr(producer.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *_args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    assert guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+        timeout_seconds=timeout,
+    )[0] == 403
+    assert wire.tell() - body_start == (3 if timeout == 2.5 else 5)
+    actual_timeouts = [call.args[0] for call in transport.settimeout.call_args_list]
+    assert actual_timeouts == [timeout - index for index in range(len(actual_timeouts))]
+    original.close.assert_called_once()
+    assert response.fp is None
+    assert guard.snapshot()["first_failure"] == {"stage": "provider_read", "code": "timeout"}
+
+
+def test_real_http_response_keeps_buffered_content_and_closes_after_success(monkeypatch):
+    import http.client
+    import io
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock, Mock
+
+    wire = io.BytesIO(
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+        b"Transfer-Encoding: chunked\r\n\r\n2\r\nOK\r\n0\r\n\r\n",
+    )
+    transport = Mock()
+    original = SimpleNamespace(
+        raw=SimpleNamespace(_sock=transport), readline=wire.readline,
+        read1=Mock(side_effect=wire.read1), close=Mock(), flush=Mock(),
+    )
+    transport.makefile.return_value = original
+    response = http.client.HTTPResponse(transport)
+    response.begin()
+    opener = MagicMock()
+    opener.open.return_value = response
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *_args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    assert guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+    ) == (200, "text/event-stream", b"OK")
+    original.close.assert_called_once()
+    assert response.fp is None
+    assert guard.transport_observation()["outbound_completed"] == 1
+
+
+@pytest.mark.parametrize("length_header,body,status,remaining", [
+    (b"Content-Length: 5\r\n", b"he", 403, 3),
+    (b"Content-Length: 5\r\n", b"hello", 200, 0),
+    (b"Content-Length: 0\r\n", b"", 200, 0),
+    (b"", b"hello", 200, None),
+])
+def test_real_http_response_rejects_short_declared_body_without_completed_count(
+    monkeypatch, length_header, body, status, remaining,
+):
+    import http.client
+    import io
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock, Mock
+
+    wire = io.BytesIO(
+        b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" + length_header + b"\r\n" + body,
+    )
+    transport = Mock()
+    original = SimpleNamespace(
+        raw=SimpleNamespace(_sock=transport), readline=wire.readline,
+        read1=Mock(side_effect=wire.read1), close=Mock(), flush=Mock(),
+    )
+    transport.makefile.return_value = original
+    response = http.client.HTTPResponse(transport)
+    response.begin()
+    opener = MagicMock()
+    opener.open.return_value = response
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *_args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    result = guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+    )
+    assert result == (
+        status, "application/json",
+        body if status == 200 else b'{"error":"supervised_provider_request_rejected"}',
+    )
+    assert response.length == remaining
+    assert response.fp is None
+    original.close.assert_called_once()
+    assert guard.transport_observation() == {
+        "admitted": 1, "outbound_attempted": 1, "outbound_completed": int(status == 200),
+        "outbound_failed": int(status == 403), "outbound_in_flight": 0,
+    }
+    assert guard.snapshot()["first_failure"] == (
+        None if status == 200 else {"stage": "provider_read", "code": "response_bound"}
+    )
+
+
+def test_owner_forward_rejects_read_when_open_returns_after_deadline(monkeypatch):
+    from unittest.mock import MagicMock, Mock
+
+    opener = MagicMock()
+    response = _guard_response(opener)
+    original = response.fp
+    original.close = Mock()
+    clock = [10.0]
+
+    def opened(*_args, **_kwargs):
+        clock[0] = 14.0
+        return opener.open.return_value
+
+    opener.open.side_effect = opened
+    monkeypatch.setattr(producer.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *_args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    assert guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+        timeout_seconds=3,
+    )[0] == 403
+    response.read1.assert_not_called()
+    original.close.assert_called_once()
+    assert guard.snapshot()["first_failure"] == {"stage": "provider_read", "code": "timeout"}
+
+
+@pytest.mark.parametrize("timeout_seconds", [
+    0, -1, 300.01, True, False, float("inf"), float("-inf"), float("nan"),
+    "1", None, 10**400,
+])
+def test_guard_owner_forward_rejects_invalid_timeout_before_attempt(monkeypatch, timeout_seconds):
+    from unittest.mock import MagicMock
+
+    opener = MagicMock()
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    assert guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+        timeout_seconds=timeout_seconds,
+    ) == (403, "application/json", b'{"error":"supervised_provider_request_rejected"}')
+    opener.open.assert_not_called()
+    assert guard.snapshot()["first_failure"] == {
+        "stage": "admission", "code": "validation_rejected",
+    }
+    assert guard.snapshot()["requests"] == []
+    assert guard.snapshot()["rejected"] == 1
+    assert guard.transport_observation() == {
+        "admitted": 0, "outbound_attempted": 0, "outbound_completed": 0,
+        "outbound_failed": 0, "outbound_in_flight": 0,
+    }
+
+
+@pytest.mark.parametrize("kind", [
+    "inactive", "route", "authorization", "model", "tool", "privacy", "disabled",
+])
+def test_guard_owner_forward_reuses_inspection_before_attempt(monkeypatch, kind):
+    from unittest.mock import MagicMock
+
+    opener = MagicMock()
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *args: opener)
+    guard = producer.RequestGuard(
+        key="private-test-key", nonce="synthetic-nonce", forward=kind != "disabled",
+    )
+    guard.active = kind != "inactive"
+    value = json.loads(_guard_body())
+    if kind == "model":
+        value["model"] = "other-model"
+    elif kind == "tool":
+        value["tools"] = [{"type": "function", "function": {
+            "name": "forbidden_tool", "parameters": {"type": "object"},
+        }}]
+    elif kind == "privacy":
+        value["messages"][0]["content"] = "Read /Users/synthetic/private."
+    result = guard.forward_request(
+        producer.encoded(value),
+        path="/models" if kind == "route" else "/chat/completions",
+        authorization="Bearer wrong" if kind == "authorization" else "Bearer synthetic-nonce",
+    )
+    assert result == (
+        403, "application/json", b'{"error":"supervised_provider_request_rejected"}',
+    )
+    opener.open.assert_not_called()
+    assert guard.snapshot()["requests"] == []
+    assert guard.snapshot()["rejected"] == 1
+    assert guard.snapshot()["in_flight"] == 0
+    assert guard.transport_observation() == {
+        "admitted": 0, "outbound_attempted": 0, "outbound_completed": 0,
+        "outbound_failed": 0, "outbound_in_flight": 0,
+    }
+
+
+@pytest.mark.parametrize("kind", ["http", "network", "timeout", "read", "body", "header"])
+def test_guard_owner_forward_failure_is_sanitized_and_consumes_admission(monkeypatch, kind):
+    import urllib.error
+    from unittest.mock import MagicMock
+
+    canary = "private-test-key synthetic-nonce /private/secret prompt reasoning"
+    opener = MagicMock()
+    response = _guard_response(opener)
+    response.headers = {}
+    if kind == "http":
+        opener.open.side_effect = urllib.error.HTTPError(canary, 429, canary, {}, None)
+    elif kind == "network":
+        opener.open.side_effect = urllib.error.URLError(canary)
+    elif kind == "timeout":
+        opener.open.side_effect = TimeoutError(canary)
+    elif kind == "read":
+        response.fp.read1.side_effect = OSError(canary)
+    elif kind == "body":
+        response = _guard_response(opener, b"x" * (producer.MAX_BYTES + 1))
+    elif kind == "header":
+        response.headers = {"Content-Type": "application/json\r\nX-Private: " + canary}
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *args: opener)
+    guard = producer.RequestGuard(
+        key="private-test-key", nonce="synthetic-nonce", forward=True, max_requests=1,
+    )
+    guard.active = True
+    result = guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+    )
+    assert result == (
+        403, "application/json", b'{"error":"supervised_provider_request_rejected"}',
+    )
+    receipt = producer.validate_guard_snapshot(guard.snapshot())
+    expected = {
+        "http": ("provider_open", "http_error"), "network": ("provider_open", "network_error"),
+        "timeout": ("provider_open", "timeout"), "read": ("provider_read", "io_error"),
+        "body": ("provider_read", "response_bound"), "header": ("provider_read", "response_bound"),
+    }
+    assert (receipt["first_failure"]["stage"], receipt["first_failure"]["code"]) == expected[kind]
+    assert receipt["first_failure"].get("http_status") == (429 if kind == "http" else None)
+    assert canary not in producer.canonical_json(receipt)
+    assert guard.transport_observation() == {
+        "admitted": 1, "outbound_attempted": 1, "outbound_completed": 0,
+        "outbound_failed": 1, "outbound_in_flight": 0,
+    }
+    assert guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+    )[0] == 403
+    assert guard.snapshot()["rejected"] == 2
+    assert guard.snapshot()["first_failure"] == receipt["first_failure"]
+    assert len(guard.snapshot()["requests"]) == 1
+    assert guard.transport_observation()["outbound_attempted"] == 1
+    opener.open.assert_called_once()
+
+
+def test_guard_http_wrapper_reuses_owner_forward_and_tracks_one_request(monkeypatch):
+    from unittest.mock import MagicMock, Mock
+
+    opener = MagicMock()
+    response = _guard_response(opener)
+    response.headers = {}
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    handler = _guard_handler(monkeypatch, guard, opener)
+    owner_forward = Mock(wraps=guard.forward_request)
+    monkeypatch.setattr(guard, "forward_request", owner_forward)
+
+    def opened(*args, **kwargs):
+        assert guard.snapshot()["in_flight"] == 1
+        return opener.open.return_value
+
+    opener.open.side_effect = opened
+    handler.do_POST()
+    owner_forward.assert_called_once_with(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+    )
+    handler.send_response.assert_called_once_with(200)
+    assert handler.wfile.getvalue() == b"{}"
+    assert guard.snapshot()["rejected"] == 0
+    assert guard.snapshot()["in_flight"] == 0
+    assert guard.transport_observation()["outbound_completed"] == 1
 
 
 @pytest.mark.parametrize("kind", ["inspect", "http", "network", "timeout", "write"])
@@ -932,8 +1427,7 @@ def test_guard_failure_retains_fixed_stage_without_exception_payload(monkeypatch
 
     canary = "private-test-key synthetic-nonce /private/secret prompt reasoning"
     opener = MagicMock()
-    response = opener.open.return_value.__enter__.return_value
-    response.read.return_value = b"{}"
+    response = _guard_response(opener)
     response.headers = {}
     if kind == "http":
         opener.open.side_effect = urllib.error.HTTPError(canary, 429, canary, {}, None)
@@ -1167,8 +1661,9 @@ def test_guard_inspection_and_response_bound_codes_remain_fail_closed(monkeypatc
     from unittest.mock import MagicMock
 
     opener = MagicMock()
-    response = opener.open.return_value.__enter__.return_value
-    response.read.return_value = b"x" * (producer.MAX_BYTES + 1) if kind == "oversize" else b"{}"
+    response = _guard_response(
+        opener, b"x" * (producer.MAX_BYTES + 1) if kind == "oversize" else b"{}",
+    )
     response.headers = {}
     guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
     guard.active = True
@@ -1513,3 +2008,76 @@ def test_guard_tool_profiles_are_explicit_and_do_not_widen_each_other(profile):
 def test_guard_unknown_profile_is_rejected_before_any_forwarding():
     with pytest.raises(producer.ProducerError, match="profile"):
         producer.RequestGuard(key="synthetic", nonce="synthetic", tool_profile="arbitrary")
+
+
+@pytest.mark.parametrize("status", [201, 202, 204, 206, 301, 302, 307, 308])
+def test_owner_forward_preserves_non200_as_rejected_failure(monkeypatch, status):
+    from unittest.mock import MagicMock
+
+    opener = MagicMock()
+    response = _guard_response(opener)
+    response.status = status
+    response.headers = {}
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    assert guard.forward_request(
+        _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+    ) == (403, "application/json", b'{"error":"supervised_provider_request_rejected"}')
+    response.read.assert_not_called()
+    response.read1.assert_not_called()
+    assert guard.transport_observation() == {
+        "admitted": 1, "outbound_attempted": 1, "outbound_completed": 0,
+        "outbound_failed": 1, "outbound_in_flight": 0,
+    }
+    assert producer.validate_guard_snapshot(guard.snapshot())["first_failure"] == {
+        "stage": "provider_read", "code": "http_error", "http_status": status,
+    }
+
+
+@pytest.mark.parametrize("stage", ["open", "read"])
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_owner_forward_cancellation_closes_actual_attempt_count(monkeypatch, stage, interruption):
+    from unittest.mock import MagicMock
+
+    opener = MagicMock()
+    response = _guard_response(opener)
+    if stage == "open":
+        opener.open.side_effect = interruption("private test canary")
+    else:
+        response.fp.read1.side_effect = interruption("private test canary")
+    monkeypatch.setattr(producer.urllib.request, "build_opener", lambda *args: opener)
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    with pytest.raises(interruption) as caught:
+        guard.forward_request(
+            _guard_body(), path="/chat/completions", authorization="Bearer synthetic-nonce",
+        )
+    assert guard.transport_observation() == {
+        "admitted": 1, "outbound_attempted": 1, "outbound_completed": 0,
+        "outbound_failed": 1, "outbound_in_flight": 0,
+    }
+    snapshot = producer.validate_guard_snapshot(guard.snapshot())
+    assert snapshot["in_flight"] == 0
+    assert snapshot["first_failure"] == {
+        "stage": "provider_open" if stage == "open" else "provider_read", "code": "interrupted",
+    }
+    assert "private test canary" not in json.dumps(snapshot)
+    assert "private test canary" not in str(caught.value)
+    assert caught.value.__suppress_context__ is True
+    assert caught.value.args == (() if interruption is KeyboardInterrupt else (1,))
+
+
+def test_http_guard_rejects_short_declared_body_before_outbound(monkeypatch):
+    from unittest.mock import MagicMock
+
+    opener = MagicMock()
+    guard = producer.RequestGuard(key="private-test-key", nonce="synthetic-nonce", forward=True)
+    guard.active = True
+    handler = _guard_handler(monkeypatch, guard, opener)
+    handler.headers["Content-Length"] = str(len(_guard_body()) + 1)
+    handler.do_POST()
+    handler.connection.settimeout.assert_called_once_with(300)
+    opener.open.assert_not_called()
+    assert guard.transport_observation()["admitted"] == 0
+    assert guard.snapshot()["first_failure"] == {"stage": "ingress", "code": "body_length"}

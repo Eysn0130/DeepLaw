@@ -80,7 +80,7 @@
           "$ref": "#/$defs/classification"
         },
         "nonapplicable": {
-          "$ref": "#/$defs/classification"
+          "$ref": "#/$defs/nonapplicable_classification"
         },
         "historical_compatibility": {
           "$ref": "#/$defs/classification"
@@ -248,6 +248,76 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/case"
+          }
+        }
+      }
+    },
+    "nonapplicable_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id",
+        "junit",
+        "nonapplicable_systems"
+      ],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "junit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "classname",
+            "name"
+          ],
+          "properties": {
+            "classname": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "nonapplicable_systems": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "Linux",
+              "Darwin",
+              "Windows"
+            ]
+          },
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 2
+        }
+      }
+    },
+    "nonapplicable_classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "selection",
+        "cases"
+      ],
+      "properties": {
+        "status": {
+          "const": "nonapplicable"
+        },
+        "selection": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonapplicable_case"
           }
         }
       }

@@ -241,6 +241,13 @@ def test_public_projection_digests_all_pid_fields_and_drops_comm() -> None:
         (_nonzero_padding_packet(), (0, 1), 0, [], "netlink_padding_nonzero"),
         (_packet(connector.PROC_EVENT_EXEC, (1, 1)) + b"\0", (0, 1), 0, [], "netlink_truncated"),
     ],
+    ids=[
+        "truncated-frame", "sender-pid", "receive-flags", "ancillary",
+        "sender-group", "oversize-packet", "netlink-type", "netlink-flags",
+        "netlink-port", "connector-index", "connector-value", "connector-length",
+        "connector-flags", "unknown-event", "invalid-pid", "nonzero-padding",
+        "trailing-byte",
+    ],
 )
 def test_rejects_invalid_transport_or_wire_structure(
     raw: bytes,

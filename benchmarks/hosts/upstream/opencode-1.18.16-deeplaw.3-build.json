@@ -1,0 +1,190 @@
+{
+  "status": "candidate_host_build_not_formal_admission",
+  "reconstruction_date": "2026-10-02",
+  "upstream_repository": "https://github.com/anomalyco/opencode",
+  "upstream_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+  "upstream_archive_sha256": "0138901c9dd350b0ad2f29c069a405b84d025a59e05341d5614cd9443f549b85",
+  "license": "MIT",
+  "patch_sha256": "3a15ab2105dfe09e19c3b29bfa83d438a5f53b80a8285000a81939f25d7130ba",
+  "source_commit": "aa469eef695b03a0243744a3e11355cb321133e7",
+  "source_tree": "a717cc39c8d340ea45af704aaa1e3ca4ac2b8292",
+  "source_commit_kind": "parentless_reconstructed_source_snapshot",
+  "bun_version": "1.3.14",
+  "bun_lock_sha256": "ad8ab55c5d899a00e155ada0da82a07d9623d9159ec370ab6df7885fc135363a",
+  "bun_darwin_archive_sha256": "d8b96221828ad6f97ac7ac0ab7e95872341af763001e8803e8267652c2652620",
+  "bun_linux_archive_sha256": "b98e0ad3625c5c00d1d5b5ff55605c7adddbfae151861e68ade57b2d3b8703bb",
+  "models_snapshot": {
+    "url": "https://models.dev/api.json",
+    "sha256": "05ff2f1a0cc1623171c6ac7988fc71fb2359701997fafe620140b0f1610e56c4",
+    "bytes": 5293435,
+    "license": "MIT",
+    "license_sha256": "dc2dc41c9fea2fd3c41c21c6f484844cab367800b88ff24781f980ad3a9d160a"
+  },
+  "linux_musl_build": {
+    "version": "1.18.16-deeplaw.3",
+    "sha256": "c893abe5862b49258e27d4ebc0adfe976d5f6c1b8e9928f7feb94d845d048486",
+    "bytes": 158052216
+  },
+  "engineering_package": {
+    "status": "owner_local_engineering_package_not_formal_release",
+    "sha256": "dc5900223d2725ef43fbf34d871a739233468b8385e7417ab7015641dcb61a9f",
+    "bytes": 52095359,
+    "member": "bin/opencode",
+    "member_sha256": "c893abe5862b49258e27d4ebc0adfe976d5f6c1b8e9928f7feb94d845d048486",
+    "package_contains_exact_executable": true,
+    "generator": {
+      "implementation": "CPython stdlib tarfile and gzip",
+      "python_version": "3.13.13",
+      "zlib_runtime_version": "1.2.12"
+    },
+    "configuration": {
+      "tar_format": "USTAR",
+      "member_mode": "0755",
+      "uid": 0,
+      "gid": 0,
+      "uname": "",
+      "gname": "",
+      "mtime": 0,
+      "gzip_filename": "",
+      "gzip_mtime": 0,
+      "gzip_compresslevel": 6
+    },
+    "static_package_validation_passed": true,
+    "formal_admission": false
+  },
+  "native_package_inputs": [
+    {
+      "name": "@opentui/core-linux-arm64-musl",
+      "version": "0.4.5",
+      "url": "https://registry.npmjs.org/@opentui/core-linux-arm64-musl/-/core-linux-arm64-musl-0.4.5.tgz",
+      "sha512": "ieqdyKI6EIYPalYAETB2wsdP83hr5Ifi+dFnBFUmdEEFHsoKwBmn2S7bsTOYlX7Bg03F4/YPIg+IvRpeC+cUJw==",
+      "sha256": "fb22ed4e2ed458b86315cf15bf5e9be6e6cf50e2eb7b6e2804de42ea742e7c76",
+      "bytes": 3574387,
+      "expanded_bytes": 13871569
+    },
+    {
+      "name": "@parcel/watcher-linux-arm64-musl",
+      "version": "2.5.1",
+      "url": "https://registry.npmjs.org/@parcel/watcher-linux-arm64-musl/-/watcher-linux-arm64-musl-2.5.1.tgz",
+      "sha512": "cFOjABi92pMYRXS7AcQv9/M1YuKRw8SZniCDw0ssQb/noPkRzA+HBDkwmyOJYp5wXcsTrhxO0zq1U11cK9jsFg==",
+      "sha256": "3f73f6c147f8934c2a5c1ffb5eb61d184dcee3a5a68767a50e28b850fab2d5e2",
+      "bytes": 181622,
+      "expanded_bytes": 471632
+    },
+    {
+      "name": "@ff-labs/fff-bin-linux-arm64-musl",
+      "version": "0.9.4",
+      "url": "https://registry.npmjs.org/@ff-labs/fff-bin-linux-arm64-musl/-/fff-bin-linux-arm64-musl-0.9.4.tgz",
+      "sha512": "EMeWm7CSTVkizy4ZEzUkLDP024tVcbCUthduuIhekFQRDsiaAze0YboIylWb9HBHJCZlCCoZrWAl4nnJbsX7AA==",
+      "sha256": "32c2899344e64362e4948d223d917297b1af7568b21729af30679fedd6462a66",
+      "bytes": 2289281,
+      "expanded_bytes": 4917308
+    },
+    {
+      "name": "@opentui/core-darwin-arm64",
+      "version": "0.4.5",
+      "url": "https://registry.npmjs.org/@opentui/core-darwin-arm64/-/core-darwin-arm64-0.4.5.tgz",
+      "sha512": "8KUG0oRidnR+oW1RSZJ72/PhZLl+qRRMk5U/mieF4c0SJ5V3tYACpBZAKzQfHNd1f7QzD8FHZct1lPpQgtmkWg==",
+      "sha256": "c81322e9114ce6e7f676583286e56ff32dee58656f7b8d043816a351c7060ecd",
+      "bytes": 811699,
+      "expanded_bytes": 3779884
+    },
+    {
+      "name": "@opentui/core-darwin-x64",
+      "version": "0.4.5",
+      "url": "https://registry.npmjs.org/@opentui/core-darwin-x64/-/core-darwin-x64-0.4.5.tgz",
+      "sha512": "R2bocsg55gwjOqCp/MWFgFYzRmsduKegB6nzgFAPCvAD/L5Jf30xpWJWFlSg3x8vxe1L9WJ84dfqa4M7mZZ3wA==",
+      "sha256": "bd5adbe81aafbc6c252ec695d4096db59bf839d3acc588dc3be0676f5c7f9326",
+      "bytes": 813871,
+      "expanded_bytes": 3765002
+    },
+    {
+      "name": "@opentui/core-linux-arm64",
+      "version": "0.4.5",
+      "url": "https://registry.npmjs.org/@opentui/core-linux-arm64/-/core-linux-arm64-0.4.5.tgz",
+      "sha512": "R4MZ25a4CzOAGVjW9aj1hUfzQGVfCJwrwBDbNs2SXaIvzcZqkxCVtU4FoQ5LsaD0j/BdNQVg2CIfFkFsm1fDuQ==",
+      "sha256": "8bf055a306cc94f62afec6337b6a1a01cda61b73e9e5eb3babe91408b637b8dd",
+      "bytes": 3609918,
+      "expanded_bytes": 13997753
+    },
+    {
+      "name": "@opentui/core-linux-x64",
+      "version": "0.4.5",
+      "url": "https://registry.npmjs.org/@opentui/core-linux-x64/-/core-linux-x64-0.4.5.tgz",
+      "sha512": "SNyuQoxMKI1vuJhgxSSW96adWM6LqFl2SoS3GM4tGeneGOanVVG2Y06PvlytXvF4cKik97t0rqkVMRetmOs93w==",
+      "sha256": "0c557e6f59b397c35d25eaa28d874a054f7bffecaf90c521a2a0307ede45bd1f",
+      "bytes": 3659329,
+      "expanded_bytes": 13747319
+    },
+    {
+      "name": "@opentui/core-linux-x64-musl",
+      "version": "0.4.5",
+      "url": "https://registry.npmjs.org/@opentui/core-linux-x64-musl/-/core-linux-x64-musl-0.4.5.tgz",
+      "sha512": "mKVKcIcPiSVVZZsdPSBoWwoa2/TCeQAaMDeHF7PFw2kt5bTXZPP7xxWfRQLCNIcA1eaGl59UuwUWHDR2Ve548Q==",
+      "sha256": "dca9f924b70ffd55bee521eb970c2834ea22e761dec4b8289a9212daa8b39cb0",
+      "bytes": 3624446,
+      "expanded_bytes": 13622463
+    },
+    {
+      "name": "@opentui/core-win32-arm64",
+      "version": "0.4.5",
+      "url": "https://registry.npmjs.org/@opentui/core-win32-arm64/-/core-win32-arm64-0.4.5.tgz",
+      "sha512": "GHTTsqeR45q2Iek9Rb7ty+x/hAKn2jZ1ujlCgPR8LBKyF7h0E1dNFryoZ7ehMc3kJndP1sKn836IemKFqxuDdQ==",
+      "sha256": "4da941d569924c93c6b050d790b9313c52d4709eb1b5ca851f81572c23ba1b6b",
+      "bytes": 784350,
+      "expanded_bytes": 3564901
+    },
+    {
+      "name": "@opentui/core-win32-x64",
+      "version": "0.4.5",
+      "url": "https://registry.npmjs.org/@opentui/core-win32-x64/-/core-win32-x64-0.4.5.tgz",
+      "sha512": "Y8T/yXCDGagRGiQrtmuB6AhRcPucKFs/Dre3v8kJwNYqDccI4FzUPKclZ7djfmRZNjl7JUqPhZZP/PwDpQocMg==",
+      "sha256": "0ed614168677262f6907836f23f4f02064704f3bee96b49e452d2e224800fafd",
+      "bytes": 834912,
+      "expanded_bytes": 3788123
+    }
+  ],
+  "closed_environment": {
+    "OPENCODE_DISABLE_MODELS_FETCH": "1"
+  },
+  "lock_unchanged": true,
+  "installation_lifecycle_scripts_executed": false,
+  "observed_zero_model_lifecycle": {
+    "status": "observed_engineering_only",
+    "run_id": "native-refreeze-1",
+    "candidate_id": "checkpoint-c5b55d7-engineering",
+    "purpose": "zero_model_fork_preflight",
+    "observation_sha256": "8ecc7c3988ed162f69282eef2a51d1fad87fd8df700831a65716331e07794d5a",
+    "initrd_sha256": "12392d2511b89c7a20e9340b5df24f17b0d8307d3ea72426c815d4e3900829e0",
+    "kernel_image_sha256": "8dfe2ce7e5bfe4d0efcf2fed0a01a692b5a5d5217e9a55587a17d92203ab7b0d",
+    "host_exit_code": 0,
+    "mcp_exit_code": 0,
+    "role_cgroups_empty": true,
+    "vm_exit_code": 0,
+    "mcp_connected": null,
+    "mcp_exercised": false,
+    "host_loopback_connections": 3,
+    "host_loopback_kernel_drops": 0,
+    "retained_mode_mismatch_attempts": 2,
+    "formal_admission": false
+  },
+  "observed_zero_model_mcp_connectivity": {
+    "status": "observed_engineering_only",
+    "run_id": "native-mcp-preflight-1",
+    "candidate_id": "checkpoint-c5b55d7-engineering",
+    "purpose": "zero_model_preflight",
+    "observation_sha256": "4eb894d1a6d0a3a4ef41254197235ae4414bd00bcf41c7afa0501da839745d3d",
+    "initrd_sha256": "f89a54d5472502554a2fb4a9496fb7c7285d8d01140e7b70069224f92bb31f00",
+    "kernel_image_sha256": "8dfe2ce7e5bfe4d0efcf2fed0a01a692b5a5d5217e9a55587a17d92203ab7b0d",
+    "mcp_connected": true,
+    "mcp_exercised": false,
+    "model_invocations": 0,
+    "vm_exit_code": 0,
+    "host_loopback_connections": 4,
+    "formal_admission": false
+  },
+  "model_task_executed": false,
+  "formal_admission": false,
+  "supersedes_for_current_reconstruction": "opencode-1.18.16-deeplaw-build.json",
+  "historical_inputs_restored": false
+}

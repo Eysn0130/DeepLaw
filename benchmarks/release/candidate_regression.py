@@ -12,15 +12,17 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
+from benchmarks.release.platform_gate import load_platform_manifest, nonapplicable_identities
+
 SHARD_SCHEMA = "deeplaw.candidate-test-shard/v1"
 RECEIPT_SCHEMA = "deeplaw.platform-candidate-regression-receipt/v1"
 AGGREGATE_SCHEMA = "deeplaw.platform-candidate-regression-aggregate/v1"
 DURATION_SCHEMA = "deeplaw.candidate-duration-weights/v1"
 PLATFORM_MATRIX_SCHEMA = "deeplaw.candidate-platform-matrix-receipt/v1"
-_MATRIX_OS_NONAPPLICABLE_CLASSIFICATION = {
-    "windows-latest": "posix_only_on_windows",
-    "ubuntu-latest": "windows_native",
-    "macos-latest": "windows_native",
+_MATRIX_OS_SYSTEM = {
+    "windows-latest": "Windows",
+    "ubuntu-latest": "Linux",
+    "macos-latest": "Darwin",
 }
 
 
@@ -214,7 +216,7 @@ def _load_duration_weights(path: Path, repository: Path) -> dict[str, float]:
 def _classified_skip_identities(
     repository: Path,
 ) -> tuple[dict[str, Any], dict[str, set[tuple[str, str]]]]:
-    manifest = _read_object(
+    manifest = load_platform_manifest(
         repository / "benchmarks/release/platform-core-test-manifest-v2.json"
     )
 
@@ -234,9 +236,6 @@ def _classified_skip_identities(
             classifications["historical_compatibility"]["cases"]
         ),
     }
-    windows_native = identities(manifest["inventories"]["windows"]["additional_cases"])
-    classified["windows_native"] = windows_native
-    classified["posix_only_on_windows"] = classified["nonapplicable"] - windows_native
     return manifest, classified
 
 
@@ -250,9 +249,7 @@ def build_regression_receipt(
 ) -> dict[str, Any]:
     repository = repository.resolve(strict=True)
     try:
-        nonapplicable_classification = _MATRIX_OS_NONAPPLICABLE_CLASSIFICATION[
-            matrix_os
-        ]
+        expected_system = _MATRIX_OS_SYSTEM[matrix_os]
     except KeyError as error:
         raise RuntimeError(
             f"unsupported candidate regression matrix OS: {matrix_os!r}"
@@ -269,7 +266,9 @@ def build_regression_receipt(
         for case in root.findall(".//testcase")
         if case.find("skipped") is not None
     ]
-    allowed_nonapplicable = classifications[nonapplicable_classification]
+    allowed_nonapplicable = nonapplicable_identities(
+        manifest, expected_system=expected_system,
+    )
     if set(skipped) & classifications["historical_compatibility"]:
         raise RuntimeError("required historical migration fixture was skipped")
     classified = (

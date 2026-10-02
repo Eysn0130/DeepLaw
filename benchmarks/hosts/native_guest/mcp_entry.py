@@ -24,9 +24,14 @@ def main() -> None:
     from benchmarks.hosts import maintenance_task_mcp as maintenance
 
     owner = json.loads(Path("/runtime/owner-input.json").read_bytes())
-    if set(owner) != {"purpose", "run_id", "candidate_id"}:
+    model_probe = owner.get("purpose") == "native_model_probe"
+    if set(owner) != {"purpose", "run_id", "candidate_id"} | (
+        {"provider_nonce"} if model_probe else set()
+    ):
         raise ValueError("owner_input_invalid")
-    if owner["purpose"] not in {"zero_model_preflight", "zero_model_fork_preflight"}:
+    if owner["purpose"] not in {
+        "zero_model_preflight", "zero_model_fork_preflight", "native_model_probe",
+    }:
         raise ValueError("owner_purpose_invalid")
     capsule = {}
     binding = maintenance.make_owner_binding(

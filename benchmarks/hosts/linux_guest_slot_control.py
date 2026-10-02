@@ -25,7 +25,7 @@ import select
 import signal
 import socket
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from threading import RLock
 from typing import Any, Final
@@ -55,7 +55,7 @@ _SESSION_ID_RE: Final[re.Pattern[str]] = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
 )
 _OPS: Final[frozenset[str]] = frozenset(
-    {"health", "new_session", "fork", "mcp_status", "stop"}
+    {"health", "new_session", "fork", "mcp_status", "stop", "bind_execution", "model_probe"}
 )
 _REQUEST_FIELDS: Final[dict[str, frozenset[str]]] = {
     "health": frozenset({"op"}),
@@ -63,6 +63,8 @@ _REQUEST_FIELDS: Final[dict[str, frozenset[str]]] = {
     "fork": frozenset({"op", "session_id"}),
     "mcp_status": frozenset({"op"}),
     "stop": frozenset({"op"}),
+    "bind_execution": frozenset({"op", "binding_sha256", "run_id", "candidate_id"}),
+    "model_probe": frozenset({"op", "session_id"}),
 }
 
 
@@ -140,7 +142,20 @@ def _decode_request(payload: bytes) -> dict[str, object]:
         _raise("operation_invalid")
     if set(value) != set(_REQUEST_FIELDS[operation]):
         _raise("request_fields_invalid")
-    if operation == "fork":
+    if operation == "bind_execution":
+        digest = value.get("binding_sha256")
+        if (
+            not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+            or digest == "0" * 64
+        ):
+            _raise("execution_binding_invalid")
+        for key in ("run_id", "candidate_id"):
+            if (
+                not isinstance(value.get(key), str)
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}", value[key]) is None
+            ):
+                _raise("execution_binding_invalid")
+    if operation in {"fork", "model_probe"}:
         session_id = value.get("session_id")
         if (
             not isinstance(session_id, str)
@@ -284,7 +299,19 @@ def _mcp_connected(value: object) -> bool:
 
 def _sanitize_host_response(operation: str, status: int, raw: bytes) -> dict[str, object]:
     if isinstance(status, bool) or not isinstance(status, int) or not 200 <= status < 300:
-        _raise("host_http_status")
+        category = "unknown"
+        if len(raw) <= MAX_HOST_RESPONSE_BYTES:
+            with suppress(ValueError, UnicodeError):
+                failure = json.loads(raw)
+                if isinstance(failure, dict) and failure.get("name") in {
+                    "ConfigInvalidError", "ConfigJsonError", "ConfigUnknownAgentError",
+                    "PluginLoadError", "PluginError", "TypeError", "Error",
+                }:
+                    category = failure["name"].lower()
+        code = (
+            f"host_http_status_{status}_{category}" if type(status) is int else "host_http_status"
+        )
+        _raise(code)
     if len(raw) > MAX_HOST_RESPONSE_BYTES:
         _raise("host_response_budget_exceeded")
     if raw:
@@ -618,11 +645,25 @@ class GuestSlotControl:
         observe_fork: bool = False,
         require_host_ready: bool = False,
         retain_fork_source: bool = False,
+        on_host_ready: Callable[[RoleHandle], None] | None = None,
+        on_execution_binding: Callable[[Mapping[str, object]], None] | None = None,
+        model_probe_handler: (
+            Callable[[RoleHandle, socket.socket, str, float], Mapping] | None
+        ) = None,
     ) -> None:
         if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65_535:
             _raise("port_invalid")
         self.port = port
-        self.timeout_seconds = _finite_timeout(timeout_seconds)
+        if model_probe_handler is not None and (
+            not callable(model_probe_handler) or on_execution_binding is None
+        ):
+            _raise("model_probe_handler_invalid")
+        self.timeout_seconds = _finite_timeout(
+            timeout_seconds,
+            maximum=180 if model_probe_handler is not None else MAX_TIMEOUT_SECONDS,
+        )
+        self._model_probe_handler = model_probe_handler
+        self._model_probe_used = False
         self._lock = RLock()
         self._listener: socket.socket | None = None
         self._connection: socket.socket | None = None
@@ -643,6 +684,13 @@ class GuestSlotControl:
         if type(retain_fork_source) is not bool or (retain_fork_source and not observe_fork):
             _raise("fork_source_option_invalid")
         self._retain_fork_source = retain_fork_source
+        if on_host_ready is not None and (not callable(on_host_ready) or not require_host_ready):
+            _raise("host_ready_observer_invalid")
+        self._on_host_ready = on_host_ready
+        if on_execution_binding is not None and not callable(on_execution_binding):
+            _raise("execution_binding_observer_invalid")
+        self._on_execution_binding = on_execution_binding
+        self._execution_bound = False
         self._private_fork_sources: list[dict[str, object]] = []
         self._fork_observations: list[dict[str, object]] = []
 
@@ -768,6 +816,13 @@ class GuestSlotControl:
             if snapshot.data.splitlines().count(marker) == 1:
                 if time.monotonic() >= deadline:
                     _raise("host_ready_timeout")
+                if self._on_host_ready is not None:
+                    try:
+                        self._on_host_ready(self._host)
+                    except Exception:
+                        _raise("host_execution_observation_gap")
+                    if time.monotonic() >= deadline:
+                        _raise("host_ready_timeout")
                 return
             time.sleep(min(0.01, max(0, deadline - time.monotonic())))
         _raise("host_ready_timeout")
@@ -892,9 +947,40 @@ class GuestSlotControl:
                 request = _decode_request(frame.payload)
                 operation = request["op"]
                 self._operation_count += 1
-                if operation == "stop":
+                if operation == "bind_execution":
+                    if (
+                        self._operation_count != 1 or self._execution_bound
+                        or self._on_execution_binding is None
+                    ):
+                        _raise("execution_binding_order_invalid")
+                    try:
+                        self._on_execution_binding(request)
+                    except Exception:
+                        _raise("execution_binding_gap")
+                    self._execution_bound = True
+                    response = {
+                        "ok": True, "result": {"binding_sha256": request["binding_sha256"]},
+                        "formal_admission": False,
+                    }
+                elif self._on_execution_binding is not None and not self._execution_bound:
+                    _raise("execution_binding_required")
+                elif operation == "stop":
                     self._stop_host()
                     response = _response_for_operation(operation, {})
+                elif operation == "model_probe":
+                    if self._model_probe_handler is None or self._model_probe_used:
+                        _raise("model_probe_unavailable")
+                    self._model_probe_used = True
+                    try:
+                        observed = self._model_probe_handler(
+                            self._host, connection, request["session_id"], deadline,
+                        )
+                    except Exception:
+                        _raise("model_probe_failed")
+                    response = {
+                        "ok": True, "result": _validate_receipt_value(observed),
+                        "formal_admission": False,
+                    }
                 else:
                     response = self._host_operation(request, deadline)
                 self._send_reply(frame.sequence, response, deadline)
@@ -999,6 +1085,8 @@ class GuestSlotControl:
         process_observation: Mapping[str, object] | None = None,
         boundary_observation: Mapping[str, object] | None = None,
         route_observation: Mapping[str, object] | None = None,
+        execution_observation: Mapping[str, object] | None = None,
+        host_failure_codes: list[str] | None = None,
     ) -> None:
         """Send one sanitized FINAL frame and close the retained connection."""
 
@@ -1035,6 +1123,16 @@ class GuestSlotControl:
                 if route_observation.get("formal_admission") is not False:
                     _raise("route_observation_invalid")
                 final["route_observation"] = _validate_receipt_value(route_observation)
+            if execution_observation is not None:
+                if execution_observation.get("formal_admission") is not False:
+                    _raise("execution_observation_invalid")
+                final["execution_observation"] = _validate_receipt_value(execution_observation)
+            if host_failure_codes is not None:
+                from .native_provider_bridge import validate_host_failure_codes
+
+                if self._model_probe_handler is None:
+                    _raise("model_probe_unavailable")
+                final["host_failure_codes"] = validate_host_failure_codes(host_failure_codes)
             payload = _json_bytes(final, limit=frames.MAX_CONTROL_PAYLOAD)
             frames.write_frame(
                 connection,

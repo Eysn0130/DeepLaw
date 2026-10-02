@@ -535,15 +535,16 @@ def test_candidate_platform_receipt_binds_exact_nine_raw_junit_cells(
     def junit_bytes(platform: str, version: str) -> bytes:
         common = manifest["inventories"]["common"]["cases"]
         cases = list(common)
-        nonapplicable = set()
         if platform == "windows":
-            additional = manifest["inventories"]["windows"]["additional_cases"]
-            cases += additional
-            native = {(c["junit"]["classname"], c["junit"]["name"]) for c in additional}
-            nonapplicable = {
-                (c["junit"]["classname"], c["junit"]["name"])
-                for c in manifest["classifications"]["nonapplicable"]["cases"]
-            } - native
+            cases += manifest["inventories"]["windows"]["additional_cases"]
+        system = {"ubuntu-latest": "Linux", "macos-latest": "Darwin", "windows": "Windows"}[
+            platform
+        ]
+        nonapplicable = {
+            (c["junit"]["classname"], c["junit"]["name"])
+            for c in manifest["classifications"]["nonapplicable"]["cases"]
+            if system in c["nonapplicable_systems"]
+        }
         root = ET.Element("testsuites")
         suite = ET.SubElement(
             root, "testsuite", tests=str(len(cases)), name=f"{platform}-{version}"
@@ -551,7 +552,7 @@ def test_candidate_platform_receipt_binds_exact_nine_raw_junit_cells(
         for case in cases:
             node = ET.SubElement(suite, "testcase", **case["junit"])
             if (node.get("classname"), node.get("name")) in nonapplicable:
-                ET.SubElement(node, "skipped", message="POSIX-only process semantics")
+                ET.SubElement(node, "skipped", message="declared OS nonapplicability")
         return ET.tostring(root)
 
     for artifact_name in ("ubuntu-latest", "macos-latest"):
@@ -630,3 +631,40 @@ def test_candidate_platform_receipt_binds_exact_nine_raw_junit_cells(
             matrix_os="windows-latest",
             matrix_python=f"{sys.version_info.major}.{sys.version_info.minor}",
         )
+
+
+@pytest.mark.parametrize(
+    "matrix_os,classname,name,allowed",
+    [
+        ("ubuntu-latest", "tests.test_endpoint_security_observer",
+         "test_native_probe_reports_actual_access_without_subscribing", True),
+        ("macos-latest", "tests.test_endpoint_security_observer",
+         "test_native_probe_reports_actual_access_without_subscribing", False),
+        ("windows-latest", "tests.test_linux_mcp_socket_transport",
+         "test_mcp_endpoint_uses_actual_peer_uid_and_removes_socket_path", True),
+        ("macos-latest", "tests.test_linux_mcp_socket_transport",
+         "test_mcp_endpoint_uses_actual_peer_uid_and_removes_socket_path", True),
+        ("ubuntu-latest", "tests.test_linux_mcp_socket_transport",
+         "test_mcp_endpoint_uses_actual_peer_uid_and_removes_socket_path", False),
+        ("windows-latest", "tests.test_native_fork_observation",
+         "test_capture_fork_response_preserves_original_response_bytes", False),
+    ],
+)
+def test_candidate_skips_follow_declared_system_and_keep_synthetic_cases_applicable(
+    tmp_path: Path, matrix_os: str, classname: str, name: str, allowed: bool,
+) -> None:
+    root = ET.Element("testsuites")
+    suite = ET.SubElement(root, "testsuite", tests="1")
+    case = ET.SubElement(suite, "testcase", classname=classname, name=name)
+    ET.SubElement(case, "skipped")
+    junit = tmp_path / "one-skip.xml"
+    ET.ElementTree(root).write(junit, encoding="utf-8")
+    arguments = {
+        "repository": REPOSITORY, "junit_path": junit, "matrix_os": matrix_os,
+        "matrix_python": f"{sys.version_info.major}.{sys.version_info.minor}",
+    }
+    if allowed:
+        assert build_regression_receipt(**arguments)["nonapplicable"]["skipped"] == 1
+    else:
+        with pytest.raises(RuntimeError, match="unclassified candidate skips"):
+            build_regression_receipt(**arguments)

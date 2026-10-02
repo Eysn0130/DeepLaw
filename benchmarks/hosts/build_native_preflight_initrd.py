@@ -34,6 +34,8 @@ from .native_slot_owner_preflight import _freeze
 SCHEMA: Final[str] = "deeplaw.native-preflight-build/v1"
 PURPOSE: Final[str] = "zero_model_preflight"
 FORK_PURPOSE: Final[str] = "zero_model_fork_preflight"
+MODEL_PROBE_SCHEMA: Final[str] = "deeplaw.native-preflight-build/v2"
+MODEL_PROBE_PURPOSE: Final[str] = "native_model_probe"
 MAX_MANIFEST_BYTES: Final[int] = 64 * 1024
 MAX_FILE_BYTES: Final[int] = 512 * 1024 * 1024
 MAX_TOTAL_INPUT_BYTES: Final[int] = 768 * 1024 * 1024
@@ -74,11 +76,15 @@ MODULE_REGISTRY: dict[str, str] = {
         "opt/benchmarks/hosts/linux_guest_slot_control.py"
     ),
     "benchmarks/hosts/native_slot_frames.py": "opt/benchmarks/hosts/native_slot_frames.py",
+    "benchmarks/hosts/native_provider_bridge.py": "opt/benchmarks/hosts/native_provider_bridge.py",
     "benchmarks/hosts/linux_proc_connector.py": "opt/benchmarks/hosts/linux_proc_connector.py",
     "benchmarks/hosts/linux_process_tree_metadata.py": (
         "opt/benchmarks/hosts/linux_process_tree_metadata.py"
     ),
     "benchmarks/hosts/linux_process_observer.py": "opt/benchmarks/hosts/linux_process_observer.py",
+    "benchmarks/hosts/linux_host_execution_observer.py": (
+        "opt/benchmarks/hosts/linux_host_execution_observer.py"
+    ),
     "benchmarks/hosts/linux_http_route_observer.py": (
         "opt/benchmarks/hosts/linux_http_route_observer.py"
     ),
@@ -109,6 +115,7 @@ MODULE_REGISTRY: dict[str, str] = {
     "benchmarks/hosts/native_guest/bootstrap.py": "opt/native-bootstrap.py",
     "benchmarks/hosts/native_guest/boundary_gate.py": "opt/boundary_gate.py",
     "benchmarks/hosts/native_guest/opencode_entry.py": "opt/opencode_entry.py",
+    "benchmarks/hosts/native_guest/model_probe_plugin.ts": "opt/model_probe_plugin.ts",
     "benchmarks/hosts/native_guest/mcp_entry.py": "opt/mcp_entry.py",
     "benchmarks/hosts/native_guest/mcp_client.py": "opt/mcp_client.py",
     "benchmarks/hosts/native_guest/mcp_relay.py": "opt/mcp_relay.py",
@@ -277,12 +284,19 @@ def _validate_identifier(value: Any, *, code: str) -> str:
 
 
 def _validate_manifest(value: dict[str, Any]) -> tuple[dict[str, Any], Path]:
-    if set(value) != _SCHEMA_KEYS:
+    model_probe = value.get("schema") == MODEL_PROBE_SCHEMA
+    if set(value) != _SCHEMA_KEYS | ({"provider_nonce"} if model_probe else set()):
         _fail("manifest_keys_invalid")
-    if value.get("schema") != SCHEMA:
+    if value.get("schema") not in (SCHEMA, MODEL_PROBE_SCHEMA):
         _fail("manifest_schema_invalid")
-    if value.get("purpose") not in (PURPOSE, FORK_PURPOSE):
+    if (model_probe and value.get("purpose") != MODEL_PROBE_PURPOSE) or (
+        not model_probe and value.get("purpose") not in (PURPOSE, FORK_PURPOSE)
+    ):
         _fail("manifest_purpose_invalid")
+    if model_probe:
+        _validate_sha256(value["provider_nonce"], code="provider_nonce_invalid")
+        if value["provider_nonce"] == "0" * 64:
+            _fail("provider_nonce_invalid")
     run_id = _validate_identifier(value.get("run_id"), code="run_id_invalid")
     candidate_id = _validate_identifier(
         value.get("candidate_id"), code="candidate_id_invalid"
@@ -326,7 +340,9 @@ def _validate_manifest(value: dict[str, Any]) -> tuple[dict[str, Any], Path]:
         _validate_path_string(archive_name, code="module_archive_path_invalid")
         _validate_archive_path(archive_name, code="module_archive_path_invalid")
     return {
+        "schema": value["schema"],
         "purpose": value["purpose"],
+        **({"provider_nonce": value["provider_nonce"]} if model_probe else {}),
         "run_id": run_id,
         "candidate_id": candidate_id,
         "base_initrd": base,
@@ -655,6 +671,8 @@ def build_initrd(manifest: Path, manifest_sha256: str, destination: Path) -> dic
                 "candidate_id": normalized["candidate_id"],
                 "purpose": normalized["purpose"],
                 "run_id": normalized["run_id"],
+                **({"provider_nonce": normalized["provider_nonce"]}
+                   if normalized["purpose"] == MODEL_PROBE_PURPOSE else {}),
             }
         )
         wheel_inputs = _canonical_json(
@@ -696,7 +714,7 @@ def build_initrd(manifest: Path, manifest_sha256: str, destination: Path) -> dic
             key=lambda item: item["logical_name"],
         )
         receipt: dict[str, Any] = {
-            "schema": SCHEMA,
+            "schema": normalized["schema"],
             "purpose": normalized["purpose"],
             "run_id": normalized["run_id"],
             "candidate_id": normalized["candidate_id"],

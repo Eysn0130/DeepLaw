@@ -3,6 +3,7 @@ from __future__ import annotations
 import errno
 import hashlib
 import json
+import os
 import socket
 import struct
 import subprocess
@@ -352,6 +353,7 @@ def test_extra_config_fields_are_rejected_before_native_start(tmp_path: Path) ->
     assert list((tmp_path / "freshroot").iterdir()) == []
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native symlink boundary")
 def test_symlinked_runtime_source_is_rejected(tmp_path: Path) -> None:
     path, value, _digest = _write_config(tmp_path)
     target = tmp_path / "link"
@@ -530,12 +532,14 @@ def _patch_native_lifecycle(
     monkeypatch.setattr(launcher, "_enter_cgroup", lambda *_args: None)
     monkeypatch.setattr(launcher, "_verify_binding", lambda *_args: None)
     monkeypatch.setattr(launcher, "_require_native_binding", lambda *_args: None)
-    monkeypatch.setattr(launcher.os, "chown", lambda *_args: None)
+    monkeypatch.setattr(launcher.os, "chown", lambda *_args: None, raising=False)
+    monkeypatch.setattr(launcher.os, "setpgid", lambda *_args: None, raising=False)
+    monkeypatch.setattr(launcher.signal, "SIGKILL", 9, raising=False)
     monkeypatch.setattr(launcher.os, "write", lambda *_args: 1)
 
     child_ids = iter((7001, 7002))
-    monkeypatch.setattr(launcher.os, "fork", lambda: next(child_ids))
-    monkeypatch.setattr(launcher.os, "waitpid", lambda pid, _options: (pid, 0))
+    monkeypatch.setattr(launcher.os, "fork", lambda: next(child_ids), raising=False)
+    monkeypatch.setattr(launcher.os, "waitpid", lambda pid, _options: (pid, 0), raising=False)
 
     responses = list(startup_lines)
 
@@ -551,6 +555,7 @@ def _patch_native_lifecycle(
         return identity_results.pop(0)
 
     monkeypatch.setattr(launcher, "_capture_role_identity", fake_capture_identity)
+    monkeypatch.setattr(launcher, "_capture_process_start_identity", lambda role, pid: "a" * 64)
     monkeypatch.setattr(launcher, "_finish_role_observation", lambda *_args: None)
     kill_calls: list[tuple[int, int]] = []
 
@@ -665,3 +670,70 @@ def test_roles_started_callback_failure_is_typed_and_cleans_up_all_roles(
     }
     serialized = launcher.canonical_json(receipt).decode()
     assert "private callback failure" not in serialized
+
+
+def test_validation_only_works_without_posix_modules(tmp_path: Path) -> None:
+    path, _value, digest = _write_config(tmp_path)
+    script = """
+import builtins
+import sys
+original_import = builtins.__import__
+def closed_import(name, *args, **kwargs):
+    if name in {"fcntl", "grp", "pwd"}:
+        raise ModuleNotFoundError(name)
+    return original_import(name, *args, **kwargs)
+builtins.__import__ = closed_import
+from benchmarks.hosts.linux_role_launcher import main
+raise SystemExit(main(sys.argv[1:]))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, "--config", str(path),
+         "--config-sha256", digest, "--validation-only"],
+        cwd=Path(__file__).parents[1], text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert _receipt(result)["status"] == "validated"
+
+
+def test_guest_paths_keep_posix_semantics_on_a_windows_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pathlib import PureWindowsPath
+
+    _path, value, _digest = _write_config(tmp_path)
+
+    def host_path(path: str) -> Path | PureWindowsPath:
+        # Keep local fixture files on the real host; model Windows interpretation
+        # for the guest paths that the public config validator must accept.
+        if path.startswith("/runtime/"):
+            return PureWindowsPath(path)
+        return Path(path)
+
+    monkeypatch.setattr(launcher, "Path", host_path)
+    config = launcher.parse_config(value)
+    assert config.roles[0].bindings[0].target == "/runtime/host/entry"
+    assert config.roles[0].command == ("/runtime/host/entry", "--bounded")
+    value["roles"][0]["runtime_bindings"][0]["target"] = "/proc/status"
+    with pytest.raises(launcher.LauncherError, match="runtime_target_reserved"):
+        launcher.parse_config(value)
+    value["roles"][0]["runtime_bindings"][0]["target"] = "/runtime/host/entry"
+    value["roles"][0]["command"] = ["/bin/sh"]
+    with pytest.raises(launcher.LauncherError, match="command_shell_wrapper_forbidden"):
+        launcher.parse_config(value)
+    value["roles"][0]["runtime_bindings"][0]["target"] = "C:/runtime/host/entry"
+    with pytest.raises(launcher.LauncherError, match="runtime_target_invalid"):
+        launcher.parse_config(value)
+
+
+def test_native_run_rejects_non_linux_before_posix_operations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    path, _value, digest = _write_config(tmp_path)
+    monkeypatch.setattr(launcher.platform, "system", lambda: "Windows")
+    monkeypatch.delattr(launcher.os, "geteuid", raising=False)
+    assert launcher.main([
+        "--config", str(path), "--config-sha256", digest, "--run",
+    ]) == 1
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["failure_codes"] == ["native_requires_linux"]
+    assert receipt["native_mutation"] is False

@@ -34,6 +34,23 @@ bun run script/build.ts --target=linux-arm64-musl \
 `OPENCODE_RELEASE` must be absent: upstream checks its presence to enable release
 upload. The local lifecycle build does not publish an upstream release.
 
+The 2026-10-02 reconstruction uses the separate
+`opencode-1.18.16-deeplaw.3-build.json` identity and version
+`1.18.16-deeplaw.3`. The historical models.dev snapshot was unavailable; the
+new public snapshot is frozen at
+`05ff2f1a0cc1623171c6ac7988fc71fb2359701997fafe620140b0f1610e56c4`.
+The reconstructed parentless source commit has the same patched source tree
+as the historical build, but a distinct commit and binary identity. The original
+record remains historical. Neither static package admission nor successful
+compilation establishes a completed model task or formal Host qualification.
+
+The `.3` record also binds an owner-local engineering archive at
+`dc5900223d2725ef43fbf34d871a739233468b8385e7417ab7015641dcb61a9f`.
+Its sole regular member, `bin/opencode`, was independently reopened and matched
+the recorded executable digest. Generator versions and fixed archive parameters
+are retained. This archive passed the existing static package validator; it has
+not been installed as a formal qualification identity or published as a release.
+
 The closed qualification environment sets `OPENCODE_DISABLE_MODELS_FETCH=1` to
 prevent background model-catalog acquisition. A real offline Linux guest exposed
 a shutdown block with refresh enabled; disabling it let the same fixed Host
@@ -52,3 +69,16 @@ official tag commits supply the recorded MIT-licensed header bytes. Existing C
 source bytes remain unchanged. These locally built `linux_aarch64` wheels are
 not relabelled as manylinux artifacts. The completed source archives, original
 sdists, build receipts and wheel bytes must remain separate, hash-bound inputs.
+
+`linux-python-wheel-builds-20261002.json` records the new offline source builds
+under Python 3.12.15. The matching older development APK was unavailable, so
+the runtime and headers were frozen together at the newer patch version. Locked
+DeepLaw dependency versions remain unchanged. All three actual imports succeeded
+in a VM with no network device, and the VM exited normally. These wheels retain
+their `linux_aarch64` tags.
+
+The reconstructed Alpine 6.18.52 kernel is an EFI zboot gzip wrapper. The native
+Linux boot loader uses its extracted ARM64 `Image`, recorded as a separate
+derived artifact with original digest, bounded header offsets, official format
+source and output digest. Passing the wrapper directly failed VM startup; the
+same launcher and initrd succeeded after this format correction.

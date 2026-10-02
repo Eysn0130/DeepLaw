@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import pytest
 
-from benchmarks.hosts import maintenance_task_mcp
+from benchmarks.hosts import maintenance_host_context, maintenance_task_mcp
 from benchmarks.hosts.maintenance_host_context import (
     capture_context,
     digest,
@@ -11,7 +11,8 @@ from benchmarks.hosts.maintenance_host_context import (
     record_host_outcome,
 )
 from benchmarks.hosts.maintenance_task_cases import MaintenanceTaskSession, score_host_trace
-from deeplaw.util import canonical_json
+from deeplaw.knowledge_autonomy import AutonomousKnowledgeStore
+from deeplaw.util import canonical_json, sha256_bytes
 
 
 def _persisted_trace(
@@ -62,6 +63,167 @@ def _resource_action(
         "kind": "submit_resource_version",
         "parameters": parameters,
     }
+
+
+@pytest.fixture
+def outcome_inputs(tmp_path):
+    vault = tmp_path / "vault"
+    setup = prepare_context_vault(vault, "governed_maintenance")
+    context = capture_context(vault, "governed_maintenance", "source_update")
+    session = MaintenanceTaskSession("governed_maintenance", "source_update")
+    trace = _persisted_trace(
+        tmp_path, context, configuration="governed_maintenance", scenario="source_update",
+        run_id="offline-validation-test", candidate_id="offline-validation-candidate",
+        action=_resource_action(session.state_sha256, experience_id="experience:governed-v2"),
+    )
+    return vault, setup, {
+        "configuration": "governed_maintenance", "scenario": "source_update",
+        "host_run_id": "offline-validation-test", "candidate_id": "offline-validation-candidate",
+        "context": context, "trace_payload": trace,
+        "score": score_host_trace("governed_maintenance", "source_update", trace["events"]),
+    }
+
+
+def _vault_snapshot(vault):
+    return {path.relative_to(vault).as_posix(): sha256_bytes(path.read_bytes())
+            for path in vault.rglob("*") if path.is_file()}
+
+
+def _reject_sink_write(*args, **kwargs):
+    raise AssertionError("read-only validation entered the mutation sink")
+
+
+def test_offline_outcome_validation_is_read_only_and_requires_actual_vault(
+    outcome_inputs, monkeypatch,
+):
+    vault, setup, inputs = outcome_inputs
+    before = _vault_snapshot(vault)
+    monkeypatch.setattr(maintenance_host_context, "handle_knowledge_sink", _reject_sink_write)
+    validated = maintenance_host_context.validate_host_outcome(vault, **inputs)
+    assert validated == inputs["trace_payload"]
+    assert validated is not inputs["trace_payload"]
+    rendered = canonical_json(validated)
+    assert setup["grant_id"] not in rendered
+    assert str(vault) not in rendered
+    assert _vault_snapshot(vault) == before
+
+    missing = vault.parent / "missing-vault"
+    with pytest.raises((OSError, RuntimeError, ValueError)):
+        maintenance_host_context.validate_host_outcome(missing, **inputs)
+    assert not missing.exists()
+    assert _vault_snapshot(vault) == before
+
+
+@pytest.mark.parametrize("tampering", [
+    "trace", "candidate", "task", "provider", "capsule", "score",
+])
+def test_offline_outcome_validation_rejects_tampering_without_writes(
+    outcome_inputs, monkeypatch, tampering,
+):
+    vault, _, original = outcome_inputs
+    inputs = deepcopy(original)
+    if tampering == "trace":
+        inputs["trace_payload"]["events"][0]["state_sha256"] = "0" * 64
+    elif tampering == "candidate":
+        inputs["candidate_id"] = "another-candidate"
+    elif tampering == "task":
+        inputs["trace_payload"]["task"]["goal"] = "A different public goal."
+    elif tampering == "provider":
+        inputs["context"]["provider_capsule"] = {"schema_version": "tampered"}
+    elif tampering == "capsule":
+        inputs["context"]["capsule"]["capsule_digest"] = "0" * 64
+    else:
+        inputs["score"]["passed"] = False
+    before = _vault_snapshot(vault)
+    monkeypatch.setattr(maintenance_host_context, "handle_knowledge_sink", _reject_sink_write)
+    with pytest.raises(ValueError):
+        maintenance_host_context.validate_host_outcome(vault, **inputs)
+    assert _vault_snapshot(vault) == before
+
+
+def test_outcome_recorder_calls_shared_validator_before_mutation(outcome_inputs, monkeypatch):
+    vault, setup, inputs = outcome_inputs
+    calls = []
+
+    def reject(path, **kwargs):
+        calls.append((path, kwargs))
+        raise ValueError("shared validation sentinel")
+
+    before = _vault_snapshot(vault)
+    monkeypatch.setattr(maintenance_host_context, "validate_host_outcome", reject)
+    monkeypatch.setattr(maintenance_host_context, "handle_knowledge_sink", _reject_sink_write)
+    with pytest.raises(ValueError, match="shared validation sentinel"):
+        record_host_outcome(vault, setup["grant_id"], **inputs,
+                            host_id="synthetic-host", model_id="synthetic-test")
+    assert calls == [(vault, inputs)]
+    assert _vault_snapshot(vault) == before
+
+
+def test_fixture_capture_and_outcome_leave_no_active_capability(outcome_inputs):
+    vault, setup, inputs = outcome_inputs
+    assert setup["grant_status"] == "revoked_after_fixture_setup"
+    maintenance_host_context.assert_context_grants_closed(vault)
+    outcome = record_host_outcome(
+        vault, setup["grant_id"], **inputs, host_id="synthetic-host", model_id="synthetic-test",
+    )
+    assert outcome["run_record"]["run_id"]
+    maintenance_host_context.assert_context_grants_closed(vault)
+    with AutonomousKnowledgeStore(vault, read_only=True) as store:
+        rows = store.connection.execute(
+            "SELECT operations_json, revoked_at FROM knowledge_sink_grants_v3 ORDER BY created_at"
+        ).fetchall()
+        assert store.vault_id == setup["vault_id"]
+    assert len(rows) == 2 and all(row["revoked_at"] is not None for row in rows)
+    assert rows[1]["operations_json"] == canonical_json(["record_feedback", "record_run"])
+    subsequent = capture_context(vault, "governed_maintenance", "wrong_experience")
+    assert subsequent["verification"]["valid"] is True
+    with pytest.raises(ValueError, match="no longer verifies"):
+        maintenance_host_context.validate_host_outcome(vault, **inputs)
+
+
+def test_failed_outcome_revokes_grant_and_preserves_mutation_failure(outcome_inputs, monkeypatch):
+    vault, setup, inputs = outcome_inputs
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("public mutation sentinel")
+
+    monkeypatch.setattr(maintenance_host_context, "handle_knowledge_sink", fail)
+    with pytest.raises(RuntimeError, match="public mutation sentinel"):
+        record_host_outcome(vault, setup["grant_id"], **inputs,
+                            host_id="synthetic-host", model_id="synthetic-test")
+    maintenance_host_context.assert_context_grants_closed(vault)
+    assert capture_context(vault, "governed_maintenance", "wrong_experience")[
+        "verification"
+    ]["valid"] is True
+
+
+def test_outcome_cleanup_failure_blocks_next_capture_and_retains_both_failures(
+    outcome_inputs, monkeypatch,
+):
+    vault, setup, inputs = outcome_inputs
+
+    def fail_mutation(*args, **kwargs):
+        raise RuntimeError("public mutation sentinel")
+
+    def fail_cleanup(*args, **kwargs):
+        raise OSError("public cleanup sentinel")
+
+    monkeypatch.setattr(maintenance_host_context, "handle_knowledge_sink", fail_mutation)
+    monkeypatch.setattr(AutonomousKnowledgeStore, "disable_grant", fail_cleanup)
+    with pytest.raises(maintenance_host_context.OutcomeGrantClosureError) as caught:
+        record_host_outcome(vault, setup["grant_id"], **inputs,
+                            host_id="synthetic-host", model_id="synthetic-test")
+    assert caught.value.mutation_failure == "RuntimeError"
+    assert caught.value.cleanup_failure == "OSError"
+    with pytest.raises(ValueError, match="grant or integrity gap"):
+        capture_context(vault, "governed_maintenance", "wrong_experience")
+
+
+def test_capture_refuses_unexpected_capability_material(outcome_inputs):
+    vault, _, _ = outcome_inputs
+    (vault / ".deeplaw/capabilities/unexpected.token").write_text("synthetic marker")
+    with pytest.raises(ValueError):
+        capture_context(vault, "governed_maintenance", "wrong_experience")
 
 
 @pytest.mark.parametrize("configuration,count", [

@@ -103,6 +103,7 @@ def test_capture_fork_response_rejects_unbound_inputs(
     assert "parent-session" not in str(raised.value)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_snapshot_plugin_log_is_frozen_and_missing_is_empty(tmp_path: Path) -> None:
     path = tmp_path / "tmp" / "native-events.jsonl"
     missing = observation.snapshot_plugin_log(path)
@@ -153,6 +154,7 @@ def test_snapshot_rejects_symlink_ancestors_and_nonregular_files(tmp_path: Path)
             observation.snapshot_plugin_log(fifo)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_await_child_event_uses_new_complete_line_and_original_hash(
     tmp_path: Path,
 ) -> None:
@@ -200,6 +202,7 @@ def test_await_child_event_uses_new_complete_line_and_original_hash(
     assert result["record_sha256"] == _record_digest(result)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_await_child_event_owner_callback_receives_record_without_newline(
     tmp_path: Path,
 ) -> None:
@@ -229,6 +232,7 @@ def test_await_child_event_owner_callback_receives_record_without_newline(
     assert result["record_sha256"] == _record_digest(result)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_await_child_event_owner_callback_failure_is_a_typed_gap(
     tmp_path: Path,
 ) -> None:
@@ -252,6 +256,7 @@ def test_await_child_event_owner_callback_failure_is_a_typed_gap(
     assert "secret plugin record" not in str(raised.value)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_await_child_event_owner_callback_cannot_outlive_deadline(
     tmp_path: Path,
 ) -> None:
@@ -274,6 +279,7 @@ def test_await_child_event_owner_callback_cannot_outlive_deadline(
     assert raised.value.code == "plugin_source_callback_timeout"
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_await_child_event_rejects_settled_event_after_deadline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -291,6 +297,7 @@ def test_await_child_event_rejects_settled_event_after_deadline(
     assert raised.value.code == "plugin_event_timeout"
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_await_child_event_does_not_reuse_old_child_event(tmp_path: Path) -> None:
     path = tmp_path / "native-events.jsonl"
     path.write_bytes(_line("session.created", CHILD_ID))
@@ -309,6 +316,7 @@ def test_await_child_event_does_not_reuse_old_child_event(tmp_path: Path) -> Non
     "suffix",
     (b"not-json\n", _line("message.updated", CHILD_ID)),
 )
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_await_child_event_rejects_malformed_or_unknown_rows(
     tmp_path: Path, suffix: bytes
 ) -> None:
@@ -327,6 +335,7 @@ def test_await_child_event_rejects_malformed_or_unknown_rows(
     assert raised.value.code == "plugin_event_invalid"
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_await_child_event_rejects_duplicate_child_and_prefix_tampering(
     tmp_path: Path,
 ) -> None:
@@ -356,6 +365,7 @@ def test_await_child_event_rejects_duplicate_child_and_prefix_tampering(
     assert raised.value.code == "plugin_log_prefix_changed"
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_await_child_event_rejects_snapshot_tamper_and_unbounded_timeout(
     tmp_path: Path,
 ) -> None:

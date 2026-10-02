@@ -125,10 +125,12 @@ def test_registry_is_the_closed_guest_module_set() -> None:
         "benchmarks/hosts/linux_role_launcher.py",
         "benchmarks/hosts/linux_guest_slot_control.py",
         "benchmarks/hosts/native_slot_frames.py",
+        "benchmarks/hosts/native_provider_bridge.py",
         "benchmarks/hosts/linux_proc_connector.py",
         "benchmarks/hosts/linux_process_tree_metadata.py",
         "benchmarks/hosts/linux_process_observer.py",
         "benchmarks/hosts/linux_http_route_observer.py",
+        "benchmarks/hosts/linux_host_execution_observer.py",
         "benchmarks/hosts/linux_audit_syscall_metadata.py",
         "benchmarks/hosts/linux_role_boundary_probe.py",
         "benchmarks/hosts/native_fork_observation.py",
@@ -142,6 +144,7 @@ def test_registry_is_the_closed_guest_module_set() -> None:
         "benchmarks/hosts/native_guest/bootstrap.py",
         "benchmarks/hosts/native_guest/boundary_gate.py",
         "benchmarks/hosts/native_guest/opencode_entry.py",
+        "benchmarks/hosts/native_guest/model_probe_plugin.ts",
         "benchmarks/hosts/native_guest/mcp_entry.py",
         "benchmarks/hosts/native_guest/mcp_client.py",
         "benchmarks/hosts/native_guest/mcp_relay.py",
@@ -386,3 +389,25 @@ def test_file_and_total_input_bounds_are_enforced(
             build_inputs["manifest_sha256"],
             build_inputs["tmp"] / "total-bound",
         )
+
+
+def test_model_probe_requires_successor_manifest_and_explicit_nonce(build_inputs):
+    value = dict(build_inputs["value"], purpose=builder.MODEL_PROBE_PURPOSE)
+    with pytest.raises(builder.NativeInitrdBuildError, match="manifest_purpose_invalid"):
+        builder._validate_manifest(value)
+    value["schema"] = builder.MODEL_PROBE_SCHEMA
+    with pytest.raises(builder.NativeInitrdBuildError, match="manifest_keys_invalid"):
+        builder._validate_manifest(value)
+    value["provider_nonce"] = "e" * 64
+    manifest, digest = _write_manifest(build_inputs, value)
+    receipt = builder.build_initrd(
+        manifest, digest, build_inputs["tmp"] / "model-probe-build",
+    )
+    assert receipt["schema"] == builder.MODEL_PROBE_SCHEMA
+    assert receipt["purpose"] == builder.MODEL_PROBE_PURPOSE
+    raw = (build_inputs["tmp"] / "model-probe-build/initrd").read_bytes()
+    entries = _newc_entries(gzip.decompress(raw[len(build_inputs["base"].read_bytes()):]))
+    owner = json.loads(entries["opt/owner-input.json"][2])
+    assert owner["provider_nonce"] == "e" * 64
+    assert owner["purpose"] == builder.MODEL_PROBE_PURPOSE
+    assert receipt["formal_admission"] is False

@@ -76,6 +76,12 @@ def test_matrix_order_and_same_budget() -> None:
 
 
 def test_public_projection_is_detached_and_contains_no_private_oracle() -> None:
+    for task in cases.iter_public_tasks():
+        assert not _contains_forbidden_projection_value(task)
+        assert all(
+            f'"{key}":' not in json.dumps(task)
+            for key in ("private", "sequences", "parameters", "result", "typed_result")
+        )
     projection = cases.public_task_projection("governed_maintenance", "source_update")
     assert not _contains_forbidden_projection_value(projection)
     assert "private" not in projection
@@ -152,6 +158,72 @@ def test_session_is_host_driven_and_does_not_auto_execute() -> None:
     assert session.state["state_revision"] == 0
     assert session.state["resource"]["version"] == "v1"
     assert session.public_task["task_id"] == "maintenance-governed_maintenance-source_update"
+
+
+@pytest.mark.parametrize("configuration_id", cases.CONFIGURATION_ORDER)
+def test_unknown_operation_can_be_recorded_from_public_task(configuration_id: str) -> None:
+    session = cases.open_task(configuration_id, "unknown_action")
+    task = session.public_task
+    facts = task["environment"]["scenario_facts"]
+    operation_name = facts["operation_name"]
+    assert operation_name == "legacy_export"
+    assert operation_name in task["task"]
+    assert operation_name in task["goal"]
+    assert "stop" in task["goal"]
+    assert facts["operation_status"] == "unknown"
+    assert facts["state_change_allowed"] is False
+    action = next(action for action in task["actions"] if action["kind"] == "record_unknown")
+    assert action["parameter_names"] == ["action_name"]
+    before = session.state_sha256
+    event = session.submit(
+        _action(session, "record-public-operation", action["kind"], {"action_name": operation_name})
+    )
+    assert event["status"] == "unknown"
+    assert session.state_sha256 == before
+    score = cases.score_host_trace(configuration_id, "unknown_action", session.trace)
+    assert score["safe_termination"] is True
+    assert score["passed"] is False
+
+
+@pytest.mark.parametrize("configuration_id", cases.CONFIGURATION_ORDER)
+def test_required_withdrawal_can_be_completed_from_public_task(configuration_id: str) -> None:
+    session = cases.open_task(configuration_id, "independent_support")
+    task = session.public_task
+    environment = task["environment"]
+    assert "Withdraw one independent archive record" in task["task"]
+    assert "then approve" in task["task"]
+    assert "withdrawn" in task["goal"]
+    assert environment["scenario_facts"]["withdrawal_required"] is True
+    supports = environment["independent_support"]
+    withdrawn_support, remaining_support = supports
+    assert all(support["status"] == "available" for support in supports)
+    withdrawal = next(action for action in task["actions"] if action["kind"] == "withdraw_support")
+    approval = next(action for action in task["actions"] if action["kind"] == "approve_report")
+    withdrawn = session.submit(
+        _action(
+            session,
+            "withdraw-public-support",
+            withdrawal["kind"],
+            {"support_id": withdrawn_support["support_id"]},
+        )
+    )
+    assert withdrawn["status"] == "succeeded"
+    approved = session.submit(
+        _action(
+            session,
+            "approve-public-report",
+            approval["kind"],
+            {
+                "report_id": environment["report"]["report_id"],
+                "status": "approved",
+                "support_refs": [remaining_support["support_id"]],
+            },
+        )
+    )
+    assert approved["status"] == "succeeded"
+    score = cases.score_host_trace(configuration_id, "independent_support", session.trace)
+    assert score["goal_state_reached"] is True
+    assert score["passed"] is True
 
 
 def test_source_update_success_and_independent_event_chain() -> None:

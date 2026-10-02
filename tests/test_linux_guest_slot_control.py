@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import socket
 import sys
 import threading
@@ -86,6 +87,51 @@ def test_protocol_routes_and_request_shape_are_fixed() -> None:
         control._decode_request(b'{"op":"fork","session_id":"../escape"}')
     with pytest.raises(control.GuestSlotControlError, match="request_json_invalid"):
         control._decode_request(b'{"op":"health","op":"stop"}')
+
+
+@pytest.mark.parametrize("case", ["bound", "missing", "replay", "callback_gap"])
+def test_execution_challenge_is_first_once_and_required_before_host_operations(case, monkeypatch):
+    observed = []
+    host_operations = []
+
+    def bind(request):
+        observed.append(request["binding_sha256"])
+        if case == "callback_gap":
+            raise ValueError("private callback failure")
+
+    instance = control.GuestSlotControl(on_execution_binding=bind)
+    monkeypatch.setattr(instance, "_host_operation", lambda request, deadline: (
+        host_operations.append(request["op"]) or {
+            "ok": True, "result": {"healthy": True}, "formal_admission": False,
+        }
+    ))
+    monkeypatch.setattr(instance, "_stop_host", lambda: setattr(instance, "_stop_requested", True))
+    client, server = socket.socketpair()
+    client.settimeout(2)
+    request = {"op": "bind_execution", "binding_sha256": "a" * 64,
+               "run_id": "run-1", "candidate_id": "candidate-1"}
+    thread, errors = _start_control_connection(instance, server)
+    with client, server:
+        first = {"op": "health"} if case == "missing" else request
+        _send_request(client, 1, first)
+        _, reply = _read_reply(client)
+        if case in {"missing", "callback_gap"}:
+            assert reply["ok"] is False
+        else:
+            assert reply["result"] == {"binding_sha256": "a" * 64}
+            _send_request(client, 2, request if case == "replay" else {"op": "health"})
+            _, reply = _read_reply(client)
+            if case == "replay":
+                assert reply["ok"] is False
+            else:
+                assert reply["result"] == {"healthy": True}
+                _send_request(client, 3, {"op": "stop"})
+                assert _read_reply(client)[1]["ok"] is True
+        thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert host_operations == (["health"] if case == "bound" else [])
+    assert observed == ([] if case == "missing" else ["a" * 64])
+    assert bool(errors) is (case != "bound")
 
 
 @pytest.mark.parametrize("timeout", [0, -1, 60.01, float("inf")])
@@ -238,6 +284,7 @@ def test_fork_control_reply_waits_for_child_observation(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("tamper", [False, True])
+@pytest.mark.skipif(os.name != "posix", reason="native POSIX no-follow file boundary")
 def test_original_fork_sources_stay_private_and_are_hash_bound(tmp_path, monkeypatch, tamper):
     from benchmarks.hosts import native_fork_observation as observation
 
@@ -772,3 +819,42 @@ def test_process_observation_is_separate_and_never_promotes_authority(formal):
         assert receipt["record_sha256"] == "a" * 64
         assert observation["record_sha256"] == "b" * 64
         assert server.fileno() == -1
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_model_probe_requires_explicit_handler_and_is_not_replayed(enabled, monkeypatch):
+    probes = []
+
+    def probe(host, connection, session_id, deadline):
+        probes.append(session_id)
+        return {"formal_admission": False, "model_task_executed": True}
+
+    instance = control.GuestSlotControl(
+        on_execution_binding=lambda request: None,
+        model_probe_handler=probe if enabled else None,
+        timeout_seconds=150 if enabled else 40,
+    )
+    monkeypatch.setattr(instance, "_stop_host", lambda: setattr(instance, "_stop_requested", True))
+    client, server = socket.socketpair()
+    client.settimeout(2)
+    thread, errors = _start_control_connection(instance, server)
+    with client, server:
+        _send_request(client, 1, {
+            "op": "bind_execution", "binding_sha256": "a" * 64,
+            "run_id": "probe-test", "candidate_id": "probe-candidate",
+        })
+        assert _read_reply(client)[1]["ok"] is True
+        _send_request(client, 2, {"op": "model_probe", "session_id": "ses_public"})
+        assert _read_reply(client)[1]["ok"] is enabled
+        if enabled:
+            _send_request(client, 3, {"op": "model_probe", "session_id": "ses_public"})
+            assert _read_reply(client)[1]["error"] == "model_probe_unavailable"
+        thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert len(errors) == 1
+    assert probes == (["ses_public"] if enabled else [])
+
+
+def test_model_probe_handler_requires_execution_challenge():
+    with pytest.raises(control.GuestSlotControlError, match="model_probe_handler_invalid"):
+        control.GuestSlotControl(model_probe_handler=lambda *args: {})

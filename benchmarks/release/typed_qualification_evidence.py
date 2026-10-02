@@ -29,6 +29,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from defusedxml import ElementTree as DefusedET
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.release.platform_gate import nonapplicable_identities
 from benchmarks.release.qualification_artifact_safety import (
     ABSOLUTE_PATH_RE as _ABSOLUTE_PATH_RE,
 )
@@ -130,7 +131,7 @@ _REQUIRED_CANDIDATE_FULL_IDENTITIES = frozenset(
     }
 )
 _PLATFORM_MANIFEST_SOURCE_SHA256 = (
-    "8682b547f2c6c163e0dffe59f5c7646f2d92b1e415634d6346e844afb47e3ccf"
+    "7ccc227a18700bb30a44343be78abb695d7ad34051b8122c938b10c09723ecbe"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_KEYS = frozenset(
@@ -1042,7 +1043,7 @@ def _platform_manifest_expectations(
         [*common["cases"], *windows["additional_cases"]],
         label="Platform Windows inventory",
     )
-    nonapplicable_identities = identities(
+    classified_nonapplicable = identities(
         manifest["classifications"]["nonapplicable"]["cases"],
         label="Platform nonapplicable classification",
     )
@@ -1061,13 +1062,10 @@ def _platform_manifest_expectations(
         _fail("Platform Windows inventory does not extend common inventory")
     if not (
         windows_native_identities
-        <= nonapplicable_identities
+        <= classified_nonapplicable
         <= windows_identities
     ):
         _fail("Platform nonapplicable classification is inconsistent")
-    posix_only_on_windows = nonapplicable_identities - windows_native_identities
-    if not posix_only_on_windows <= common_identities:
-        _fail("Platform POSIX-only classification is outside common inventory")
     return (
         {
             "ubuntu": common_identities,
@@ -1075,9 +1073,10 @@ def _platform_manifest_expectations(
             "windows": windows_identities,
         },
         {
-            "ubuntu": set(),
-            "macos": set(),
-            "windows": posix_only_on_windows,
+            platform: nonapplicable_identities(dict(manifest), expected_system=system)
+            for platform, system in (
+                ("ubuntu", "Linux"), ("macos", "Darwin"), ("windows", "Windows")
+            )
         },
         source.ref["sha256"],
         manifest_digest,

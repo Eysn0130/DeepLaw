@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import queue
 import re
@@ -42,6 +43,7 @@ OBSERVATION = "deeplaw.host-mcp-observation/v2"
 RESULT = "deeplaw.v013-host-task-result/v3"
 ROOT = Path(__file__).resolve().parents[2]
 MAX_BYTES = 4 * 1024 * 1024
+_PROVIDER_READ_CHUNK_BYTES = 64 * 1024
 TOOL = "deeplaw_knowledge_knowledge_support"
 GUARD_TOOL_PROFILES = {
     "continuity": TOOL,
@@ -782,6 +784,91 @@ def proxy(config_path: Path) -> None:
     require(not fault.is_set(), "MCP proxy failed closed")
 
 
+def _provider_seconds_left(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError from None
+    return remaining
+
+
+class _DeadlineProviderStream:
+    """Keep the buffered response while bounding each body/metadata socket read."""
+
+    def __init__(self, stream: Any, transport: Any, deadline: float) -> None:
+        self.stream = stream
+        self.transport = transport
+        self.deadline = deadline
+
+    def read1(self, size: int) -> bytes:
+        self.transport.settimeout(_provider_seconds_left(self.deadline))
+        data = self.stream.read1(size)
+        _provider_seconds_left(self.deadline)
+        if not isinstance(data, bytes) or len(data) > size:
+            raise DiagnosticError("provider_read", "response_bound")
+        return data
+
+    def read(self, size: int) -> bytes:
+        chunks = bytearray()
+        while len(chunks) < size:
+            data = self.read1(min(_PROVIDER_READ_CHUNK_BYTES, size - len(chunks)))
+            if not data:
+                break
+            chunks.extend(data)
+        return bytes(chunks)
+
+    def readline(self, size: int) -> bytes:
+        # HTTP chunk-size and trailer parsing otherwise calls buffered readline,
+        # which can perform multiple receives with the same stale socket timeout.
+        line = bytearray()
+        while len(line) < size:
+            data = self.read1(1)
+            if not data:
+                break
+            line.extend(data)
+            if data == b"\n":
+                break
+        return bytes(line)
+
+    def close(self) -> None:
+        self.stream.close()
+
+    def flush(self) -> None:
+        self.stream.flush()
+
+
+def _read_provider_response(response: Any, deadline: float) -> bytes:
+    _provider_seconds_left(deadline)
+    if response.fp is None:
+        length = getattr(response, "length", None)
+        if type(length) is int and length > 0:
+            raise DiagnosticError("provider_read", "response_bound")
+        return b""
+    original = response.fp
+    transport = getattr(getattr(original, "raw", None), "_sock", None)
+    if not (callable(getattr(response, "read1", None))
+            and callable(getattr(original, "read1", None))
+            and callable(getattr(transport, "settimeout", None))):
+        raise DiagnosticError("provider_read", "response_bound")
+    response.fp = _DeadlineProviderStream(original, transport, deadline)
+    data = bytearray()
+    while True:
+        _provider_seconds_left(deadline)
+        # One overflow detection byte preserves the existing MAX_BYTES bound.
+        size = min(_PROVIDER_READ_CHUNK_BYTES, MAX_BYTES + 1 - len(data))
+        chunk = response.read1(size)
+        _provider_seconds_left(deadline)
+        if not isinstance(chunk, bytes) or len(chunk) > size:
+            raise DiagnosticError("provider_read", "response_bound")
+        if not chunk:
+            length = getattr(response, "length", None)
+            if type(length) is int and length > 0:
+                raise DiagnosticError("provider_read", "response_bound")
+            return bytes(data)
+        data.extend(chunk)
+        if len(data) > MAX_BYTES:
+            raise DiagnosticError("provider_read", "response_bound")
+
+
 class RequestGuard:
     """Inspect every request on the configured Provider route before forwarding.
 
@@ -790,18 +877,26 @@ class RequestGuard:
     """
 
     def __init__(self, *, key: str, nonce: str, forward: bool = False,
-                 tool_profile: str = "continuity") -> None:
+                 tool_profile: str = "continuity", max_requests: int = 6) -> None:
         require(tool_profile in GUARD_TOOL_PROFILES, "guard tool profile differs")
+        require(type(max_requests) is int and 1 <= max_requests <= 6,
+                "guard request budget differs")
         self.tool_name = GUARD_TOOL_PROFILES[tool_profile]
         self.key = key
         self.nonce = nonce
         self.forward = forward
+        self.max_requests = max_requests
         self.active = False
         self.requests: list[dict[str, Any]] = []
         self.rejected = 0
         self.in_flight = 0
         self.first_failure: dict[str, Any] | None = None
         self.lock = threading.Lock()
+        self._request_local = threading.local()
+        self._opener: Any = None
+        self._outbound_attempted = 0
+        self._outbound_completed = 0
+        self._outbound_failed = 0
         self.server: Any = None
         self.thread: threading.Thread | None = None
 
@@ -926,16 +1021,124 @@ class RequestGuard:
             if self.first_failure is None:
                 self.first_failure = diagnostic(error, stage)
 
+    @contextmanager
+    def _request_in_flight(self):
+        # HTTP ingress/egress and its nested owner forward are one active request.
+        nested = getattr(self._request_local, "active", False)
+        if not nested:
+            self._request_local.active = True
+            with self.lock:
+                self.in_flight += 1
+        try:
+            yield
+        finally:
+            if not nested:
+                with self.lock:
+                    self.in_flight -= 1
+                self._request_local.active = False
+
+    def transport_observation(self) -> dict[str, int]:
+        """Owner-local counts; admission is not a successful outbound response.
+
+        An attempt is an opener invocation. Completion requires its bounded read
+        and close; it does not establish model-task success or formal admission.
+        """
+        with self.lock:
+            return {
+                "admitted": len(self.requests),
+                "outbound_attempted": self._outbound_attempted,
+                "outbound_completed": self._outbound_completed,
+                "outbound_failed": self._outbound_failed,
+                "outbound_in_flight": self._outbound_attempted
+                    - self._outbound_completed - self._outbound_failed,
+            }
+
+    def _provider_opener(self) -> Any:
+        with self.lock:
+            if self._opener is None:
+                class NoRedirect(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+                        raise DiagnosticError("provider_open", "redirect_forbidden")
+
+                self._opener = urllib.request.build_opener(
+                    urllib.request.ProxyHandler({}), NoRedirect(),
+                )
+            return self._opener
+
+    def forward_request(self, body: bytes, *, path: str,
+                        authorization: str, timeout_seconds: float = 300.0
+                        ) -> tuple[int, str, bytes]:
+        """Inspect and forward in this credential-authority process, on any transport.
+
+        Body and chunk metadata reads enforce an absolute deadline. Until open
+        returns, DNS, TLS and response-header work only have urllib's socket
+        timeout; this function cannot forcibly interrupt that opening phase.
+        """
+        stage = "inspect"
+        attempted = False
+        with self._request_in_flight():
+            try:
+                if not (type(timeout_seconds) in {int, float} and 0 < timeout_seconds <= 300
+                        and math.isfinite(timeout_seconds)):
+                    raise DiagnosticError("admission", "validation_rejected")
+                deadline = time.monotonic() + timeout_seconds
+                with self.lock:
+                    self.inspect(body, path=path, authorization=authorization)
+                    stage = "admission"
+                    if len(self.requests) >= self.max_requests:
+                        raise DiagnosticError(stage, "request_budget")
+                    if not self.forward:
+                        raise DiagnosticError(stage, "forward_disabled")
+                    self.requests.append({"sha256": digest(body), "bytes": len(body)})
+                stage = "provider_open"
+                request = urllib.request.Request(
+                    "https://api.deepseek.com/chat/completions",
+                    data=body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + self.key,
+                    },
+                )
+                opener = self._provider_opener()
+                open_timeout = _provider_seconds_left(deadline)
+                with self.lock:
+                    self._outbound_attempted += 1
+                    attempted = True
+                with opener.open(request, timeout=open_timeout) as response:
+                    stage = "provider_read"
+                    if type(response.status) is not int or response.status != 200:
+                        raise DiagnosticError(
+                            stage, "http_error",
+                            http_status=response.status if type(response.status) is int
+                            and 100 <= response.status <= 599 else None,
+                        )
+                    data = _read_provider_response(response, deadline)
+                    content_type = response.headers.get("Content-Type", "application/json")
+                    if len(data) > MAX_BYTES or not (
+                        isinstance(content_type, str) and 0 < len(content_type) <= 256
+                        and all(32 <= ord(char) <= 126 for char in content_type)
+                    ):
+                        raise DiagnosticError(stage, "response_bound")
+                with self.lock:
+                    self._outbound_completed += 1
+                return 200, content_type, data
+            except BaseException as error:
+                if attempted:
+                    with self.lock:
+                        self._outbound_failed += 1
+                self.reject(error, stage)
+                if isinstance(error, KeyboardInterrupt):
+                    raise KeyboardInterrupt from None
+                if isinstance(error, SystemExit):
+                    raise SystemExit(1) from None
+                return (
+                    403, "application/json", b'{"error":"supervised_provider_request_rejected"}',
+                )
+
     def start(self) -> str:
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
         guard = self
-
-        class NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *args: Any, **kwargs: Any) -> None:
-                raise DiagnosticError("provider_open", "redirect_forbidden")
-
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args: Any) -> None:
@@ -943,59 +1146,34 @@ class RequestGuard:
 
             def do_POST(self) -> None:
                 stage = "ingress"
-                with guard.lock:
-                    guard.in_flight += 1
-                try:
+                with guard._request_in_flight():
                     try:
-                        length = int(self.headers.get("Content-Length", "0"))
-                    except ValueError:
-                        raise DiagnosticError(stage, "body_length") from None
-                    if not 0 < length <= 262144:
-                        raise DiagnosticError(stage, "body_length")
-                    body = self.rfile.read(length)
-                    stage = "inspect"
-                    with guard.lock:
-                        guard.inspect(
-                            body,
-                            path=self.path,
+                        try:
+                            length = int(self.headers.get("Content-Length", "0"))
+                        except ValueError:
+                            raise DiagnosticError(stage, "body_length") from None
+                        if not 0 < length <= 262144:
+                            raise DiagnosticError(stage, "body_length")
+                        self.connection.settimeout(300)
+                        body = self.rfile.read(length)
+                        if len(body) != length:
+                            raise DiagnosticError(stage, "body_length")
+                        status, content_type, data = guard.forward_request(
+                            body, path=self.path,
                             authorization=self.headers.get("Authorization", ""),
                         )
-                        stage = "admission"
-                        if len(guard.requests) >= 6:
-                            raise DiagnosticError(stage, "request_budget")
-                        if not guard.forward:
-                            raise DiagnosticError(stage, "forward_disabled")
-                        guard.requests.append({"sha256": digest(body), "bytes": len(body)})
-                    stage = "provider_open"
-                    request = urllib.request.Request(
-                        "https://api.deepseek.com/chat/completions",
-                        data=body,
-                        headers={
-                            "Content-Type": "application/json",
-                            "Authorization": "Bearer " + guard.key,
-                        },
-                    )
-                    with opener.open(request, timeout=300) as response:
-                        stage = "provider_read"
-                        data = response.read(MAX_BYTES + 1)
-                        if len(data) > MAX_BYTES:
-                            raise DiagnosticError(stage, "response_bound")
-                        content_type = response.headers.get("Content-Type", "application/json")
-                    stage = "client_write"
-                    self.send_response(200)
-                    self.send_header("Content-Type", content_type)
-                    self.send_header("Content-Length", str(len(data)))
-                    self.end_headers()
-                    self.wfile.write(data)
-                except Exception as error:
-                    guard.reject(error, stage)
-                    with suppress(Exception):
-                        self.send_response(403)
+                        stage = "client_write"
+                        self.send_response(status)
+                        self.send_header("Content-Type", content_type)
+                        self.send_header("Content-Length", str(len(data)))
                         self.end_headers()
-                        self.wfile.write(b'{"error":"supervised_provider_request_rejected"}')
-                finally:
-                    with guard.lock:
-                        guard.in_flight -= 1
+                        self.wfile.write(data)
+                    except Exception as error:
+                        guard.reject(error, stage)
+                        with suppress(Exception):
+                            self.send_response(403)
+                            self.end_headers()
+                            self.wfile.write(b'{"error":"supervised_provider_request_rejected"}')
 
             def do_GET(self) -> None:
                 guard.reject(DiagnosticError("ingress", "method_forbidden"), "ingress")

@@ -1,0 +1,632 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/owner-provider-authority-protocol.v1.schema.json",
+  "title": "DeepLaw owner Provider authority IPC engineering protocol v1",
+  "description": "Closed finite IPC metadata around the existing owner forward callback; no credential loader or Provider policy. Fixed probe is exactly max 1 request/120 seconds; explicit maintenance is exactly max 6 requests/180 seconds. Caller timeouts may only shorten either profile. Absolute monotonic deadlines, fresh 32-byte nonce, canonical configuration binding, body hash/length and strict consumed-before-callback sequence checks are additionally enforced at runtime. Raw original bodies travel only in the existing bounded binary Provider frames and never in receipts. Existing DPR1 response codec caps the entire encoded reply at 4 MiB. Local process commitments bind a Popen PID, role, nonce and binding and are not native process-start or isolation evidence. Entry source paths remain private launch inputs; credentials are neither launch arguments nor IPC/config/receipt fields. The private child callback may load the existing owner authority under separate owner authorization. Formal admission is always false.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/configure"
+    },
+    {
+      "$ref": "#/$defs/dispatch"
+    },
+    {
+      "$ref": "#/$defs/stop"
+    },
+    {
+      "$ref": "#/$defs/ready"
+    },
+    {
+      "$ref": "#/$defs/stopped"
+    },
+    {
+      "$ref": "#/$defs/failure"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    }
+  ],
+  "$defs": {
+    "configure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_kind",
+        "nonce",
+        "binding_sha256",
+        "profile",
+        "model_pin",
+        "execution_binding_sha256",
+        "deadline_monotonic_ns"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.owner-provider-authority-protocol/v1"
+        },
+        "message_kind": {
+          "const": "configure"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "binding_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "profile": {
+          "enum": [
+            "fixed_probe",
+            "maintenance"
+          ]
+        },
+        "model_pin": {
+          "const": "deepseek/deepseek-v4-flash"
+        },
+        "execution_binding_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "deadline_monotonic_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854776000
+        }
+      }
+    },
+    "dispatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_kind",
+        "nonce",
+        "binding_sha256",
+        "request_sha256",
+        "request_bytes",
+        "deadline_monotonic_ns"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.owner-provider-authority-protocol/v1"
+        },
+        "message_kind": {
+          "const": "dispatch"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "binding_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "request_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "deadline_monotonic_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854776000
+        }
+      }
+    },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_kind",
+        "nonce",
+        "binding_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.owner-provider-authority-protocol/v1"
+        },
+        "message_kind": {
+          "const": "stop"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "binding_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_kind",
+        "nonce",
+        "binding_sha256",
+        "role",
+        "process_identity_sha256",
+        "formal_admission"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.owner-provider-authority-protocol/v1"
+        },
+        "message_kind": {
+          "const": "ready"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "binding_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "role": {
+          "const": "credential_authority"
+        },
+        "process_identity_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "formal_admission": {
+          "const": false
+        }
+      }
+    },
+    "stopped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_kind",
+        "nonce",
+        "binding_sha256",
+        "consumed_requests",
+        "formal_admission"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.owner-provider-authority-protocol/v1"
+        },
+        "message_kind": {
+          "const": "stopped"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "binding_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "consumed_requests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        },
+        "formal_admission": {
+          "const": false
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_kind",
+        "nonce",
+        "binding_sha256",
+        "diagnostic",
+        "formal_admission"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.owner-provider-authority-protocol/v1"
+        },
+        "message_kind": {
+          "const": "failure"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "binding_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "diagnostic": {
+          "$ref": "#/$defs/diagnostic"
+        },
+        "formal_admission": {
+          "const": false
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "code"
+      ],
+      "properties": {
+        "stage": {
+          "enum": [
+            "authority_start",
+            "authority_protocol",
+            "authority_forward",
+            "authority_cleanup"
+          ]
+        },
+        "code": {
+          "enum": [
+            "authority_failed",
+            "authority_config_invalid",
+          "authority_entry_invalid",
+          "authority_platform_unsupported",
+            "authority_start_failed",
+            "authority_not_started",
+            "authority_closed",
+            "authority_reader_busy",
+            "authority_deadline_exceeded",
+            "authority_frame_timeout",
+            "authority_frame_truncated",
+            "authority_frame_bound",
+            "authority_frame_invalid",
+            "authority_pipe_failed",
+            "authority_binding_invalid",
+            "authority_sequence_invalid",
+            "authority_request_bound",
+            "authority_request_budget",
+            "authority_response_invalid",
+            "authority_callback_failed",
+            "authority_child_failed",
+            "authority_stop_unconfirmed",
+            "authority_kill_failed",
+            "authority_reap_failed",
+          "authority_pipe_close_failed",
+          "authority_group_unconfirmed"
+          ]
+        }
+      }
+    },
+    "actor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "role",
+            "process_identity_sha256"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "observer",
+                "runner"
+              ]
+            },
+            "process_identity_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "role",
+            "source_sha256",
+            "process_identity_sha256"
+          ],
+          "properties": {
+            "role": {
+              "const": "credential_authority"
+            },
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "process_identity_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "request_sha256",
+        "request_bytes",
+        "response_state",
+        "response_sha256",
+        "response_bytes"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "request_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "response_state": {
+          "enum": [
+            "complete",
+            "unknown"
+          ]
+        },
+        "response_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "response_bytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4194304
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "response_state": {
+                "const": "complete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "response_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "response_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4194304
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "response_sha256": {
+                "type": "null"
+              },
+              "response_bytes": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_kind",
+        "profile",
+        "model_pin",
+        "execution_binding_sha256",
+        "binding_sha256",
+        "nonce_sha256",
+        "process_identity_source",
+        "actors",
+        "consumed_requests",
+        "requests",
+        "first_failure",
+        "cleanup_failures",
+        "cleanup_confirmed",
+        "child_reaped",
+        "authority_group_empty",
+        "child_exit_code",
+        "authority_killed",
+        "formal_admission"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "deeplaw.owner-provider-authority-protocol/v1"
+        },
+        "message_kind": {
+          "const": "receipt"
+        },
+        "profile": {
+          "enum": [
+            "fixed_probe",
+            "maintenance"
+          ]
+        },
+        "model_pin": {
+          "const": "deepseek/deepseek-v4-flash"
+        },
+        "execution_binding_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "binding_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nonce_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "process_identity_source": {
+          "const": "local_popen_pid_nonce_binding"
+        },
+        "actors": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/actor"
+          }
+        },
+        "consumed_requests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        },
+        "requests": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/request"
+          }
+        },
+        "first_failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/diagnostic"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cleanup_failures": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        },
+        "cleanup_confirmed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "child_reaped": {
+          "type": "boolean"
+        },
+        "authority_group_empty": {
+          "type": ["boolean", "null"]
+        },
+        "child_exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -255,
+          "maximum": 255
+        },
+        "authority_killed": {
+          "type": "boolean"
+        },
+        "formal_admission": {
+          "const": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "profile": {
+                "const": "fixed_probe"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "consumed_requests": {
+                "maximum": 1
+              },
+              "requests": {
+                "maxItems": 1,
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/request"
+                    },
+                    {
+                      "properties": {
+                        "sequence": {
+                          "const": 1
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "cleanup_confirmed": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "child_reaped": {
+                "const": true
+              },
+              "authority_group_empty": {
+                "const": true
+              },
+              "cleanup_failures": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

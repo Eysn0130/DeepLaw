@@ -52,13 +52,21 @@ def finish_route_observer(observers, read_observer):
         return {"status": "gap", "failure": "route_observer_missing", "formal_admission": False}
     observer = observers[0]
     try:
-        observer.stdin.write(b'{"op":"finish"}\n')
-        observer.stdin.flush()
+        if observer.poll() is None:
+            try:
+                observer.stdin.write(b'{"op":"finish"}\n')
+                observer.stdin.flush()
+            except BrokenPipeError:
+                # A failed capture may have emitted its original gap before
+                # closing control input. Consume that bounded output once.
+                pass
         result = read_observer(observer.stdout)
+        if not isinstance(result, dict):
+            raise RuntimeError("route_observer_output_invalid")
         if observer.wait(timeout=2) != 0 and result.get("status") != "gap":
             raise RuntimeError("route_observer_exit_failed")
         return result
-    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+    except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired):
         return {"status": "gap", "failure": "route_observer_failed", "formal_admission": False}
     finally:
         if observer.poll() is None:
@@ -180,9 +188,12 @@ def main() -> int:
     from benchmarks.hosts import linux_guest_observer as audit
     from benchmarks.hosts import linux_role_launcher as l
     owner = json.loads(pathlib.Path("/opt/owner-input.json").read_bytes())
-    if owner.get("purpose") not in {"zero_model_preflight", "zero_model_fork_preflight"}:
+    if owner.get("purpose") not in {
+        "zero_model_preflight", "zero_model_fork_preflight", "native_model_probe",
+    }:
         raise RuntimeError("owner_purpose_invalid")
-    fork_only = owner["purpose"] == "zero_model_fork_preflight"
+    model_probe = owner["purpose"] == "native_model_probe"
+    fork_only = owner["purpose"] in {"zero_model_fork_preflight", "native_model_probe"}
     from benchmarks.hosts.linux_guest_slot_control import GuestSlotControl
 
     if sys.platform != "linux" or os.geteuid() != 0:
@@ -246,12 +257,19 @@ def main() -> int:
         binding(pathlib.Path("/opt/boundary_gate.py"), "/runtime/boundary_gate.py"),
         binding(pathlib.Path("/opt/owner-input.json"), "/runtime/owner-input.json"),
     ]
+    plugin_source = pathlib.Path("/opt/plugin-source")
+    if model_probe:
+        plugin_source = stage / "probe-plugins"
+        plugin_source.mkdir()
+        shutil.copy2("/opt/model_probe_plugin.ts", plugin_source / "deeplaw-probe.ts")
     host = [
         *common,
         binding(pathlib.Path("/opt/opencode"), "/runtime/opencode"),
         binding(pathlib.Path("/opt/opencode_entry.py"), "/runtime/entry.py"),
         binding(pathlib.Path("/opt/mcp_client.py"), "/runtime/mcp_client.py"),
-        binding(pathlib.Path("/opt/plugin-source"), "/runtime/plugins"),
+        binding(plugin_source, "/runtime/plugins"),
+        *([binding(pathlib.Path("/opt/plugin-source"), "/runtime/probe-source")]
+          if model_probe else []),
     ]
     mcp = [
         *common,
@@ -265,7 +283,7 @@ def main() -> int:
         "schema": l.CONFIG_SCHEMA,
         "freshroot": str(fresh),
         "cgroup_root": "/sys/fs/cgroup",
-        "timeout_seconds": 50,
+        "timeout_seconds": 190 if model_probe else 50,
         "roles": [
             {
                 "role": role,
@@ -285,6 +303,33 @@ def main() -> int:
     seeds = {}
     boundary_observations = []
     route_observers = []
+    execution_observations = {}
+    execution_binding = None
+    role_handles = {}
+
+    def observe_execution(handle, expected):
+        from benchmarks.hosts.linux_host_execution_observer import observe_executed_binary
+
+        execution_observations[handle.role] = observe_executed_binary(
+            role=handle.role, pid=handle.pid, expected_sha256=expected,
+            binding_sha256=execution_binding,
+        )
+
+    host_executable_sha256 = l._file_or_tree_sha256(pathlib.Path("/opt/opencode"))[0]
+    mcp_executable_sha256 = l._file_or_tree_sha256(stage / "python")[0]
+
+    def bind_execution(request):
+        nonlocal execution_binding
+        if (
+            request["run_id"] != owner["run_id"]
+            or request["candidate_id"] != owner["candidate_id"]
+            or execution_binding is not None
+        ):
+            raise RuntimeError("owner_execution_binding_gap")
+        execution_binding = request["binding_sha256"]
+        observe_execution(role_handles["mcp"], mcp_executable_sha256)
+        if fork_only:
+            close_unused_mcp(role_handles["mcp"].workdir)
 
     def read_observer(stream, timeout=5):
         result = bytearray()
@@ -312,12 +357,25 @@ def main() -> int:
     )
     if read_observer(observer.stdout) != {"ready": True, "formal_admission": False}:
         raise RuntimeError("observer_not_ready")
+    def probe(handle, connection, session_id, deadline):
+        from benchmarks.hosts.native_provider_bridge import run_fixed_model_probe
+
+        return run_fixed_model_probe(
+            handle, connection, session_id=session_id,
+            dummy_nonce=owner["provider_nonce"], deadline=deadline,
+        )
+
     control = GuestSlotControl(
-        port=4050, timeout_seconds=40, observe_fork=True, require_host_ready=True,
+        port=4050, timeout_seconds=150 if model_probe else 40,
+        observe_fork=True, require_host_ready=True,
+        on_host_ready=lambda handle: observe_execution(handle, host_executable_sha256),
+        on_execution_binding=bind_execution,
+        model_probe_handler=probe if model_probe else None,
     )
 
     def on_started(handles):
         for handle in handles:
+            role_handles[handle.role] = handle
             seeds[handle.role] = {
                 "pid": handle.pid,
                 "uid": handle.uid,
@@ -326,7 +384,7 @@ def main() -> int:
         h = next(x for x in handles if x.role == "host")
         route_observer = subprocess.Popen(
             ["/usr/bin/python3", "-m", "benchmarks.hosts.linux_http_route_observer",
-             "--host-pid", str(h.pid)],
+             "--host-pid", str(h.pid), *(["--model-probe"] if model_probe else [])],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             cwd="/opt",
         )
@@ -346,9 +404,7 @@ def main() -> int:
             raise
         h = next(x for x in handles if x.role == "host")
         m = next(x for x in handles if x.role == "mcp")
-        if fork_only:
-            close_unused_mcp(m.workdir)
-        else:
+        if not fork_only:
             controllers.append(
                 subprocess.Popen(
                     ["/usr/bin/python3", "/opt/mcp_relay.py", str(h.workdir), str(m.workdir)]
@@ -404,10 +460,23 @@ def main() -> int:
         and process_observation.get("tree_receipt", {}).get("status") != "gap"
     ):
         raise RuntimeError("observer_exit_nonzero")
+    model_diagnostics = {}
+    if model_probe:
+        from benchmarks.hosts.native_provider_bridge import _public_host_failure_codes
+
+        model_diagnostics = {
+            "host_failure_codes": _public_host_failure_codes(role_handles["host"].workdir),
+        }
     control.finish(
         receipt, process_observation=process_observation,
         boundary_observation=boundary_observations[0] if boundary_observations else None,
         route_observation=finish_route_observer(route_observers, read_observer),
+        execution_observation={
+            "formal_admission": False, "claim_eligible": False,
+            "binding_sha256": execution_binding,
+            "roles": execution_observations,
+        },
+        **model_diagnostics,
     )
     control.close()
     return (

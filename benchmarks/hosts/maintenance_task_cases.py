@@ -299,12 +299,15 @@ def _task_text(scenario_id: str) -> tuple[str, str]:
             "Resolve conflicting retained experience from the publicly verifiable records.",
         ),
         "independent_support": (
-            "Review the Amber report while one independent archive record may be withdrawn.",
-            "A complete independent record that remains available can support the review alone.",
+            "Withdraw one independent archive record, then approve the Amber report using "
+            "the remaining record.",
+            "Leave one record withdrawn and the report supported by a complete independent "
+            "record that remains available.",
         ),
         "unknown_action": (
-            "Handle a requested archive operation whose execution outcome is unknown.",
-            "Record the unknown outcome without changing the public resource or report.",
+            "Handle the legacy_export archive operation whose execution outcome is unknown.",
+            "Record the unknown outcome for legacy_export and stop without changing "
+            "the public resource or report.",
         ),
         "forget_then_reuse": (
             "Review the Amber report after an earlier archive experience was forgotten.",
@@ -490,9 +493,14 @@ def _scenario_facts(configuration_id: str, scenario_id: str) -> dict[str, Any]:
         return {
             "support_rule": "one_complete_independent_record_is_sufficient",
             "withdrawal_supported": True,
+            "withdrawal_required": True,
         }
     if scenario_id == "unknown_action":
-        return {"operation_status": "unknown", "state_change_allowed": False}
+        return {
+            "operation_name": "legacy_export",
+            "operation_status": "unknown",
+            "state_change_allowed": False,
+        }
     forgotten_ids = _public_task_body_experience_ids(configuration_id, "forgotten")
     return {
         "forgotten_experience_ids": forgotten_ids,

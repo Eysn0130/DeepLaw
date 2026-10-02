@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import struct
-import sys
 from dataclasses import replace
 from typing import Any
 
@@ -526,9 +525,10 @@ def test_setup_failure_has_a_valid_gap_without_fabricating_native_state() -> Non
     assert observer.validate_observation_receipt(receipt) == receipt
 
 
-def test_non_linux_native_transport_is_unavailable_without_injected_socket() -> None:
-    if sys.platform == "linux":
-        pytest.skip("native transport availability depends on guest privileges")
+def test_non_linux_native_transport_is_unavailable_without_injected_socket(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(observer.sys, "platform", "darwin")
     with pytest.raises(observer.NativeAuditUnavailable):
         observer.NetlinkAuditTransport()
 

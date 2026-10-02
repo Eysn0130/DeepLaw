@@ -18,13 +18,11 @@ from __future__ import annotations
 
 import ctypes
 import errno
-import fcntl
-import grp
 import hashlib
 import json
 import os
 import platform
-import pwd
+import posixpath
 import re
 import select
 import signal
@@ -37,7 +35,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath
 from typing import Any, Final
 
 SCHEMA_VERSION: Final = "deeplaw.linux-role-launcher/v1"
@@ -310,7 +308,7 @@ def _require_directory(path: Path, *, code: str) -> os.stat_result:
     return item
 
 
-def _path_is_or_below(path: Path, parent: Path) -> bool:
+def _path_is_or_below(path: PurePath, parent: PurePath) -> bool:
     try:
         path.relative_to(parent)
     except ValueError:
@@ -386,12 +384,25 @@ def _file_or_tree_sha256(path: Path) -> tuple[str, bool]:
     raise LauncherError("runtime_binding_type_invalid")
 
 
+def _is_guest_absolute_canonical(value: Any, *, code: str) -> PurePosixPath:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise LauncherError(code)
+    if len(value.encode("utf-8")) > MAX_PATH_BYTES:
+        raise LauncherError(code)
+    path = PurePosixPath(value)
+    if not path.is_absolute() or posixpath.normpath(value) != value:
+        raise LauncherError(code)
+    if any(part in {".", ".."} for part in path.parts):
+        raise LauncherError(code)
+    return path
+
+
 def _validate_target(value: Any) -> str:
-    path = _is_absolute_canonical(value, code="runtime_target_invalid")
+    path = _is_guest_absolute_canonical(value, code="runtime_target_invalid")
     target = str(path)
     if target == "/" or target in {"/proc", "/dev", "/work"}:
         raise LauncherError("runtime_target_reserved")
-    if _path_is_or_below(path, Path("/proc")) or _path_is_or_below(path, Path("/dev")):
+    if any(_path_is_or_below(path, PurePosixPath(root)) for root in ("/proc", "/dev")):
         raise LauncherError("runtime_target_reserved")
     return target
 
@@ -414,12 +425,14 @@ def _validate_command(value: Any, *, bindings: Sequence[RuntimeBinding]) -> tupl
     encoded_size = sum(len(item.encode("utf-8")) for item in value)
     if encoded_size > MAX_ARGUMENT_BYTES:
         raise LauncherError("command_too_large")
-    executable = _is_absolute_canonical(value[0], code="command_path_invalid")
-    if executable in {Path("/bin/sh"), Path("/bin/ash"), Path("/bin/bash"), Path("/usr/bin/env")}:
+    executable = _is_guest_absolute_canonical(value[0], code="command_path_invalid")
+    if executable in {
+        PurePosixPath(path) for path in ("/bin/sh", "/bin/ash", "/bin/bash", "/usr/bin/env")
+    }:
         raise LauncherError("command_shell_wrapper_forbidden")
     if not any(
-        executable == Path(binding.target)
-        or _path_is_or_below(executable, Path(binding.target))
+        executable == PurePosixPath(binding.target)
+        or _path_is_or_below(executable, PurePosixPath(binding.target))
         for binding in bindings
     ):
         raise LauncherError("command_not_bound")
@@ -701,10 +714,10 @@ class _LibC:
 
 
 def _native_requirements() -> None:
-    if os.geteuid() != 0:
-        raise LauncherError("native_requires_root")
     if platform.system() != "Linux":
         raise LauncherError("native_requires_linux")
+    if os.geteuid() != 0:
+        raise LauncherError("native_requires_root")
     if platform.machine().lower() not in {"aarch64", "arm64"}:
         raise LauncherError("native_requires_arm64")
 
@@ -789,6 +802,8 @@ def _cgroup_kill(directory: Path) -> None:
 
 
 def _bring_loopback_up() -> None:
+    import fcntl
+
     request = bytearray(40)
     struct.pack_into("16sH", request, 0, b"lo", 0)
     try:
@@ -1067,6 +1082,9 @@ def _setup_chroot(libc: _LibC, spec: RoleSpec, root: Path, work: Path) -> None:
 
 
 def _lookup_fixed_user(role: str) -> tuple[int, int] | None:
+    import grp
+    import pwd
+
     uid, gid = ROLE_UID_GID[role]
     try:
         entry = pwd.getpwuid(uid)
@@ -1112,6 +1130,9 @@ def _run_fixed_user_tool(command: Sequence[str]) -> None:
 
 
 def _ensure_fixed_users() -> None:
+    import grp
+    import pwd
+
     group_tool = _fixed_tool(("/usr/sbin/addgroup", "/sbin/addgroup"))
     user_tool = _fixed_tool(("/usr/sbin/adduser", "/sbin/adduser"))
     for role, uid, gid in (("host", HOST_UID, HOST_GID), ("mcp", MCP_UID, MCP_GID)):
@@ -1303,6 +1324,12 @@ def _capture_role_identity(
         return observe_role_identity(role=role, pid=pid, cgroup_dir=cgroup_dir), None
     except Exception:
         return None, "role_observation_missing"
+
+
+def _capture_process_start_identity(role: str, pid: int) -> str:
+    from benchmarks.hosts.linux_host_execution_observer import observe_process_start_identity
+
+    return observe_process_start_identity(role=role, pid=pid)
 
 
 def _finish_role_observation(
@@ -1519,6 +1546,13 @@ def run_native(
             identity, identity_error = _capture_role_identity(spec.role, pid, cgroup_dir)
             if identity_error is not None:
                 failure_codes.append(identity_error)
+            row = next(item for item in role_rows if item["role"] == spec.role)
+            try:
+                row["process_start_identity_sha256"] = _capture_process_start_identity(
+                    spec.role, pid,
+                )
+            except Exception:
+                failure_codes.append("role_process_identity_missing")
             processes[spec.role] = _RoleRuntime(
                 supervisor_pid=child,
                 pid=pid,
@@ -1530,7 +1564,6 @@ def run_native(
                 identity=identity,
             )
             pending_children.pop(child, None)
-            row = next(item for item in role_rows if item["role"] == spec.role)
             row["lifecycle"] = "started"
             row["seccomp"]["installed"] = True
             events.append(f"{spec.role}_started")

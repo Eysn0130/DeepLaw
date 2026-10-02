@@ -185,7 +185,7 @@ def test_frozen_behavior_map_claim_boundary_and_candidate_status_are_explicit() 
     assert "Active gate classification: `v9`" in traceability
     assert "Active qualification profile: `kernel_release_core`" in traceability
     assert "public-seam, source-free development closure runner" in traceability
-    assert "knowledge-support input v8/output v7" in traceability
+    assert "knowledge-support input v9/output v8" in traceability
     assert "Caller-authored PASS values" in traceability
 
     pyproject = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))

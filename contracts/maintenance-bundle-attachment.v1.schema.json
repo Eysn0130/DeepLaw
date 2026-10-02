@@ -1,0 +1,483 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/maintenance-bundle-attachment.v1.schema.json",
+  "title": "Exact public C6 engineering attachment receipt",
+  "description": "Byte-closure staging only; no native, model, final-artifact or Commercial Authority. Cross-field closure, totals, slot run bindings and record digest are also enforced by the receipt validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.maintenance-bundle-attachment/v1"
+    },
+    "attachment_subtree": {
+      "const": "attachments/c6_public_maintenance"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "maxLength": 128
+    },
+    "candidate_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "maxLength": 128
+    },
+    "binary_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "public_input_sha256": {
+      "const": "8a5607e6ad7170fc8aca1e83defc78865bf2dfe3962bbbc3d1b564bf35fa10d5"
+    },
+    "source_files": {
+      "type": "array",
+      "minItems": 17,
+      "maxItems": 2012,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/file_reference"
+      }
+    },
+    "closure_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "slots": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "uniqueItems": true,
+      "items": false,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "no_memory"
+            },
+            "scenario_id": {
+              "const": "source_update"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "no_memory"
+            },
+            "scenario_id": {
+              "const": "wrong_experience"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "no_memory"
+            },
+            "scenario_id": {
+              "const": "independent_support"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "no_memory"
+            },
+            "scenario_id": {
+              "const": "unknown_action"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "no_memory"
+            },
+            "scenario_id": {
+              "const": "forget_then_reuse"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "frozen_unmaintained"
+            },
+            "scenario_id": {
+              "const": "source_update"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "frozen_unmaintained"
+            },
+            "scenario_id": {
+              "const": "wrong_experience"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "frozen_unmaintained"
+            },
+            "scenario_id": {
+              "const": "independent_support"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "frozen_unmaintained"
+            },
+            "scenario_id": {
+              "const": "unknown_action"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "frozen_unmaintained"
+            },
+            "scenario_id": {
+              "const": "forget_then_reuse"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "governed_maintenance"
+            },
+            "scenario_id": {
+              "const": "source_update"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "governed_maintenance"
+            },
+            "scenario_id": {
+              "const": "wrong_experience"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "governed_maintenance"
+            },
+            "scenario_id": {
+              "const": "independent_support"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "governed_maintenance"
+            },
+            "scenario_id": {
+              "const": "unknown_action"
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/slot",
+          "properties": {
+            "configuration_id": {
+              "const": "governed_maintenance"
+            },
+            "scenario_id": {
+              "const": "forget_then_reuse"
+            }
+          }
+        }
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "slot_count": {
+          "const": 15
+        },
+        "passed_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "failed_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "unknown_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "producer_succeeded_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "producer_failed_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        }
+      },
+      "required": [
+        "slot_count",
+        "passed_count",
+        "failed_count",
+        "unknown_count",
+        "producer_succeeded_count",
+        "producer_failed_count"
+      ]
+    },
+    "generated_empty_directories": {
+      "type": "array",
+      "minItems": 45,
+      "maxItems": 45,
+      "uniqueItems": true,
+      "const": [
+        "context-snapshots/no_memory-source_update/vault/sources",
+        "context-snapshots/no_memory-source_update/vault/.deeplaw/capabilities",
+        "context-snapshots/no_memory-source_update/vault/.deeplaw/staging",
+        "context-snapshots/no_memory-wrong_experience/vault/sources",
+        "context-snapshots/no_memory-wrong_experience/vault/.deeplaw/capabilities",
+        "context-snapshots/no_memory-wrong_experience/vault/.deeplaw/staging",
+        "context-snapshots/no_memory-independent_support/vault/sources",
+        "context-snapshots/no_memory-independent_support/vault/.deeplaw/capabilities",
+        "context-snapshots/no_memory-independent_support/vault/.deeplaw/staging",
+        "context-snapshots/no_memory-unknown_action/vault/sources",
+        "context-snapshots/no_memory-unknown_action/vault/.deeplaw/capabilities",
+        "context-snapshots/no_memory-unknown_action/vault/.deeplaw/staging",
+        "context-snapshots/no_memory-forget_then_reuse/vault/sources",
+        "context-snapshots/no_memory-forget_then_reuse/vault/.deeplaw/capabilities",
+        "context-snapshots/no_memory-forget_then_reuse/vault/.deeplaw/staging",
+        "context-snapshots/frozen_unmaintained-source_update/vault/sources",
+        "context-snapshots/frozen_unmaintained-source_update/vault/.deeplaw/capabilities",
+        "context-snapshots/frozen_unmaintained-source_update/vault/.deeplaw/staging",
+        "context-snapshots/frozen_unmaintained-wrong_experience/vault/sources",
+        "context-snapshots/frozen_unmaintained-wrong_experience/vault/.deeplaw/capabilities",
+        "context-snapshots/frozen_unmaintained-wrong_experience/vault/.deeplaw/staging",
+        "context-snapshots/frozen_unmaintained-independent_support/vault/sources",
+        "context-snapshots/frozen_unmaintained-independent_support/vault/.deeplaw/capabilities",
+        "context-snapshots/frozen_unmaintained-independent_support/vault/.deeplaw/staging",
+        "context-snapshots/frozen_unmaintained-unknown_action/vault/sources",
+        "context-snapshots/frozen_unmaintained-unknown_action/vault/.deeplaw/capabilities",
+        "context-snapshots/frozen_unmaintained-unknown_action/vault/.deeplaw/staging",
+        "context-snapshots/frozen_unmaintained-forget_then_reuse/vault/sources",
+        "context-snapshots/frozen_unmaintained-forget_then_reuse/vault/.deeplaw/capabilities",
+        "context-snapshots/frozen_unmaintained-forget_then_reuse/vault/.deeplaw/staging",
+        "context-snapshots/governed_maintenance-source_update/vault/sources",
+        "context-snapshots/governed_maintenance-source_update/vault/.deeplaw/capabilities",
+        "context-snapshots/governed_maintenance-source_update/vault/.deeplaw/staging",
+        "context-snapshots/governed_maintenance-wrong_experience/vault/sources",
+        "context-snapshots/governed_maintenance-wrong_experience/vault/.deeplaw/capabilities",
+        "context-snapshots/governed_maintenance-wrong_experience/vault/.deeplaw/staging",
+        "context-snapshots/governed_maintenance-independent_support/vault/sources",
+        "context-snapshots/governed_maintenance-independent_support/vault/.deeplaw/capabilities",
+        "context-snapshots/governed_maintenance-independent_support/vault/.deeplaw/staging",
+        "context-snapshots/governed_maintenance-unknown_action/vault/sources",
+        "context-snapshots/governed_maintenance-unknown_action/vault/.deeplaw/capabilities",
+        "context-snapshots/governed_maintenance-unknown_action/vault/.deeplaw/staging",
+        "context-snapshots/governed_maintenance-forget_then_reuse/vault/sources",
+        "context-snapshots/governed_maintenance-forget_then_reuse/vault/.deeplaw/capabilities",
+        "context-snapshots/governed_maintenance-forget_then_reuse/vault/.deeplaw/staging"
+      ]
+    },
+    "directory_topology": {
+      "const": "derived_fixed_empty_directories"
+    },
+    "execution_evidence": {
+      "const": "producer_declarations_only"
+    },
+    "formal_admission": {
+      "const": false
+    },
+    "claim_scope": {
+      "const": "public_engineering_attachment_only"
+    },
+    "caption": {
+      "const": "Exact public engineering attachment only. Host/model execution remains producer declarations; native and final-artifact Authority and Commercial admission are not established."
+    },
+    "record_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "attachment_subtree",
+    "run_id",
+    "candidate_id",
+    "binary_sha256",
+    "public_input_sha256",
+    "source_files",
+    "closure_sha256",
+    "slots",
+    "summary",
+    "generated_empty_directories",
+    "directory_topology",
+    "execution_evidence",
+    "formal_admission",
+    "claim_scope",
+    "caption",
+    "record_sha256"
+  ],
+  "$defs": {
+    "file_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/\\u0000]+(?:/[^/\\u0000]+)*$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "size"
+      ]
+    },
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "configuration_id": {
+          "enum": [
+            "no_memory",
+            "frozen_unmaintained",
+            "governed_maintenance"
+          ]
+        },
+        "scenario_id": {
+          "enum": [
+            "source_update",
+            "wrong_experience",
+            "independent_support",
+            "unknown_action",
+            "forget_then_reuse"
+          ]
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "producer_status": {
+          "enum": [
+            "succeeded",
+            "failed"
+          ]
+        },
+        "score_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "unknown_outcome": {
+          "type": "boolean"
+        },
+        "outcome_unknown": {
+          "type": "boolean"
+        },
+        "safe_termination": {
+          "type": "boolean"
+        },
+        "event_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "final_state_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure_codes": {
+          "type": "array",
+          "maxItems": 14,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "event_chain_invalid",
+              "state_transition_mismatch",
+              "missing_action",
+              "wrong_action",
+              "wrong_parameters",
+              "typed_result_mismatch",
+              "sequence_mismatch",
+              "expired_reference_used",
+              "constraint_violation",
+              "benign_damage",
+              "duplicate_action",
+              "unknown_result",
+              "not_terminal"
+            ]
+          }
+        }
+      },
+      "required": [
+        "configuration_id",
+        "scenario_id",
+        "run_id",
+        "producer_status",
+        "score_sha256",
+        "passed",
+        "unknown_outcome",
+        "outcome_unknown",
+        "safe_termination",
+        "event_count",
+        "final_state_sha256",
+        "failure_codes"
+      ]
+    }
+  }
+}

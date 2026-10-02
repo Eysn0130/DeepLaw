@@ -3,6 +3,8 @@
 Engineering only. Unsupported packets, stream gaps, capture loss, or an open
 window prevent an observed result. No packet bodies or literal routes are
 exported. This is not an observation of non-network model execution.
+The fixed model-probe profile also records one auxiliary TCP flow on port 4100;
+TCP closure does not establish completeness of a Provider response body.
 """
 
 from __future__ import annotations
@@ -24,7 +26,9 @@ MAX_PACKETS = 8192
 MAX_CONNECTIONS = 128
 MAX_STREAM_BYTES = 16384
 MAX_SECONDS = 60
+MODEL_PROBE_MAX_SECONDS = 190
 PORT = 4096
+AUXILIARY_PORT = 4100
 SOL_PACKET = 263
 PACKET_STATISTICS = 6
 _SESSION = rb"[A-Za-z0-9_-]{1,256}"
@@ -87,6 +91,10 @@ def _requests(raw: bytes) -> list[dict[str, object]]:
             route = "fork"
         elif method == b"GET" and target == b"/mcp" and not body:
             route = "mcp_status"
+        elif method == b"POST" and re.fullmatch(
+            rb"/session/" + _SESSION + rb"/message", target,
+        ) and body:
+            route = "model_message"
         rows.append({
             "route": route,
             "method_sha256": _digest(method),
@@ -112,8 +120,10 @@ class _Stream:
 class RouteCapture:
     """Parse a finite cooked AF_PACKET capture; never infer completeness."""
 
-    def __init__(self) -> None:
-        self.streams: dict[int, _Stream] = {}
+    def __init__(self, *, model_probe: bool = False) -> None:
+        _require(type(model_probe) is bool, "model_probe_invalid")
+        self.model_probe = model_probe
+        self.streams: dict[tuple[int, int], _Stream] = {}
         self.packets = 0
         self.outgoing = 0
 
@@ -122,10 +132,7 @@ class RouteCapture:
         _require(self.packets <= MAX_PACKETS, "packet_budget_exceeded")
         _require(not truncated, "packet_truncated")
         _require(len(address) >= 3 and address[0] == "lo", "packet_interface_gap")
-        if address[2] == 4:  # PACKET_OUTGOING duplicates loopback reception.
-            self.outgoing += 1
-            return
-        _require(address[2] == 0 and address[1] == 0x0800, "packet_protocol_gap")
+        _require(address[2] in (0, 4) and address[1] == 0x0800, "packet_protocol_gap")
         _require(len(raw) >= 40 and raw[0] >> 4 == 4, "ipv4_header_gap")
         ip_size = (raw[0] & 15) * 4
         total = int.from_bytes(raw[2:4], "big")
@@ -135,25 +142,36 @@ class RouteCapture:
         tcp = raw[ip_size:]
         _require(len(tcp) >= 20, "tcp_header_gap")
         source, destination, sequence = struct.unpack_from("!HHI", tcp)
-        client = destination == PORT and source != PORT
-        _require(client or (source == PORT and destination != PORT), "tcp_port_gap")
-        port = source if client else destination
+        ports = (PORT, AUXILIARY_PORT) if self.model_probe else (PORT,)
+        client = destination in ports and source not in ports
+        _require(client or (source in ports and destination not in ports), "tcp_port_gap")
+        server_port, client_port = (destination, source) if client else (source, destination)
+        _require(client_port > 0, "tcp_port_gap")
+        key = (server_port, client_port)
         header_size = (tcp[12] >> 4) * 4
         _require(20 <= header_size <= len(tcp), "tcp_size_gap")
         flags = tcp[13]
         _require(not flags & 32, "tcp_urgent_gap")
         payload = tcp[header_size:]
+        if address[2] == 4:  # Validated PACKET_OUTGOING duplicate of loopback reception.
+            self.outgoing += 1
+            return
         if client and flags & 2:
             _require(not payload and not flags & 5, "tcp_syn_gap")
-            if port in self.streams:
-                _require(self.streams[port].start == (sequence + 1) % 2**32,
+            if key in self.streams:
+                stream = self.streams[key]
+                _require(stream.start == (sequence + 1) % 2**32
+                         and not (stream.client_fin or stream.server_fin or stream.reset),
                          "tcp_port_reuse_gap")
             else:
                 _require(len(self.streams) < MAX_CONNECTIONS, "connection_budget_exceeded")
-                self.streams[port] = _Stream((sequence + 1) % 2**32, self.packets)
+                if server_port == AUXILIARY_PORT:
+                    _require(not any(port == AUXILIARY_PORT for port, _ in self.streams),
+                             "auxiliary_connection_budget_exceeded")
+                self.streams[key] = _Stream((sequence + 1) % 2**32, self.packets)
             return
-        _require(port in self.streams, "tcp_start_gap")
-        stream = self.streams[port]
+        _require(key in self.streams, "tcp_start_gap")
+        stream = self.streams[key]
         if flags & 4:
             _require(not payload and not stream.data, "tcp_reset_gap")
             stream.reset = True
@@ -188,16 +206,26 @@ class RouteCapture:
         _require(kernel_drops == 0 and kernel_packets == self.packets,
                  "packet_capture_loss")
         rows = []
-        for stream in sorted(
-            self.streams.values(), key=lambda item: item.data_order or item.order
+        auxiliary = []
+        for (server_port, client_port), stream in sorted(
+            self.streams.items(), key=lambda item: item[1].data_order or item[1].order
         ):
             _require(stream.reset or (stream.client_fin and stream.server_fin),
                      "tcp_window_open")
+            if server_port == AUXILIARY_PORT:
+                auxiliary.append({
+                    "server_port": server_port, "client_port": client_port,
+                    "client_bytes": len(stream.data), "client_sha256": _digest(stream.data),
+                    "client_fin": stream.client_fin, "server_fin": stream.server_fin,
+                    "reset": stream.reset,
+                })
+                continue
             parsed = _requests(bytes(stream.data))
             _require(len(parsed) <= 1, "http_connection_reuse_gap")
             rows.extend(parsed)
         result: dict[str, object] = {
-            "schema_version": "deeplaw.linux-http-route-observation/v1",
+            "schema_version": "deeplaw.linux-http-route-observation/v2" if self.model_probe
+            else "deeplaw.linux-http-route-observation/v1",
             "formal_admission": False,
             "claim_eligible": False,
             "status": "observed",
@@ -207,9 +235,13 @@ class RouteCapture:
             "outgoing_duplicate_count": self.outgoing,
             "connection_count": len(self.streams),
             "requests": rows,
-            "observation_scope": "host_loopback_ipv4_tcp_4096",
+            "observation_scope": "host_loopback_ipv4_tcp_4096_with_auxiliary_tcp_4100"
+            if self.model_probe else "host_loopback_ipv4_tcp_4096",
             "namespace_sha256": namespace_sha256,
         }
+        if self.model_probe:
+            result["auxiliary_flows"] = auxiliary
+            result["auxiliary_connection_count"] = len(auxiliary)
         result["record_sha256"] = _digest(_json(result))
         return result
 
@@ -227,11 +259,21 @@ def validate_observation(value: object) -> dict[str, object]:
         "connection_count", "requests", "observation_scope", "record_sha256",
         "namespace_sha256",
     }
-    _require(isinstance(value, dict) and set(value) == keys, "route_receipt_shape_gap")
-    _require(value["schema_version"] == "deeplaw.linux-http-route-observation/v1"
+    _require(isinstance(value, dict), "route_receipt_shape_gap")
+    model_probe = value.get("schema_version") == "deeplaw.linux-http-route-observation/v2"
+    if model_probe:
+        keys |= {"auxiliary_flows", "auxiliary_connection_count"}
+    _require(set(value) == keys, "route_receipt_shape_gap")
+    _require(value["schema_version"] == (
+        "deeplaw.linux-http-route-observation/v2" if model_probe
+        else "deeplaw.linux-http-route-observation/v1"
+    )
              and value["formal_admission"] is False and value["claim_eligible"] is False
              and value["status"] == "observed"
-             and value["observation_scope"] == "host_loopback_ipv4_tcp_4096",
+             and value["observation_scope"] == (
+                 "host_loopback_ipv4_tcp_4096_with_auxiliary_tcp_4100" if model_probe
+                 else "host_loopback_ipv4_tcp_4096"
+             ),
              "route_receipt_status_gap")
     _require(isinstance(value["namespace_sha256"], str)
              and re.fullmatch(r"[0-9a-f]{64}", value["namespace_sha256"]) is not None,
@@ -243,15 +285,47 @@ def validate_observation(value: object) -> dict[str, object]:
     _require(value["kernel_drop_count"] == 0
              and value["kernel_packet_count"] == value["packet_count"]
              and value["outgoing_duplicate_count"] <= value["packet_count"]
-             and value["connection_count"] <= MAX_CONNECTIONS, "route_receipt_count_gap")
+             and value["connection_count"] <= MAX_CONNECTIONS
+             and value["connection_count"] <= (
+                 value["packet_count"] - value["outgoing_duplicate_count"]
+             ), "route_receipt_count_gap")
+    auxiliary_count = 0
+    if model_probe:
+        auxiliary_count = value["auxiliary_connection_count"]
+        _require(type(auxiliary_count) is int and 0 <= auxiliary_count <= 1
+                 and auxiliary_count <= value["connection_count"], "route_receipt_count_gap")
+        auxiliary = value["auxiliary_flows"]
+        _require(isinstance(auxiliary, list) and len(auxiliary) == auxiliary_count,
+                 "route_receipt_auxiliary_gap")
+        for flow in auxiliary:
+            _require(isinstance(flow, dict) and set(flow) == {
+                "server_port", "client_port", "client_bytes", "client_sha256",
+                "client_fin", "server_fin", "reset",
+            }, "route_receipt_auxiliary_gap")
+            _require(type(flow["server_port"]) is int and flow["server_port"] == AUXILIARY_PORT
+                     and type(flow["client_port"]) is int and 0 < flow["client_port"] <= 65535
+                     and flow["client_port"] not in (PORT, AUXILIARY_PORT)
+                     and type(flow["client_bytes"]) is int
+                     and 0 <= flow["client_bytes"] <= MAX_STREAM_BYTES,
+                     "route_receipt_auxiliary_gap")
+            _require(isinstance(flow["client_sha256"], str)
+                     and re.fullmatch(r"[0-9a-f]{64}", flow["client_sha256"]) is not None,
+                     "route_receipt_auxiliary_gap")
+            _require(all(type(flow[key]) is bool for key in ("client_fin", "server_fin", "reset"))
+                     and (flow["reset"] or (flow["client_fin"] and flow["server_fin"]))
+                     and (not flow["reset"] or flow["client_bytes"] == 0)
+                     and (flow["client_bytes"] != 0 or flow["client_sha256"] == _digest(b"")),
+                     "route_receipt_auxiliary_gap")
     rows = value["requests"]
-    _require(isinstance(rows, list) and len(rows) <= value["connection_count"],
+    _require(isinstance(rows, list) and len(rows) <= value["connection_count"] - auxiliary_count,
              "route_receipt_requests_gap")
     for row in rows:
         _require(isinstance(row, dict) and set(row) == {
             "route", "method_sha256", "target_sha256", "body_sha256", "request_sha256",
         }, "route_receipt_request_gap")
-        _require(row["route"] in {"health", "new_session", "fork", "mcp_status", "forbidden"},
+        _require(isinstance(row["route"], str) and row["route"] in {
+            "health", "new_session", "fork", "mcp_status", "model_message", "forbidden",
+        },
                  "route_receipt_request_gap")
         for key in ("method_sha256", "target_sha256", "body_sha256", "request_sha256"):
             _require(isinstance(row[key], str) and re.fullmatch(r"[0-9a-f]{64}", row[key])
@@ -262,8 +336,9 @@ def validate_observation(value: object) -> dict[str, object]:
     return value
 
 
-def observe(host_pid: int) -> int:
+def observe(host_pid: int, *, model_probe: bool = False) -> int:
     """Run as external guest root; stdin finish must follow actual Host exit."""
+    _require(type(model_probe) is bool, "model_probe_invalid")
     _require(sys.platform == "linux" and os.geteuid() == 0, "linux_root_required")
     _require(type(host_pid) is int and host_pid > 1, "host_pid_invalid")
     # The launcher supplies the live PID before releasing its entry gate.
@@ -274,8 +349,8 @@ def observe(host_pid: int) -> int:
         os.setns(namespace.fileno(), 0x40000000)
         _require(os.readlink("/proc/self/ns/net") == target, "namespace_binding_gap")
     namespace_digest = _digest(target.encode("ascii"))
-    capture = RouteCapture()
-    deadline = time.monotonic() + MAX_SECONDS
+    capture = RouteCapture(model_probe=model_probe)
+    deadline = time.monotonic() + (MODEL_PROBE_MAX_SECONDS if model_probe else MAX_SECONDS)
     try:
         with socket.socket(socket.AF_PACKET, socket.SOCK_DGRAM, socket.htons(3)) as source:
             source.bind(("lo", 0))
@@ -318,8 +393,10 @@ def observe(host_pid: int) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host-pid", type=int, required=True)
+    parser.add_argument("--model-probe", action="store_true")
     try:
-        return observe(parser.parse_args().host_pid)
+        args = parser.parse_args()
+        return observe(args.host_pid, model_probe=args.model_probe)
     except (RouteObservationGap, OSError):
         print('{"status":"gap","failure":"capture_start_failed","formal_admission":false}',
               flush=True)

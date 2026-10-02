@@ -179,24 +179,22 @@ def _platform_junit_bytes(
     windows: bool = False,
     nonapplicable_skips: bool = False,
     applicable_skip: bool = False,
+    system: str = "Darwin",
+    extra_skip: tuple[str, str] | None = None,
 ) -> bytes:
     root = ET.Element("testsuites")
     suite = ET.SubElement(root, "testsuite", {"name": f"pytest-{cell}"})
     cases = list(manifest["inventories"]["common"]["cases"])
     if windows:
         cases.extend(manifest["inventories"]["windows"]["additional_cases"])
-    windows_native = {
-        (case["junit"]["classname"], case["junit"]["name"])
-        for case in manifest["inventories"]["windows"]["additional_cases"]
-    }
     first_windows_native = (
         manifest["inventories"]["windows"]["additional_cases"][0]["junit"]
     )
     nonapplicable = {
         (case["junit"]["classname"], case["junit"]["name"])
         for case in manifest["classifications"]["nonapplicable"]["cases"]
+        if system in case["nonapplicable_systems"]
     }
-    posix_only_on_windows = nonapplicable - windows_native
     for index, item in enumerate(cases):
         junit = item["junit"]
         testcase = ET.SubElement(
@@ -211,9 +209,10 @@ def _platform_junit_bytes(
             or (
                 nonapplicable_skips
                 and (junit["classname"], junit["name"])
-                in posix_only_on_windows
+                in nonapplicable
             )
             or (applicable_skip and junit == first_windows_native)
+            or (junit["classname"], junit["name"]) == extra_skip
         ):
             ET.SubElement(testcase, "skipped")
     return ET.tostring(root, encoding="utf-8")
@@ -393,7 +392,8 @@ def test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding(
                 platform_manifest,
                 cell=f"{platform}-{python_version}",
                 windows=platform == "windows",
-                nonapplicable_skips=platform == "windows",
+                nonapplicable_skips=True,
+                system={"ubuntu": "Linux", "macos": "Darwin", "windows": "Windows"}[platform],
             )
             source_ref = _bytes_file(
                 tmp_path,
@@ -437,7 +437,17 @@ def test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding(
         6 * platform_manifest["inventories"]["common"]["count"]
         + 3 * platform_manifest["inventories"]["windows"]["count"]
     )
-    assert result["metrics"]["nonapplicable_testcase_count"] == 36
+    expected_skips = {"Linux": 15, "Darwin": 2, "Windows": 285}
+    for system, count in expected_skips.items():
+        cases = list(platform_manifest["inventories"]["common"]["cases"])
+        if system == "Windows":
+            cases += platform_manifest["inventories"]["windows"]["additional_cases"]
+        inventory_ids = {case["node_id"] for case in cases}
+        assert sum(
+            system in case["nonapplicable_systems"] and case["node_id"] in inventory_ids
+            for case in platform_manifest["classifications"]["nonapplicable"]["cases"]
+        ) == count
+    assert result["metrics"]["nonapplicable_testcase_count"] == 3 * sum(expected_skips.values())
     assert result["hard_failure_counts"]["platform_skip"] == 0
     assert result["hard_failure_counts"]["mandatory_skip"] == 0
     duplicate_path = _envelope(
@@ -469,6 +479,14 @@ def test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding(
             cell=f"{platform}-{python_version}",
             windows=platform == "windows",
             applicable_skip=index == 6,
+            extra_skip={
+                1: ("tests.test_linux_mcp_socket_transport",
+                    "test_mcp_endpoint_uses_actual_peer_uid_and_removes_socket_path"),
+                3: ("tests.test_endpoint_security_observer",
+                    "test_native_probe_reports_actual_access_without_subscribing"),
+                7: ("tests.test_native_fork_observation",
+                    "test_capture_fork_response_preserves_original_response_bytes"),
+            }.get(index),
         )
         source_ref = _bytes_file(
             failure_root,
@@ -504,8 +522,8 @@ def test_candidate_platform_receipt_requires_real_rows_and_exact_wheel_binding(
     failure_result = parse_typed_evidence(failure_path)
     assert failure_result["status"] == "failed"
     assert failure_result["hard_failure_counts"]["platform_failure"] == 1
-    assert failure_result["hard_failure_counts"]["platform_skip"] == 2
-    assert failure_result["hard_failure_counts"]["mandatory_skip"] == 2
+    assert failure_result["hard_failure_counts"]["platform_skip"] == 5
+    assert failure_result["hard_failure_counts"]["mandatory_skip"] == 5
 
     value["rows"][0]["artifact_sha256"] = "9" * 64
     bad_source = _json_file(tmp_path, "platform-bad.json", value)
