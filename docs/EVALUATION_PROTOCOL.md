@@ -8,9 +8,9 @@ retained evidence own exact task status. The 13 v9 Kernel Release Core gates rem
 required; `release_ready=false`, `claim_eligible=false`, and no `0.13.0` tag/release follows from
 this document.
 
-The current autonomous-core Provider advertisement is `knowledge-support` input v8/output v7 and exposes only
+The current autonomous-core Provider advertisement is `knowledge-support` input v9/output v8 and exposes only
 `query`, `context`, `explain`, and typed `read`. Existing operation response versions remain intact;
-read uses output/v7 and input v7 remains unchanged. New advertisement/reading budgets and their
+read uses output/v8 and inputs v7/v8 remain unchanged. New advertisement/reading budgets and their
 measurement boundaries are explicit in [ADR 0007](adr/0007-exact-progressive-mcp-reads.md).
 Evaluation never treats transcript, prompt, raw log, hidden reasoning, Secret, local
 path, or unadmitted content as Provider evidence. Task Continuity uses explicit task and Host
@@ -33,6 +33,15 @@ comparative results gate only Competitive/Research claims. Historical Pass 11 re
 some claim-ineligible exact-candidate Host, editor, scale, and artifact observations, but they do
 not supply the complete v9 Core gate set and are not part of this repository-visible development
 protocol. See [`V0_13_PASS11_FINAL_DISPOSITION.md`](V0_13_PASS11_FINAL_DISPOSITION.md).
+
+The Host-task parser also recognizes the separately versioned
+`host-owner-guard-isolation/v1` candidate declaration. It distinguishes a key-free
+Host and bounded public inspection from private-store reads and raw retention;
+it does not project those facts into the old Secret-bearing-parent contract.
+Every such declaration still derives a failed process-observation boundary and
+`isolation_observed=false`: matching producer digests are not independent native
+observations. Old isolation sources keep their original admission rules. No
+formal Host, Secret isolation, or release gate passes through this candidate path.
 
 ## Gate v9 release boundary
 

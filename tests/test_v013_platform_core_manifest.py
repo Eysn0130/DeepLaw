@@ -56,7 +56,26 @@ def test_platform_core_manifest_is_closed_frozen_and_digest_bound() -> None:
         node_id for node_id in qualification_ids
         if node_id.startswith("tests/test_macos_slot_isolation.py::")
     }
-    assert len(seatbelt_ids) == 13
+    assert {node_id.split("::", 1)[1] for node_id in seatbelt_ids} == {
+        "test_backend_spawn_and_child_marker_do_not_attest_isolation",
+        "test_configuration_rejects_non_loopback_and_unbounded_limits",
+        "test_configuration_rejects_relative_symlink_and_wide_boundaries",
+        "test_dry_run_is_path_free_and_never_observed",
+        "test_endpoint_declares_dual_stack_outbound_only",
+        "test_group_cleanup_failure_is_explicit_and_bounded",
+        "test_non_macos_never_falls_back_to_unsandboxed_execution",
+        "test_profile_is_closed_and_path_escaping_is_literal",
+        "test_real_sandbox_defaults_to_network_denial_and_allows_one_loopback_port",
+        "test_real_sandbox_observes_filesystem_denials_and_preserves_allowed_write",
+        "test_real_sandbox_uses_closed_environment_and_fixed_output_timeout_bounds",
+        "test_staging_hardlinks_are_rejected_before_launch[read]",
+        "test_staging_hardlinks_are_rejected_before_launch[write]",
+        "test_strict_policy_is_explicit_closed_and_keeps_legacy_result_shape",
+        "test_strict_policy_rejects_unsafe_roots_aliases_and_loopback_opt_in",
+        "test_strict_input_bytes_are_bound_and_mutation_fails_before_spawn",
+        "test_strict_launch_closes_ambient_environment_and_extra_fds",
+        "test_strict_native_python_staging_and_synthetic_denials",
+    }
     assert len(qualification_ids - seatbelt_ids) == 13
     assert (
         "tests/test_v013_pass24_opencode_plugin.py::"

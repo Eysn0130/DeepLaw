@@ -3036,6 +3036,41 @@
         },
         {
           "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_strict_input_bytes_are_bound_and_mutation_fails_before_spawn"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_strict_input_bytes_are_bound_and_mutation_fails_before_spawn"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_strict_launch_closes_ambient_environment_and_extra_fds"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_strict_launch_closes_ambient_environment_and_extra_fds"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_strict_native_python_staging_and_synthetic_denials"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_strict_native_python_staging_and_synthetic_denials"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_strict_policy_is_explicit_closed_and_keeps_legacy_result_shape"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_strict_policy_is_explicit_closed_and_keeps_legacy_result_shape"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_macos_slot_isolation",
+            "name": "test_strict_policy_rejects_unsafe_roots_aliases_and_loopback_opt_in"
+          },
+          "node_id": "tests/test_macos_slot_isolation.py::test_strict_policy_rejects_unsafe_roots_aliases_and_loopback_opt_in"
+        },
+        {
+          "junit": {
             "classname": "tests.test_v013_pass24_opencode_plugin",
             "name": "test_bun_capsule_parser_rejects_route_hashes_paths_secrets_and_extra_keys"
           },
@@ -23914,6 +23949,20 @@
         {
           "junit": {
             "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_external_guard_declaration_cannot_hide_private_store_read"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_external_guard_declaration_cannot_hide_private_store_read"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
+            "name": "test_external_guard_declaration_reports_observation_gap_without_false_secret_exposure"
+          },
+          "node_id": "tests/test_v013_host_task_evidence.py::test_external_guard_declaration_reports_observation_gap_without_false_secret_exposure"
+        },
+        {
+          "junit": {
+            "classname": "tests.test_v013_host_task_evidence",
             "name": "test_v013_construction_kit_manifest_is_closed_and_exactly_bound"
           },
           "node_id": "tests/test_v013_host_task_evidence.py::test_v013_construction_kit_manifest_is_closed_and_exactly_bound"
@@ -34125,9 +34174,9 @@
           "node_id": "tests/test_windows_acl.py::test_writable_vault_close_reapplies_native_acl_boundary"
         }
       ],
-      "count": 4426,
+      "count": 4428,
       "selection": "not qualification and not windows_native",
-      "sha256": "ce56c0c702340d2fad7f77eb738eb2be17f7af8521a324d8a903bac54ed01315"
+      "sha256": "92a59178b563d9f21a66e191e396c5845f33ad0e2bf883346161362adaadb37c"
     },
     "windows": {
       "additional_cases": [
@@ -34167,13 +34216,13 @@
           "node_id": "tests/test_windows_acl.py::test_native_windows_vault_acl_is_owner_only_after_real_ingest"
         }
       ],
-      "count": 4431,
+      "count": 4433,
       "extends": "common",
       "selection": "not qualification",
-      "sha256": "29a3e08ae84fb4af67b504e360ee72784cf023946deb1ffc9207875822f064c9"
+      "sha256": "62f341c7aa008a8787e0dcdfa4799a050a6a657a334fcb45da2a0afd8550ff49"
     }
   },
-  "manifest_sha256": "d57a43ff38abd7d4461f433d230698b3c1109924949ac611ffcc1ec9e2b5beaa",
+  "manifest_sha256": "20aa4bf04d082bafe66fe9c7dd9ea46e3f5422fc8b3c73fac119818bdba2cb6b",
   "schema_version": "deeplaw.platform-core-test-manifest/v2",
   "selection": {
     "common": "not qualification and not windows_native",

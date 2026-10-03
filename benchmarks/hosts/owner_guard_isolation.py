@@ -4,7 +4,8 @@ Every boolean and actor digest is an external producer declaration that must be
 reopened against native observations. This validator checks structure, policy,
 and supplied cross-bindings only; it does not observe processes, read a key, or
 prove source authenticity, create observations, or authorize credential access.
-This candidate source is not enabled in the current qualification consumer.
+The qualification consumer can parse this candidate to report an observation
+gap, but it cannot admit it as formal isolation evidence.
 Public requests and native responses may be inspected in memory, but their raw
 contents must not be retained. Store-read declarations
 refer to on-disk private Host stores, not the authority's authorized access to an

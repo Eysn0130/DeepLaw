@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
+import select
 import shlex
 import socket
+import subprocess
 import sys
+import textwrap
+import uuid
 from pathlib import Path
 
 import pytest
@@ -16,6 +21,7 @@ from benchmarks.hosts.macos_slot_isolation import (
     MAX_TIMEOUT_SECONDS,
     LoopbackEndpoint,
     MacOSSlotConfig,
+    SandboxLaunchError,
     SandboxUnavailableError,
     SlotConfigurationError,
     build_sandbox_profile,
@@ -29,7 +35,7 @@ from benchmarks.hosts.macos_slot_isolation import (
 # inventory; passing them does not attest a native Host or a complete process tree.
 pytestmark = [
     pytest.mark.qualification,
-    pytest.mark.skipif(sys.platform != "darwin", reason="Darwin Seatbelt facility only"),
+    pytest.mark.skipif(os.name != "posix", reason="POSIX staging and Seatbelt prerequisites only"),
 ]
 
 _COMMAND_EXECUTABLE = (
@@ -49,6 +55,8 @@ def _shell_config(
     timeout_seconds: float = 5.0,
     max_output_bytes: int = 4096,
 ) -> MacOSSlotConfig:
+    if sys.platform != "darwin":
+        pytest.skip("legacy shell policy requires the Darwin filesystem")
     read_roots = [Path("/bin"), read_root]
     if outside_read_root is not None:
         read_roots.append(outside_read_root)
@@ -411,3 +419,281 @@ def test_endpoint_declares_dual_stack_outbound_only(tmp_path: Path) -> None:
             read_root, write_root, "printf ok",
             endpoints=(LoopbackEndpoint("127.0.0.1", 12345),),
         )
+
+
+def _strict_config(tmp_path: Path, **options: object) -> MacOSSlotConfig:
+    inputs, outputs = tmp_path / "inputs", tmp_path / "outputs"
+    inputs.mkdir(mode=0o700, exist_ok=True)
+    outputs.mkdir(mode=0o700, exist_ok=True)
+    executable = inputs / "synthetic-runtime"
+    if not executable.exists():
+        executable.write_bytes(b"synthetic executable bytes")
+        executable.chmod(0o700)
+    values = {
+        "command": (str(executable),), "allowed_read_roots": (inputs,),
+        "allowed_write_roots": (outputs,), "cwd": inputs,
+        "policy_mode": "strict_single_process",
+    }
+    values.update(options)
+    return MacOSSlotConfig(**values)
+
+
+def test_strict_policy_is_explicit_closed_and_keeps_legacy_result_shape(tmp_path: Path) -> None:
+    config = _strict_config(tmp_path)
+    profile = build_sandbox_profile(config)
+    assert '(import "system.sb")' not in profile
+    assert '(import "dyld-support.sb")' in profile
+    assert "(allow process*)" not in profile
+    assert "(deny process-fork process-info* mach* network* ipc-posix* iokit*)" in profile
+    assert "SYS_ptrace SYS_proc_info" in profile
+    assert f'(allow process-exec (literal "{config.command[0]}"))' in profile
+    assert '(allow file-read* file-test-existence (subpath "/System"))' not in profile
+    strict = prepare_slot(config).to_public_dict()
+    assert strict["strict_policy"]["production_runner_integrated"] is False
+    assert strict["formal_qualification"] is False
+    assert str(tmp_path) not in json.dumps(strict)
+    legacy = MacOSSlotConfig(
+        command=config.command, allowed_read_roots=config.read_roots,
+        allowed_write_roots=config.write_roots,
+    )
+    assert '(import "system.sb")' in build_sandbox_profile(legacy)
+    assert "strict_policy" not in prepare_slot(legacy).to_public_dict()
+
+
+def test_strict_policy_rejects_unsafe_roots_aliases_and_loopback_opt_in(tmp_path: Path) -> None:
+    config = _strict_config(tmp_path)
+    for root in (Path("/"), Path("/bin"), Path("/usr/bin"), Path.home()):
+        with pytest.raises(SlotConfigurationError):
+            _strict_config(tmp_path, allowed_read_roots=(*config.read_roots, root))
+    with pytest.raises(SlotConfigurationError):
+        _strict_config(tmp_path, allowed_loopback_endpoints=(LoopbackEndpoint("localhost", 1),))
+    with pytest.raises(SlotConfigurationError):
+        _strict_config(tmp_path, policy_mode="unknown")
+    runtime = tmp_path / "runtime"
+    runtime.mkdir(mode=0o700)
+    (runtime / "escaped").symlink_to(config.command[0])
+    with pytest.raises(SlotConfigurationError):
+        _strict_config(tmp_path, runtime_read_roots=(runtime,))
+    (runtime / "escaped").unlink()
+    (runtime / "library").write_bytes(b"runtime")
+    (runtime / "internal-alias").symlink_to("library")
+    accepted = _strict_config(tmp_path, runtime_read_roots=(runtime,))
+    assert prepare_slot(accepted).strict_metadata is not None
+
+
+def test_strict_input_bytes_are_bound_and_mutation_fails_before_spawn(tmp_path: Path) -> None:
+    config = _strict_config(tmp_path)
+    initial = prepare_slot(config).strict_metadata["runtime_tree_sha256"]
+    Path(config.command[0]).write_bytes(b"changed executable bytes")
+    with pytest.raises(SlotConfigurationError):
+        prepare_slot(config)
+    rebound = _strict_config(tmp_path)
+    assert prepare_slot(rebound).strict_metadata["runtime_tree_sha256"] != initial
+
+
+def test_strict_launch_closes_ambient_environment_and_extra_fds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import benchmarks.hosts.macos_slot_isolation as slot
+
+    config = _strict_config(tmp_path)
+    monkeypatch.setenv("DEEPLAW_SYNTHETIC_OWNER_VALUE", "must-not-be-inherited")
+    captured: dict[str, object] = {}
+
+    def capture_spawn(command: object, **kwargs: object) -> None:
+        captured.update(kwargs)
+        raise OSError("synthetic spawn failure")
+
+    monkeypatch.setattr(slot, "sandbox_backend_available", lambda: True)
+    monkeypatch.setattr(slot, "_strict_metadata", lambda _: {"production_runner_integrated": False})
+    monkeypatch.setattr(slot.subprocess, "Popen", capture_spawn)
+    with pytest.raises(SandboxLaunchError):
+        launch_slot(config)
+    assert captured["close_fds"] is True
+    assert "pass_fds" not in captured
+    assert captured["shell"] is False
+    assert captured["stdin"] == subprocess.DEVNULL
+    assert captured["env"] == {
+        "PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C", "LC_CTYPE": "C",
+        "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
+        "HOME": str(config.write_roots[0]), "TMPDIR": str(config.write_roots[0]),
+    }
+
+
+_STRICT_NATIVE_PROBE = r"""
+#include <errno.h>
+#include <fcntl.h>
+#include <libproc.h>
+#include <mach/mach.h>
+#include <netinet/in.h>
+#include <servers/bootstrap.h>
+#include <spawn.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ptrace.h>
+#include <sys/socket.h>
+#include <sys/syscall.h>
+#include <sys/wait.h>
+#include <unistd.h>
+extern char **environ;
+static int denied_read(const char *p) {
+    errno = 0; int fd = open(p, O_RDONLY);
+    if (fd >= 0) { close(fd); return 0; }
+    return errno == EPERM || errno == EACCES;
+}
+int main(int argc, char **argv) {
+    if (argc == 3 && !strcmp(argv[1], "target")) {
+        mach_port_t p = MACH_PORT_NULL;
+        if (mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &p) ||
+            mach_port_insert_right(mach_task_self(), p, p, MACH_MSG_TYPE_MAKE_SEND) ||
+            bootstrap_register(bootstrap_port, argv[2], p)) return 90;
+        puts("SYNTHETIC_READY"); fflush(stdout);
+        for (;;) pause();
+    }
+    if (argc != 10) return 91;
+    pid_t target = atoi(argv[6]);
+    errno = 0; int fd_closed = fcntl(atoi(argv[5]), F_GETFD) == -1 && errno == EBADF;
+    errno = 0; pid_t child = fork();
+    int fork_denied = child == -1 && (errno == EPERM || errno == EACCES);
+    if (child == 0) _exit(0);
+    if (child > 0) waitpid(child, NULL, 0);
+    char *args[] = {argv[0], "unused", NULL};
+    int spawn_error = posix_spawn(&child, argv[0], NULL, NULL, args, environ);
+    int spawn_denied = spawn_error == EPERM || spawn_error == EACCES;
+    if (!spawn_error) waitpid(child, NULL, 0);
+    struct proc_bsdinfo info;
+    errno = 0; int proc_result = proc_pidinfo(target, PROC_PIDTBSDINFO, 0, &info, sizeof(info));
+    int proc_denied = proc_result == 0 && (errno == EPERM || errno == EACCES);
+    mach_port_t task = MACH_PORT_NULL, name = MACH_PORT_NULL, inspect = MACH_PORT_NULL;
+    int task_denied = task_for_pid(mach_task_self(), target, &task) != KERN_SUCCESS;
+    int name_denied = task_name_for_pid(mach_task_self(), target, &name) != KERN_SUCCESS;
+    errno = 0;
+    int inspect_result = syscall(SYS_task_inspect_for_pid, mach_task_self(), target, &inspect);
+    int inspect_denied = inspect_result == -1 && (errno == EPERM || errno == EACCES);
+    errno = 0; int ptrace_result = ptrace(PT_ATTACH, target, 0, 0);
+    int ptrace_denied = ptrace_result == -1 && (errno == EPERM || errno == EACCES);
+    if (!ptrace_result) ptrace(PT_DETACH, target, 0, 0);
+    mach_port_t service = MACH_PORT_NULL;
+    int mach_denied = bootstrap_look_up(bootstrap_port, argv[7], &service) != KERN_SUCCESS;
+    struct sockaddr_in addr = {0}; addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); addr.sin_port = htons(atoi(argv[8]));
+    errno = 0; int s = socket(AF_INET, SOCK_STREAM, 0);
+    int net_result = s < 0 ? -1 : connect(s, (struct sockaddr *)&addr, sizeof(addr));
+    int net_denied = net_result == -1 && (errno == EPERM || errno == EACCES);
+    if (s >= 0) close(s);
+    int owner_denied = denied_read(argv[1]), alias_denied = denied_read(argv[2]);
+    int traversal_denied = denied_read(argv[3]);
+    errno = 0; int write_fd = open(argv[9], O_CREAT | O_WRONLY, 0600);
+    int write_denied = write_fd < 0 && (errno == EPERM || errno == EACCES);
+    if (write_fd >= 0) close(write_fd);
+    FILE *out = fopen(argv[4], "w"); if (!out) return 92;
+    fprintf(out, "{\"owner_read_denied\":%d,\"alias_read_denied\":%d,"
+        "\"traversal_read_denied\":%d,\"fd_closed\":%d,\"fork_denied\":%d,"
+        "\"spawn_denied\":%d,\"proc_info_denied\":%d,\"task_port_denied\":%d,"
+        "\"task_name_denied\":%d,\"task_inspect_denied\":%d,\"ptrace_denied\":%d,"
+        "\"mach_lookup_denied\":%d,\"network_denied\":%d,\"owner_write_denied\":%d}",
+        owner_denied, alias_denied, traversal_denied, fd_closed, fork_denied,
+        spawn_denied, proc_denied, task_denied, name_denied, inspect_denied,
+        ptrace_denied, mach_denied, net_denied, write_denied);
+    fclose(out);
+    puts("DEEPLAW_SLOT_CHALLENGE_READ_DENIED");
+    puts("DEEPLAW_SLOT_CHALLENGE_WRITE_DENIED");
+    puts("DEEPLAW_SLOT_CHALLENGE_NETWORK_DENIED");
+    return 0;
+}
+"""
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="requires Darwin sandbox-exec and SDK")
+def test_strict_native_python_staging_and_synthetic_denials(tmp_path: Path) -> None:
+    inputs, outputs, runtime, owner = (tmp_path / name for name in (
+        "inputs", "outputs", "runtime", "owner",
+    ))
+    for root in (inputs, outputs, runtime, owner):
+        root.mkdir(mode=0o700)
+    (inputs / "allowed").write_text("public staged input", encoding="utf-8")
+    runner = inputs / "runner.py"
+    runner.write_text(textwrap.dedent("""\
+        import pathlib, sys
+        data = pathlib.Path(sys.argv[1]).read_bytes()
+        pathlib.Path(sys.argv[2]).write_text(str(len(data)))
+        print("PYTHON_STAGED_OK")
+        """), encoding="utf-8")
+    python = MacOSSlotConfig(
+        command=(str(Path(sys.executable).resolve()), "-I", "-S", str(runner),
+                 str(inputs / "allowed"), str(outputs / "positive")),
+        allowed_read_roots=(inputs,), allowed_write_roots=(outputs,),
+        runtime_read_roots=(Path(sys.base_prefix).resolve(),),
+        policy_mode="strict_single_process", cwd=inputs, timeout_seconds=5,
+    )
+    positive = launch_slot(python)
+    assert positive.status == "completed"
+    assert positive.returncode == 0
+    assert positive.stderr_bytes == 0
+    assert (outputs / "positive").read_text() == "19"
+    assert positive.strict_metadata["dyld_support_sha256"]
+
+    source, executable = runtime / "probe.c", runtime / "probe"
+    source.write_text(_STRICT_NATIVE_PROBE, encoding="utf-8")
+    compiled = subprocess.run(
+        ["/usr/bin/clang", "-Wno-deprecated-declarations", str(source), "-o", str(executable)],
+        capture_output=True, text=True, timeout=15, check=False,
+    )
+    assert compiled.returncode == 0, compiled.stderr
+    service_name = "com.deeplaw.synthetic." + uuid.uuid4().hex
+    target = subprocess.Popen(
+        [str(executable), "target", service_name], stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL, text=True,
+        env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+    )
+    canary = owner / "private"
+    canary.write_bytes(os.urandom(32))
+    canary.chmod(0o600)
+    alias = owner / "alias"
+    alias.symlink_to(canary)
+    inherited = os.open(canary, os.O_RDONLY)
+    os.set_inheritable(inherited, True)
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    try:
+        assert select.select([target.stdout], [], [], 3)[0], "synthetic target not ready"
+        assert target.stdout.readline(128).strip() == "SYNTHETIC_READY"
+        config = MacOSSlotConfig(
+            command=(str(executable), str(canary), str(alias),
+                     str(inputs / ".." / "owner" / "private"), str(outputs / "negatives.json"),
+                     str(inherited), str(target.pid), service_name,
+                     str(server.getsockname()[1]), str(owner / "write-escape")),
+            allowed_read_roots=(inputs,), allowed_write_roots=(outputs,),
+            runtime_read_roots=(runtime,), policy_mode="strict_single_process",
+            cwd=inputs, timeout_seconds=5,
+        )
+        result = launch_slot(
+            config, expected_challenges=("read_denied", "write_denied", "network_denied"),
+        )
+        assert result.status == "completed"
+        assert result.returncode == 0
+        assert result.stderr_bytes == 0
+        observations = json.loads((outputs / "negatives.json").read_text())
+        assert len(observations) == 14
+        assert all(value == 1 for value in observations.values()), observations
+        assert not (owner / "write-escape").exists()
+        assert result.marker_observed is True
+        assert result.formal_qualification is False
+        assert result.process_tree_cleanup_observed is False
+        assert result.strict_metadata["production_runner_integrated"] is False
+        assert str(tmp_path) not in json.dumps(result.to_public_dict())
+        (outputs / "engineering-results.json").write_text(json.dumps({
+            "python": positive.to_public_dict(), "synthetic_native": result.to_public_dict(),
+        }, sort_keys=True), encoding="utf-8")
+    finally:
+        os.close(inherited)
+        server.close()
+        target.terminate()
+        try:
+            target.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            target.kill()
+            target.wait(timeout=3)
+        target.stdout.close()

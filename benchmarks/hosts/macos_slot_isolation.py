@@ -17,9 +17,11 @@ The implementation intentionally has a small public surface:
     timeout and output accounting.  Raw command, path, stdout and stderr data
     are never returned.
 
-The imported macOS system profile additionally permits system files and IPC;
-caller roots are not the complete effective allowlist. This candidate is not
-a credential or process-tree isolation boundary. Results remain unqualified.
+The default policy imports the macOS system profile and is not a credential
+boundary. The explicit ``strict_single_process`` policy instead imports only
+dyld support, denies process creation, cross-process inspection, Mach and
+network access, and uses staged data plus separately selected runtime roots.
+Both policies remain engineering candidates, never qualification authority.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ import hashlib
 import json
 import math
 import os
+import platform
 import signal
 import stat
 import subprocess
@@ -41,6 +44,7 @@ from pathlib import Path
 from typing import Literal
 
 SANDBOX_EXECUTABLE = Path("/usr/bin/sandbox-exec")
+DYLD_PROFILE = Path("/System/Library/Sandbox/Profiles/dyld-support.sb")
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
 MAX_TIMEOUT_SECONDS = 300.0
@@ -53,10 +57,12 @@ MAX_COMMAND_ARGUMENTS = 128
 MAX_COMMAND_ARGUMENT_BYTES = 16 * 1024
 MAX_PATH_BYTES = 4096
 MAX_PROFILE_BYTES = 256 * 1024
+MAX_RUNTIME_BYTES = 512 * 1024 * 1024
 PROCESS_CLEANUP_TIMEOUT_SECONDS = 0.5
 OUTPUT_CHUNK_BYTES = 8192
 
 ChallengeKind = Literal["read_denied", "write_denied", "network_denied"]
+PolicyMode = Literal["legacy", "strict_single_process"]
 SlotStatus = Literal[
     "completed",
     "exited",
@@ -80,6 +86,10 @@ _NOT_QUALIFIED = (
     "runtime_path_toctou_unobserved",
     "inherited_system_profile_permissions",
     "formal_qualification_not_executed",
+)
+_STRICT_NOT_QUALIFIED = (
+    *(reason for reason in _NOT_QUALIFIED if reason != "inherited_system_profile_permissions"),
+    "production_runner_integration_unexecuted", "synthetic_markers_not_attestation",
 )
 _WIDE_ROOTS = frozenset(
     {
@@ -244,8 +254,11 @@ def _validate_staging_trees(config: MacOSSlotConfig) -> None:
     """
 
     count = 0
-    for root in (*config.allowed_read_roots, *config.allowed_write_roots):
+    for root in (
+        *config.allowed_read_roots, *config.allowed_write_roots, *config.runtime_read_roots,
+    ):
         writable = root in config.allowed_write_roots
+        runtime = root in config.runtime_read_roots
         _safe_directory(root, writable=writable)
         if not writable and root in (Path("/bin"), Path("/usr/bin")):
             continue
@@ -259,13 +272,20 @@ def _validate_staging_trees(config: MacOSSlotConfig) -> None:
                         if count > MAX_STAGING_ENTRIES:
                             raise _configuration_error()
                         metadata = entry.stat(follow_symlinks=False)
+                        if runtime and stat.S_ISLNK(metadata.st_mode):
+                            # Runtime aliases (e.g. python3 -> python3.13) may
+                            # resolve only within this separately bound tree.
+                            target = Path(entry.path).resolve(strict=True)
+                            if not _is_under(root, target):
+                                raise _configuration_error()
+                            continue
                         if stat.S_ISDIR(metadata.st_mode):
                             pending.append(Path(entry.path))
                         elif not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
                             raise _configuration_error()
                         if metadata.st_mode & 0o022:
                             raise _configuration_error()
-            except OSError:
+            except (OSError, RuntimeError):
                 raise _configuration_error() from None
 
 
@@ -353,6 +373,9 @@ class MacOSSlotConfig:
     cwd: Path
     timeout_seconds: float
     max_output_bytes: int
+    policy_mode: PolicyMode
+    runtime_read_roots: tuple[Path, ...]
+    _runtime_tree_sha256: str | None = field(repr=False)
     _config_sha256: str = field(repr=False)
 
     def __init__(
@@ -368,7 +391,11 @@ class MacOSSlotConfig:
         read_roots: Iterable[str | Path] | None = None,
         write_roots: Iterable[str | Path] | None = None,
         loopback_endpoints: Iterable[LoopbackEndpoint | Sequence[object]] | None = None,
+        policy_mode: PolicyMode = "legacy",
+        runtime_read_roots: Iterable[str | Path] = (),
     ) -> None:
+        if policy_mode not in ("legacy", "strict_single_process"):
+            raise _configuration_error()
         if allowed_read_roots is not None and read_roots is not None:
             raise _configuration_error()
         if allowed_write_roots is not None and write_roots is not None:
@@ -397,12 +424,26 @@ class MacOSSlotConfig:
             raise _configuration_error()
         reads = tuple(_safe_directory(value, writable=False) for value in read_candidates)
         writes = tuple(_safe_directory(value, writable=True) for value in write_candidates)
-        _reject_nested_roots((*reads, *writes))
-        if not any(_is_under(root, executable) for root in reads):
+        runtime_candidates = _bounded_values(runtime_read_roots, maximum=MAX_ROOTS)
+        runtimes = tuple(
+            _safe_directory(value, writable=False) for value in runtime_candidates
+        )
+        if policy_mode == "legacy" and runtimes:
+            raise _configuration_error()
+        if policy_mode == "strict_single_process":
+            unsafe_roots = (Path("/bin"), Path("/usr/bin"), Path.home().resolve())
+            if any(root in unsafe_roots for root in (*reads, *runtimes)):
+                raise _configuration_error()
+        _reject_nested_roots((*reads, *writes, *runtimes))
+        if not any(_is_under(root, executable) for root in (*reads, *runtimes)):
+            raise _configuration_error()
+        if policy_mode == "strict_single_process" and executable.stat().st_mode & 0o022:
             raise _configuration_error()
         endpoint_candidates = _bounded_values(endpoint_values, maximum=MAX_ENDPOINTS)
         endpoints = tuple(_normalise_endpoint(value) for value in endpoint_candidates)
         if len(set(endpoints)) != len(endpoints):
+            raise _configuration_error()
+        if policy_mode == "strict_single_process" and endpoints:
             raise _configuration_error()
         if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)):
             raise _configuration_error()
@@ -435,6 +476,11 @@ class MacOSSlotConfig:
             "timeout_seconds": timeout,
             "max_output_bytes": max_output_bytes,
         }
+        if policy_mode == "strict_single_process":
+            payload.update(
+                policy_mode=policy_mode,
+                runtime_read_roots=[str(root) for root in runtimes],
+            )
         digest = _sha256(_canonical_json(payload).encode("utf-8"))
         object.__setattr__(self, "command", command_text)
         object.__setattr__(self, "allowed_read_roots", reads)
@@ -443,8 +489,14 @@ class MacOSSlotConfig:
         object.__setattr__(self, "cwd", current_directory)
         object.__setattr__(self, "timeout_seconds", timeout)
         object.__setattr__(self, "max_output_bytes", max_output_bytes)
+        object.__setattr__(self, "policy_mode", policy_mode)
+        object.__setattr__(self, "runtime_read_roots", runtimes)
         object.__setattr__(self, "_config_sha256", digest)
         _validate_staging_trees(self)
+        object.__setattr__(
+            self, "_runtime_tree_sha256",
+            _input_tree_sha256(self) if policy_mode == "strict_single_process" else None,
+        )
 
     @property
     def config_sha256(self) -> str:
@@ -492,9 +544,10 @@ class SlotPlan:
     process_tree_cleanup_observed: bool = False
     formal_qualification: bool = False
     not_qualified: tuple[str, ...] = _NOT_QUALIFIED
+    strict_metadata: dict[str, object] | None = field(default=None, repr=False)
 
     def to_public_dict(self) -> dict[str, object]:
-        return {
+        public: dict[str, object] = {
             "schema_version": "deeplaw.macos-slot-plan/v1",
             "config_sha256": self.config_sha256,
             "profile_sha256": self.profile_sha256,
@@ -505,6 +558,9 @@ class SlotPlan:
             "formal_qualification": self.formal_qualification,
             "not_qualified": list(self.not_qualified),
         }
+        if self.strict_metadata is not None:
+            public["strict_policy"] = dict(self.strict_metadata)
+        return public
 
 
 @dataclass(frozen=True, slots=True)
@@ -525,11 +581,12 @@ class SlotLaunchResult:
     process_tree_cleanup_observed: bool = False
     formal_qualification: bool = False
     not_qualified: tuple[str, ...] = _NOT_QUALIFIED
+    strict_metadata: dict[str, object] | None = field(default=None, repr=False)
 
     def to_public_dict(self) -> dict[str, object]:
         """Return the only representation suitable for logs or receipts."""
 
-        return {
+        public: dict[str, object] = {
             "schema_version": "deeplaw.macos-slot-result/v1",
             "status": self.status,
             "returncode": self.returncode,
@@ -546,6 +603,9 @@ class SlotLaunchResult:
             "formal_qualification": self.formal_qualification,
             "not_qualified": list(self.not_qualified),
         }
+        if self.strict_metadata is not None:
+            public["strict_policy"] = dict(self.strict_metadata)
+        return public
 
 
 def _canonical_json(value: object) -> str:
@@ -560,6 +620,76 @@ def _canonical_json(value: object) -> str:
 
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def _input_tree_sha256(config: MacOSSlotConfig) -> str:
+    """Bind exact staged inputs and runtime bytes, excluding mutable outputs."""
+
+    try:
+        return _hash_input_trees(config)
+    except (OSError, RuntimeError):
+        raise _configuration_error() from None
+
+
+def _hash_input_trees(config: MacOSSlotConfig) -> str:
+    digest = hashlib.sha256()
+    total = 0
+    for index, root in enumerate((*config.allowed_read_roots, *config.runtime_read_roots)):
+        for directory, names, files in os.walk(root, followlinks=False):
+            names.sort()
+            for name in sorted((*names, *files)):
+                path = Path(directory) / name
+                metadata = path.lstat()
+                entry = [index, str(path.relative_to(root)), stat.S_IMODE(metadata.st_mode)]
+                if path.is_symlink():
+                    entry.extend(["symlink", os.readlink(path)])
+                elif path.is_file():
+                    file_digest = hashlib.sha256()
+                    with path.open("rb") as stream:
+                        while chunk := stream.read(1024 * 1024):
+                            total += len(chunk)
+                            if total > MAX_RUNTIME_BYTES:
+                                raise _configuration_error()
+                            file_digest.update(chunk)
+                    entry.extend(["file", file_digest.hexdigest()])
+                else:
+                    entry.append("directory")
+                digest.update(_canonical_json(entry).encode("utf-8") + b"\n")
+    return digest.hexdigest()
+
+
+def _strict_metadata(config: MacOSSlotConfig) -> dict[str, object] | None:
+    if config.policy_mode != "strict_single_process":
+        return None
+    if _input_tree_sha256(config) != config._runtime_tree_sha256:
+        raise _configuration_error()
+    dependencies: dict[str, str | None] = {"dyld_support_sha256": None}
+    backend_sha256 = None
+    os_build = None
+    if sys.platform == "darwin":
+        try:
+            dependencies["dyld_support_sha256"] = _sha256(DYLD_PROFILE.read_bytes())
+            backend_sha256 = _sha256(SANDBOX_EXECUTABLE.read_bytes())
+            # A fixed system metadata query in the trusted parent; no child
+            # environment or command is copied into the sandbox.
+            os_build = subprocess.check_output(
+                ["/usr/bin/sw_vers", "-buildVersion"], env={"PATH": "/usr/bin:/bin"},
+                timeout=2, text=True,
+            ).strip()
+        except (OSError, subprocess.SubprocessError):
+            raise SandboxUnavailableError("strict sandbox dependencies are unavailable") from None
+    return {
+        "policy_mode": "strict_single_process",
+        "profile_version": 1,
+        "os_release": platform.release(),
+        "os_build": os_build,
+        "sandbox_exec_sha256": backend_sha256,
+        **dependencies,
+        "runtime_tree_sha256": config._runtime_tree_sha256,
+        "executable_sha256": _sha256(Path(config.command[0]).read_bytes()),
+        "inherited_fd_policy": "stdio_only_close_fds",
+        "production_runner_integrated": False,
+    }
 
 
 def sandbox_backend_available() -> bool:
@@ -589,6 +719,8 @@ def build_sandbox_profile(config: MacOSSlotConfig) -> str:
 
     if not isinstance(config, MacOSSlotConfig):
         raise _configuration_error()
+    if config.policy_mode == "strict_single_process":
+        return _build_strict_profile(config)
     lines = [
         "(version 1)",
         "(deny default)",
@@ -617,18 +749,68 @@ def build_sandbox_profile(config: MacOSSlotConfig) -> str:
     return profile
 
 
+def _build_strict_profile(config: MacOSSlotConfig) -> str:
+    # Version 1 is deliberate: on the observed macOS build a version-3
+    # default-deny profile rejects the initial exec even with syscall* allowed.
+    # dyld-support is the only import; its exact bytes are recorded separately.
+    lines = [
+        "(version 1)",
+        "(deny default)",
+        '(import "dyld-support.sb")',
+        "(deny file-read* file-test-existence file-map-executable)",
+        "(deny process-fork process-info* mach* network* ipc-posix* iokit*)",
+        "(deny dynamic-code-generation)",
+        "(deny syscall-unix (syscall-number SYS_fork SYS_vfork SYS_posix_spawn "
+        "SYS_ptrace SYS_proc_info SYS_proc_info_extended_id SYS_task_inspect_for_pid))",
+        f"(allow process-exec (literal {_sbpl_quote(config.command[0])}))",
+        '(allow file-read* file-test-existence (literal "/"))',
+        '(allow file-read-metadata (literal "/dev/null"))',
+    ]
+    # Only loader-library directories are public system data dependencies.
+    # The import's broader Cryptex file rules are overridden above.
+    loader_roots = (
+        "/usr/lib", "/System/Library/dyld",
+        "/System/Cryptexes/OS/System/Library/dyld",
+        "/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld",
+    )
+    readable = (*config.allowed_read_roots, *config.runtime_read_roots, *config.allowed_write_roots)
+    for root in (*loader_roots, *readable):
+        quoted = _sbpl_quote(str(root))
+        lines.append(f"(allow file-read* file-test-existence (subpath {quoted}))")
+        lines.append(f"(allow file-read-metadata (path-ancestors {quoted}))")
+    for root in (*loader_roots, *config.runtime_read_roots):
+        lines.append(f"(allow file-map-executable (subpath {_sbpl_quote(str(root))}))")
+    lines.append(
+        f"(allow file-map-executable (literal {_sbpl_quote(config.command[0])}))"
+    )
+    for root in config.allowed_write_roots:
+        lines.append(f"(allow file-write* (subpath {_sbpl_quote(str(root))}))")
+    profile = "\n".join(lines) + "\n"
+    if len(profile.encode("utf-8")) > MAX_PROFILE_BYTES:
+        raise _configuration_error()
+    return profile
+
+
 def prepare_slot(config: MacOSSlotConfig) -> SlotPlan:
     """Build a dry-run plan without starting ``sandbox-exec``."""
 
     profile = build_sandbox_profile(config)
+    metadata = _strict_metadata(config)
     available = sandbox_backend_available()
     extra = () if available else ("sandbox_backend_unavailable",)
     return SlotPlan(
         config_sha256=config.config_sha256,
         profile_sha256=_sha256(profile.encode("utf-8")),
         sandbox_available=available,
-        not_qualified=(*_NOT_QUALIFIED, *extra),
+        not_qualified=(*_qualification_limits(config), *extra),
+        strict_metadata=metadata,
     )
+
+
+def _qualification_limits(config: MacOSSlotConfig) -> tuple[str, ...]:
+    if config.policy_mode == "strict_single_process":
+        return _STRICT_NOT_QUALIFIED
+    return _NOT_QUALIFIED
 
 
 def challenge_marker(kind: ChallengeKind) -> str:
@@ -786,6 +968,7 @@ def launch_slot(
     expected = _validate_expected_challenges(expected_challenges)
     if not sandbox_backend_available():
         raise SandboxUnavailableError("macOS sandbox backend is unavailable")
+    metadata = _strict_metadata(config)
     profile = build_sandbox_profile(config)
     profile_sha256 = _sha256(profile.encode("utf-8"))
     marker_scanner = _MarkerScanner([CHALLENGE_MARKERS[kind] for kind in expected])
@@ -880,12 +1063,14 @@ def launch_slot(
             status = "exited"
         try:
             _validate_staging_trees(config)
+            if metadata is not None and _input_tree_sha256(config) != config._runtime_tree_sha256:
+                raise _configuration_error()
         except SlotConfigurationError:
             status = "staging_integrity_failed"
         observed = bool(expected) and all(
             CHALLENGE_MARKERS[kind] in marker_scanner.seen for kind in expected
         )
-        not_qualified = _NOT_QUALIFIED
+        not_qualified = _qualification_limits(config)
         if expected and not observed:
             not_qualified = (*not_qualified, "requested_challenge_not_observed")
         return SlotLaunchResult(
@@ -902,6 +1087,7 @@ def launch_slot(
             sandbox_exec_spawned=True,
             marker_observed=observed,
             not_qualified=not_qualified,
+            strict_metadata=metadata,
         )
     finally:
         if process is not None:

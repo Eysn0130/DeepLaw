@@ -22,6 +22,16 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from benchmarks.hosts.owner_guard_isolation import (
+    BINDING_FIELDS as OWNER_GUARD_BINDING_FIELDS,
+)
+from benchmarks.hosts.owner_guard_isolation import (
+    SCHEMA_VERSION as OWNER_GUARD_SCHEMA_VERSION,
+)
+from benchmarks.hosts.owner_guard_isolation import (
+    OwnerGuardIsolationError,
+    validate_owner_guard_isolation,
+)
 from deeplaw.native_host import (
     NativeHostObservationError,
     derive_native_host_receipt,
@@ -1420,6 +1430,23 @@ def _authorized_mutation(value: Any, *, task_case: str, label: str) -> Mapping[s
 
 
 def _isolation(value: Mapping[str, Any], *, envelope: Mapping[str, Any]) -> Mapping[str, Any]:
+    if value.get("schema_version") == OWNER_GUARD_SCHEMA_VERSION:
+        # Reopen the hashed declaration with its own versioned contract. These
+        # producer-supplied bindings are not independently observed bindings;
+        # this branch must never turn their equality into formal admission.
+        try:
+            declaration = validate_owner_guard_isolation(
+                value,
+                envelope=envelope,
+                expected_bindings={field: value.get(field) for field in OWNER_GUARD_BINDING_FIELDS},
+            )
+        except OwnerGuardIsolationError as error:
+            raise HostTaskEvidenceError(
+                "external guard isolation declaration is invalid"
+            ) from error
+        if declaration["formal_admission"] is not False:
+            _fail("external guard isolation declaration cannot establish formal admission")
+        return declaration["validated_source"]
     required = {
         "artifact_kind",
         "schema_version",
@@ -1961,28 +1988,37 @@ def parse_host_task_evidence(
         ):
             _fail(f"{field}.entry_count is invalid")
 
-    secret = isolation["secret_boundary"]
     process = isolation["process_boundary"]
     write = isolation["write_observation"]
-    secret_boundary_failure = (
-        (
-            result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION
-            and not secret["parent_secret_present"]
+    external_guard = isolation["schema_version"] == OWNER_GUARD_SCHEMA_VERSION
+    if external_guard:
+        # The versioned guard declaration forbids key delivery, private-store
+        # reads and raw retention while admitting bounded public inspection.
+        # A key-free Host is therefore not an observed Secret exposure. Its
+        # access-denial/native provenance still have no admitted producer.
+        secret_boundary_failure = False
+        process_boundary_failure = True
+    else:
+        secret = isolation["secret_boundary"]
+        secret_boundary_failure = (
+            (
+                result["schema_version"] == TASK_RESULT_V3_SCHEMA_VERSION
+                and not secret["parent_secret_present"]
+            )
+            or secret["child_secret_present"]
+            or secret["auth_read"]
+            or secret["transcript_read"]
+            or secret["prompt_read"]
+            or secret["reasoning_read"]
+            or secret["secret_read"]
         )
-        or secret["child_secret_present"]
-        or secret["auth_read"]
-        or secret["transcript_read"]
-        or secret["prompt_read"]
-        or secret["reasoning_read"]
-        or secret["secret_read"]
-    )
+        process_boundary_failure = (
+            not process["native_receipt_observed"]
+            or not process["host_process_separated"]
+            or not process["mcp_process_separated"]
+        )
     if secret_boundary_failure:
         failures["secret_exposure"] += 1
-    process_boundary_failure = (
-        not process["native_receipt_observed"]
-        or not process["host_process_separated"]
-        or not process["mcp_process_separated"]
-    )
     if process_boundary_failure:
         failures["wrong_tool_or_parameter"] += 1
     if secret_boundary_failure or process_boundary_failure:

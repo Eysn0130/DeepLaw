@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://deeplaw.dev/contracts/host-owner-guard-isolation.v1.schema.json",
   "title": "DeepLaw owner external guard isolation source v1",
-  "description": "Closed, role-bound external producer declarations for OpenCode only. Booleans and process digests require independent native collector reopening and do not establish source authenticity or formal admission. Raw public request and native response inspection is memory-only. Store reads refer to on-disk private Host authentication, transcript, and reasoning stores; they do not describe the authority's authorized access to its existing broker credential. This candidate source is not enabled in the current qualification consumer and grants no credential authorization.",
+  "description": "Closed, role-bound external producer declarations for OpenCode only. Booleans and process digests require independent native collector reopening and do not establish source authenticity or formal admission. Raw public request and native response inspection is memory-only. Store reads refer to on-disk private Host authentication, transcript, and reasoning stores; they do not describe the authority's authorized access to its existing broker credential. The qualification consumer may parse this candidate only to report an observation gap; it cannot admit it as formal isolation evidence and grants no credential authorization.",
   "type": "object",
   "additionalProperties": false,
   "required": [

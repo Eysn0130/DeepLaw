@@ -7,6 +7,86 @@ history below does not authorize treating incomplete producers as formal evidenc
 
 ## Current continuation record
 
+### 2026-10-02 strict runner and topology declaration implementation
+
+The new sole writer consumed the predecessor's explicit release and preserved
+the three documentation candidates above checkpoint `de5c0e6`. The primary
+checkout's six protected files remain outside this work package.
+
+The typed Host-task consumer now dispatches the existing separately versioned
+owner-guard declaration without projecting its key-free Host or bounded public
+inspection into the old Secret-bearing-parent contract. This is a current
+engineering fix, not formal topology admission. Every owner-guard declaration
+still derives a process-observation hard failure and `isolation_observed=false`;
+matching self-reported digests cannot pass a Core gate. Private-store reads,
+key delivery and raw retention are rejected by the closed source schema. The
+old source retains its original rules. Two public parser regressions first
+failed at the unsupported source boundary, then the affected Host-task and
+owner-guard regressions passed after the fix. An independent read-only review
+found no admission bypass.
+
+The explicit strict macOS launcher is a prerequisite for trusted-owner
+deployment. Authority launch and native Host control must stay with the trusted
+owner; the production runner/scorer FD connection has not been implemented.
+Its result therefore retains `production_runner_integrated=false` and no formal
+qualification. See `benchmarks/hosts/NATIVE_SLOT_ENGINEERING.md` for the actual
+policy and synthetic challenge boundary.
+
+The runner inventory was refreshed: zero registered qualification runners,
+with repository administration available. The current workflow requires the
+actual external Host producers and retained exact-candidate workflow artifacts.
+There is no existing signed-owner-evidence import route. Registering a new
+runner needs a new registration credential, outside the current prohibition
+on obtaining new Secrets. The labels alone cannot replace isolation evidence.
+
+The loader's bounded unsampled libproc check passed and confirmed the exact
+Python image, only three child descriptors, no traced/resource-suspended state,
+and a short pre-user-code wait. This rules out the observed run exhausting
+Darwin's spawn descriptor bound; it does not explain the retained three-second
+failure. The original timeout and production deadline remain unchanged.
+No new Provider request or credential operation was performed. Final Core,
+Host/C6, packaging and release remain unexecuted; this record is not a release.
+
+### 2026-10-02 contract and loader boundary review
+
+The current takeover verified clean checkpoint
+`de5c0e660381dbd7e2193b85e3feccdd2d257f82`, tree
+`da42bca19e38f0996a23d7d703e6eda83c683550`, and the unchanged lock digest
+`a8e33e7d390bb7f94528c75827176b46b85f7539d27c51923700f38ccaf732d7`.
+The predecessor explicitly released write ownership. No final artifact candidate
+or new qualification evidence was produced by this review.
+
+| Required boundary | Actual consumer | Current source and gap |
+| --- | --- | --- |
+| Exact Host/MCP isolation, Secret non-delivery and negative canaries | `typed_qualification_evidence_v3_host_tasks._isolation` and process receipt v2 | Guest UID/namespace/mount/seccomp/cgroup observations are engineering evidence; existing negatives cover runtime writes and non-loopback connections, not complete Secret non-delivery/access |
+| Frozen formal credential topology and private-data exclusions | Task-result/v3 evaluation and `v013-host-task-evidence/v1` | The old source requires a Secret-bearing Host parent and all read flags false; the external-authority producer honestly reports a key-free parent and native-message inspection, so a versioned semantic migration is required |
+| Actual qualification workflow and artifact provenance | Kernel, Commercial and release workflows | Kernel requires `[self-hosted, macOS, deeplaw-kernel-qualification]`; the repository runner API returned zero registered runners. Local run IDs cannot replace the successful GitHub run and retained artifacts |
+| Six actor process/source/instance identities | Candidate `host-owner-guard-isolation/v1` only | This source is not enabled in the formal consumer and its validator always returns `formal_admission=false`; it is not an additional original Core gate |
+
+The earlier checklist's independent six-role authority identity step describes
+that candidate design, not a requirement established by the original Core
+consumer. Removing that assumption does not supply the missing safety evidence.
+The current authority uses ordinary same-UID Popen and owner-only files: this
+supports non-delivery through its closed IPC/environment, not a claim that the
+runner cannot read the credential. Formal acceptance of an external authority
+must preserve the real Host/MCP, credential, private-store, retention, canary and
+exact-candidate boundaries; changing booleans or enabling a declaration validator
+alone is insufficient. No actual key was moved or new credential obtained.
+
+The installed loader Host embeds Bun `1.3.14+0d9b296af`; global Bun `1.3.11`
+is a different runtime. One unchanged focused loader test passed. Copied
+diagnostics preserved the production three-second deadline and original
+session/argv/environment/interpreter assertions. Sampled shebang and fixed-env
+starts timed out before Python's first statement, while direct invocation of
+the same interpreter and script completed. A later sampled shebang start also
+completed, and its actual interpreter image matched the direct control. Sampling
+can perturb startup; the initial dyld stack is not a proven deadlock or root cause.
+Matching Bun source does not set `START_SUSPENDED` on this normal spawn path.
+No production workaround, deadline expansion or test replacement was made.
+The original unsampled timeout and retained full-suite failure remain unresolved.
+
+### Earlier bounded correction record
+
 The next sole writer resumed from clean `85af7d58d2f10fd39f2306d5a0ee5f0995889993`
 after the predecessor explicitly released dd2a. The exact commit's Fast PR
 `37053774604` is completed/success. PR #42 remains draft/open and the latest

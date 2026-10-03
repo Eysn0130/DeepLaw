@@ -691,6 +691,63 @@ def test_v3_missing_parent_secret_is_failed_but_still_emits_metrics(
     assert parsed["metrics"]["isolation_observed"] is False
 
 
+def _external_guard_source(tmp_path: Path, manifest: Path) -> Path:
+    from tests.test_owner_guard_isolation import synthetic_source
+
+    envelope = json.loads(manifest.read_text())
+    source = synthetic_source()
+    for field in ("candidate_binding", "run_binding", "corpus", "runner", "scorer"):
+        source[field] = envelope[field]
+    for role in ("runner", "scorer"):
+        source["actors"][role]["source_sha256"] = source[role]["sha256"]
+    source["inspection_observation"]["observer_public_native_response_inspected"] = True
+    isolation_path = tmp_path / envelope["payload"]["isolation_source"]["relative_path"]
+    previous = json.loads(isolation_path.read_text())
+    source["write_observation"] = previous["write_observation"]
+    isolation_path.write_bytes(_canonical(source))
+    _refresh_source_ref(manifest, "isolation_source", isolation_path)
+    return isolation_path
+
+
+def test_external_guard_declaration_reports_observation_gap_without_false_secret_exposure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = _v3_continuity_manifest(tmp_path)
+    _external_guard_source(tmp_path, manifest)
+    _install_synthetic_host_observation_validator(monkeypatch, [])
+
+    parsed = parse_typed_evidence(
+        manifest, root=tmp_path,
+        expected_corpus_sha256=_expected_sha(tmp_path, "opencode", "continuity"),
+    )
+
+    assert parsed["status"] == "failed"
+    assert parsed["hard_failure_counts"]["secret_exposure"] == 0
+    assert parsed["hard_failure_counts"]["wrong_tool_or_parameter"] > 0
+    assert parsed["hard_failure_counts"]["cross_boundary_disclosure"] > 0
+    assert parsed["metrics"]["isolation_observed"] is False
+
+
+def test_external_guard_declaration_cannot_hide_private_store_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = _v3_continuity_manifest(tmp_path)
+    isolation_path = _external_guard_source(tmp_path, manifest)
+    source = json.loads(isolation_path.read_text())
+    source["inspection_observation"]["store_reads"]["runner"]["auth_store_read"] = True
+    isolation_path.write_bytes(_canonical(source))
+    _refresh_source_ref(manifest, "isolation_source", isolation_path)
+    _install_synthetic_host_observation_validator(monkeypatch, [])
+
+    with pytest.raises(
+        TypedQualificationEvidenceError, match="external guard isolation declaration"
+    ):
+        parse_typed_evidence(
+            manifest, root=tmp_path,
+            expected_corpus_sha256=_expected_sha(tmp_path, "opencode", "continuity"),
+        )
+
+
 @pytest.mark.parametrize("host", ["codex", "opencode"])
 @pytest.mark.parametrize("task", ["continuity", "living_wiki", "professional_evidence"])
 def test_v013_host_task_manifest_derives_host_task_metrics(

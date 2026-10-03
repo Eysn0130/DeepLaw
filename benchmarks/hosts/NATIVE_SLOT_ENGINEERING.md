@@ -4,6 +4,71 @@ Status: engineering candidate, not formal Host admission. The current producer
 components retain `formal_admission=false`; they do not replace the existing
 qualification contracts or admit a new Host/package identity.
 
+## Strict macOS single-process prerequisite
+
+`MacOSSlotConfig(policy_mode="strict_single_process", ...)` is an explicit
+engineering opt-in to the existing `launch_slot` API. The default legacy policy
+is unchanged. Strict mode takes dedicated staged input/output trees and optional
+separate `runtime_read_roots`; it rejects broad executable directories, home
+roots, loopback opt-ins, data-tree aliases and runtime aliases escaping their
+runtime tree. Exact staged input/runtime bytes are hashed before launch and
+checked again at completion. The selected executable is the only permitted
+exec target. Runtime-internal aliases support the explicit Python installation;
+they do not expand the read boundary.
+
+The strict Seatbelt profile applies before the initial exec. It imports only
+`dyld-support.sb`, explicitly removes that import's file permissions, and grants
+the selected staged/runtime trees plus listed dyld-library directories and
+ancestor metadata. It denies fork, cross-process information, Mach, network,
+POSIX IPC, IOKit and dynamic code generation, with additional named syscall
+denials for spawn, ptrace and process inspection. `close_fds=True` admits only
+stdin/stdout/stderr; stdin is `/dev/null`, and the environment is constructed
+from constants and the explicit staging roots. There is no extra-FD capability
+opt-in in this prerequisite.
+
+The trusted owner bootstrap, root, and other unrestricted processes capable of
+modifying trusted inputs remain outside this threat boundary. A production
+runner must consume an already established, bounded owner channel rather than
+start the private authority entry. That producer/authority integration is not
+implemented here. `production_runner_integrated=false`,
+`formal_qualification=false`, and the existing unobserved process-tree/cleanup
+fields remain literal even after successful synthetic challenges.
+
+On 2026-10-02 (Pacific), macOS 26.5.2 build `25F84` (Darwin `25.5.0`) ran the actual uv
+Python 3.13.13 executable with `-I -S`, a staged script and staged input, and
+created the allowed output with exit 0 and zero stderr bytes. A staged C probe
+then exited 0 with zero stderr bytes after reporting all 14 synthetic negatives:
+owner mode-600 file reads by direct, symlink and `..` spellings; owner-file write;
+an inheritable owner-file FD; fork and same-executable posix_spawn; proc_pidinfo,
+task, task-name and task-inspect ports; ptrace; a registered synthetic bootstrap
+service; and connection to an actual local listener. No real credential,
+Keychain item or Provider was used, and no canary bytes were printed.
+
+The retained path-free `engineering-results.json` records these exact hashes:
+
+| Input | SHA-256 |
+| --- | --- |
+| sandbox-exec | `8290e4be7387a0df83cd1559e86afd880464f269450573d012795761fe298f16` |
+| dyld-support.sb | `06215a5d32689aefe395c29710e182eb54ba22162f50df8b4842290f8a19bf1c` |
+| Python executable | `d22a09ce45166ee066022909e071bba239c263ba090ed8f0884f7f21ae922ac3` |
+| Python profile | `656a8f8391a9becad6d13c14c58926767ffe5fb5f9bbdb886c7fa22cd7529f2a` |
+| Python input/runtime tree | `c2032f931ad84bffbae58e4eb2e6f4f58260607404ff8671fe9a2146e6d09769` |
+| C executable | `f9abbda768fc82a542c6abeb90ae2d5dde5df84482cb45896fb23c1585fee00c` |
+| C profile | `90e8a2b2faff99e4f2228f8601c92cde8c8ef1ef64aaa6c1537cd92b1308f9e2` |
+| C input/runtime tree | `b91aa5c37cf2128347685f1553345ab22dc909dc1e0591ada1f8fb3fd8b2c12d` |
+
+The implementation deliberately uses profile version 1. Earlier bare version-3
+Python startup aborted; adding dyld support still did not start it. Bounded C
+comparisons retained `execvp: Operation not permitted` for version 3, including
+the syscall/system-import controls, while version 1 started the same bytes.
+Those observations establish compatibility for this exact build, not the cause
+of the version-3 failure. The first C challenge build also failed because the
+SDK did not declare `task_inspect_for_pid`; the correction invokes the declared
+`SYS_task_inspect_for_pid` syscall, without weakening the policy. Unknown profile
+operations, missing challenge output, input mutation and cleanup failure remain
+failures or unqualified results. These synthetic observations do not establish
+formal credential authority, production Host compatibility or release readiness.
+
 ## Observed native boundary
 
 The macOS launcher creates a Linux ARM64 VM with no network device, disk, shared
