@@ -5,7 +5,6 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from ..compilation.artifacts import read_compilation_artifact
 from ..knowledge_autonomy import (
     AutonomousKnowledgeStore,
     _validate_contract,
@@ -126,6 +125,56 @@ def _canonical_gaps(values: Any) -> list[dict[str, str]]:
     return sorted(gaps, key=canonical_json)
 
 
+def evidence_contract_name(stem: str, value: dict[str, Any]) -> str:
+    """Select an explicit immutable evidence version; never reinterpret old bytes."""
+    schema = value.get("schema_version")
+    if schema not in {f"deeplaw.{stem}/v1", f"deeplaw.{stem}/v2"}:
+        raise ValueError("evidence schema_version is invalid")
+    version = 2 if schema.endswith("/v2") else 1
+    return f"{stem}.v{version}.schema.json"
+
+
+def canonical_support_sets(values: Any) -> list[dict[str, Any]]:
+    """Bounded disjunction of complete conjunctions of exact references."""
+    fields = {"source_refs", "knowledge_revision_refs", "relation_revision_refs"}
+    if not isinstance(values, list) or not 0 <= len(values) <= 16:
+        raise ValueError("support sets exceed their bound")
+    result = []
+    edge_count = 0
+    for value in values:
+        if not isinstance(value, dict) or set(value) != fields:
+            raise ValueError("support set shape is invalid")
+        sources = value["source_refs"]
+        if not isinstance(sources, list) or len(sources) > MAX_REFS_PER_STATEMENT:
+            raise ValueError("support source refs exceed their bound")
+        sources = sorted(
+            [_canonical_source_reference(item) for item in sources], key=canonical_json
+        )
+        if len({canonical_json(item) for item in sources}) != len(sources):
+            raise ValueError("support set contains duplicate source refs")
+        group = {
+            "source_refs": sources,
+            "knowledge_revision_refs": _canonical_refs(
+                value["knowledge_revision_refs"], field="support knowledge refs",
+                pattern=_KNOWLEDGE_REVISION,
+            ),
+            "relation_revision_refs": _canonical_refs(
+                value["relation_revision_refs"], field="support relation refs",
+                pattern=_RELATION_REVISION,
+            ),
+        }
+        size = sum(len(items) for items in group.values())
+        if not size:
+            raise ValueError("empty support set cannot establish support")
+        edge_count += size
+        result.append(group)
+    if edge_count > MAX_REFS_PER_STATEMENT:
+        raise ValueError("support set members exceed their combined bound")
+    if len({canonical_json(item) for item in result}) != len(result):
+        raise ValueError("support sets contain duplicate alternatives")
+    return sorted(result, key=canonical_json)
+
+
 def build_input_set_sha256(
     *,
     source_refs: Iterable[dict[str, Any]],
@@ -137,6 +186,7 @@ def build_input_set_sha256(
     support_status: str,
     limitation: str | None,
     gaps: Iterable[dict[str, str]],
+    support_sets: list[dict[str, Any]] | None = None,
 ) -> str:
     """Return the canonical evidence/input binding digest.
 
@@ -165,6 +215,8 @@ def build_input_set_sha256(
         "limitation": limitation,
         "gaps": canonical_gaps,
     }
+    if support_sets is not None:
+        payload["support_sets"] = canonical_support_sets(support_sets)
     return sha256_bytes(canonical_json(payload).encode("utf-8"))
 
 
@@ -203,11 +255,18 @@ def validate_statement(
         "limitation",
         "gaps",
         "input_set_sha256",
+        "support_sets",
     }
     if set(value) - allowed:
         raise ValueError("statement contains unknown fields")
-    if "schema_version" in value and value["schema_version"] != "deeplaw.knowledge-statement/v1":
+    version = value.get("schema_version", "deeplaw.knowledge-statement/v1")
+    if version not in {"deeplaw.knowledge-statement/v1", "deeplaw.knowledge-statement/v2"}:
         raise ValueError("statement schema_version is invalid")
+    support_sets = None
+    if version.endswith("/v2"):
+        support_sets = canonical_support_sets(value.get("support_sets"))
+    elif "support_sets" in value:
+        raise ValueError("support sets require explicit statement v2")
     ordinal = value.get("ordinal")
     if not isinstance(ordinal, int) or isinstance(ordinal, bool) or ordinal < 1:
         raise ValueError("statement ordinal is invalid")
@@ -244,6 +303,20 @@ def validate_statement(
         field="statement relation refs",
         pattern=_RELATION_REVISION,
     )
+    if support_sets is not None:
+        if support_status == "supported" and not support_sets:
+            raise ValueError("supported statement requires a complete support set")
+        for field, refs in (
+            ("source_refs", source_refs), ("knowledge_revision_refs", knowledge_refs),
+            ("relation_revision_refs", relation_refs),
+        ):
+            union = {canonical_json(item) for group in support_sets for item in group[field]}
+            if union != {canonical_json(item) for item in refs}:
+                raise ValueError("support set union does not match the exact input inventory")
+        if statement_type == "factual" and support_status == "supported" and any(
+            not group["source_refs"] for group in support_sets
+        ):
+            raise ValueError("every factual support alternative requires exact source evidence")
     valid_from = value.get("valid_from")
     valid_to = value.get("valid_to")
     if valid_from is not None:
@@ -280,6 +353,7 @@ def validate_statement(
         support_status=support_status,
         limitation=limitation,
         gaps=gaps,
+        support_sets=support_sets,
     )
     if input_set != expected_input_set:
         raise ValueError("statement input-set digest is invalid")
@@ -319,7 +393,7 @@ def validate_statement(
             if start < 0 or body.find(text, start + 1) >= 0:
                 raise ValueError("statement text must occur exactly once in the final body")
     result = {
-        "schema_version": "deeplaw.knowledge-statement/v1",
+        "schema_version": version,
         "statement_id": expected_id if expected_id is not None else supplied_id,
         "knowledge_revision_id": revision,
         "ordinal": ordinal,
@@ -336,8 +410,10 @@ def validate_statement(
         "gaps": gaps,
         "input_set_sha256": input_set,
     }
+    if support_sets is not None:
+        result["support_sets"] = support_sets
     if require_statement_id:
-        _validate_contract("knowledge-statement.v1.schema.json", result)
+        _validate_contract(evidence_contract_name("knowledge-statement", result), result)
     if "char_start" in value or "char_end" in value:
         result["char_start"] = char_start
         result["char_end"] = char_end
@@ -425,6 +501,8 @@ def _bounded_artifact(
         raise RuntimeError("statement evidence artifact binding is invalid")
     if row["byte_size"] > MAX_EVIDENCE_ARTIFACT_BYTES:
         raise RuntimeError("statement evidence artifact exceeds its read bound")
+    from ..compilation.artifacts import read_compilation_artifact
+
     payload = read_compilation_artifact(
         store.connection,
         store.root,
@@ -443,6 +521,7 @@ def _statement_freshness(
     *,
     knowledge_revision_id: str,
     source_refs: list[dict[str, Any]],
+    statement: dict[str, Any] | None = None,
 ) -> str:
     """Return the worst recorded direct-source freshness for one statement.
 
@@ -453,6 +532,21 @@ def _statement_freshness(
     worst freshness wins when a statement cites multiple fragments.
     """
 
+    if statement is not None and (
+        "support_sets" in statement
+        or statement.get("knowledge_revision_refs") or statement.get("relation_revision_refs")
+    ):
+        from .support import SupportEvaluator
+
+        row = store.connection.execute(
+            "SELECT scope, sensitivity FROM knowledge_revisions_v3 WHERE revision_id = ?",
+            (knowledge_revision_id,),
+        ).fetchone()
+        if row is None:
+            return "unknown"
+        return SupportEvaluator(
+            store, scope=row["scope"], sensitivity=row["sensitivity"]
+        ).statement(statement)["freshness"]
     freshness = "fresh"
     for reference in source_refs:
         row = store.connection.execute(
@@ -518,7 +612,7 @@ class StatementEvidenceStore:
             if row is None:
                 return {"status": "missing", "statement_id": statement_id_value}
             value = _bounded_artifact(store, row["statement_artifact_sha256"], "statement")
-            _validate_contract("knowledge-statement.v1.schema.json", value)
+            _validate_contract(evidence_contract_name("knowledge-statement", value), value)
             if (
                 value.get("statement_id") != statement_id_value
                 or value.get("knowledge_revision_id") != row["knowledge_revision_id"]
@@ -540,6 +634,7 @@ class StatementEvidenceStore:
                 store,
                 knowledge_revision_id=row["knowledge_revision_id"],
                 source_refs=value["source_refs"],
+                statement=value,
             )
             status = "historical" if not is_current else (
                 "present" if freshness == "fresh" else freshness
@@ -601,7 +696,7 @@ class StatementEvidenceStore:
             all_supported = True
             for row in rows:
                 value = _bounded_artifact(store, row["map_artifact_sha256"], "statement_map")
-                _validate_contract("statement-evidence-map.v1.schema.json", value)
+                _validate_contract(evidence_contract_name("statement-evidence-map", value), value)
                 if (
                     value.get("statement_id") != row["statement_id"]
                     or value.get("statement_sha256") != row["statement_sha256"]
@@ -623,11 +718,14 @@ class StatementEvidenceStore:
                 statement_value = _bounded_artifact(
                     store, statement_row["statement_artifact_sha256"], "statement"
                 )
-                _validate_contract("knowledge-statement.v1.schema.json", statement_value)
+                _validate_contract(
+                    evidence_contract_name("knowledge-statement", statement_value), statement_value
+                )
                 candidate = _statement_freshness(
                     store,
                     knowledge_revision_id=knowledge_revision_id,
                     source_refs=statement_value["source_refs"],
+                    statement=statement_value,
                 )
                 if _FRESHNESS_ORDER[candidate] > _FRESHNESS_ORDER[freshness]:
                     freshness = candidate
@@ -677,7 +775,7 @@ class StatementEvidenceStore:
             value = _bounded_artifact(
                 store, row["artifact_sha256"], "statement_evidence_receipt"
             )
-            _validate_contract("statement-evidence-receipt.v1.schema.json", value)
+            _validate_contract(evidence_contract_name("statement-evidence-receipt", value), value)
             if (
                 value.get("statement_id") != statement_id_value
                 or value.get("receipt_sha256") != row["receipt_sha256"]
@@ -716,6 +814,7 @@ class StatementEvidenceStore:
                 "knowledge_revision_refs",
                 "relation_revision_refs",
                 "gaps",
+                "support_sets",
             ):
                 if value.get(field) != statement_value.get(field):
                     raise RuntimeError("statement evidence receipt references are inconsistent")

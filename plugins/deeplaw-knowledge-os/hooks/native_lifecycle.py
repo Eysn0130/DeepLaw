@@ -119,17 +119,20 @@ def _gap_capsule(*codes: str) -> dict[str, Any]:
 
 
 def _valid_capsule(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, dict) or set(value) != {
+    if not isinstance(value, dict):
+        return None
+    action_version = value.get("schema_version") == "deeplaw.host-continuity-capsule/v2"
+    if set(value) != {
         "schema_version",
         "status",
         "statements",
         "gaps",
         "conflicts",
         "write_performed",
-    }:
+    } | ({"action_states"} if action_version else set()):
         return None
     if (
-        value.get("schema_version") != _CAPSULE_SCHEMA
+        value.get("schema_version") not in {_CAPSULE_SCHEMA, "deeplaw.host-continuity-capsule/v2"}
         or value.get("status") not in {"admitted", "gap"}
         or value.get("write_performed") is not False
     ):
@@ -204,6 +207,30 @@ def _valid_capsule(value: Any) -> dict[str, Any] | None:
             or not text(conflict.get("summary"), 160)
         ):
             return None
+    if action_version:
+        states = value.get("action_states")
+        requirements = {
+            "not_executed": "not_started", "initiated_unknown": "verify_external_state",
+            "succeeded": "do_not_repeat", "failed": "review_failure",
+        }
+        if not isinstance(states, list) or len(states) > 4:
+            return None
+        for state in states:
+            if (
+                not isinstance(state, dict)
+                or set(state) != {
+                    "action_id", "status", "resume_requirement",
+                    "evidence_level", "legal_authority",
+                }
+                or not isinstance(state.get("action_id"), str)
+                or re.fullmatch(r"[A-Za-z0-9_-]{1,64}", state["action_id"]) is None
+                or not isinstance(state.get("status"), str)
+                or state["status"] not in requirements
+                or state["resume_requirement"] != requirements[state["status"]]
+                or state["evidence_level"] != "host_reported"
+                or state["legal_authority"] is not False
+            ):
+                return None
     encoded = json.dumps(
         value,
         ensure_ascii=False,

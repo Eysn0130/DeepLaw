@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/query-audit-receipt.v2.schema.json",
+  "title": "DeepLaw admitted selection receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "query_plan_sha256",
+    "query_sha256",
+    "input_audit_head",
+    "input_legacy_audit_head",
+    "ranking_authority_changed",
+    "write_performed",
+    "receipt_sha256",
+    "selection_entries",
+    "selection_sha256",
+    "discovery_exhaustive",
+    "selection_truncated",
+    "scope"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.query-audit-receipt/v2"
+    },
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^queryreceipt_[0-9a-f]{24}$"
+    },
+    "query_plan_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "query_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "input_audit_head": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "input_legacy_audit_head": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ranking_authority_changed": {
+      "const": false
+    },
+    "write_performed": {
+      "const": false
+    },
+    "receipt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selection_entries": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidate_id",
+          "kind",
+          "state",
+          "reason"
+        ],
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "kind": {
+            "enum": [
+              "statement",
+              "knowledge_revision",
+              "evidence"
+            ]
+          },
+          "state": {
+            "enum": [
+              "selected",
+              "omitted"
+            ]
+          },
+          "reason": {
+            "enum": [
+              "selected",
+              "selection_budget",
+              "character_budget",
+              "token_budget",
+              "source_budget",
+              "source_only_purpose",
+              "relevance_floor",
+              "exact_source_passage_budget",
+              "duplicate_source_reference",
+              "represented_source_reference"
+            ]
+          }
+        }
+      }
+    },
+    "selection_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "discovery_exhaustive": {
+      "const": false
+    },
+    "selection_truncated": {
+      "type": "boolean"
+    },
+    "scope": {
+      "const": "bounded_admitted_candidates_only"
+    }
+  }
+}

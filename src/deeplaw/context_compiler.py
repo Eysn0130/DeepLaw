@@ -279,10 +279,10 @@ def _verify_autonomous_capsule(
 
 
 @cache
-def _autonomous_v3_capsule_contract_validator() -> Draft202012Validator:
+def _autonomous_v3_capsule_contract_validator(version: int = 3) -> Draft202012Validator:
     from .knowledge_autonomy import _contract_validator
 
-    return _contract_validator("knowledge-capsule.v3.schema.json")
+    return _contract_validator(f"knowledge-capsule.v{version}.schema.json")
 
 
 def _verify_autonomous_capsule_v3(
@@ -290,7 +290,10 @@ def _verify_autonomous_capsule_v3(
     *,
     vault: KnowledgeVault | None,
 ) -> dict[str, Any]:
-    if next(_autonomous_v3_capsule_contract_validator().iter_errors(capsule), None) is not None:
+    mixed = capsule.get("schema_version") == "deeplaw.knowledge-capsule/v4"
+    version = 4 if mixed else 3
+    validator = _autonomous_v3_capsule_contract_validator(version)
+    if next(validator.iter_errors(capsule), None) is not None:
         raise ValueError("knowledge capsule v3 does not match its closed JSON contract")
     from .knowledge_autonomy import _validate_contract
 
@@ -306,14 +309,16 @@ def _verify_autonomous_capsule_v3(
     plan_hash_valid = capsule["query_plan_sha256"] == sha256_bytes(
         canonical_json(plan).encode("utf-8")
     )
-    plan_schema_valid = plan.get("schema_version") == "deeplaw.knowledge-query-plan/v6"
+    plan_schema_valid = (
+        plan.get("schema_version") == f"deeplaw.knowledge-query-plan/v{7 if mixed else 6}"
+    )
     if plan_schema_valid:
         try:
-            _validate_contract("knowledge-query-plan.v6.schema.json", plan)
+            _validate_contract(f"knowledge-query-plan.v{7 if mixed else 6}.schema.json", plan)
         except Exception:
             plan_schema_valid = False
     try:
-        _validate_contract("provider-knowledge-capsule.v2.schema.json", provider)
+        _validate_contract(f"provider-knowledge-capsule.v{3 if mixed else 2}.schema.json", provider)
         provider_schema_valid = True
     except Exception:
         provider_schema_valid = False
@@ -371,6 +376,7 @@ def _verify_autonomous_capsule_v3(
         plan.get("query_sha256") == expected_query_sha256
         and audit.get("query_sha256") == expected_query_sha256
     )
+    revisions = capsule.get("knowledge_revisions", [])
     statements = capsule["statements"]
     evidence = capsule["evidence"]
     contradictions = capsule["contradictions"]
@@ -383,7 +389,11 @@ def _verify_autonomous_capsule_v3(
         and selection.get("evidence_ids")
         == [item.get("evidence_id") for item in evidence]
         and plan.get("residual_gap_ids") == [item.get("gap_id") for item in gaps]
-        and audit.get("selected_statement_ids") == selection.get("statement_ids")
+        and (
+            [item["candidate_id"] for item in audit.get("selection_entries", [])
+             if item["kind"] == "statement" and item["state"] == "selected"]
+            if mixed else audit.get("selected_statement_ids")
+        ) == selection.get("statement_ids")
         and plan.get("selected_statement_count") == len(statements)
         and plan.get("evidence_selected_count") == len(evidence)
     )
@@ -429,12 +439,42 @@ def _verify_autonomous_capsule_v3(
         and local_budget.get("max_tokens") == plan_budget.get("tokens")
         and local_budget.get("max_provider_characters")
         == plan_budget.get("provider_characters")
-        and local_budget.get("selected_items") == len(statements) + len(evidence)
+        and local_budget.get("selected_items") == len(statements) + len(evidence) + len(revisions)
         and isinstance(local_budget.get("selected_characters"), int)
         and 0 <= local_budget["selected_characters"] <= local_budget["max_characters"]
         and local_budget.get("provider_payload_bytes") == provider_payload_bytes
         and local_budget.get("local_payload_hard_limit_bytes") == 256 * 1024
     )
+    if mixed:
+        selected_tokens = sum(
+            estimate_tokens(str(item.get(field, "")))
+            for items, field in (
+                (statements, "statement_text"), (evidence, "excerpt"), (revisions, "content")
+            )
+            for item in items
+        )
+        budget_identity_valid = bool(
+            budget_identity_valid
+            and local_budget.get("selected_tokens") == selected_tokens
+            and selected_tokens <= local_budget["max_tokens"]
+            and local_budget.get("token_count_mode") == "estimated"
+        )
+        revision_selection = plan.get("knowledge_revision_selection", {})
+        selection_identity_valid = bool(
+            selection_identity_valid
+            and revision_selection.get("selected_revision_ids")
+            == [item["revision_id"] for item in revisions]
+            and revision_selection.get("selection_sha256") == audit.get("selection_sha256")
+            == sha256_bytes(canonical_json(audit.get("selection_entries", [])).encode("utf-8"))
+            and revision_selection.get("selection_entries")
+            == audit.get("selection_entries", [])[:20]
+        )
+        provider_projection_consistent = bool(
+            provider_projection_consistent
+            and isinstance(provider_body, dict)
+            and provider_body.get("knowledge_revisions") == revisions
+            and provider_body.get("selection_explanation") == revision_selection
+        )
     local_payload_bytes = len(canonical_json(capsule).encode("utf-8"))
     local_hard_limit_valid = local_payload_bytes <= 256 * 1024
     vault_matches: bool | None = None
@@ -450,6 +490,20 @@ def _verify_autonomous_capsule_v3(
                 "SELECT 1 FROM autonomous_events_v3 WHERE event_hash = ?",
                 (capsule["audit_head"],),
             ).fetchone() is not None
+    if mixed and vault is not None:
+        from .retrieval.query_v6 import _load_governed_revisions
+
+        with AutonomousKnowledgeStore(vault.root, read_only=True) as store:
+            current = _load_governed_revisions(
+                store, [item["revision_id"] for item in revisions],
+                target=plan["query_target"], scope=plan["scope"],
+                max_sensitivity=plan["max_sensitivity"],
+            )
+            selection_identity_valid = selection_identity_valid and current == revisions
+            audit_anchor_valid = bool(
+                audit_anchor_valid and store.audit_head == plan["input_audit_head"]
+                and store.legacy_audit_head == plan["input_legacy_audit_head"]
+            )
     valid = bool(
         digest_valid
         and id_valid
@@ -469,7 +523,7 @@ def _verify_autonomous_capsule_v3(
         and (audit_anchor_valid is not False)
     )
     result = {
-        "schema_version": "deeplaw.knowledge-capsule-verification/v3",
+        "schema_version": f"deeplaw.knowledge-capsule-verification/v{version}",
         "capsule_id": capsule["capsule_id"],
         "expected_capsule_id": expected_id,
         "digest_valid": digest_valid,
@@ -491,7 +545,7 @@ def _verify_autonomous_capsule_v3(
         "autonomous_integrity_valid": autonomous_integrity_valid,
         "valid": valid,
     }
-    _validate_contract("knowledge-capsule-verification.v3.schema.json", result)
+    _validate_contract(f"knowledge-capsule-verification.v{version}.schema.json", result)
     return result
 
 
@@ -1198,7 +1252,9 @@ def verify_capsule(
 ) -> dict[str, Any]:
     if not isinstance(capsule, dict):
         raise ValueError("knowledge capsule must be an object")
-    if capsule.get("schema_version") == "deeplaw.knowledge-capsule/v3":
+    if capsule.get("schema_version") in {
+        "deeplaw.knowledge-capsule/v3", "deeplaw.knowledge-capsule/v4"
+    }:
         return _verify_autonomous_capsule_v3(capsule, vault=vault)
     if capsule.get("schema_version") == "deeplaw.knowledge-capsule/v2":
         return _verify_autonomous_capsule(capsule, vault=vault)

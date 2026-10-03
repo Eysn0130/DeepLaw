@@ -45,7 +45,7 @@ QueryPurpose = Literal[
     "freshness_check",
 ]
 QueryPolicy = Literal["compiled-first-v1", "evidence-first-v1", "balanced-v1"]
-QueryPlanVersion = Literal["4", "5", "6"]
+QueryPlanVersion = Literal["4", "5", "6", "7"]
 
 QUERY_PURPOSES: Final = frozenset(
     {
@@ -303,7 +303,7 @@ class PurposeAwareRetrievalService:
         retrieval_mode: str = "hybrid",
         as_of: str | None = None,
         kinds: tuple[str, ...] = (),
-        query_plan_version: QueryPlanVersion = "6",
+        query_plan_version: QueryPlanVersion = "7",
         force_canonical_lexical: bool = False,
         query_target: str | dict[str, Any] | None = None,
         applicable_duties: tuple[str, ...] | list[str] | None = None,
@@ -320,15 +320,15 @@ class PurposeAwareRetrievalService:
         )
         if purpose not in QUERY_PURPOSES:
             raise ValueError("query purpose is invalid")
-        if query_plan_version not in {"4", "5", "6"}:
+        if query_plan_version not in {"4", "5", "6", "7"}:
             raise ValueError("query plan version is invalid")
         normalized_task_binding = normalize_task_context_binding(
             task_binding,
             allow_none=True,
         )
-        if query_plan_version != "6" and normalized_task_binding is not None:
+        if query_plan_version not in {"6", "7"} and normalized_task_binding is not None:
             raise ValueError("task_binding requires query_plan_version=6")
-        if query_plan_version == "6" and projection not in {
+        if query_plan_version in {"6", "7"} and projection not in {
             "compact",
             "standard",
             "audit",
@@ -368,7 +368,7 @@ class PurposeAwareRetrievalService:
                 raise ValueError("purpose-aware query scope is invalid")
 
             if purpose == "legal":
-                if query_plan_version == "6":
+                if query_plan_version in {"6", "7"}:
                     from .query_v6 import execute_v6
 
                     return execute_v6(
@@ -394,6 +394,7 @@ class PurposeAwareRetrievalService:
                         projection=projection,
                         task_binding=normalized_task_binding,
                         task_route_query=selected_task_route_text,
+                        query_plan_version=query_plan_version,
                     )
                 result = self._legal_boundary_result(
                     query=selected_query,
@@ -420,7 +421,7 @@ class PurposeAwareRetrievalService:
                     _validate_contract("purpose-aware-retrieval.v1.schema.json", result)
                 return result
 
-            if query_plan_version == "6":
+            if query_plan_version in {"6", "7"}:
                 from .query_v6 import execute_v6
 
                 return execute_v6(
@@ -446,6 +447,7 @@ class PurposeAwareRetrievalService:
                     projection=projection,
                     task_binding=normalized_task_binding,
                     task_route_query=selected_task_route_text,
+                        query_plan_version=query_plan_version,
                 )
 
             compiled_budget, evidence_budget = self._partition_budget(
@@ -2132,6 +2134,22 @@ class PurposeAwareRetrievalService:
             (row["freshness"] for row in [*source_rows, *revision_rows]),
             key=order.__getitem__,
         )
+        statement = store.connection.execute(
+            "SELECT 1 FROM knowledge_statements_v1 WHERE knowledge_revision_id = ? "
+            "AND json_extract(statement_json, '$.schema_version') = "
+            "'deeplaw.knowledge-statement/v2' LIMIT 1", (revision_id,),
+        ).fetchone()
+        if statement is not None:
+            from ..evidence.support import SupportEvaluator
+
+            row = store.connection.execute(
+                "SELECT scope, sensitivity FROM knowledge_revisions_v3 WHERE revision_id = ?",
+                (revision_id,),
+            ).fetchone()
+            if row is not None:
+                state = SupportEvaluator(
+                    store, scope=row["scope"], sensitivity=row["sensitivity"]
+                ).revision("knowledge_revision", revision_id)
         dependencies = [
             {
                 "input_kind": "source_fragment",
@@ -2253,6 +2271,8 @@ class PurposeAwareRetrievalService:
                 store,
                 revision["revision_id"],
             )
+            if freshness["state"] == "fresh":
+                continue
             selected.append(
                 {
                     "code": "stale_knowledge",

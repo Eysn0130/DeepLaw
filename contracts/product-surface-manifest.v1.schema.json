@@ -16,7 +16,7 @@
   ],
   "properties": {
     "schema_version": {"const": "deeplaw.product-surface-manifest/v1"},
-    "package_version": {"const": "0.12.0"},
+    "package_version": {"const": "0.13.0"},
     "lifecycle_status": {"const": "source_candidate"},
     "release_ready": {"const": false},
     "default_product": {

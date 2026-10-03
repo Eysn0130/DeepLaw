@@ -293,3 +293,21 @@ def test_hook_rejects_noncanonical_or_sensitive_core_capsule() -> None:
     admitted["statements"][0]["content"] = "Safe content"  # type: ignore[index]
     admitted["statements"][0]["receipt_id"] = "queryreceipt_private"  # type: ignore[index]
     assert native_lifecycle._valid_capsule(admitted) is None
+
+
+def test_action_capsule_preserves_unknown_outcome_without_authority() -> None:
+    capsule = {
+        **native_lifecycle._gap_capsule("action_outcome_unknown"),
+        "schema_version": "deeplaw.host-continuity-capsule/v2",
+        "action_states": [{
+            "action_id": "external_once", "status": "initiated_unknown",
+            "resume_requirement": "verify_external_state", "evidence_level": "host_reported",
+            "legal_authority": False,
+        }],
+    }
+    assert native_lifecycle._valid_capsule(capsule) == capsule
+    capsule["action_states"][0]["resume_requirement"] = "do_not_repeat"
+    assert native_lifecycle._valid_capsule(capsule) is None
+    capsule["action_states"][0]["resume_requirement"] = "verify_external_state"
+    capsule["action_states"][0]["legal_authority"] = True
+    assert native_lifecycle._valid_capsule(capsule) is None

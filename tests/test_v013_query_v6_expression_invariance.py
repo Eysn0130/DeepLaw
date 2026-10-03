@@ -178,6 +178,7 @@ def _context_triplet(
             max_chars=8_000,
             max_tokens=6_000,
             max_sources=12,
+            query_plan_version="6",
             confirm_no_case_data=True,
         )
     cli_context = _run_cli(
@@ -201,6 +202,8 @@ def _context_triplet(
         "6000",
         "--max-sources",
         "12",
+        "--query-plan-version",
+        "6",
         "--confirm-no-case-data",
     )
     mcp_context = handle_knowledge_support(
@@ -211,6 +214,7 @@ def _context_triplet(
         max_chars=8_000,
         max_tokens=6_000,
         max_sources=12,
+        query_plan_version="6",
         scope="project",
         max_sensitivity="public",
         confirm_no_case_data=True,
@@ -236,6 +240,7 @@ def test_v6_case_punctuation_quotes_and_cjk_preserve_required_identities(
             max_chars=8_000,
             max_tokens=6_000,
             max_sources=12,
+            query_plan_version="6",
             projection="audit",
         )
     assert not any(
@@ -318,6 +323,7 @@ def test_v6_inferred_anchor_is_ranking_only_for_related_nonmatching_candidate(
             max_chars=8_000,
             max_tokens=6_000,
             max_sources=12,
+            query_plan_version="6",
             projection="audit",
         )
     multilingual = next(
@@ -417,6 +423,7 @@ def test_v6_explicit_semantic_knowledge_and_revision_targets_remain_strict(
                 max_tokens=6_000,
                 max_sources=12,
                 query_target=query_target,
+                query_plan_version="6",
                 confirm_no_case_data=True,
             )
         assert _statement_rows(context) == {target_identity}

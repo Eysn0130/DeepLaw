@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-sink.input.v7.schema.json",
+  "title": "DeepLaw Knowledge Sink Input v7",
+  "oneOf": [
+    {
+      "$ref": "knowledge-sink.input.v6.schema.json"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "idempotency_key",
+        "confirm_no_case_data",
+        "task",
+        "host_id",
+        "status",
+        "run_metadata"
+      ],
+      "properties": {
+        "operation": {
+          "const": "record_run"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "confirm_no_case_data": {
+          "const": true
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "task": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        },
+        "host_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "partial",
+            "aborted"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "personal",
+            "project",
+            "domain"
+          ]
+        },
+        "sensitivity": {
+          "enum": [
+            "public",
+            "internal",
+            "private",
+            "restricted"
+          ]
+        },
+        "input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "output_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "tool_results_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "run_metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "task_binding",
+            "action_state"
+          ],
+          "properties": {
+            "task_kind": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "tool_ids": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "artifact_ids": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,199}$",
+                "not": {
+                  "anyOf": [
+                    {
+                      "pattern": "\\.\\."
+                    },
+                    {
+                      "pattern": "(^|[._:-])([Aa][Uu][Tt][Hh]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll][Ss]?|[Ss][Ee][Cc][Rr][Ee][Tt][Ss]?|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Kk][Ee][Yy])($|[._:-])"
+                    }
+                  ]
+                }
+              }
+            },
+            "notes_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "task_binding": {
+              "$ref": "task-context-binding.v1.schema.json"
+            },
+            "action_state": {
+              "$ref": "task-action-state.v1.schema.json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -49,19 +49,19 @@ def test_product_surface_manifest_routes_current_sink_to_v6() -> None:
         for item in manifest["external_callers"]  # type: ignore[index]
         if item["caller"] == "knowledge_sink"
     )
-    assert "contracts/knowledge-sink.input.v6.schema.json" in caller[
+    assert "contracts/knowledge-sink.input.v7.schema.json" in caller[
         "current_bindings"
     ]
     assert caller["compatibility_bindings"] == [
-        "contracts/knowledge-sink.input.v1.schema.json through v5",
-        "contracts/knowledge-sink.output.v1.schema.json through v3",
+        "contracts/knowledge-sink.input.v1.schema.json through v6",
+        "contracts/knowledge-sink.output.v1.schema.json through v4",
     ]
     surface = next(
         item
         for item in manifest["surfaces"]  # type: ignore[index]
         if item["surface_id"] == "advanced.knowledge_sink"
     )
-    assert "contracts/knowledge-sink.input.v6.schema.json" in surface["bindings"]
+    assert "contracts/knowledge-sink.input.v7.schema.json" in surface["bindings"]
 
 
 def test_pre_freeze_version_deadlock_is_explicit_and_fail_closed() -> None:

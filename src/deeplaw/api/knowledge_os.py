@@ -377,7 +377,7 @@ class _ContextAPI:
         retrieval_mode: str = "hybrid",
         as_of: str | None = None,
         kinds: tuple[str, ...] = (),
-        query_plan_version: str = "6",
+        query_plan_version: str = "7",
         query_target: str | dict[str, Any] | None = None,
         applicable_duties: tuple[str, ...] | list[str] | None = None,
         projection: str = "standard",

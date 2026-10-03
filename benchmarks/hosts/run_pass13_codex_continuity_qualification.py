@@ -1881,10 +1881,13 @@ def _turn_record(
     post_forget_phase: bool = False,
     require_task_binding: bool = False,
     expected_continuity: Mapping[str, Any] | None = None,
+    expected_thread_id: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     # The native Host hook resolves and projects continuity before the turn.
     # Never accept a task-binding digest supplied by a Provider-side tool call.
     del expected_task_binding, require_task_binding
+    if expected_thread_id is not None and _result_value(result, "thread_id") != expected_thread_id:
+        raise QualificationFailure("turn response changed the requested thread identity")
     observations = list(_result_value(result, "tool_call_observations", []) or [])
     outputs = list(_result_value(result, "tool_outputs", []) or [])
     native_delivery = expected_continuity is not None
@@ -2204,6 +2207,7 @@ def _run_scenario(
             ),
             post_forget_phase=post_forget_phase,
             expected_continuity=capsule,
+            expected_thread_id=thread_id,
         )
         record["host_elapsed_ms"] = round((time.monotonic() - started) * 1000)
         turns.append(record)

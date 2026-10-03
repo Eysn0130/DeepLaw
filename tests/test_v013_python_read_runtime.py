@@ -71,10 +71,10 @@ def test_python_facade_reuses_startup_snapshot_and_closes_it(
             task="warm Python Capsule request",
             confirm_no_case_data=True,
         )
-        assert first["schema_version"] == "deeplaw.knowledge-capsule/v3"
-        assert second["schema_version"] == "deeplaw.knowledge-capsule/v3"
-        assert first["query_plan"]["schema_version"] == "deeplaw.knowledge-query-plan/v6"
-        assert second["query_plan"]["schema_version"] == "deeplaw.knowledge-query-plan/v6"
+        assert first["schema_version"] == "deeplaw.knowledge-capsule/v4"
+        assert second["schema_version"] == "deeplaw.knowledge-capsule/v4"
+        assert first["query_plan"]["schema_version"] == "deeplaw.knowledge-query-plan/v7"
+        assert second["query_plan"]["schema_version"] == "deeplaw.knowledge-query-plan/v7"
         assert counts == {"legacy": 2, "autonomous": 2}
 
         verified = knowledge_os.verify()

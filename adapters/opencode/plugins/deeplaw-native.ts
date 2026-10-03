@@ -4,8 +4,8 @@ import { dirname, resolve, sep } from "node:path"
 
 export const OPENCODE_VERSION = "1.18.16"
 export const OPENCODE_SOURCE_COMMIT = "a3647eb025c7615159d417dcc49fc39fdaeba65b"
-export const CONFIG_SELECTOR = "deepseek/deepseek-v4-flash"
-export const EXPECTED_RESPONSE_MODEL_ID = "deepseek-v4-flash"
+export const CONFIG_SELECTOR = "deepseek/deepseek-flash"
+export const EXPECTED_RESPONSE_MODEL_ID = "deepseek-flash"
 export const MAX_CONTEXT_BYTES = 2048
 
 export const NATIVE_EVENTS = [
@@ -19,7 +19,8 @@ const NATIVE_EVENT_OBSERVATION_SCHEMA = "deeplaw.opencode-native-event-observati
 const MAX_CAPSULE_BYTES = 1400
 const MAX_CLI_BYTES = 64 * 1024
 const MAX_ID_BYTES = 4096
-const CLI_TIMEOUT_MS = 1500
+// Includes isolated Python CLI cold start; still fail closed at a hard deadline.
+const CLI_TIMEOUT_MS = 3000
 const SHA256 = /^[0-9a-f]{64}$/
 const SHA256_TEXT = /[0-9a-f]{64}/i
 const GAP_CODE = /^[a-z0-9][a-z0-9_.:-]{0,99}$/

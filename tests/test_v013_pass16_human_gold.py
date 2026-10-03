@@ -432,9 +432,9 @@ def _report(host: str) -> dict[str, Any]:
     turns = [turn for run in runs for turn in run["turns"]]
     methods = sorted({method for run in runs for method in run["methods_observed"]})
     native_receipts = [receipt for run in runs for receipt in run["native_receipts"]]
-    from deeplaw.knowledge_mcp_server import knowledge_tool_definition
+    from deeplaw.knowledge_mcp_server import _v7_input_schema
 
-    input_schema = knowledge_tool_definition(autonomous=True).inputSchema
+    input_schema = _v7_input_schema()
     tool_schema = pass13_evidence.knowledge_support_tool_schema_receipt(
         [{"name": "knowledge_support", "inputSchema": input_schema}]
     )

@@ -78,7 +78,6 @@ def _seed_repository(tmp_path: Path) -> Path:
     _git(repository, "checkout", "-q", main_branch)
     _git(repository, "checkout", "-q", "-b", "candidate-integration")
     _git(repository, "merge", "--no-ff", "--no-edit", "candidate-feature")
-    _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, _commit(repository))
     return repository
 
 
@@ -91,7 +90,7 @@ def _snapshot(repository: Path, relatives: tuple[str, ...]) -> dict[str, bytes]:
 
 
 def _frozen_main(repository: Path) -> str:
-    return _git(repository, "rev-parse", f"{prep.INTEGRATED_MAIN_REF}^1")
+    return _git(repository, "rev-parse", prep.INTEGRATED_MAIN_REF)
 
 
 def _run(
@@ -154,6 +153,8 @@ def test_cli_accepts_merge_first_parent_at_latest_frozen_main(
     assert result["base"]["integration_commit"] == _commit(repository)
     assert result["base"]["frozen_main_commit"] == frozen_main
     assert result["write_performed"] is False
+    assert _git(repository, "rev-parse", prep.INTEGRATED_MAIN_REF) == frozen_main
+    assert frozen_main != _commit(repository)
 
 
 def _run_cli(
@@ -186,7 +187,6 @@ def test_cli_rejects_wrong_first_parent(tmp_path: Path, capsys: pytest.CaptureFi
     _git(repository, "commit", "--allow-empty", "-q", "-m", "wrong parent feature")
     _git(repository, "checkout", "-q", "wrong-integration")
     _git(repository, "merge", "--no-ff", "--no-edit", "wrong-feature")
-    _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, _commit(repository))
 
     result_code, error = _run_cli(repository, capsys, frozen_main)
 
@@ -195,14 +195,14 @@ def test_cli_rejects_wrong_first_parent(tmp_path: Path, capsys: pytest.CaptureFi
     assert str(repository) not in error
 
 
-@pytest.mark.parametrize("main_state", ["stale", "missing"])
-def test_cli_rejects_stale_or_missing_integrated_main(
+@pytest.mark.parametrize("main_state", ["advanced", "missing"])
+def test_cli_rejects_advanced_or_missing_frozen_main(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], main_state: str
 ) -> None:
     repository = _seed_repository(tmp_path)
     frozen_main = _frozen_main(repository)
-    if main_state == "stale":
-        _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, frozen_main)
+    if main_state == "advanced":
+        _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, _commit(repository))
     else:
         _git(repository, "update-ref", "-d", prep.INTEGRATED_MAIN_REF)
 
@@ -262,7 +262,6 @@ def test_cli_rejects_non_merge_or_parentless_integration_commit(
         tree = _git(repository, "rev-parse", f"{frozen_main}^{{tree}}")
         root = _git(repository, "commit-tree", tree, "-m", "parentless integration")
         _git(repository, "checkout", "-q", "--detach", root)
-    _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, _commit(repository))
 
     result_code, error = _run_cli(repository, capsys, frozen_main)
 
@@ -359,7 +358,6 @@ def test_wrong_construction_contract_or_hash_fails(tmp_path: Path, kind: str) ->
     _git(repository, "commit", "-q", "-m", "tamper")
     _git(repository, "checkout", "-q", "-b", "tampered-integration", frozen_main)
     _git(repository, "merge", "--no-ff", "--no-edit", "candidate-integration")
-    _git(repository, "update-ref", prep.INTEGRATED_MAIN_REF, _commit(repository))
     with pytest.raises(prep.CandidatePrepError):
         _run(repository, frozen_main)
 

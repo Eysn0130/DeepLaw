@@ -51,8 +51,11 @@ class NativeHostObservationError(ValueError):
     """Raised when a Native Host observation is not safe or closed."""
 
 
-def _repository_contract(name: str) -> Path:
-    path = Path(__file__).resolve().parents[2] / "contracts" / name
+def _contract_path(name: str) -> Path:
+    packaged = Path(__file__).resolve().parent / "contracts" / name
+    repository = Path(__file__).resolve().parents[2] / "contracts" / name
+    # A present but invalid packaged resource must not fall back to a checkout.
+    path = packaged if packaged.exists() or packaged.is_symlink() else repository
     if not path.is_file() or path.is_symlink():
         raise NativeHostObservationError(f"Native Host contract is unavailable: {name}")
     return path
@@ -60,7 +63,7 @@ def _repository_contract(name: str) -> Path:
 
 def _load_contract(name: str) -> dict[str, Any]:
     try:
-        value = strict_json_loads(_repository_contract(name).read_bytes())
+        value = strict_json_loads(_contract_path(name).read_bytes())
     except (OSError, UnicodeError, ValueError) as error:
         raise NativeHostObservationError("Native Host contract is invalid") from error
     if not isinstance(value, dict):

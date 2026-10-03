@@ -304,7 +304,9 @@ def verify_platform_inventory(
         | set(qualification_result["unexpected"])
     )
     overlap.extend(sorted(windows_set & qualification_set))
-    if classified["nonapplicable"] != additional:
+    if not (
+        additional <= classified["nonapplicable"] <= windows_set
+    ):
         overlap.append("nonapplicable_windows_inventory_mismatch")
     if classified["qualification"] != qualification_set:
         overlap.append("qualification_inventory_mismatch")

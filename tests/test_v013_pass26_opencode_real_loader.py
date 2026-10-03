@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -81,8 +83,14 @@ def test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     observation_path = tmp_path / "resolver-observation.json"
+    resolver_entry_path = tmp_path / "resolver-entry.txt"
+    event_path = tmp_path / "host-events.jsonl"
     fake_deeplaw = fake_bin / "deeplaw"
-    resolver_script = """#!/usr/bin/env python3
+    # Bind the test's interpreter; PATH may select an OS developer-tool shim.
+    # The stdlib-only fake does not need Python site hooks.
+    resolver_script = """#!__PYTHON_EXECUTABLE__ -S
+with open(__ENTRY_PATH__, "w") as entry:
+    entry.write("entered")
 import json
 import os
 import pathlib
@@ -90,7 +98,11 @@ import sys
 
 argv = sys.argv[1:]
 pathlib.Path(__OBSERVATION_PATH__).write_text(
-    json.dumps({"argv": argv, "environment_keys": sorted(os.environ)}),
+    json.dumps({
+        "argv": argv,
+        "environment_keys": sorted(os.environ),
+        "executable": sys.executable,
+    }),
     encoding="utf-8",
 )
 print(json.dumps({
@@ -103,7 +115,11 @@ print(json.dumps({
 }))
 """
     fake_deeplaw.write_text(
-        resolver_script.replace("__OBSERVATION_PATH__", json.dumps(str(observation_path))),
+        resolver_script.replace("__PYTHON_EXECUTABLE__", sys.executable).replace(
+            "__OBSERVATION_PATH__", json.dumps(str(observation_path))
+        ).replace(
+            "__ENTRY_PATH__", json.dumps(str(resolver_entry_path))
+        ),
         encoding="utf-8",
     )
     fake_deeplaw.chmod(0o700)
@@ -118,6 +134,11 @@ print(json.dumps({
     host_environment = {
         "HOME": str(isolated_home),
         "DEEPLAW_KNOWLEDGE_VAULT": str(isolated_vault),
+        "DEEPLAW_OPENCODE_MODEL_RECEIPT": str(event_path),
+        "OPENCODE_DISABLE_AUTOUPDATE": "1",
+        "OPENCODE_DISABLE_CLAUDE_CODE": "1",
+        "OPENCODE_DISABLE_DEFAULT_PLUGINS": "1",
+        "OPENCODE_DISABLE_MODELS_FETCH": "1",
         "PATH": f"{fake_bin}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin",
         "LANG": "C",
         "LC_ALL": "C",
@@ -157,6 +178,27 @@ print(json.dumps({
             assert response.status == 200
             session = json.loads(response.read())
         assert isinstance(session.get("id"), str) and session["id"]
+        session_sha256 = hashlib.sha256(session["id"].encode()).hexdigest()
+
+        def session_event_observed() -> bool:
+            if not event_path.exists():
+                return False
+            with event_path.open("rb") as stream:
+                raw = stream.read(65537)
+            if len(raw) > 65536:
+                return False
+            try:
+                observations = [json.loads(line) for line in raw.splitlines()]
+            except (UnicodeError, ValueError):
+                return False
+            return any(
+                isinstance(item, dict)
+                and item.get("event_type") == "session.created"
+                and item.get("session_sha256") == session_sha256
+                and item.get("status") == "observed"
+                and item.get("gap") is None
+                for item in observations
+            )
 
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline and not observation_path.exists():
@@ -164,11 +206,19 @@ print(json.dumps({
         if not observation_path.exists():
             process.terminate()
             stdout, stderr = process.communicate(timeout=5)
+            stage = (
+                "resolver observation missing after observed session.created"
+                if session_event_observed()
+                else "project plugin session.created observation missing"
+            )
             pytest.fail(
-                "the project plugin did not dispatch session.created; "
+                f"{stage}; resolver_entered={resolver_entry_path.exists()}; "
                 f"stdout={stdout!r}; stderr={stderr!r}"
             )
+        assert session_event_observed()
+        assert resolver_entry_path.read_text(encoding="utf-8") == "entered"
         observation = json.loads(observation_path.read_text(encoding="utf-8"))
+        assert observation["executable"] == sys.executable
         assert observation["argv"][:7] == [
             "knowledge",
             "--format",
@@ -182,6 +232,7 @@ print(json.dumps({
             "--host",
             "opencode",
         ]
+        assert observation["argv"][9:11] == ["--session-sha256", session_sha256]
         environment_keys = set(observation["environment_keys"])
         assert {"DEEPLAW_KNOWLEDGE_VAULT", "LANG", "LC_ALL", "PATH"} <= environment_keys
         assert environment_keys <= {

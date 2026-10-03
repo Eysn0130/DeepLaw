@@ -271,14 +271,68 @@ def test_host_pins_and_cross_host_task_matrix_are_frozen() -> None:
         "tool_version": None,
         "binary_sha256": None,
         "source_commit": None,
-        "config_selector": "deepseek/deepseek-v4-flash",
-        "model_id": "deepseek-v4-flash",
-        "expected_response_model_id": "deepseek-v4-flash",
+        "config_selector": "deepseek/deepseek-flash",
+        "model_id": "deepseek-flash",
+        "expected_response_model_id": "deepseek-flash",
         "reasoning_effort": None,
         "argv_prefix": ["opencode", "run", "--format", "json"],
         "plugin_policy": "single_exact_candidate_plugin",
         "ambient_project_plugins": "forbidden",
     }
+
+
+def test_current_host_contracts_reject_retired_opencode_selector() -> None:
+    schema_names = (
+        ("native-host-event.v3.schema.json", "opencodeIdentity"),
+        ("native-host-lifecycle-receipt.v3.schema.json", "opencodeIdentity"),
+        ("v013-host-task-evidence.v1.schema.json", "opencodeIdentityV3"),
+    )
+    for schema_name, identity_definition in schema_names:
+        schema = _load(REPOSITORY / "contracts" / schema_name)
+        identity_schema = {
+            "$ref": f"#/$defs/{identity_definition}",
+            "$defs": schema["$defs"],
+        }
+        validator = Draft202012Validator(identity_schema)
+        identity = {
+            "version": "1.18.16",
+            "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
+            "config_selector": "deepseek/deepseek-flash",
+            "expected_response_model_id": "deepseek-flash",
+            "executable_sha256": "a" * 64,
+            "package_sha256": "b" * 64,
+            "runtime": "host_bun_runtime_only",
+            "dotenv_policy": "owner_only_external_strict_parser",
+            "secret_visibility": "forbidden",
+        }
+        validator.validate(identity)
+        retired = copy.deepcopy(identity)
+        retired["config_selector"] = "deepseek/deepseek-v4-flash"
+        retired["expected_response_model_id"] = "deepseek-v4-flash"
+        with pytest.raises(ValidationError):
+            validator.validate(retired)
+
+    classification = _load(CLASSIFICATION)
+    retired_gate = next(
+        row for row in classification["gates"] if row["gate_id"] == "opencode"
+    )
+    retired_gate["constraints"].update(
+        config_selector="deepseek/deepseek-v4-flash",
+        model_id="deepseek-v4-flash",
+        expected_response_model_id="deepseek-v4-flash",
+    )
+    with pytest.raises(ValidationError):
+        Draft202012Validator(_load(SCHEMA)).validate(classification)
+
+
+def test_task_evidence_keeps_historical_opencode_identity_separate() -> None:
+    schema = _load(REPOSITORY / "contracts/v013-host-task-evidence.v1.schema.json")
+    historical = schema["$defs"]["opencodeIdentity"]["properties"]
+    current = schema["$defs"]["opencodeIdentityV3"]["properties"]
+    assert historical["config_selector"] == {"const": "deepseek/deepseek-v4-flash"}
+    assert historical["expected_response_model_id"] == {"const": "deepseek-v4-flash"}
+    assert current["config_selector"] == {"const": "deepseek/deepseek-flash"}
+    assert current["expected_response_model_id"] == {"const": "deepseek-flash"}
 
 
 def test_not_executed_cannot_be_forged_as_pass_or_claim() -> None:

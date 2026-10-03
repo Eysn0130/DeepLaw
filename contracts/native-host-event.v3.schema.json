@@ -143,8 +143,8 @@
       "properties": {
         "version": {"$ref": "#/$defs/version"},
         "source_commit": {"$ref": "#/$defs/git"},
-        "config_selector": {"const": "deepseek/deepseek-v4-flash"},
-        "expected_response_model_id": {"const": "deepseek-v4-flash"},
+        "config_selector": {"const": "deepseek/deepseek-flash"},
+        "expected_response_model_id": {"const": "deepseek-flash"},
         "executable_sha256": {"$ref": "#/$defs/sha256"},
         "package_sha256": {"$ref": "#/$defs/sha256"},
         "runtime": {"const": "host_bun_runtime_only"},

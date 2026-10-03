@@ -136,6 +136,8 @@ def test_root_and_nested_source_routes_share_source_only_v6_gap(
                 "Verify the project retention window.",
                 "--purpose",
                 "verify",
+                "--query-plan-version",
+                "6",
                 "--confirm-no-case-data",
             )
         )
@@ -186,7 +188,7 @@ def test_public_source_only_gap_preserves_multiformat_evidence(
             "--confirm-no-case-data",
         )
     )
-    assert context["schema_version"] == "deeplaw.knowledge-capsule/v3"
+    assert context["schema_version"] == "deeplaw.knowledge-capsule/v4"
     assert context["statements"] == []
     assert "uncompiled_source" in {gap["code"] for gap in context["gaps"]}
     assert context["provider_capsule"]["delivery"]["provider_content_bytes"] <= 65_536
@@ -359,13 +361,13 @@ def test_host_connect_loads_contract_from_installed_package_layout(
 ) -> None:
     installed_module = tmp_path / "site-packages" / "deeplaw" / "host_connect.py"
     packaged_contract = installed_module.parent / "contracts" / (
-        "host-connect-plan.v2.schema.json"
+        "host-connect-plan.v3.schema.json"
     )
     packaged_contract.parent.mkdir(parents=True)
     shutil.copy2(
         Path(__file__).resolve().parents[1]
         / "contracts"
-        / "host-connect-plan.v2.schema.json",
+        / "host-connect-plan.v3.schema.json",
         packaged_contract,
     )
     installed_module.touch()
@@ -373,7 +375,7 @@ def test_host_connect_loads_contract_from_installed_package_layout(
 
     contract = host_connect_module._contract()
 
-    assert contract["$id"].endswith("host-connect-plan.v2.schema.json")
+    assert contract["$id"].endswith("host-connect-plan.v3.schema.json")
 
 
 def test_owner_forget_routes_explicit_asset_knowledge_and_source_targets(
@@ -439,6 +441,20 @@ def test_owner_forget_routes_explicit_asset_knowledge_and_source_targets(
     assert asset_receipt["target_type"] == "legacy_asset"
     assert asset_receipt["current_retrieval_eligible"] is False
 
+    def knowledge_state() -> tuple[str, str, str, str]:
+        with AutonomousKnowledgeStore(vault, read_only=True) as store:
+            current = store.get_current(
+                remembered["knowledge_id"], include_inactive=True
+            )
+            return (
+                store.audit_head,
+                store.legacy_audit_head,
+                current["revision_id"],
+                current["lifecycle"],
+            )
+
+    denied_state = knowledge_state()
+
     for grant, key in (
         (wrong_scope_grant_id, "pass12-forget-wrong-scope"),
         (public_only_grant_id, "pass12-forget-wrong-sensitivity"),
@@ -463,6 +479,7 @@ def test_owner_forget_routes_explicit_asset_knowledge_and_source_targets(
         )
         assert denied.returncode != 0
         assert "unavailable" in denied.stderr
+        assert knowledge_state() == denied_state
 
     knowledge_receipt = _json(
         _run_cli(

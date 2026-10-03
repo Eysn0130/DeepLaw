@@ -97,7 +97,10 @@ def _validate_source_evidence_bindings(capsule: dict[str, Any]) -> None:
 def provider_capsule_from_v6(result: dict[str, Any]) -> dict[str, Any]:
     """Project one v6 retrieval result onto the bounded provider surface."""
 
-    if result.get("schema_version") != "deeplaw.purpose-aware-retrieval/v3":
+    mixed = result.get("schema_version") == "deeplaw.purpose-aware-retrieval/v4"
+    if result.get("schema_version") not in {
+        "deeplaw.purpose-aware-retrieval/v3", "deeplaw.purpose-aware-retrieval/v4"
+    }:
         raise RuntimeError("Query Plan v6 result is invalid")
     plan = result.get("query_plan")
     capsule = result.get("capsule")
@@ -122,7 +125,9 @@ def provider_capsule_from_v6(result: dict[str, Any]) -> dict[str, Any]:
         provider_capsule["projection"] = "standard"
     _validate_source_evidence_bindings(provider_capsule)
     provider = {
-        "schema_version": PROVIDER_CAPSULE_SCHEMA,
+        "schema_version": (
+            "deeplaw.provider-knowledge-capsule/v3" if mixed else PROVIDER_CAPSULE_SCHEMA
+        ),
         "purpose": result["purpose"],
         "policy_id": result["policy_id"],
         "capsule": provider_capsule,
@@ -136,7 +141,7 @@ def provider_capsule_from_v6(result: dict[str, Any]) -> dict[str, Any]:
     }
     if provider["delivery"]["provider_content_bytes"] > PROVIDER_CAPSULE_HARD_LIMIT:
         raise RuntimeError("Query Plan v6 provider projection exceeds its hard limit")
-    _validate_contract("provider-knowledge-capsule.v2.schema.json", provider)
+    _validate_contract(f"provider-knowledge-capsule.v{3 if mixed else 2}.schema.json", provider)
     return provider
 
 
@@ -145,6 +150,9 @@ def _local_audit_summary(audit: dict[str, Any], *, receipt_id: str) -> dict[str,
 
     if audit.get("receipt_id") != receipt_id:
         raise RuntimeError("Query Plan v6 audit receipt identity is invalid")
+    if audit.get("schema_version") == "deeplaw.query-audit-receipt/v2":
+        _validate_contract("query-audit-receipt.v2.schema.json", audit)
+        return deepcopy(audit)
 
     def _count(name: str) -> int:
         value = audit.get(name, [])
@@ -216,6 +224,7 @@ def assemble_v6_context(
     confirm_no_case_data: bool,
     task_binding: dict[str, Any] | None = None,
     runtime_snapshot: Any | None = None,
+    query_plan_version: str = "6",
 ) -> dict[str, Any]:
     """Return local v3, provider v2, and one local trace for a v6 query."""
 
@@ -243,7 +252,7 @@ def assemble_v6_context(
         retrieval_mode=retrieval_mode,
         as_of=as_of,
         kinds=kinds,
-        query_plan_version="6",
+        query_plan_version=query_plan_version,
         force_canonical_lexical=force_canonical_lexical,
         query_target=query_target,
         applicable_duties=applicable_duties,
@@ -298,10 +307,14 @@ def assemble_v6_context(
         "capsule_id": "",
         "capsule_digest": "",
     }
+    if query_plan_version == "7":
+        capsule["schema_version"] = "deeplaw.knowledge-capsule/v4"
+        capsule["knowledge_revisions"] = retrieval["knowledge_revisions"]
     _seal(capsule)
     if len(canonical_json(capsule).encode("utf-8")) > LOCAL_CAPSULE_HARD_LIMIT:
         raise RuntimeError("local v6 Knowledge Capsule exceeds its hard bound")
-    _validate_contract("knowledge-capsule.v3.schema.json", capsule)
+    contract_version = 4 if query_plan_version == "7" else 3
+    _validate_contract(f"knowledge-capsule.v{contract_version}.schema.json", capsule)
     return {
         "capsule": capsule,
         "provider_capsule": provider,

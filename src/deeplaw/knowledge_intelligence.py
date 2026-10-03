@@ -428,6 +428,7 @@ def search_dense_index(
     except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError, struct.error):
         return {"ready": False, "reason": "index_invalid", "results": []}
     query_vector = dense_vector(query)
+    query_norm = math.sqrt(sum(value * value for value in query_vector))
     scored: list[tuple[float, str, str]] = []
     maximum_sensitivity = _SENSITIVITY_ORDER.index(max_sensitivity)
     for ordinal, record in enumerate(records):
@@ -451,7 +452,15 @@ def search_dense_index(
         vector = struct.unpack(
             f"{DENSE_DIMENSIONS}b", payload[offset : offset + DENSE_DIMENSIONS]
         )
-        score = vector_cosine(query_vector, vector)
+        dot = 0
+        right_norm_sq = 0
+        for left_value, right_value in zip(query_vector, vector, strict=True):
+            dot += left_value * right_value
+            right_norm_sq += right_value * right_value
+        if query_norm == 0 or right_norm_sq == 0:
+            score = 0.0
+        else:
+            score = dot / (query_norm * math.sqrt(right_norm_sq))
         if score > 0:
             scored.append((score, record["knowledge_id"], record["revision_id"]))
     scored.sort(key=lambda item: (-item[0], item[1]))

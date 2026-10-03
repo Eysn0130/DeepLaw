@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/task-action-state.v1.schema.json",
+  "title": "DeepLaw host-reported task action state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "action_id",
+    "request_sha256",
+    "status",
+    "outcome_sha256",
+    "expected_prior_run_id",
+    "evidence_level"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.task-action-state/v1"
+    },
+    "action_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": [
+        "not_executed",
+        "initiated_unknown",
+        "succeeded",
+        "failed"
+      ]
+    },
+    "outcome_sha256": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      ]
+    },
+    "expected_prior_run_id": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+        }
+      ]
+    },
+    "evidence_level": {
+      "const": "host_reported"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "not_executed",
+              "initiated_unknown"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "outcome_sha256": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "outcome_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  ]
+}

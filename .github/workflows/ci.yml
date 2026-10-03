@@ -57,6 +57,44 @@ jobs:
           tests/test_v013_commercial_release_gate.py
           tests/test_v013_platform_core_manifest.py
           tests/test_release_engineering.py
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_stops_live_output_overflow_before_child_completion
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_accepts_exact_output_boundary
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_preserves_observed_overflow
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_terminates_live_child_on_timeout
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_does_not_use_unbounded_communicate
+          tests/test_repository_gold_quality.py
+
+  macos-broker-inputs:
+    name: macOS broker interpreter and runtime inputs (Python ${{ matrix.python }})
+    runs-on: macos-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install focused dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Record interpreter permission metadata and exercise real broker inputs
+        run: |
+          uv run --frozen python -c 'import os, stat, sys; from pathlib import Path; s = Path(sys.executable).resolve().stat(); print({"uid": s.st_uid, "euid": os.geteuid(), "mode": oct(stat.S_IMODE(s.st_mode))})'
+          uv run --frozen pytest --strict-markers -q \
+            tests/test_v013_broker_interpreter_binding.py \
+            tests/test_v013_broker_runtime_input.py
 
   windows-sentinel:
     name: Windows launcher, native ACL, environment, and continuity sentinel
@@ -86,14 +124,33 @@ jobs:
           uv run --frozen pytest --strict-markers -q
           tests/test_windows_acl.py
           tests/test_v013_pass21_windows_acl_environment.py
+          tests/test_v013_codex_transport_observer.py::test_actual_wire_roundtrip_has_bounded_observation_and_identity_scope
+          tests/test_v013_pass13_opencode_qualification.py::test_shared_reader_accepts_interleaved_native_model_delivery_at_actual_offset
+          tests/test_v013_pass13_opencode_qualification.py::test_shared_reader_rejects_invalid_native_records_fail_closed
+          tests/test_v013_no_model_production_registration.py::test_no_model_registration_starts_production_launcher_and_lists_tools
           tests/test_closed_mcp_launcher.py
           tests/test_v013_task_continuity_driver.py
+          tests/test_v013_host_task_executor.py::test_admits_exact_six_slot_tree_transactionally
+          tests/test_v013_host_task_executor.py::test_atomic_promotion_never_replaces_racing_output
+          tests/test_v013_host_task_executor.py::test_chmod_failure_rolls_back_temporary_tree
+          tests/test_v013_host_task_executor.py::test_post_rename_fsync_failure_is_reported_as_committed_uncertain
+          tests/test_v013_host_task_executor.py::test_source_symlink_race_after_snapshot_cannot_escape_captured_bytes
+          tests/test_v013_host_task_executor.py::test_symlink_and_hardlink_are_rejected
+          tests/test_bounded_subprocess.py::test_bounded_subprocess_kills_descendants_that_inherit_output_pipes
+          tests/test_bounded_subprocess.py::test_bounded_subprocess_reports_unavailable_pipes
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_stops_live_output_overflow_before_child_completion
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_accepts_exact_output_boundary
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_preserves_observed_overflow
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_terminates_live_child_on_timeout
+          tests/test_v013_pass13_opencode_qualification.py::test_bounded_process_timeout_does_not_use_unbounded_communicate
+          tests/test_v013_host_process_receipt_v2.py::test_production_seams_reject_unattested_codex_connection_and_synthetic_opencode_fork
           tests/test_v013_pass13_codex_qualification.py::test_codex_login_receipt_hashes_status_without_reading_auth_file
           tests/test_v013_pass13_codex_qualification.py::test_owner_broker_launcher_is_external_owner_only_and_process_separated
           tests/test_v013_pass13_opencode_qualification.py::test_owner_broker_launcher_must_be_owner_only_and_process_separated
           tests/test_v013_pass13_opencode_qualification.py::test_preflight_keeps_owner_broker_out_of_static_inspection_commands
           tests/test_v013_pass13_opencode_qualification.py::test_preflight_rejects_a_canary_resolved_into_debug_config
           tests/test_v013_pass13_opencode_qualification.py::test_resolved_config_must_bind_the_unique_installed_project_plugin
+          tests/test_v013_pass13_opencode_qualification.py::test_windows_process_tree_cleanup_reports_unconfirmed_taskkill
           tests/test_v013_pass22_host_lifecycle.py::test_codex_adapter_process_accepts_only_closed_event_and_emits_receipt
           tests/test_v013_pass24_exact_wheel_runner.py::test_unique_wheel_is_installed_and_receipt_is_path_free
           tests/test_v013_pass24_exact_wheel_runner.py::test_version_probe_accepts_one_native_line_and_rejects_other_output

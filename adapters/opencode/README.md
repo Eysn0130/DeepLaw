@@ -23,7 +23,7 @@ re-verified before qualification; this README and local adapter tests are not re
 
 `plugins/deeplaw-native.ts` is a thin, local candidate for OpenCode `1.18.16` at source commit
 `a3647eb025c7615159d417dcc49fc39fdaeba65b`, with config selector
-`deepseek/deepseek-v4-flash` and expected response model ID `deepseek-v4-flash`. It binds the
+`deepseek/deepseek-flash` and expected response model ID `deepseek-flash`. It binds the
 native `chat.message`, `event`, `experimental.chat.system.transform`, and
 `experimental.session.compacting` seams. The `event` seam accepts only
 `session.created`, `session.updated`, and `session.compacted` lifecycle events.
@@ -49,3 +49,9 @@ carry the DeepSeek key.
 This is a candidate seam, not a real OpenCode qualification or release receipt. The owner must
 review the exact installed plugin/source and provider configuration before using it; this adapter
 does not change trust, authentication, or Secret state.
+
+## Native continuity deadline
+
+The continuity CLI has a hard 3,000 ms deadline, including isolated Python cold start.
+Expiry kills the child and returns `continuity_resolve_timeout`; it never admits partial context.
+The capsule and output byte limits continue to apply independently of the deadline.

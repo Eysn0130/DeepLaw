@@ -1,14 +1,15 @@
 # DeepLaw Living Wiki Compiler
 
-Status: **Current source candidate; package/main 0.12.0 Beta; release_ready=false**, reviewed
-2026-08-21. The Living Wiki is one of three product roles on the shared governed kernel, alongside
+Status: **Current source-candidate contract**, reconciled 2026-09-09.
+The Living Wiki is one of three product roles on the shared governed kernel, alongside
 Task Continuity / Governed Project Knowledge and Source-native Evidence Library. Its projections
 are rebuildable and source-linked; Wiki pages are not a complete editable canonical copy of a
-professional source. Qualification remains bound to
-[`benchmarks/v013/active-qualification-v3.json`](../benchmarks/v013/active-qualification-v3.json):
-`machine_evaluation_pending`, profile `kernel_release_core`, Gate v9, with no
-`0.13.0` tag or release. Historical receipts are development evidence only, not Human Gold,
-legal-expert attestation, or release qualification.
+professional source. Public release/main remain on the `0.12.0 Beta` line; the source candidate
+is prepared as `0.13.0`. Qualification uses the repository
+[construction record](../benchmarks/v013/active-qualification-v3.json) and its exact artifact-bound
+copy under the [qualification protocol](V0_13_QUALIFICATION_PROTOCOL.md). This document does not
+declare a release. Historical development receipts are not Human Gold, legal-expert attestation,
+or qualification of a different candidate.
 
 The shared Context Compiler is `Discovery → Admission → Selection → Bounded Verifiable Knowledge
 Capsule → thin Host drivers`. It is not a fourth product or second retrieval engine. Transcript,
@@ -123,7 +124,9 @@ are required.
 
 ## Rich Living Wiki projection
 
-Projection is deterministic and model-free. It produces:
+Projection is deterministic and model-free. The implementation supports the families below;
+the named profile controls which are materialized. Default `standard` v2 excludes communities and
+all Canvas families; those require the explicit `full` v2 profile.
 
 - distinct `wiki/index.md` navigation and `wiki/overview.md` canonical-Synthesis rendering;
 - active Source status pages, with explicit `uncompiled` state and sharded exact
@@ -323,9 +326,13 @@ The public facade maps internal validation, not-found, permission and state conf
 
 ## MCP and host workflow
 
-The Provider advertisement is read-only `knowledge-support` input v7/output v6 and exposes only
-`query`, `context`, and `explain`. The local compiler inventory/profile/status and historical
-verification operations remain internal compatibility calls; input v1-v6 and output v1-v5 are
+The autonomous-core Provider advertisement is read-only `knowledge-support` input v8/output v7 and exposes only
+`query`, `context`, `explain`, and typed `read`. The latter reads current admitted non-memory
+knowledge revisions, their registered Wiki knowledge pages and exact Source fragments under the
+[progressive read contract](AGENT_ADAPTERS.md#exact-progressive-read-contract); it does not expose
+all navigation pages or historical revisions. Existing operations retain their response versions.
+The local compiler inventory/profile/status and historical
+verification operations remain internal compatibility calls; input v1-v7 and output v1-v6 are
 not advertised as current operations. `knowledge_sink` input v6 / output v4 is a separate
 process and exposes only the operations in its owner-created grant. Its caller-supplied idempotency
 key is durably bound to the exact closed request and a content-addressed result; reusing the key for
@@ -336,7 +343,9 @@ The shared Skill is
 [`compile-living-wiki`](../plugins/deeplaw-knowledge-os/skills/compile-living-wiki/SKILL.md).
 The OpenCode least-privilege example is
 [`knowledge-compiler.example.jsonc`](../adapters/opencode/knowledge-compiler.example.jsonc).
-Codex, Claude Code and OpenCode use the same domain coordinator and closed Plan.
+The Codex, Claude Code and OpenCode adapter paths target the same domain coordinator and closed
+Plan. Static/no-model adapter evidence does not qualify their real compilation sessions; Claude
+runtime integration remains a separate optional Capability with its own retained evidence.
 
 ## Controlled query backfill
 

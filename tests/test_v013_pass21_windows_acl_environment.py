@@ -30,6 +30,7 @@ def test_windows_acl_powershell_subprocess_uses_minimal_environment(
     monkeypatch.setattr(windows_acl, "run_bounded_subprocess", capture)
     windows_acl._run_encoded_script(
         "Write-Output '{}'",
+        operation="query",
         environment={"DEEPLAW_ACL_TARGET": str(tmp_path / "target")},
     )
 

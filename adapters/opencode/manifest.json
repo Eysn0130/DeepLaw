@@ -1,6 +1,6 @@
 {
   "schema_version": "deeplaw.opencode-adapter-manifest/v1",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "host": "opencode",
   "host_context_contract": "context-bridge.json",
   "agent_context_schema": "deeplaw.agent-context-envelope/v1",
@@ -9,8 +9,8 @@
   "native_plugin": {
     "version": "1.18.16",
     "source_commit": "a3647eb025c7615159d417dcc49fc39fdaeba65b",
-    "config_selector": "deepseek/deepseek-v4-flash",
-    "expected_response_model_id": "deepseek-v4-flash",
+    "config_selector": "deepseek/deepseek-flash",
+    "expected_response_model_id": "deepseek-flash",
     "entrypoint": "plugins/deeplaw-native.ts",
     "status": "candidate_requires_owner_review"
   },

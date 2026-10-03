@@ -22,7 +22,7 @@ from .task_continuity import (
 )
 from .util import canonical_json, sha256_bytes, strict_json_loads
 
-NATIVE_HOST_LIFECYCLE_RECEIPT = "deeplaw.native-host-lifecycle-receipt/v1"
+NATIVE_HOST_LIFECYCLE_RECEIPT = "deeplaw.native-host-lifecycle-receipt/v4"
 MAX_CONFIG_BYTES = 64 * 1024
 MAX_EVENT_BYTES = 64 * 1024
 _EVENT_OPERATIONS = {
@@ -168,7 +168,7 @@ def _receipt(
     }
     receipt["receipt_sha256"] = sha256_bytes(canonical_json(receipt).encode("utf-8"))
     schema_path = Path(__file__).resolve().parents[2] / (
-        "contracts/native-host-lifecycle-receipt.v1.schema.json"
+        "contracts/native-host-lifecycle-receipt.v4.schema.json"
     )
     schema = strict_json_loads(schema_path.read_bytes())
     if not isinstance(schema, dict):

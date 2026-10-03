@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from ..evidence.statements import (
     MAX_STATEMENTS_PER_REVISION,
+    evidence_contract_name,
     validate_statement,
     validate_statement_plans,
 )
@@ -2943,6 +2944,29 @@ class CompilationCoordinator:
                 if start < prior_end:
                     raise ValueError("statement body spans overlap")
                 prior_end = end
+            # The immutable Statement artifact is the expression authority;
+            # existing dependency rows index its union for bounded propagation.
+            for statement in statements:
+                for field, input_kind in (
+                    ("knowledge_revision_refs", "knowledge_revision"),
+                    ("relation_revision_refs", "relation_revision"),
+                ):
+                    for input_id in statement[field]:
+                        existing = store.connection.execute(
+                            "SELECT 1 FROM revision_dependencies_v1 "
+                            "WHERE consumer_kind = 'knowledge_revision' "
+                            "AND consumer_revision_id = ? AND input_kind = ? AND input_id = ?",
+                            (revision_id, input_kind, input_id),
+                        ).fetchone()
+                        if existing is None:
+                            cls._insert_revision_dependency(
+                                store, consumer_kind="knowledge_revision",
+                                consumer_object_id=prepared["knowledge_id"],
+                                consumer_revision_id=revision_id, input_kind=input_kind,
+                                input_id=input_id,
+                                input_set_sha256=statement["input_set_sha256"],
+                                recorded_at=committed_at,
+                            )
             statement_records: list[dict[str, Any]] = []
             bundled_artifacts: list[tuple[str, dict[str, Any]]] = []
             for statement in statements:
@@ -2952,7 +2976,10 @@ class CompilationCoordinator:
                 statement_payload = dict(statement)
                 statement_payload.pop("char_start", None)
                 statement_payload.pop("char_end", None)
-                _validate_contract("knowledge-statement.v1.schema.json", statement_payload)
+                _validate_contract(
+                    evidence_contract_name("knowledge-statement", statement_payload),
+                    statement_payload
+                )
                 span_start = next(
                     item["char_start"]
                     for item in planned
@@ -2963,8 +2990,9 @@ class CompilationCoordinator:
                     for item in planned
                     if item["ordinal"] == statement["ordinal"]
                 )
+                evidence_version = 2 if "support_sets" in statement else 1
                 map_value = {
-                    "schema_version": "deeplaw.statement-evidence-map/v1",
+                    "schema_version": f"deeplaw.statement-evidence-map/v{evidence_version}",
                     "statement_id": statement_id_value,
                     "knowledge_revision_id": revision_id,
                     "ordinal": statement["ordinal"],
@@ -2983,10 +3011,14 @@ class CompilationCoordinator:
                     "relation_revision_refs": statement["relation_revision_refs"],
                     "gaps": statement["gaps"],
                 }
-                _validate_contract("statement-evidence-map.v1.schema.json", map_value)
+                if evidence_version == 2:
+                    map_value["support_sets"] = statement["support_sets"]
+                _validate_contract(
+                    evidence_contract_name("statement-evidence-map", map_value), map_value
+                )
                 map_sha256 = sha256_bytes(canonical_json(map_value).encode("utf-8"))
                 receipt_body = {
-                    "schema_version": "deeplaw.statement-evidence-receipt/v1",
+                    "schema_version": f"deeplaw.statement-evidence-receipt/v{evidence_version}",
                     "statement_id": statement_id_value,
                     "knowledge_revision_id": revision_id,
                     "map_sha256": map_sha256,
@@ -3006,9 +3038,14 @@ class CompilationCoordinator:
                     "commit_audit_head": commit_audit_head,
                     "recorded_at": committed_at,
                 }
+                if evidence_version == 2:
+                    receipt_body["support_sets"] = statement["support_sets"]
                 receipt_digest = sha256_bytes(canonical_json(receipt_body).encode("utf-8"))
                 receipt_value = {**receipt_body, "receipt_sha256": receipt_digest}
-                _validate_contract("statement-evidence-receipt.v1.schema.json", receipt_value)
+                _validate_contract(
+                    evidence_contract_name("statement-evidence-receipt", receipt_value),
+                    receipt_value
+                )
                 statement_records.append(
                     {
                         "statement": statement,
@@ -3158,7 +3195,11 @@ class CompilationCoordinator:
     ) -> None:
         """Re-bind the frozen v3 publication artifact at the commit boundary."""
 
-        _validate_contract("semantic-publication-plan.v3.schema.json", publication_plan)
+        _validate_contract(
+            "semantic-publication-plan.v4.schema.json"
+            if publication_plan.get("schema_version") == "deeplaw.semantic-publication-plan/v4"
+            else "semantic-publication-plan.v3.schema.json", publication_plan
+        )
         if (
             publication_plan["compilation_run_id"] != run["compilation_run_id"]
             or publication_plan["source_revision_id"] != run["source_revision_id"]
@@ -3998,13 +4039,15 @@ class CompilationCoordinator:
     def _commit_dependencies(
         store: AutonomousKnowledgeStore,
         *,
-        compilation_run_id: str,
+        compilation_run_id: str | None,
         consumer_kind: str,
         consumer_object_id: str,
         consumer_revision_id: str,
         source_refs: list[dict[str, str]],
         recorded_at: str,
     ) -> None:
+        if compilation_run_id is None and consumer_kind != "relation_revision":
+            raise ValueError("only direct relation dependencies may omit a compilation run")
         for reference in source_refs:
             dependency_id = stable_id(
                 "dependency",
@@ -4022,7 +4065,7 @@ class CompilationCoordinator:
                     freshness, reason, recorded_at, updated_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, 'direct', 'fresh',
-                    'source_compilation_commit', ?, ?
+                    ?, ?, ?
                 )
                 """,
                 (
@@ -4033,6 +4076,7 @@ class CompilationCoordinator:
                     consumer_revision_id,
                     reference["source_revision_id"],
                     reference.get("fragment_id"),
+                    "source_compilation_commit" if compilation_run_id else "direct_relation_commit",
                     recorded_at,
                     recorded_at,
                 ),
@@ -4135,7 +4179,7 @@ class CompilationCoordinator:
         cls,
         store: AutonomousKnowledgeStore,
         *,
-        compilation_run_id: str,
+        compilation_run_id: str | None,
         value: dict[str, Any],
     ) -> None:
         input_revision_ids: list[str] = []
@@ -4153,12 +4197,15 @@ class CompilationCoordinator:
             if row is None or row["current_revision_id"] is None:
                 raise RuntimeError("compiled relation input revision is unavailable")
             input_revision_ids.append(row["current_revision_id"])
+        input_revision_ids.extend(
+            ref["revision_id"] for ref in value.get("evidence_refs", []) if "revision_id" in ref
+        )
         input_revision_ids = sorted(set(input_revision_ids))
         input_set_sha256 = sha256_bytes(
             canonical_json(
                 {
                     "knowledge_revision_ids": input_revision_ids,
-                    "compilation_run_ids": [compilation_run_id],
+                    "compilation_run_ids": [compilation_run_id] if compilation_run_id else [],
                 }
             ).encode("utf-8")
         )
@@ -4172,7 +4219,12 @@ class CompilationCoordinator:
                 input_id=input_id,
                 input_set_sha256=input_set_sha256,
                 recorded_at=value["recorded_at"],
+                reason=(
+                    "source_compilation_commit" if compilation_run_id else "direct_relation_commit"
+                ),
             )
+        if compilation_run_id is None:
+            return
         cls._insert_revision_dependency(
             store,
             consumer_kind="relation_revision",
@@ -4195,6 +4247,7 @@ class CompilationCoordinator:
         input_id: str,
         input_set_sha256: str,
         recorded_at: str,
+        reason: str = "source_compilation_commit",
     ) -> None:
         dependency_id = stable_id(
             "revisiondependency",
@@ -4210,7 +4263,7 @@ class CompilationCoordinator:
                 consumer_revision_id, input_kind, input_id,
                 input_set_sha256, freshness, reason, recorded_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, 'fresh',
-                      'source_compilation_commit', ?, ?)
+                      ?, ?, ?)
             """,
             (
                 dependency_id,
@@ -4220,6 +4273,7 @@ class CompilationCoordinator:
                 input_kind,
                 input_id,
                 input_set_sha256,
+                reason,
                 recorded_at,
                 recorded_at,
             ),

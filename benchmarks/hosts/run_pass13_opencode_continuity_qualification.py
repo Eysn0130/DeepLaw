@@ -43,8 +43,9 @@ from benchmarks.hosts import (
     pass17_development_diagnostic,
 )
 from benchmarks.hosts.pass13_orchestrator import (
-    PACKAGE_VERSION,
+    QualificationOrchestrationError,
     QualificationOrchestrator,
+    installed_runtime_python,
     observe_knowledge_support_tools_list,
 )
 from benchmarks.hosts.pass13_orchestrator import (
@@ -57,6 +58,12 @@ from benchmarks.hosts.run_v013_host_task_qualification import (
     HostTaskQualificationError,
     load_zero_model_candidate_binding,
 )
+from benchmarks.hosts.v013_native_event_adapter import (
+    NativeEventAdapterError,
+    validate_opencode_native_observation,
+)
+from deeplaw import bounded_subprocess
+from deeplaw.util import strict_json_loads
 
 MODEL = "deepseek/deepseek-v4-flash"
 VARIANT = "max"
@@ -90,6 +97,11 @@ _MAX_BROKER_CONTROL_BYTES = 256 * 1024
 _BROKER_CONTROL_READ_CHUNK_BYTES = 16 * 1024
 _BROKER_SOURCE_MAX_BYTES = 256 * 1024
 _OPENCODE_PACKAGE_MAX_BYTES = 128 * 1024 * 1024
+_PROCESS_TREE_CLEANUP_UNCONFIRMED = (
+    "OpenCode process-tree cleanup could not be confirmed"
+)
+_PROCESS_TERMINATION_WAIT_SECONDS = 2
+_PROCESS_KILL_WAIT_SECONDS = 1
 OPENCODE_BROKER_CONTROL_SCHEMA_VERSION = (
     "deeplaw.opencode-owner-external-broker-control/v2"
 )
@@ -202,6 +214,7 @@ EXPECTED_HOST_ENVIRONMENT_NAMES = frozenset(
         "OPENCODE_DISABLE_AUTOUPDATE",
         "OPENCODE_DISABLE_CLAUDE_CODE",
         "OPENCODE_DISABLE_DEFAULT_PLUGINS",
+        "OPENCODE_DISABLE_MODELS_FETCH",
         "NO_COLOR",
         "GIT_TERMINAL_PROMPT",
         "DEEPLAW_KNOWLEDGE_VAULT",
@@ -354,9 +367,14 @@ def build_permission() -> dict[str, str]:
     return {"*": "deny", TOOL_NAME: "allow"}
 
 
-def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any]:
+def build_opencode_config(
+    *, agent_name: str = "qualification", model_id: str = "deepseek-v4-flash"
+) -> dict[str, Any]:
     if agent_name not in {"qualification", "development"}:
         raise QualificationError("OpenCode agent mode is invalid")
+    if model_id not in {"deepseek-v4-flash", "deepseek-flash"}:
+        raise QualificationError("OpenCode model pin is invalid")
+    model = "deepseek/" + model_id
     permission = build_permission()
     agent_prompt = (
         "Use only the bounded continuity capsule supplied by the native Host context; "
@@ -375,8 +393,8 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
     )
     return {
         "$schema": "https://opencode.ai/config.json",
-        "model": MODEL,
-        "small_model": MODEL,
+        "model": model,
+        "small_model": model,
         "default_agent": agent_name,
         "subagent_depth": 0,
         "enabled_providers": ["deepseek"],
@@ -394,7 +412,7 @@ def build_opencode_config(*, agent_name: str = "qualification") -> dict[str, Any
                     else "Pass 17 source-free development diagnostic"
                 ),
                 "mode": "primary",
-                "model": MODEL,
+                "model": model,
                 "variant": VARIANT,
                 "steps": 4,
                 "permission": permission,
@@ -449,6 +467,7 @@ def build_host_environment(
         "OPENCODE_DISABLE_AUTOUPDATE": "1",
         "OPENCODE_DISABLE_CLAUDE_CODE": "1",
         "OPENCODE_DISABLE_DEFAULT_PLUGINS": "1",
+        "OPENCODE_DISABLE_MODELS_FETCH": "1",
         "NO_COLOR": "1",
         "GIT_TERMINAL_PROMPT": "0",
         "DEEPLAW_KNOWLEDGE_VAULT": "vault",
@@ -682,37 +701,81 @@ os.execve({str(deeplaw_executable)!r}, [
     del node_binary
 
 
+def _windows_child_environment(environment: Mapping[str, str]) -> dict[str, str]:
+    """Project the Windows system root into a closed child environment."""
+
+    projected = dict(environment)
+    if os.name != "nt":
+        return projected
+    system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+    if not system_root or not os.path.isabs(system_root):
+        _control_fail("OpenCode Windows system root is unavailable")
+    projected["SYSTEMROOT"] = system_root
+    projected["WINDIR"] = system_root
+    return projected
+
+
 def process_creation_options() -> dict[str, Any]:
+    """Return native group options or fail closed before spawning.
+
+    POSIX ``start_new_session`` provides best-effort session/process-group
+    containment, not an operating-system sandbox or an all-descendant-empty
+    proof.  Windows creation flags pair with the Job Guard cleanup proof.
+    """
+
     if os.name == "nt":
-        return {"creationflags": int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))}
-    return {"start_new_session": True}
+        creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        if type(creation_flags) is not int or creation_flags <= 0:
+            _control_fail("OpenCode process-group isolation is unavailable")
+        return {"creationflags": creation_flags}
+    if os.name == "posix":
+        if not callable(getattr(os, "killpg", None)) or not hasattr(signal, "SIGKILL"):
+            _control_fail("OpenCode process-group isolation is unavailable")
+        return {"start_new_session": True}
+    _control_fail("OpenCode process-group isolation is unavailable")
 
 
-def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
-    """Terminate the process group we created, failing closed if unavailable."""
+def _terminate_process_tree(
+    process: subprocess.Popen[bytes],
+    guard: bounded_subprocess.WindowsJobGuard | None = None,
+) -> bool:
+    """Terminate the created group and report only the bounded cleanup result.
 
-    if process.poll() is not None:
-        return
+    POSIX ``killpg`` is best-effort process-group containment, not an
+    operating-system sandbox.  It cannot prove that a descendant which
+    deliberately calls ``setsid()`` has terminated.
+    Windows Job Guard cleanup has an independent bounded five-second proof
+    grace and is not the caller's child-execution timeout.
+    """
+
     if os.name == "nt":
-        taskkill = shutil.which("taskkill")
-        if taskkill is None:
+        cleanup_confirmed = False
+        if guard is not None:
+            try:
+                cleanup_confirmed = guard.cleanup(timeout_seconds=5)
+            except Exception:
+                cleanup_confirmed = False
+        # Parent termination is best-effort containment only.  It must never
+        # upgrade a missing or failed Job Object proof into success.
+        with suppress(Exception):
             process.kill()
-            return
-        result = subprocess.run(
-            [taskkill, "/F", "/T", "/PID", str(process.pid)],
-            env={"PATH": os.defpath},
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        if result.returncode != 0:
-            process.kill()
-        return
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except (OSError, ProcessLookupError):
+        return cleanup_confirmed
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return True
+        except OSError:
+            with suppress(Exception):
+                process.kill()
+            return False
+        else:
+            with suppress(Exception):
+                process.kill()
+            return True
+    with suppress(Exception):
         process.kill()
+    return False
 
 
 def _run_bounded_process(
@@ -726,39 +789,55 @@ def _run_bounded_process(
     if not argv:
         raise QualificationError("bounded process argv is empty")
     started = time.monotonic()
-    process = subprocess.Popen(
-        [str(item) for item in argv],
-        cwd=str(cwd),
-        env=dict(environment),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        **process_creation_options(),
-    )
-    timed_out = False
     try:
-        stdout, stderr = process.communicate(input=input_bytes, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        _terminate_process_tree(process)
-        stdout, stderr = process.communicate()
-    elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
-    if len(stdout) > MAX_OUTPUT_BYTES or len(stderr) > MAX_OUTPUT_BYTES:
-        _terminate_process_tree(process)
+        bounded_environment = _windows_child_environment(environment)
+        process_creation_options()
+        result = bounded_subprocess.run_bounded_subprocess(
+            [str(item) for item in argv],
+            input_bytes=input_bytes,
+            environment=bounded_environment,
+            cwd=str(cwd),
+            timeout_seconds=timeout,
+            max_stdout_bytes=MAX_OUTPUT_BYTES,
+            max_stderr_bytes=MAX_OUTPUT_BYTES,
+        )
+    except bounded_subprocess.BoundedSubprocessError as exc:
+        elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
+        if exc.kind is bounded_subprocess.BoundedSubprocessFailureKind.START_FAILED:
+            raise QualificationError("bounded process failed to start") from exc
+        if (
+            exc.kind
+            is bounded_subprocess.BoundedSubprocessFailureKind.CLEANUP_UNCONFIRMED
+        ):
+            _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
+        if exc.kind is bounded_subprocess.BoundedSubprocessFailureKind.PIPES_UNAVAILABLE:
+            raise QualificationError("bounded process pipes are unavailable") from exc
+        timed_out = exc.kind is bounded_subprocess.BoundedSubprocessFailureKind.TIMEOUT
+        output_overflow = (
+            exc.kind in {
+                bounded_subprocess.BoundedSubprocessFailureKind.STDOUT_LIMIT,
+                bounded_subprocess.BoundedSubprocessFailureKind.STDERR_LIMIT,
+            }
+            or exc.stdout_truncated
+            or exc.stderr_truncated
+        )
+        if not timed_out and not output_overflow:
+            raise QualificationError("bounded process failed") from exc
         return {
-            "returncode": process.returncode,
-            "stdout": b"",
-            "stderr": b"",
+            "returncode": exc.returncode,
+            "stdout": b"" if output_overflow else exc.stdout,
+            "stderr": b"" if output_overflow else exc.stderr,
             "elapsed_ms": elapsed_ms,
             "timed_out": timed_out,
-            "output_overflow": True,
+            "output_overflow": output_overflow,
         }
+    elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
     return {
-        "returncode": process.returncode,
-        "stdout": stdout,
-        "stderr": stderr,
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
         "elapsed_ms": elapsed_ms,
-        "timed_out": timed_out,
+        "timed_out": False,
         "output_overflow": False,
     }
 
@@ -2730,12 +2809,25 @@ def validate_opencode_zero_model_preflight_response(
     return admitted
 
 
-def _terminate_broker_process_group(process: subprocess.Popen[bytes]) -> None:
+def _terminate_broker_process_group(process: subprocess.Popen[bytes]) -> bool:
+    """Request broker process-group cleanup and report signal delivery status."""
+
+    cleanup_confirmed = False
     if os.name == "posix":
-        with suppress(ProcessLookupError, PermissionError):
+        try:
             os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            # The group disappeared between observation and cleanup.  This is
+            # the only benign race; it does not prove escaped ``setsid()``
+            # descendants are gone.
+            cleanup_confirmed = True
+        except OSError:
+            cleanup_confirmed = False
+        else:
+            cleanup_confirmed = True
     with suppress(OSError):
         process.kill()
+    return cleanup_confirmed
 
 
 def _bounded_broker_control_exchange(
@@ -2744,7 +2836,11 @@ def _bounded_broker_control_exchange(
     payload: bytes,
     timeout_seconds: float,
 ) -> bytes:
-    """Consume one owner-external response with an in-flight combined bound."""
+    """Consume one owner-external response with bounded group cleanup.
+
+    The POSIX group check is best-effort containment only; it cannot prove
+    that a descendant which calls ``setsid()`` has terminated.
+    """
 
     if os.name != "posix":
         _control_fail("OpenCode broker process-group isolation is unavailable")
@@ -2766,8 +2862,26 @@ def _bounded_broker_control_exchange(
         raise QualificationError(
             "OpenCode owner-external broker control IPC failed to start"
         ) from exc
+
+    cleanup_failure = threading.Event()
+    cleanup_lock = threading.Lock()
+
+    def terminate_process_group() -> bool:
+        """Serialize cleanup requests and retain any failure for final gating."""
+
+        with cleanup_lock:
+            try:
+                cleanup_confirmed = _terminate_broker_process_group(process)
+            except Exception:
+                cleanup_confirmed = False
+        if not cleanup_confirmed:
+            cleanup_failure.set()
+        return cleanup_confirmed
+
     if process.stdin is None or process.stdout is None or process.stderr is None:
-        _terminate_broker_process_group(process)
+        terminate_process_group()
+        if cleanup_failure.is_set():
+            _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
         _control_fail("OpenCode owner-external broker control pipes are unavailable")
 
     stdout_buffer = bytearray()
@@ -2797,10 +2911,10 @@ def _bounded_broker_control_exchange(
                     else:
                         target.extend(chunk)
                 if terminate:
-                    _terminate_broker_process_group(process)
+                    terminate_process_group()
         except OSError:
             read_failure.set()
-            _terminate_broker_process_group(process)
+            terminate_process_group()
 
     readers = (
         threading.Thread(target=drain, args=(process.stdout, stdout_buffer), daemon=True),
@@ -2824,14 +2938,14 @@ def _bounded_broker_control_exchange(
         process.wait(timeout=max(0.001, deadline - time.monotonic()))
     except subprocess.TimeoutExpired:
         timed_out = True
-        _terminate_broker_process_group(process)
+        terminate_process_group()
         with suppress(subprocess.TimeoutExpired):
             process.wait(timeout=2)
     for reader in readers:
         reader.join(timeout=max(0.0, deadline - time.monotonic()))
     if any(reader.is_alive() for reader in readers):
         timed_out = True
-        _terminate_broker_process_group(process)
+        terminate_process_group()
         for stream in (process.stdout, process.stderr):
             with suppress(OSError):
                 stream.close()
@@ -2842,7 +2956,9 @@ def _bounded_broker_control_exchange(
         with buffer_lock:
             stdout_buffer.clear()
             stderr_buffer.clear()
-        _terminate_broker_process_group(process)
+        terminate_process_group()
+        if cleanup_failure.is_set():
+            _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
         _control_fail(message)
 
     if overflow.is_set():
@@ -2853,6 +2969,16 @@ def _bounded_broker_control_exchange(
         fail_closed("OpenCode owner-external broker control IPC failed")
     if stderr_buffer:
         fail_closed("OpenCode owner-external broker emitted unexpected stderr")
+
+    # Even an otherwise clean response must prove cleanup before exposing the
+    # broker bytes.  This is process-group containment only on POSIX; the
+    # helper deliberately cannot prove a descendant that called ``setsid()``
+    # is gone.
+    if not terminate_process_group() or cleanup_failure.is_set():
+        with buffer_lock:
+            stdout_buffer.clear()
+            stderr_buffer.clear()
+        _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
     return bytes(stdout_buffer)
 
 
@@ -2939,16 +3065,24 @@ def _validate_stable_path_fd_binding(
         _control_fail(error_message)
 
 
-def _windows_acl_hardening_verified(report: object) -> bool:
-    if not isinstance(report, Mapping):
+def _windows_acl_hardening_verified(
+    report: object,
+    *,
+    expected_path: Path | str | None = None,
+    directory: bool | None = None,
+) -> bool:
+    try:
+        host_preflight_receipt.validate_windows_acl_hardening_report(
+            report,
+            expected_path=expected_path,
+            expected_kind=(
+                "directory" if directory is True else "file" if directory is False else None
+            ),
+            recursive=directory,
+        )
+    except (TypeError, ValueError):
         return False
-    verification = report.get("verification")
-    return bool(
-        report.get("platform") == "nt"
-        and report.get("applied") is True
-        and isinstance(verification, Mapping)
-        and verification.get("permissions_verified") is True
-    )
+    return True
 
 
 def _harden_windows_broker_path(
@@ -2970,7 +3104,11 @@ def _harden_windows_broker_path(
         )
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
         raise QualificationError(error_message) from exc
-    if not _windows_acl_hardening_verified(report):
+    if not _windows_acl_hardening_verified(
+        report,
+        expected_path=path,
+        directory=directory,
+    ):
         _control_fail(error_message)
 
 
@@ -3118,9 +3256,26 @@ def _validate_opencode_package(
     version = host_item.get("version")
     source_commit = host_item.get("source_commit")
     expected_sha256 = host_item.get("package_sha256")
+    historical_release = (
+        version == HISTORICAL_OPENCODE_VERSION_FIXTURE and source_commit == OPENCODE_SOURCE_COMMIT
+    )
+    # Exact owner-directed lifecycle build, recorded in upstream/
+    # opencode-1.18.16-deeplaw-build.json. This only admits static preflight
+    # inputs; it does not establish broker authority or a formal Host slot.
+    shutdown_build = (
+        version == "1.18.16-deeplaw.2"
+        and source_commit == "9f3a8e505a3926cc80aa1037aea8836a19d58afd"
+        and host_item.get("executable_sha256")
+        == "261ed2c03b5bc60c7d0a9615d16b0d929bf2657e1394abfb852de8723d311729"
+    )
+    reconstructed_build = (
+        version == "1.18.16-deeplaw.3"
+        and source_commit == "aa469eef695b03a0243744a3e11355cb321133e7"
+        and host_item.get("executable_sha256")
+        == "c893abe5862b49258e27d4ebc0adfe976d5f6c1b8e9928f7feb94d845d048486"
+    )
     if (
-        version != HISTORICAL_OPENCODE_VERSION_FIXTURE
-        or source_commit != OPENCODE_SOURCE_COMMIT
+        not (historical_release or shutdown_build or reconstructed_build)
         or not isinstance(expected_sha256, str)
         or _SHA256.fullmatch(expected_sha256) is None
         or expected_sha256 == "0" * 64
@@ -3404,6 +3559,7 @@ class _OpenCodeLocalServer:
         self.root = root
         self.forbidden_output_values = tuple(forbidden_output_values)
         self.process: subprocess.Popen[bytes] | None = None
+        self.job_guard: bounded_subprocess.WindowsJobGuard | None = None
         self.base_url = ""
         self.port = 0
 
@@ -3416,26 +3572,32 @@ class _OpenCodeLocalServer:
         # This process is intentionally loopback-only and uses the isolated
         # OpenCode environment; it is terminated before the scenario root is
         # cleaned up.
-        self.process = subprocess.Popen(
-            [
-                str(self.binary),
-                "serve",
-                "--hostname",
-                "127.0.0.1",
-                "--port",
-                str(self.port),
-            ],
-            cwd=str(self.cwd),
-            env=dict(self.environment),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            **process_creation_options(),
-        )
+        try:
+            self.process, self.job_guard = bounded_subprocess.spawn_process(
+                [
+                    str(self.binary),
+                    "serve",
+                    "--hostname",
+                    "127.0.0.1",
+                    "--port",
+                    str(self.port),
+                ],
+                cwd=str(self.cwd),
+                env=_windows_child_environment(self.environment),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                **process_creation_options(),
+            )
+        except (OSError, ValueError, bounded_subprocess.WindowsJobStartError) as exc:
+            self.process = None
+            self.job_guard = None
+            raise QualificationError("OpenCode local server failed to start") from exc
         self.base_url = f"http://127.0.0.1:{self.port}"
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
+                self.stop()
                 raise QualificationError("OpenCode local server exited before readiness")
             try:
                 self.request("GET", "/global/health")
@@ -3511,14 +3673,26 @@ class _OpenCodeLocalServer:
     def stop(self) -> None:
         process = self.process
         if process is None:
+            self.job_guard = None
             return
-        _terminate_process_tree(process)
+        guard = self.job_guard
+        cleanup_confirmed = _terminate_process_tree(process, guard)
         try:
             process.communicate(timeout=10)
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate()
-        self.process = None
+            with suppress(OSError):
+                process.kill()
+            try:
+                process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
+            except (OSError, subprocess.SubprocessError, ValueError):
+                cleanup_confirmed = False
+        except (OSError, subprocess.SubprocessError, ValueError):
+            cleanup_confirmed = False
+        finally:
+            self.process = None
+            self.job_guard = None
+        if not cleanup_confirmed:
+            _control_fail(_PROCESS_TREE_CLEANUP_UNCONFIRMED)
 
 
 def _bind_public_host_session(
@@ -3937,8 +4111,10 @@ def _freeze_local_plugin_dependency_state(
 def _installed_opencode_plugin_bytes(deeplaw_executable: Path) -> bytes:
     """Read the plugin only from the isolated candidate-wheel installation."""
 
-    runtime_python = deeplaw_executable.parent / "python"
-    _require_regular_path(runtime_python, label="candidate runtime Python")
+    try:
+        runtime_python = installed_runtime_python(deeplaw_executable)
+    except QualificationOrchestrationError as exc:
+        raise QualificationError(str(exc)) from exc
     resource = _PLUGIN_RESOURCE_RELATIVE.as_posix()
     script = (
         "import importlib.resources, sys\n"
@@ -3953,7 +4129,7 @@ def _installed_opencode_plugin_bytes(deeplaw_executable: Path) -> bytes:
             "LC_ALL": "C.UTF-8",
             "PYTHONNOUSERSITE": "1",
         },
-        cwd=deeplaw_executable.parent,
+        cwd=runtime_python.parent,
         timeout=30,
     )
     source_bytes = bytes(result["stdout"])
@@ -4120,6 +4296,7 @@ def _prepare_scenario_state(
     node_binary: Path,
     expected_version: str = HISTORICAL_OPENCODE_VERSION_FIXTURE,
     agent_name: str = "qualification",
+    model_id: str = "deepseek-v4-flash",
 ) -> tuple[dict[str, str], Path, dict[str, Any]]:
     """Give each scenario a distinct OpenCode state tree and MCP wrapper."""
 
@@ -4143,7 +4320,7 @@ def _prepare_scenario_state(
         receipt_path=receipt,
         node_binary=node_binary,
     )
-    config = build_opencode_config(agent_name=agent_name)
+    config = build_opencode_config(agent_name=agent_name, model_id=model_id)
     if os.name == "nt":
         config["mcp"]["deeplaw_knowledge"]["command"] = [  # type: ignore[index]
             sys.executable,
@@ -4446,9 +4623,24 @@ def _read_host_observations(
     model_observations: list[dict[str, Any]] = []
     delivery_observations: list[dict[str, Any]] = []
     for line in raw.splitlines():
-        value = _strict_json(line)
+        try:
+            value = strict_json_loads(line)
+        except (RecursionError, TypeError, UnicodeError, ValueError) as error:
+            raise QualificationError(
+                "OpenCode event is not valid strict JSON"
+            ) from error
         if not isinstance(value, Mapping):
             raise QualificationError("OpenCode Host observation shape is invalid")
+        if value.get("schema_version") == (
+            "deeplaw.opencode-native-event-observation/v1"
+        ):
+            try:
+                validate_opencode_native_observation(value)
+            except NativeEventAdapterError as error:
+                raise QualificationError(
+                    "OpenCode native event observation is invalid"
+                ) from error
+            continue
         if set(value) == _CONTINUITY_DELIVERY_KEYS:
             gap_codes = value.get("gap_codes")
             if (
@@ -5764,6 +5956,7 @@ def _execute_qualification_body(
     )
     output_dir, binding, installed = orchestrator.prepare_candidate()
     output_dir.mkdir(parents=True)
+    expected_package_version = binding["package_version"]
     host_identity: Mapping[str, Any] | None = None
     expected_version = HISTORICAL_OPENCODE_VERSION_FIXTURE
     if host_identity_input is None:
@@ -5866,8 +6059,14 @@ def _execute_qualification_body(
         cwd=root,
     )
     runtime_text = runtime_check["stdout"].decode("utf-8", errors="replace").strip()
-    if runtime_check["returncode"] != 0 or PACKAGE_VERSION not in runtime_text:
-        raise QualificationError("installed DeepLaw runtime is not version 0.12.0")
+    if (
+        runtime_check["returncode"] != 0
+        or runtime_text != f"deeplaw {expected_package_version}"
+    ):
+        raise QualificationError(
+            "installed DeepLaw runtime is not version "
+            f"{expected_package_version}"
+        )
     preflight_project = root / "preflight-project"
     preflight_project.mkdir(parents=True, exist_ok=True)
     preflight_plugin_receipt, _preflight_plugin_receipt_path = (

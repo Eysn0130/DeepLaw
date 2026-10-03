@@ -16,6 +16,7 @@ from benchmarks.release.platform_gate import (
     _junit_report,
     _manifest_digest,
     load_platform_manifest,
+    nonapplicable_identities,
 )
 from benchmarks.release.platform_inventory import (
     CANDIDATE_STATUS,
@@ -47,11 +48,40 @@ def test_platform_core_manifest_is_closed_frozen_and_digest_bound() -> None:
     assert manifest["selection"]["windows"] == "not qualification"
     assert manifest["inventories"]["common"]["count"] > 1_000
     assert manifest["inventories"]["windows"]["count"] > manifest["inventories"]["common"]["count"]
-    assert len(manifest["classifications"]["qualification"]["cases"]) == 12
     qualification_ids = {
         case["node_id"]
         for case in manifest["classifications"]["qualification"]["cases"]
     }
+    seatbelt_ids = {
+        node_id for node_id in qualification_ids
+        if node_id.startswith("tests/test_macos_slot_isolation.py::")
+    }
+    assert {node_id.split("::", 1)[1] for node_id in seatbelt_ids} == {
+        "test_backend_spawn_and_child_marker_do_not_attest_isolation",
+        "test_configuration_rejects_non_loopback_and_unbounded_limits",
+        "test_configuration_rejects_relative_symlink_and_wide_boundaries",
+        "test_dry_run_is_path_free_and_never_observed",
+        "test_endpoint_declares_dual_stack_outbound_only",
+        "test_group_cleanup_failure_is_explicit_and_bounded",
+        "test_non_macos_never_falls_back_to_unsandboxed_execution",
+        "test_profile_is_closed_and_path_escaping_is_literal",
+        "test_real_sandbox_defaults_to_network_denial_and_allows_one_loopback_port",
+        "test_real_sandbox_observes_filesystem_denials_and_preserves_allowed_write",
+        "test_real_sandbox_uses_closed_environment_and_fixed_output_timeout_bounds",
+        "test_staging_hardlinks_are_rejected_before_launch[read]",
+        "test_staging_hardlinks_are_rejected_before_launch[write]",
+        "test_strict_policy_is_explicit_closed_and_keeps_legacy_result_shape",
+        "test_strict_policy_rejects_unsafe_roots_aliases_and_loopback_opt_in",
+        "test_strict_input_bytes_are_bound_and_mutation_fails_before_spawn",
+        "test_strict_launch_closes_ambient_environment_and_extra_fds",
+        "test_strict_native_python_staging_and_synthetic_denials",
+    }
+    assert len(qualification_ids - seatbelt_ids) == 13
+    assert (
+        "tests/test_v013_pass24_opencode_plugin.py::"
+        "test_bun_continuity_resolution_cold_start_and_hard_deadline"
+        in qualification_ids
+    )
     assert (
         "tests/test_v013_pass26_opencode_real_loader.py::"
         "test_exact_opencode_loads_project_plugin_and_dispatches_native_session_event"
@@ -68,6 +98,10 @@ def test_platform_core_manifest_is_closed_frozen_and_digest_bound() -> None:
         "test_lifecycle_config_requires_owner_only_non_symlink_file"
     }
     assert manifest["classifications"]["nonapplicable"]["status"] == "nonapplicable"
+    assert (
+        manifest["classifications"]["nonapplicable"]["selection"]
+        == "platform-specific tests outside their applicable OS"
+    )
     assert (
         manifest["classifications"]["historical_compatibility"]["status"]
         == "required_fixture"
@@ -170,6 +204,40 @@ def test_platform_core_manifest_rejects_tampered_digest(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="classification status"):
         load_platform_manifest(path)
 
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    additional = manifest["inventories"]["windows"]["additional_cases"]
+    manifest["classifications"]["nonapplicable"]["cases"] = [
+        case
+        for case in manifest["classifications"]["nonapplicable"]["cases"]
+        if case["node_id"] != additional[0]["node_id"]
+    ]
+    manifest["manifest_sha256"] = _manifest_digest(manifest)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(
+        PlatformGateError,
+        match="Windows additional cases must be classified nonapplicable",
+    ):
+        load_platform_manifest(path)
+
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    manifest["classifications"]["nonapplicable"]["cases"].append(
+        {
+            "junit": {
+                "classname": "tests.fixture",
+                "name": "test_outside_platform_inventory",
+            },
+            "node_id": "tests/fixture.py::test_outside_platform_inventory",
+            "nonapplicable_systems": ["Windows"],
+        }
+    )
+    manifest["manifest_sha256"] = _manifest_digest(manifest)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(
+        PlatformGateError,
+        match="nonapplicable cases must belong to the Platform inventory",
+    ):
+        load_platform_manifest(path)
+
 
 def test_platform_core_manifest_requires_exact_junit_inventory(tmp_path: Path) -> None:
     manifest = load_platform_manifest(MANIFEST_PATH)
@@ -245,3 +313,94 @@ def test_platform_core_manifest_requires_exact_junit_inventory(tmp_path: Path) -
             expected_system="Darwin",
             manifest_path=MANIFEST_PATH,
         )
+
+
+@pytest.mark.parametrize("system", ["Linux", "Darwin", "Windows"])
+def test_platform_core_allows_only_exact_system_nonapplicable_skips(
+    tmp_path: Path, system: str,
+) -> None:
+    manifest = load_platform_manifest(MANIFEST_PATH)
+    cases = list(manifest["inventories"]["common"]["cases"])
+    if system == "Windows":
+        cases += manifest["inventories"]["windows"]["additional_cases"]
+    permitted = nonapplicable_identities(manifest, expected_system=system)
+    assert permitted
+    root = ET.Element("testsuites")
+    suite = ET.SubElement(
+        root, "testsuite", tests=str(len(cases)), skipped=str(len(permitted & {
+            (case["junit"]["classname"], case["junit"]["name"]) for case in cases
+        })),
+    )
+    for case in cases:
+        node = ET.SubElement(suite, "testcase", **case["junit"])
+        if (node.get("classname"), node.get("name")) in permitted:
+            ET.SubElement(node, "skipped")
+    junit = tmp_path / "classified.xml"
+    ET.ElementTree(root).write(junit, encoding="utf-8")
+    assert _junit_report(
+        junit, expected_system=system, manifest_path=MANIFEST_PATH,
+    )["inventory_count"] == len(cases)
+
+    # An applicable native case cannot acquire permission to skip from another OS.
+    applicable = next(
+        case for case in manifest["classifications"]["nonapplicable"]["cases"]
+        if system not in case["nonapplicable_systems"]
+        and case["node_id"] in {item["node_id"] for item in cases}
+    )
+    node = next(
+        node for node in suite
+        if (node.get("classname"), node.get("name"))
+        == (applicable["junit"]["classname"], applicable["junit"]["name"])
+    )
+    ET.SubElement(node, "skipped")
+    ET.ElementTree(root).write(junit, encoding="utf-8")
+    with pytest.raises(PlatformGateError, match="unclassified skip"):
+        _junit_report(junit, expected_system=system, manifest_path=MANIFEST_PATH)
+
+
+def test_platform_core_nonapplicable_systems_are_closed_and_required(tmp_path: Path) -> None:
+    original = load_platform_manifest(MANIFEST_PATH)
+    for systems in (None, [], ["FreeBSD"], ["Linux", "Linux"],
+                    ["Linux", "Darwin", "Windows"]):
+        manifest = json.loads(json.dumps(original))
+        case = manifest["classifications"]["nonapplicable"]["cases"][0]
+        if systems is None:
+            case.pop("nonapplicable_systems")
+        else:
+            case["nonapplicable_systems"] = systems
+        manifest["manifest_sha256"] = _manifest_digest(manifest)
+        path = tmp_path / "invalid-systems.json"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        with pytest.raises(PlatformGateError, match="manifest is invalid"):
+            load_platform_manifest(path)
+
+
+    manifest = json.loads(json.dumps(original))
+    native_id = manifest["inventories"]["windows"]["additional_cases"][0]["node_id"]
+    native = next(
+        case for case in manifest["classifications"]["nonapplicable"]["cases"]
+        if case["node_id"] == native_id
+    )
+    native["nonapplicable_systems"] = ["Windows"]
+    manifest["manifest_sha256"] = _manifest_digest(manifest)
+    path = tmp_path / "native-skips-on-own-system.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(PlatformGateError, match="Windows native cases"):
+        load_platform_manifest(path)
+
+
+def test_platform_core_historical_fixture_skip_still_fails(tmp_path: Path) -> None:
+    manifest = load_platform_manifest(MANIFEST_PATH)
+    historical = manifest["classifications"]["historical_compatibility"]["cases"][0]
+    root = ET.Element("testsuites")
+    suite = ET.SubElement(
+        root, "testsuite", tests=str(manifest["inventories"]["common"]["count"]), skipped="1",
+    )
+    for case in manifest["inventories"]["common"]["cases"]:
+        node = ET.SubElement(suite, "testcase", **case["junit"])
+        if case["node_id"] == historical["node_id"]:
+            ET.SubElement(node, "skipped")
+    junit = tmp_path / "missing-history.xml"
+    ET.ElementTree(root).write(junit, encoding="utf-8")
+    with pytest.raises(PlatformGateError, match="unclassified skip"):
+        _junit_report(junit, expected_system="Darwin", manifest_path=MANIFEST_PATH)

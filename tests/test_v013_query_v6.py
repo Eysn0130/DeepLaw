@@ -68,6 +68,7 @@ def test_v6_context_reuses_statement_selection_and_provider_projection(
         context = knowledge_os.context.compile(
             task="A durable source statement.",
             purpose="verify",
+            query_plan_version="6",
             confirm_no_case_data=True,
         )
     assert context["schema_version"] == "deeplaw.knowledge-capsule/v3"
@@ -83,6 +84,7 @@ def test_v6_context_reuses_statement_selection_and_provider_projection(
         operation="context",
         task="A durable source statement.",
         purpose="verify",
+        query_plan_version="6",
         limit=8,
         max_chars=8_000,
         max_tokens=6_000,
@@ -104,6 +106,7 @@ def test_v6_source_evidence_contract_requires_exact_revision_locator_and_quote(
         context = knowledge_os.context.compile(
             task="A durable source statement.",
             purpose="verify",
+            query_plan_version="6",
             confirm_no_case_data=True,
         )
     evidence = context["provider_capsule"]["capsule"]["evidence"][0]
@@ -150,8 +153,10 @@ def test_v6_targeted_fallback_is_limited_to_uncovered_duty(tmp_path: Path) -> No
     assert {event["duty"] for event in events} <= {"procedure"}
 
 
+@pytest.mark.parametrize("query_plan_version", ("6", "7"))
 def test_v6_verify_and_quote_materialize_exact_statement_evidence(
     tmp_path: Path,
+    query_plan_version: str,
 ) -> None:
     root = _committed_vault(tmp_path)
     service = PurposeAwareRetrievalService(root)
@@ -159,14 +164,18 @@ def test_v6_verify_and_quote_materialize_exact_statement_evidence(
         result = service.query(
             "A durable source statement.",
             purpose=purpose,
-            query_plan_version="6",
+            query_plan_version=query_plan_version,
         )
         assert result["evidence"]
         assert result["evidence"][0]["verification"] == "verified_source"
         assert result["evidence"][0]["excerpt"] == "A durable source statement."
 
 
-def test_v6_quote_returns_gap_instead_of_truncated_source_passage(tmp_path: Path) -> None:
+@pytest.mark.parametrize("query_plan_version", ("6", "7"))
+def test_v6_quote_returns_gap_instead_of_truncated_source_passage(
+    tmp_path: Path,
+    query_plan_version: str,
+) -> None:
     long_passage = " ".join(f"budget-token-{index}" for index in range(80))
     root, grant_id, run_id, _publication, _statement_value = _prepared_v3_run(
         tmp_path,
@@ -181,7 +190,7 @@ def test_v6_quote_returns_gap_instead_of_truncated_source_passage(tmp_path: Path
     result = PurposeAwareRetrievalService(root).query(
         "budget-token-40",
         purpose="quote",
-        query_plan_version="6",
+        query_plan_version=query_plan_version,
         max_chars=200,
     )
     assert result["evidence"] == []
@@ -377,11 +386,13 @@ def test_v6_evidence_admission_preserves_exact_content_across_source_revisions(
     assert deduplications == []
 
 
-@pytest.mark.parametrize("quote", [None, "0" * 64])
+@pytest.mark.parametrize("quote", [None, "0" * 64, "wrong_revision"])
+@pytest.mark.parametrize("query_plan_version", ("6", "7"))
 def test_v6_evidence_admission_rejects_missing_or_wrong_quote(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     quote: str | None,
+    query_plan_version: str,
 ) -> None:
     root = _committed_vault(tmp_path)
     with AutonomousKnowledgeStore(root, read_only=True) as store:
@@ -402,6 +413,10 @@ def test_v6_evidence_admission_rejects_missing_or_wrong_quote(
             if key != "quote_sha256"
         }
     )
+    if quote == "wrong_revision":
+        invalid_reference = {
+            **exact_reference, "source_revision_id": "sourcerev_" + "f" * 24,
+        }
     service = PurposeAwareRetrievalService(root)
     original_evidence = service._evidence
     card = {
@@ -415,6 +430,17 @@ def test_v6_evidence_admission_rejects_missing_or_wrong_quote(
         return replace(selection, cards=[card])
 
     monkeypatch.setattr(service, "_evidence", invalid_evidence)
+    if quote == "wrong_revision":
+        result = service.query(
+            "A durable source statement.", purpose="verify",
+            query_plan_version=query_plan_version,
+        )
+        assert result["evidence"]
+        assert {item["source_revision_id"] for item in result["evidence"]} == {
+            exact_reference["source_revision_id"]
+        }
+        assert invalid_reference["source_revision_id"] not in canonical_json(result["capsule"])
+        return
     with pytest.raises(
         RuntimeError,
         match="statement source reference does not match its fragment",
@@ -422,7 +448,7 @@ def test_v6_evidence_admission_rejects_missing_or_wrong_quote(
         service.query(
             "A durable source statement.",
             purpose="verify",
-            query_plan_version="6",
+            query_plan_version=query_plan_version,
         )
 
 
@@ -517,12 +543,16 @@ def test_v6_historical_targeted_fallback_does_not_repeat_admitted_evidence(
     )
 
 
-def test_v6_temporal_duty_requires_temporal_coordinates(tmp_path: Path) -> None:
+@pytest.mark.parametrize("query_plan_version", ("6", "7"))
+def test_v6_temporal_duty_requires_temporal_coordinates(
+    tmp_path: Path,
+    query_plan_version: str,
+) -> None:
     root = _committed_vault(tmp_path)
     result = PurposeAwareRetrievalService(root).query(
         "A durable source statement.",
         purpose="freshness_check",
-        query_plan_version="6",
+        query_plan_version=query_plan_version,
     )
     temporal = next(
         item
@@ -535,7 +565,11 @@ def test_v6_temporal_duty_requires_temporal_coordinates(tmp_path: Path) -> None:
     )
 
 
-def test_v6_statement_and_map_tamper_fail_closed(tmp_path: Path) -> None:
+@pytest.mark.parametrize("query_plan_version", ("6", "7"))
+def test_v6_statement_and_map_tamper_fail_closed(
+    tmp_path: Path,
+    query_plan_version: str,
+) -> None:
     root = _committed_vault(tmp_path)
     with AutonomousKnowledgeStore(root, read_only=False) as store:
         store.connection.execute(
@@ -545,7 +579,7 @@ def test_v6_statement_and_map_tamper_fail_closed(tmp_path: Path) -> None:
         store.connection.commit()
     with pytest.raises(RuntimeError, match="knowledge vault integrity"):
         PurposeAwareRetrievalService(root).query(
-            "A durable source statement.", query_plan_version="6"
+            "A durable source statement.", query_plan_version=query_plan_version
         )
 
     root = _committed_vault(tmp_path / "map")
@@ -557,7 +591,7 @@ def test_v6_statement_and_map_tamper_fail_closed(tmp_path: Path) -> None:
         store.connection.commit()
     with pytest.raises(RuntimeError, match="knowledge vault integrity"):
         PurposeAwareRetrievalService(root).query(
-            "A durable source statement.", query_plan_version="6"
+            "A durable source statement.", query_plan_version=query_plan_version
         )
 
 

@@ -89,6 +89,27 @@ def _case_descriptor_identity(case: dict[str, Any]) -> tuple[str, str]:
     return str(junit["classname"]), str(junit["name"])
 
 
+def nonapplicable_identities(
+    manifest: dict[str, Any], *, expected_system: str,
+) -> set[tuple[str, str]]:
+    """Return the frozen cases permitted to skip on exactly this system."""
+
+    if expected_system not in SUPPORTED_SYSTEMS:
+        raise PlatformGateError("platform system is unsupported")
+    cases = manifest["classifications"]["nonapplicable"]["cases"]
+    if manifest["schema_version"] == MANIFEST_SCHEMA_VERSION:
+        return {
+            _case_descriptor_identity(case) for case in cases
+            if expected_system in case["nonapplicable_systems"]
+        }
+    native = {
+        _case_descriptor_identity(case)
+        for case in manifest["inventories"]["windows"]["additional_cases"]
+    }
+    identities = {_case_descriptor_identity(case) for case in cases}
+    return identities - native if expected_system == "Windows" else identities & native
+
+
 def _validate_manifest_invariants(manifest: dict[str, Any]) -> None:
     common = manifest["inventories"]["common"]
     windows = manifest["inventories"]["windows"]
@@ -123,6 +144,12 @@ def _validate_manifest_invariants(manifest: dict[str, Any]) -> None:
         for label, status in expected_statuses.items()
     ):
         raise PlatformGateError("platform test classification status is invalid")
+    for classification in classifications.values():
+        cases = classification["cases"]
+        identities = [_case_descriptor_identity(case) for case in cases]
+        node_ids = [case["node_id"] for case in cases]
+        if len(identities) != len(set(identities)) or len(node_ids) != len(set(node_ids)):
+            raise PlatformGateError("platform classification contains duplicate cases")
     classified = {
         label: {
             _case_descriptor_identity(case)
@@ -136,13 +163,40 @@ def _validate_manifest_invariants(manifest: dict[str, Any]) -> None:
     }
     if classified["qualification"] & set(map(_case_descriptor_identity, windows_cases)):
         raise PlatformGateError("qualification cases leaked into Platform Core inventory")
+    common_inventory = set(map(_case_descriptor_identity, common_cases))
+    windows_inventory = set(map(_case_descriptor_identity, windows_cases))
     additional = {
         _case_descriptor_identity(case) for case in windows["additional_cases"]
     }
-    if classified["nonapplicable"] != additional:
-        raise PlatformGateError("nonapplicable cases do not match Windows-only inventory")
+    missing_additional = additional - classified["nonapplicable"]
+    if missing_additional:
+        raise PlatformGateError(
+            "Windows additional cases must be classified nonapplicable"
+        )
+    if manifest["schema_version"] == MANIFEST_SCHEMA_VERSION:
+        systems_by_identity = {
+            _case_descriptor_identity(case): set(case["nonapplicable_systems"])
+            for case in classifications["nonapplicable"]["cases"]
+        }
+        if any(
+            systems_by_identity.get(_case_descriptor_identity(case)) != {"Linux", "Darwin"}
+            for case in windows["additional_cases"]
+        ):
+            raise PlatformGateError(
+                "Windows native cases must be nonapplicable only on Linux and Darwin"
+            )
+    outside_inventory = classified["nonapplicable"] - windows_inventory
+    if outside_inventory:
+        raise PlatformGateError(
+            "nonapplicable cases must belong to the Platform inventory"
+        )
+    extra_nonapplicable = classified["nonapplicable"] - additional
+    if not extra_nonapplicable <= common_inventory:
+        raise PlatformGateError(
+            "additional nonapplicable cases must belong to the common inventory"
+        )
     if not classified["historical_compatibility"].issubset(
-        set(map(_case_descriptor_identity, common_cases))
+        common_inventory
     ):
         raise PlatformGateError("historical compatibility case is outside common inventory")
     if any(
@@ -232,10 +286,11 @@ def _strict_manifest_junit_report(
         )
     if len(observed_identities) != len(expected_identities):
         raise PlatformGateError("JUnit inventory count does not match frozen manifest")
+    permitted_skips = nonapplicable_identities(manifest, expected_system=expected_system)
     if any(
         case.find("failure") is not None
         or case.find("error") is not None
-        or case.find("skipped") is not None
+        or (case.find("skipped") is not None and _case_identity(case) not in permitted_skips)
         for case in cases
     ):
         raise PlatformGateError(
@@ -263,9 +318,9 @@ def _strict_manifest_junit_report(
         "duplicate": [],
         "qualification_status": manifest["classifications"]["qualification"]["status"],
         "nonapplicable_status": (
-            "passed"
-            if expected_system == "Windows"
-            else manifest["classifications"]["nonapplicable"]["status"]
+            "nonapplicable"
+            if manifest["schema_version"] == MANIFEST_SCHEMA_VERSION or expected_system != "Windows"
+            else "passed"
         ),
         "historical_compatibility_status": "passed",
     }
@@ -321,9 +376,17 @@ def _junit_report(
         )
     if manifest is None and counters["tests"] < 580:
         raise PlatformGateError("mandatory suite executed fewer than 580 tests")
-    if any(counters[field] for field in ("failures", "errors", "skipped")):
+    observed_skips = sum(case.find("skipped") is not None for case in cases)
+    if counters["skipped"] != observed_skips:
+        raise PlatformGateError("JUnit skip counter does not match testcase outcomes")
+    if counters["failures"] or counters["errors"] or (manifest is None and observed_skips):
+        message = (
+            "mandatory suite requires zero failures, errors, and skips"
+            if manifest is None else
+            "mandatory suite contains failures, errors, or unclassified skips"
+        )
         raise PlatformGateError(
-            "mandatory suite must have zero failures, errors, and skips: " + str(counters)
+            message + ": " + str(counters)
         )
     return {
         **counters,

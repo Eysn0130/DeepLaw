@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/codex-transport-observation.v1.schema.json",
+  "title": "DeepLaw development Codex transport observation v1",
+  "description": "Path-free bounded transport observations. This is not a Host or Formal qualification receipt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_class",
+    "formal_admission",
+    "claim_eligible",
+    "status",
+    "identity_scope",
+    "activity_observation",
+    "counts",
+    "outbound",
+    "inbound",
+    "native_events",
+    "thread_identities",
+    "session_identity_sha256",
+    "close"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "deeplaw.codex-transport-observation/v1"
+    },
+    "evidence_class": {
+      "const": "development_transport_observation"
+    },
+    "formal_admission": {
+      "const": false
+    },
+    "claim_eligible": {
+      "const": false
+    },
+    "status": {
+      "enum": ["running", "closing", "graceful", "failed"]
+    },
+    "identity_scope": {
+      "const": "thread_start_only"
+    },
+    "activity_observation": {
+      "$ref": "#/$defs/activityObservation"
+    },
+    "counts": {
+      "$ref": "#/$defs/counts"
+    },
+    "outbound": {
+      "$ref": "#/$defs/records"
+    },
+    "inbound": {
+      "$ref": "#/$defs/records"
+    },
+    "native_events": {
+      "$ref": "#/$defs/records"
+    },
+    "thread_identities": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/threadIdentity"
+      }
+    },
+    "session_identity_sha256": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "close": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/close"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": {
+        "const": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "method": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_./:-]{1,128}$"
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "bytes", "sha256"],
+      "properties": {
+        "method": {
+          "$ref": "#/$defs/method"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 131072
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "records": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outbound", "inbound", "native_events"],
+      "properties": {
+        "outbound": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "inbound": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "native_events": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        }
+      }
+    },
+    "internalCounter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value"],
+      "properties": {
+        "status": {
+          "const": "not_executed"
+        },
+        "value": {
+          "type": "null"
+        }
+      }
+    },
+    "activityObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["public_rpc_counts", "internal_counters"],
+      "properties": {
+        "public_rpc_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model/list", "turn/start"],
+          "properties": {
+            "model/list": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 256
+            },
+            "turn/start": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 256
+            }
+          }
+        },
+        "internal_counters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model_inventory_count",
+            "model_invocation_count",
+            "sampling_count"
+          ],
+          "properties": {
+            "model_inventory_count": {
+              "$ref": "#/$defs/internalCounter"
+            },
+            "model_invocation_count": {
+              "$ref": "#/$defs/internalCounter"
+            },
+            "sampling_count": {
+              "$ref": "#/$defs/internalCounter"
+            }
+          }
+        }
+      }
+    },
+    "threadIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "thread_id_sha256", "session_id_sha256"],
+      "properties": {
+        "method": {
+          "const": "thread/start"
+        },
+        "thread_id_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "session_id_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "close": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "stdin_closed",
+        "wait",
+        "child_returncode",
+        "cleanup_fallback",
+        "cleanup_failed"
+      ],
+      "properties": {
+        "status": {
+          "enum": ["graceful", "failed"]
+        },
+        "stdin_closed": {
+          "type": "boolean"
+        },
+        "wait": {
+          "enum": ["not_started", "already_exited", "exited", "timeout", "failed"]
+        },
+        "child_returncode": {
+          "type": ["integer", "null"]
+        },
+        "cleanup_fallback": {
+          "type": "boolean"
+        },
+        "cleanup_failed": {
+          "type": "boolean"
+        },
+        "failure": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_:-]{1,64}$"
+        }
+      }
+    }
+  }
+}

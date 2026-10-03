@@ -24,6 +24,9 @@ from typing import Any
 from defusedxml import ElementTree as DefusedET
 from jsonschema import Draft202012Validator, FormatChecker
 
+from benchmarks.release.qualification_artifact_safety import (
+    FORBIDDEN_FILENAME_RE as _FORBIDDEN_NAME,
+)
 from benchmarks.release.qualification_evidence_core import (
     canonical_json_bytes as _core_canonical_json_bytes,
 )
@@ -102,13 +105,6 @@ _SECRET_VALUE = re.compile(
     r"|-----begin[^\n]*(?:private|rsa|openssh)[^\n]*-----"
     r"|(?:ghp_|github_pat_|glpat-|xox[baprs]-|sk-[A-Za-z0-9]|eyJ[A-Za-z0-9_-]+\.)"
     r")",
-)
-_FORBIDDEN_NAME = re.compile(
-    r"(?:^|[._-])(?:auth|authorization|credential|credentials|secret|secrets|"
-    r"password|passwd|api[_-]?key|private[_-]?key|access[_-]?token|token|"
-    r"transcript|chain[_-]?of[_-]?thought|hidden[_-]?reasoning|"
-    r"raw[_-]?(?:events|reasoning|log)|reasoning|log)(?:$|[._-])",
-    re.IGNORECASE,
 )
 
 # These fields are policy receipts, not secret values.  They are kept closed

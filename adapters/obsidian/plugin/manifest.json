@@ -1,7 +1,7 @@
 {
   "id": "deeplaw-bridge",
   "name": "DeepLaw Bridge",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "minAppVersion": "1.8.0",
   "description": "Governed Source-to-Knowledge compilation and bounded context for DeepLaw.",
   "author": "DeepLaw",

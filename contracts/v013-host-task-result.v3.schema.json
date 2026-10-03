@@ -1,0 +1,348 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/v013-host-task-result.v3.schema.json",
+  "title": "DeepLaw v0.13 Host task result v3",
+  "description": "Closed Host task result projection. Continuity v3 carries one separately retained, root-produced Host observation source; all qualification eligibility remains derived by the parser.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_kind",
+    "schema_version",
+    "run_id",
+    "workflow_run_id",
+    "task_case",
+    "host",
+    "first_correct_action",
+    "decision_preservation",
+    "wrong_state_admission",
+    "duties",
+    "provider",
+    "selected_identities",
+    "duplicate_distractor",
+    "no_hidden_mutation",
+    "query_trace",
+    "ledger",
+    "lifecycle_steps",
+    "observed_public_seams",
+    "claim_eligible"
+  ],
+  "properties": {
+    "artifact_kind": {"const": "task_result"},
+    "schema_version": {"const": "deeplaw.v013-host-task-result/v3"},
+    "run_id": {"$ref": "#/$defs/identifier"},
+    "workflow_run_id": {"type": "integer", "minimum": 1},
+    "task_case": {"$ref": "#/$defs/taskCase"},
+    "host": {"$ref": "#/$defs/host"},
+    "first_correct_action": {"$ref": "#/$defs/firstCorrectAction"},
+    "decision_preservation": {"$ref": "#/$defs/decisionPreservation"},
+    "wrong_state_admission": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/observedStateRow"}
+    },
+    "duties": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/duty"}
+    },
+    "provider": {"$ref": "#/$defs/provider"},
+    "selected_identities": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/identitySelection"}
+    },
+    "duplicate_distractor": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/observedStateRow"}
+    },
+    "no_hidden_mutation": {"$ref": "#/$defs/noHiddenMutation"},
+    "query_trace": {"$ref": "#/$defs/auditProjection"},
+    "ledger": {"$ref": "#/$defs/auditProjection"},
+    "lifecycle_steps": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/lifecycleStep"}
+    },
+    "observed_public_seams": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 6,
+      "items": {"enum": [
+        "knowledge_support",
+        "native_capsule",
+        "source_read",
+        "fragment_read",
+        "wiki_read",
+        "query_context"
+      ]}
+    },
+    "claim_eligible": {"const": false},
+    "host_observation_source": {"$ref": "#/$defs/jsonSource"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"task_case": {"const": "continuity"}},
+        "required": ["task_case"]
+      },
+      "then": {"required": ["host_observation_source"]}
+    },
+    {
+      "if": {
+        "properties": {"task_case": {"enum": ["living_wiki", "professional_evidence"]}},
+        "required": ["task_case"]
+      },
+      "then": {"not": {"required": ["host_observation_source"]}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
+    },
+    "safePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!\\\\)(?![A-Za-z]:)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "taskCase": {
+      "enum": ["continuity", "living_wiki", "professional_evidence"]
+    },
+    "host": {"enum": ["codex", "opencode"]},
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "lock_sha256", "wheel_sha256", "sdist_sha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git"},
+        "tree": {"$ref": "#/$defs/git"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "wheel_sha256": {"$ref": "#/$defs/sha256"},
+        "sdist_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "jsonSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "byte_size", "sha256", "media_type"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/safePath"},
+        "byte_size": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "media_type": {"const": "application/json"}
+      }
+    },
+    "firstCorrectAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "event_index", "seam"],
+      "properties": {
+        "observed": {"type": "boolean"},
+        "event_index": {"type": "integer", "minimum": 0},
+        "seam": {
+          "enum": [
+            "knowledge_support",
+            "native_capsule",
+            "source_read",
+            "fragment_read",
+            "wiki_read",
+            "query_context"
+          ]
+        }
+      }
+    },
+    "decisionPreservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "identity_sha256"],
+      "properties": {
+        "observed": {"type": "boolean"},
+        "identity_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "observedStateRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "observed", "admitted"],
+      "properties": {
+        "state": {"$ref": "#/$defs/identifier"},
+        "observed": {"type": "boolean"},
+        "admitted": {"type": ["boolean", "null"]}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"observed": {"const": false}},
+            "required": ["observed"]
+          },
+          "then": {"properties": {"admitted": {"type": "null"}}}
+        },
+        {
+          "if": {
+            "properties": {"observed": {"const": true}},
+            "required": ["observed"]
+          },
+          "then": {"properties": {"admitted": {"type": "boolean"}}}
+        }
+      ]
+    },
+    "duty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duty", "status", "gap_code"],
+      "properties": {
+        "duty": {"$ref": "#/$defs/identifier"},
+        "status": {"enum": ["observed", "gap", "not_executed"]},
+        "gap_code": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"enum": ["observed", "not_executed"]}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"gap_code": {"const": null}}}
+        },
+        {
+          "if": {
+            "properties": {"status": {"const": "gap"}},
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "gap_code": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capsule_sha256",
+        "provider_bytes",
+        "input_tokens",
+        "output_tokens",
+        "cache_tokens",
+        "reasoning_tokens"
+      ],
+      "properties": {
+        "capsule_sha256": {"$ref": "#/$defs/sha256"},
+        "provider_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "cache_tokens": {"type": "integer", "minimum": 0},
+        "reasoning_tokens": {"type": "integer", "minimum": 0}
+      }
+    },
+    "identitySelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "identity_sha256"],
+      "properties": {
+        "kind": {"$ref": "#/$defs/identifier"},
+        "identity_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "authorizedMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "operation", "owner_authorized", "receipt_sha256"],
+      "properties": {
+        "observed": {"type": "boolean"},
+        "operation": {"type": ["string", "null"], "enum": ["owner_forget", null]},
+        "owner_authorized": {"type": "boolean"},
+        "receipt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "noHiddenMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hidden_mutation",
+        "write_performed",
+        "ledger_before_sha256",
+        "ledger_after_sha256",
+        "authorized_mutation",
+        "process_receipt_observed"
+      ],
+      "properties": {
+        "hidden_mutation": {"const": false},
+        "write_performed": {"type": "boolean"},
+        "ledger_before_sha256": {"$ref": "#/$defs/sha256"},
+        "ledger_after_sha256": {"$ref": "#/$defs/sha256"},
+        "authorized_mutation": {"$ref": "#/$defs/authorizedMutation"},
+        "process_receipt_observed": {"const": true}
+      }
+    },
+    "auditProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["in_capsule", "sha256", "entry_count"],
+      "properties": {
+        "in_capsule": {"const": false},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "entry_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "lifecycleStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step", "observed", "gap_code"],
+      "properties": {
+        "step": {
+          "enum": [
+            "new",
+            "resume",
+            "fork",
+            "compaction",
+            "stale",
+            "wrong_task_line",
+            "forget",
+            "resume_after_forget"
+          ]
+        },
+        "observed": {"type": "boolean"},
+        "gap_code": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"observed": {"const": true}},
+            "required": ["observed"]
+          },
+          "then": {"properties": {"gap_code": {"const": null}}}
+        },
+        {
+          "if": {
+            "properties": {"observed": {"const": false}},
+            "required": ["observed"]
+          },
+          "then": {
+            "properties": {
+              "gap_code": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

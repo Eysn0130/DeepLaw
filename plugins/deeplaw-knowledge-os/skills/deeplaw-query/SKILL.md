@@ -11,9 +11,10 @@ Use only after explicit user invocation. Keep every read bounded and preserve pr
    query for compiled-first reuse.
 2. Use `operation=context` only when the user asks for a task capsule; require
    `confirm_no_case_data=true` and provide a short task and goal.
-3. Select one explicit read plane and scope when using search or context. Do not mix
-   source-derived and autonomous partitions by default.
+3. Select scope and maximum sensitivity explicitly. The current public input does not accept
+   a read plane selector; the Context Compiler admits and labels the selected partitions.
 4. Set `limit`, `max_chars`, `max_tokens`, `max_sources`, and `graph_hops` deliberately. Preserve
    gaps, conflicts, receipts, revision IDs, and authority partitions in the answer.
-5. Use `operation=verify` before materially relying on a selected revision. Never write, promote,
-   or treat rank, synthesis, or Wiki navigation as authority.
+5. Use `operation=read` with an exact `target` from the response to inspect a registered knowledge
+   body or source fragment; use `operation=explain` with its `receipt_id` for the query receipt.
+   Preserve integrity and freshness gaps. Never write, promote, or treat rank as authority.

@@ -13,6 +13,54 @@ def _workflow(name: str) -> str:
 
 def test_candidate_full_retains_raw_platform_and_exact_wheel_evidence() -> None:
     workflow = _workflow("candidate-full.yml")
+    jobs = yaml.safe_load(workflow)["jobs"]
+    assert jobs["verified-artifact"]["needs"] == "historical-migration-fixture"
+    fixture = jobs["historical-migration-fixture"]["steps"]
+    assert any("historical_migration_fixture build" in step.get("run", "") for step in fixture)
+    assert fixture[-1]["with"]["name"] == "historical-migration-fixture"
+    for job in ("windows-calibration-shards", "posix-matrix", "windows-shards"):
+        steps = jobs[job]["steps"]
+        admitted = next(
+            index for index, step in enumerate(steps)
+            if "historical_migration_fixture verify" in step.get("run", "")
+        )
+        executed = next(
+            index for index, step in enumerate(steps)
+            if "pytest --strict-markers" in step.get("run", "")
+        )
+        assert admitted < executed
+        assert '--github-env "${GITHUB_ENV}"' in steps[admitted]["run"]
+        assert any(
+            step.get("with", {}).get("name") == "historical-migration-fixture"
+            for step in steps[:admitted]
+        )
+    assert jobs["posix-matrix"]["timeout-minutes"] == 100
+    assert jobs["scale_ten_thousand"]["timeout-minutes"] == 180
+    for job in ("windows-calibration-shards", "windows-shards"):
+        assert jobs[job]["timeout-minutes"] == 240
+        assert jobs[job]["strategy"]["matrix"]["shard"] == [1, 2, 3]
+        pytest_run = next(
+            step["run"]
+            for step in jobs[job]["steps"]
+            if "pytest --strict-markers" in step.get("run", "")
+        )
+        assert "pytest --strict-markers -vv" in pytest_run
+        assert '-m "not qualification"' in pytest_run
+        assert "--junitxml=" in pytest_run
+        assert '"${test_files[@]}"' in pytest_run
+        assert " -s" not in pytest_run
+    aggregate = jobs["aggregate-raw-evidence"]["steps"]
+    assert any(step.get("run") == "uv sync --frozen --extra dev" for step in aggregate)
+    assert "uv run --frozen python -m benchmarks.release.candidate_regression platform" in workflow
+    commercial = yaml.safe_load(_workflow("commercial-gates.yml"))["jobs"]
+    historical = next(
+        step["run"] for step in commercial["platform-gates"]["steps"]
+        if step.get("name") == "Build exact historical v0.6.0 migration and upgrade fixture"
+    )
+    assert "historical_migration_fixture build" in historical
+    assert "historical_migration_fixture verify" in historical
+    assert '--github-env "${GITHUB_ENV}"' in historical
+    assert "git worktree" not in historical
 
     assert (
         "uv export --frozen --no-dev --no-emit-project --no-emit-local"
@@ -36,6 +84,28 @@ def test_candidate_full_retains_raw_platform_and_exact_wheel_evidence() -> None:
     assert "windows-calibration-aggregate.json" in workflow
     assert "windows-aggregate.json" in workflow
     assert "--junit-output" in workflow
+    assert "--output-file candidate-requirements.txt" in workflow
+    assert 'export_dir="$(mktemp -d ' in workflow
+    assert 'UV_PROJECT="${GITHUB_WORKSPACE}" \\' in workflow
+    assert 'test ! -e "${destination}"' in workflow
+    assert 'test ! -L "${destination}"' in workflow
+    assert 'test ! -L "${source}"' in workflow
+    assert 'mv "${source}" "${destination}"' in workflow
+    assert '--output-file "${RUNNER_TEMP}' not in workflow
+    assert "benchmarks.release.candidate_artifact_path_policy" in workflow
+    assert workflow.count("normalize-junit") >= 5
+    assert workflow.count('--checkout-root "${GITHUB_WORKSPACE}"') >= 5
+    assert "--root \"${RUNNER_TEMP}/candidate-full-raw-evidence\"" in workflow
+    assert (
+        '--requirements "${RUNNER_TEMP}/candidate-full-raw-evidence/'
+        'verified-candidate-artifacts/candidate-requirements.txt"'
+        in workflow
+    )
+    assert workflow.index(
+        "Validate retained Candidate Full text and XML before inventory upload"
+    ) < workflow.index(
+        "Write path-independent raw evidence inventory receipt"
+    )
     assert "= 14" in workflow
     assert "candidate_regression platform" in workflow
     assert "platform-matrix-receipt.json" in workflow
@@ -68,6 +138,26 @@ def test_external_qualification_consumes_candidate_full_and_emits_typed_evidence
     assert "python -m build" not in workflow
     assert "uv build" not in workflow
     assert "hatch build" not in workflow
+
+
+def test_legacy_semantic_evidence_is_manual_only_and_stays_pre_v013() -> None:
+    workflow = _workflow("semantic-evidence.yml")
+    parsed = yaml.safe_load(workflow)
+    triggers = parsed.get("on", parsed.get(True))
+
+    assert set(triggers) == {"workflow_dispatch"}
+    inputs = triggers["workflow_dispatch"]["inputs"]
+    assert inputs["mode"]["type"] == "choice"
+    assert inputs["mode"]["options"] == ["deterministic_review", "package_consensus"]
+    assert inputs["mode"]["default"] == "deterministic_review"
+    assert inputs["release_ref"]["required"] is True
+    assert inputs["evidence_ref"]["required"] is False
+    assert "Legacy pre-v0.13 Semantic Living Wiki evidence" in parsed["name"]
+    assert "Gate v6" not in workflow
+    guard = 'if tuple(map(int, version.split("."))) >= (0, 13, 0):'
+    rejection = "v0.13 must use the active qualification and Gate v9 path"
+    assert workflow.count(guard) == 2
+    assert workflow.count(rejection) == 2
 
 
 def test_commercial_qualification_recomputes_current_typed_core_gates() -> None:

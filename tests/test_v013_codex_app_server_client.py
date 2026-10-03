@@ -205,7 +205,65 @@ def _fake_server(
                     "params": {"threadId": "thread-1"},
                 })
             elif method == "turn/start":
-                send({"id": request_id, "result": {"turn": {"id": "turn-1"}}})
+                if MODE in {"pending-match", "pending-count", "pending-bytes"}:
+                    for _ in range(9 if MODE == "pending-count" else 1):
+                        send({"method": "item/agentMessage/delta", "params": {
+                            "threadId": "thread-1", "turnId": "turn-1",
+                            "delta": "x" * (65537 if MODE == "pending-bytes" else 3),
+                        }})
+                    send({"method": "turn/completed", "params": {
+                        "threadId": "thread-1", "turn": {
+                            "id": "turn-1", "status": "completed", "items": [],
+                        },
+                    }})
+                    send({"id": request_id, "result": {"turn": {"id": "turn-1"}}})
+                    continue
+                if MODE in {"foreign-thread", "foreign-turn"}:
+                    foreign_thread = (
+                        "thread-foreign" if MODE == "foreign-thread" else "thread-1"
+                    )
+                    foreign_turn = "turn-1" if MODE == "foreign-thread" else "turn-foreign"
+                    send({"method": "item/agentMessage/delta", "params": {
+                        "threadId": foreign_thread, "turnId": foreign_turn,
+                        "delta": "foreign pre-ack "
+                    }})
+                    send({"method": "thread/tokenUsage/updated", "params": {
+                        "threadId": foreign_thread, "turnId": foreign_turn, "tokenUsage": {"last": {
+                            "inputTokens": 99, "cachedInputTokens": 9,
+                            "outputTokens": 7, "reasoningOutputTokens": 2
+                        }}
+                    }})
+                if MODE in {"foreign-tool", "pending-tool"}:
+                    send({"id": "tool-pre-ack", "method": "item/tool/call", "params": {
+                        "threadId": "thread-foreign" if MODE == "foreign-tool" else "thread-1",
+                        "turnId": "turn-1",
+                        "callId": "call-pre-ack", "tool": "lookup",
+                        "arguments": {"query": "fixture"},
+                    }})
+                ack = {"turn": {"id": "turn-1"}}
+                if MODE == "conflicting-ack":
+                    ack = {"turnId": "turn-1", "turn": {"id": "turn-foreign"}}
+                elif MODE == "invalid-ack":
+                    ack["turnId"] = True
+                elif MODE == "foreign-thread-ack":
+                    ack["threadId"] = "thread-foreign"
+                elif MODE == "flat-ack":
+                    ack = {"id": "turn-1"}
+                elif MODE == "matching-alias-ack":
+                    ack.update({"id": "turn-1", "turnId": "turn-1"})
+                send({"id": request_id, "result": ack})
+                if MODE in {"foreign-completion", "conflicting-completion", "invalid-thread"}:
+                    completion_params = {
+                        "threadId": True if MODE == "invalid-thread" else "thread-1", "turn": {
+                            "id": "turn-foreign", "status": "completed", "items": [],
+                        },
+                    }
+                    if MODE == "conflicting-completion":
+                        completion_params["turnId"] = "turn-1"
+                    if MODE == "invalid-thread":
+                        completion_params["turn"]["id"] = "turn-1"
+                    send({"method": "turn/completed", "params": completion_params})
+                    continue
                 if MODE == "session-start-stop":
                     assert message["params"] == {
                         "threadId": "thread-1",
@@ -243,6 +301,29 @@ def _fake_server(
                     continue
                 if MODE == "unknown-request":
                     send({"id": "srv-1", "method": "server/unknown", "params": {}})
+                    continue
+                if MODE in {"foreign-thread", "foreign-turn"}:
+                    foreign_thread = (
+                        "thread-foreign" if MODE == "foreign-thread" else "thread-1"
+                    )
+                    foreign_turn = "turn-1" if MODE == "foreign-thread" else "turn-foreign"
+                    send({
+                        "method": "item/completed",
+                        "params": {
+                            "threadId": foreign_thread,
+                            "turnId": foreign_turn,
+                            "item": {
+                                "type": "agentMessage",
+                                "status": "completed",
+                                "text": "foreign final",
+                            },
+                        },
+                    })
+                    send({"method": "turn/completed", "params": {
+                        "threadId": foreign_thread, "turn": {
+                            "id": foreign_turn, "status": "completed", "items": []
+                        }
+                    }})
                     continue
                 send({"method": "item/agentMessage/delta", "params": {
                     "threadId": "thread-1", "turnId": "turn-1", "delta": "hello "
@@ -509,6 +590,151 @@ def _assert_zero_model_production_contract_stops_before_sampling(
         "requires_openai_auth": False,
         "supports_websockets": False,
     }
+
+
+def test_turn_start_rejects_foreign_thread_wire_notifications(tmp_path: Path) -> None:
+    with _client(tmp_path, mode="mcp", stderr=b"") as client:
+        client.initialize()
+        thread = client.thread_start(params={"ephemeral": True})
+        matching = client.turn_start(
+            thread["thread"]["id"],
+            [{"type": "text", "text": "matching fixture"}],
+        )
+    assert matching["status"] == "completed"
+    assert matching.thread_id == "thread-1"
+    assert matching.turn_id == "turn-1"
+    assert matching.final_text == "hello world"
+
+    with _client(tmp_path, mode="foreign-thread", stderr=b"") as client:
+        client.initialize()
+        thread = client.thread_start(params={"ephemeral": True})
+        try:
+            foreign = client.turn_start(
+                thread["thread"]["id"],
+                [{"type": "text", "text": "foreign fixture"}],
+            )
+        except CodexAppServerProtocolError:
+            return
+    foreign_thread_sha256 = hashlib.sha256(b"thread-foreign").hexdigest()
+    foreign_events = [
+        event
+        for event in foreign.events
+        if event.get("thread_id_sha256") == foreign_thread_sha256
+    ]
+    pytest.fail(
+        "foreign thread notifications were accepted: "
+        f"status={foreign['status']!r}, final_text={foreign.final_text!r}, "
+        f"methods={[event.get('method') for event in foreign_events]!r}, "
+        f"usage={[event.get('usage') for event in foreign_events if 'usage' in event]!r}"
+    )
+
+
+def test_turn_start_rejects_foreign_turn_wire_notifications(tmp_path: Path) -> None:
+    with _client(tmp_path, mode="foreign-turn", stderr=b"") as client:
+        client.initialize()
+        thread = client.thread_start(params={"ephemeral": True})
+        with pytest.raises(
+            CodexAppServerProtocolError, match=r"turn/start identity|active turn identity"
+        ):
+            client.turn_start(
+                thread["thread"]["id"],
+                [{"type": "text", "text": "foreign turn fixture"}],
+            )
+
+
+@pytest.mark.parametrize("mode", ["foreign-tool", "pending-tool"])
+def test_pre_ack_foreign_tool_request_is_rejected_before_handler(
+    tmp_path: Path, mode: str,
+) -> None:
+    calls: list[tuple[str | None, Any]] = []
+
+    def handler(name: str | None, arguments: Any) -> dict[str, Any]:
+        calls.append((name, arguments))
+        return {"contentItems": [], "success": True}
+
+    with _client(
+        tmp_path,
+        mode=mode,
+        stderr=b"",
+        dynamic_tools=[{"name": "lookup"}],
+        dynamic_tool_handler=handler,
+    ) as client:
+        client.initialize()
+        thread = client.thread_start(params={"ephemeral": True})
+        with pytest.raises(CodexAppServerProtocolError, match="identity"):
+            client.turn_start(
+                thread["thread"]["id"],
+                [{"type": "text", "text": "foreign tool fixture"}],
+            )
+    assert calls == []
+
+
+@pytest.mark.parametrize("mode", ["pending-match", "pending-count", "pending-bytes"])
+def test_pre_ack_notifications_are_bounded_and_replayed_after_identity(
+    tmp_path: Path, mode: str,
+) -> None:
+    with _client(tmp_path, mode=mode, stderr=b"") as client:
+        client.initialize()
+        client.thread_start()
+        if mode == "pending-match":
+            result = client.turn_start("thread-1", "bounded fixture")
+            assert result["status"] == "completed"
+            assert result.turn_id == "turn-1"
+            assert result.final_text == "xxx"
+            assert [event["method"] for event in result.events] == [
+                "item/agentMessage/delta", "turn/completed",
+            ]
+        else:
+            with pytest.raises(CodexAppServerProtocolError, match="exceeded their bound"):
+                client.turn_start("thread-1", "bounded fixture")
+            assert client._final_text_parts == []
+        assert client._turn_capture_active is False
+        assert client._turn_pending_notifications == []
+
+
+def test_nested_foreign_completion_after_ack_is_not_current_turn(tmp_path: Path) -> None:
+    with _client(tmp_path, mode="foreign-completion", stderr=b"") as client:
+        client.initialize()
+        client.thread_start()
+        with pytest.raises(CodexAppServerProtocolError, match="active turn identity"):
+            client.turn_start("thread-1", "bounded fixture")
+
+
+@pytest.mark.parametrize("mode", ["conflicting-completion", "invalid-thread"])
+def test_turn_wire_identity_is_not_selected_from_conflicting_or_invalid_fields(
+    tmp_path: Path, mode: str,
+) -> None:
+    with _client(tmp_path, mode=mode, stderr=b"") as client:
+        client.initialize()
+        client.thread_start()
+        with pytest.raises(CodexAppServerProtocolError):
+            client.turn_start("thread-1", "bounded fixture")
+
+
+@pytest.mark.parametrize("mode", ["conflicting-ack", "invalid-ack", "foreign-thread-ack"])
+def test_turn_start_ack_identity_is_validated_before_notification_capture(
+    tmp_path: Path, mode: str,
+) -> None:
+    with _client(tmp_path, mode=mode, stderr=b"") as client:
+        client.initialize()
+        client.thread_start()
+        with pytest.raises(CodexAppServerProtocolError):
+            client.turn_start("thread-1", "bounded fixture")
+        assert client._active_turn_id is None
+        assert client._final_text_parts == []
+        assert client._tool_call_observations == []
+
+
+@pytest.mark.parametrize("mode", ["flat-ack", "matching-alias-ack"])
+def test_turn_start_ack_supports_unambiguous_compatible_identity(
+    tmp_path: Path, mode: str,
+) -> None:
+    with _client(tmp_path, mode=mode, stderr=b"") as client:
+        client.initialize()
+        client.thread_start()
+        result = client.turn_start("thread-1", "bounded fixture")
+        assert result.turn_id == "turn-1"
+        assert result["status"] == "completed"
 
 
 def test_codex_diagnostic_fails_before_candidate_or_host_calls(

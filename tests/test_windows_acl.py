@@ -8,6 +8,10 @@ from types import SimpleNamespace
 import pytest
 
 from deeplaw import knowledge_autonomy, knowledge_store, windows_acl
+from deeplaw.bounded_subprocess import (
+    BoundedSubprocessError,
+    BoundedSubprocessFailureKind,
+)
 from deeplaw.knowledge_autonomy import (
     AutonomousKnowledgeStore,
     initialize_autonomous_core,
@@ -20,6 +24,7 @@ from deeplaw.knowledge_store import (
 )
 from deeplaw.windows_acl import (
     evaluate_windows_acl_payload,
+    harden_windows_private_file,
     harden_windows_vault,
     native_windows_acl_report,
 )
@@ -34,6 +39,62 @@ def _rule(sid: str, *, inherited: bool = False) -> dict[str, object]:
         "inheritance_flags": "None",
         "propagation_flags": "None",
     }
+
+
+@pytest.mark.parametrize(
+    ("operation", "environment_name", "failure_kind"),
+    (
+        (
+            "query",
+            "DEEPLAW_ACL_PATHS_B64",
+            BoundedSubprocessFailureKind.TIMEOUT,
+        ),
+        (
+            "harden",
+            "DEEPLAW_ACL_ROOT_B64",
+            BoundedSubprocessFailureKind.STDERR_LIMIT,
+        ),
+    ),
+)
+def test_windows_acl_bounded_failure_is_sanitized_by_operation(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    environment_name: str,
+    failure_kind: BoundedSubprocessFailureKind,
+) -> None:
+    path_canary = r"C:\private\acl-canary"
+    secret_canary = "ambient-secret-canary"
+    source_error = BoundedSubprocessError(
+        f"PowerShell failed at {path_canary}: {secret_canary}",
+        kind=failure_kind,
+        stdout=path_canary.encode(),
+        stderr=secret_canary.encode(),
+    )
+
+    def fail_bounded_subprocess(*_args: object, **_kwargs: object) -> None:
+        raise source_error
+
+    monkeypatch.setattr(windows_acl, "_powershell", lambda: "powershell.exe")
+    monkeypatch.setattr(
+        windows_acl,
+        "run_bounded_subprocess",
+        fail_bounded_subprocess,
+    )
+
+    with pytest.raises(RuntimeError) as captured:
+        windows_acl._run_encoded_script(
+            "Write-Output '{}'",
+            operation=operation,  # type: ignore[arg-type]
+            environment={environment_name: path_canary},
+        )
+
+    message = str(captured.value)
+    assert message == (
+        f"native Windows ACL {operation} command failed closed: {failure_kind.value}"
+    )
+    assert path_canary not in message
+    assert secret_canary not in message
+    assert captured.value.__cause__ is source_error
 
 
 def test_windows_acl_prefers_the_matching_pwsh_runtime(
@@ -318,6 +379,35 @@ def test_native_windows_vault_acl_is_owner_only_after_real_ingest(tmp_path: Path
 
 @pytest.mark.windows_native
 @pytest.mark.skipif(os.name != "nt", reason="requires native Windows ACLs")
+def test_native_windows_private_file_hardening_is_single_item_and_receipt_compatible(
+    tmp_path: Path,
+) -> None:
+    from benchmarks.hosts.host_preflight_receipt import validate_windows_acl_hardening_report
+
+    path = (tmp_path / "private-broker.exe").resolve()
+    path.write_bytes(b"private-broker-fixture")
+
+    hardening = harden_windows_private_file(path)
+    verification = hardening["verification"]
+    entry = verification["entries"][0]
+
+    assert hardening["applied"] is True
+    assert hardening["item_count"] == 1
+    assert verification["entry_count"] == 1
+    assert verification["files_and_directories_checked"] == 1
+    assert len(verification["entries"]) == 1
+    assert entry["path"] == str(path)
+    assert entry["kind"] == "file"
+    assert validate_windows_acl_hardening_report(
+        hardening,
+        expected_path=path,
+        expected_kind="file",
+        recursive=False,
+    ) == hardening
+
+
+@pytest.mark.windows_native
+@pytest.mark.skipif(os.name != "nt", reason="requires native Windows ACLs")
 def test_closed_launcher_hardens_root_home_tmp_and_work_with_native_acl(
     tmp_path: Path,
 ) -> None:
@@ -413,3 +503,27 @@ def test_host_connect_and_launcher_reject_junction_ancestor(tmp_path: Path) -> N
             vault_path=selected_vault,
             owner_home=tmp_path / "owner-home",
         )
+
+
+def test_acl_inventory_stops_discovery_at_its_bound(monkeypatch) -> None:
+    from pathlib import Path
+
+    import deeplaw.windows_acl as acl
+
+    visited = []
+
+    def inventory(self, pattern):
+        assert pattern == "*"
+        for index in range(100):
+            visited.append(index)
+            if len(visited) > 3:
+                raise AssertionError("ACL inventory read beyond the first excluded entry")
+            yield self / f"entry-{index}"
+
+    monkeypatch.setattr(acl, "_MAX_ACL_PATHS", 3)
+    monkeypatch.setattr(Path, "rglob", inventory)
+    paths, complete = acl._protected_paths(Path("synthetic-vault"))
+    assert paths == [Path("synthetic-vault"), Path("synthetic-vault/entry-0"),
+                     Path("synthetic-vault/entry-1")]
+    assert complete is False
+    assert visited == [0, 1, 2]

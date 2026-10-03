@@ -1,0 +1,509 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deeplaw.dev/contracts/knowledge-support.output.v7.schema.json",
+  "title": "DeepLaw Knowledge Support Output v7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation",
+    "authority_boundary",
+    "result"
+  ],
+  "properties": {
+    "schema_version": {
+      "enum": [
+        "deeplaw.knowledge-support-output/v3",
+        "deeplaw.knowledge-support-output/v4",
+        "deeplaw.knowledge-support-output/v5",
+        "deeplaw.knowledge-support-output/v6",
+        "deeplaw.knowledge-support-output/v7"
+      ]
+    },
+    "operation": {
+      "enum": [
+        "search",
+        "recall",
+        "get",
+        "context",
+        "verify",
+        "inspect",
+        "lineage",
+        "graph",
+        "wiki_lookup",
+        "explain",
+        "identity_lookup",
+        "gaps",
+        "query",
+        "compilation",
+        "source",
+        "wiki",
+        "editor_context",
+        "synthesis",
+        "semantic",
+        "read"
+      ]
+    },
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legal_authority",
+        "official_legal_sources_tool",
+        "persistent_writes",
+        "case_data_allowed",
+        "authority_from_ranking"
+      ],
+      "properties": {
+        "legal_authority": {
+          "const": false
+        },
+        "official_legal_sources_tool": {
+          "const": "law_support"
+        },
+        "persistent_writes": {
+          "const": "separate_explicit_knowledge_sink"
+        },
+        "case_data_allowed": {
+          "const": false
+        },
+        "authority_from_ranking": {
+          "const": false
+        }
+      }
+    },
+    "result": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "read"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "schema_version": {
+            "const": "deeplaw.knowledge-support-output/v7"
+          },
+          "result": {
+            "$ref": "#/$defs/readResult"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "schema_version": {
+            "enum": [
+              "deeplaw.knowledge-support-output/v3",
+              "deeplaw.knowledge-support-output/v4",
+              "deeplaw.knowledge-support-output/v5",
+              "deeplaw.knowledge-support-output/v6"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "readTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "knowledge_id",
+            "revision_id"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "knowledge",
+                "wiki"
+              ]
+            },
+            "knowledge_id": {
+              "type": "string",
+              "pattern": "^knowledge_[0-9a-f]{24}$"
+            },
+            "revision_id": {
+              "type": "string",
+              "pattern": "^knowledgerev_[0-9a-f]{24}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source_revision_id",
+            "fragment_id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "source_fragment"
+            },
+            "source_revision_id": {
+              "type": "string",
+              "pattern": "^sourcerev_[0-9a-f]{24}$"
+            },
+            "fragment_id": {
+              "type": "string",
+              "pattern": "^(fragment|fragmentrev)_[0-9a-f]{24}$"
+            }
+          }
+        }
+      ]
+    },
+    "readResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "content",
+        "content_sha256",
+        "offset",
+        "next_offset",
+        "total_characters",
+        "source_refs",
+        "governance",
+        "locator",
+        "write_performed",
+        "budget"
+      ],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/readTarget"
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 12000
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "next_offset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "total_characters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_refs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source_id": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "source_revision_id": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "fragment_id": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "artifact_id": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "revision_id": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "quote_sha256": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "object_sha256": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "locator": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "uri": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "reference_sha256": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "metadata_omitted": {
+                "type": "boolean"
+              },
+              "knowledge_id": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "knowledge_id",
+                  "revision_id"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "source_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "source_revision_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "fragment_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "artifact_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "locator"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "uri"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "quote_sha256"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "source_revision_id"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "knowledge_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "revision_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "artifact_id"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "artifact_id"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "knowledge_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "revision_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "source_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "source_revision_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "fragment_id"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "locator"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "uri"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "quote_sha256"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "governance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "authority",
+            "verification",
+            "lifecycle",
+            "scope",
+            "sensitivity",
+            "legal_authority"
+          ],
+          "properties": {
+            "origin": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "authority": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "verification": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "lifecycle": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "scope": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "sensitivity": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "trust": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "legal_authority": {
+              "const": false
+            },
+            "source_free": {
+              "type": "boolean"
+            },
+            "imported_at": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "temporal_state": {
+              "enum": [
+                "current_admitted",
+                "unknown"
+              ]
+            },
+            "valid_from": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 40
+            },
+            "valid_to": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 40
+            },
+            "expires_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 40
+            }
+          }
+        },
+        "locator": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000
+        },
+        "write_performed": {
+          "const": false
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "read_calls",
+            "read_content_bytes",
+            "max_read_calls",
+            "max_read_content_bytes",
+            "scope"
+          ],
+          "properties": {
+            "read_calls": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32
+            },
+            "read_content_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 262144
+            },
+            "max_read_calls": {
+              "const": 32
+            },
+            "max_read_content_bytes": {
+              "const": 262144
+            },
+            "scope": {
+              "const": "mcp_lifespan_successful_read_content_only"
+            }
+          }
+        }
+      }
+    }
+  }
+}

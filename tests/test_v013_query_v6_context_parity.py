@@ -73,9 +73,9 @@ def _assert_v6_query(
     *,
     force_canonical_lexical: bool,
 ) -> None:
-    assert result["schema_version"] == "deeplaw.purpose-aware-retrieval/v3"
+    assert result["schema_version"] == "deeplaw.purpose-aware-retrieval/v4"
     plan = result["query_plan"]
-    assert plan["schema_version"] == "deeplaw.knowledge-query-plan/v6"
+    assert plan["schema_version"] == "deeplaw.knowledge-query-plan/v7"
     assert plan["retrieval_controls"] == {
         "graph_hops": 2,
         "retrieval_mode": "lexical",
@@ -91,7 +91,7 @@ def _assert_v6_context(result: dict[str, Any]) -> None:
     """Assert the additive context contract required by the v6 parity fix."""
 
     plan = result["query_plan"]
-    assert plan["schema_version"] == "deeplaw.knowledge-query-plan/v6"
+    assert plan["schema_version"] == "deeplaw.knowledge-query-plan/v7"
     assert plan["retrieval_controls"] == {
         "graph_hops": 2,
         "retrieval_mode": "lexical",
@@ -166,7 +166,7 @@ def _reseal_capsule(capsule: dict[str, Any]) -> None:
     capsule["capsule_id"] = stable_id("capsule", capsule["vault_id"], digest)
 
 
-def test_python_query_and_context_default_to_v6(
+def test_python_query_and_context_default_to_v7(
     tmp_path: Path,
 ) -> None:
     root = _vault(tmp_path)
@@ -211,7 +211,7 @@ def test_python_context_explicit_v5_remains_compatibility_only(tmp_path: Path) -
         )
 
 
-def test_cli_query_defaults_to_v6(tmp_path: Path) -> None:
+def test_cli_query_defaults_to_v7(tmp_path: Path) -> None:
     root = _vault(tmp_path)
     query = _run_cli(
         root,
@@ -228,7 +228,7 @@ def test_cli_query_defaults_to_v6(tmp_path: Path) -> None:
     _assert_v6_query(query, force_canonical_lexical=False)
 
 
-def test_cli_context_defaults_to_v6(tmp_path: Path) -> None:
+def test_cli_context_defaults_to_v7(tmp_path: Path) -> None:
     root = _vault(tmp_path)
     context = _run_cli(
         root,
@@ -246,7 +246,7 @@ def test_cli_context_defaults_to_v6(tmp_path: Path) -> None:
     _assert_v6_context(context)
 
 
-def test_cli_autonomy_context_defaults_to_v6(tmp_path: Path) -> None:
+def test_cli_autonomy_context_defaults_to_v7(tmp_path: Path) -> None:
     root = _vault(tmp_path)
     autonomy_context = _run_cli(
         root,
@@ -283,7 +283,7 @@ def test_cli_context_v5_requires_an_explicit_compatibility_request(tmp_path: Pat
     )
 
 
-def test_mcp_query_and_context_default_to_v6(
+def test_mcp_query_and_context_default_to_v7(
     tmp_path: Path,
 ) -> None:
     root = _vault(tmp_path)
@@ -294,8 +294,8 @@ def test_mcp_query_and_context_default_to_v6(
         retrieval_mode="lexical",
         vault_path=root,
     )
-    assert query["schema_version"] == "deeplaw.knowledge-support-output/v6"
-    assert query["result"]["schema_version"] == "deeplaw.provider-knowledge-capsule/v2"
+    assert query["schema_version"] == "deeplaw.knowledge-support-output/v8"
+    assert query["result"]["schema_version"] == "deeplaw.provider-knowledge-capsule/v3"
     assert query["result"]["receipt"]["receipt_id"].startswith("queryreceipt_")
     assert query["result"]["delivery"]["hard_limit_bytes"] == 65_536
 
@@ -307,8 +307,8 @@ def test_mcp_query_and_context_default_to_v6(
         confirm_no_case_data=True,
         vault_path=root,
     )
-    assert context["schema_version"] == "deeplaw.knowledge-support-output/v6"
-    assert context["result"]["schema_version"] == "deeplaw.provider-knowledge-capsule/v2"
+    assert context["schema_version"] == "deeplaw.knowledge-support-output/v8"
+    assert context["result"]["schema_version"] == "deeplaw.provider-knowledge-capsule/v3"
 
 
 def test_task_binding_has_python_cli_mcp_v6_parity_and_never_reaches_provider(
@@ -416,9 +416,9 @@ def test_task_binding_has_python_cli_mcp_v6_parity_and_never_reaches_provider(
             vault_path=root,
             **fields,
         )
-        assert response["schema_version"] == "deeplaw.knowledge-support-output/v6"
+        assert response["schema_version"] == "deeplaw.knowledge-support-output/v8"
         assert response["result"]["schema_version"] == (
-            "deeplaw.provider-knowledge-capsule/v2"
+            "deeplaw.provider-knowledge-capsule/v3"
         )
         assert binding["binding_sha256"] not in canonical_json(response["result"])
     with pytest.raises(ValueError, match="query_plan_version=6"):

@@ -140,9 +140,9 @@ async def _mcp_registration(
         }
         if (
             not isinstance(input_schema, dict)
-            or input_schema.get("title") != "DeepLaw Knowledge Support Provider Input v7"
+            or input_schema.get("title") != "DeepLaw Knowledge Support Provider Input v9"
             or not isinstance(input_schema.get("oneOf"), list)
-            or advertised_operations != {"query", "context", "explain"}
+            or advertised_operations != {"query", "context", "explain", "read"}
             or '"additionalProperties":false' not in rendered_input_schema
             or '"context"' not in rendered_input_schema
         ):
@@ -160,9 +160,9 @@ async def _mcp_registration(
         )
     result = response.get("result")
     if (
-        response.get("schema_version") != "deeplaw.knowledge-support-output/v6"
+        response.get("schema_version") != "deeplaw.knowledge-support-output/v8"
         or not isinstance(result, dict)
-        or result.get("schema_version") != "deeplaw.provider-knowledge-capsule/v2"
+        or result.get("schema_version") != "deeplaw.provider-knowledge-capsule/v3"
         or result.get("delivery", {}).get("write_performed") is not False
         or result.get("delivery", {}).get("provider_content_bytes", 65_537) > 65_536
     ):
@@ -173,7 +173,7 @@ async def _mcp_registration(
         "tools_list": "passed",
         "tool_names": ["knowledge_support"],
         "input_schema_sha256": sha256_bytes(canonical_json(input_schema).encode("utf-8")),
-        "provider_schema": "deeplaw.provider-knowledge-capsule/v2",
+        "provider_schema": "deeplaw.provider-knowledge-capsule/v3",
         "provider_hard_limit_bytes": 65_536,
         "vault_identity_verified": True,
         "expected_vault_id": expected_vault_id,
