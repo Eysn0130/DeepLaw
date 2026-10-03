@@ -134,7 +134,15 @@ to the explicit model entry, and a callback failure closes the native slot befor
 health or Provider dispatch. The zero-model entry rejects authority-hook injection.
 
 The fixed public probe selects `deepseek/deepseek-flash`, denies tools and
-limits output to 256 tokens. The frozen Host config schema requires both model
+limits output to 1,024 tokens, including reasoning. The owner entry must enforce
+the same bound with at most one outbound request. This is an engineering profile
+change; formal task budgets are unchanged. The retained 256-token run ended with
+`finish=length`, 248 reasoning tokens and 8 output tokens. A separately bound
+1,024-token run completed with `finish=stop`, 98 reasoning tokens and 10 output
+tokens, and its fixed reply matched. Its original observation SHA-256 is
+`310752deb3b19773b99b821666522f9fd5d2b35fcebe499a1637c98c76de5baa`.
+It retains checkpoint packages, `mcp_exercised=false` and `formal_admission=false`.
+The frozen Host config schema requires both model
 context and output limits; its context limit is the public snapshot's 1,000,000.
 The guest's HTTP proxy is confined to 127.0.0.1:4100. A single VSOCK reader accepts
 one bounded Provider frame, and consumes its sequence before forwarding. Requests
@@ -175,7 +183,8 @@ name to V4.1 Flash. That failure predates the explicit successor freeze. Current
 v3/v9 inputs pin `deepseek/deepseek-flash` / `deepseek-flash`; retained v2 inputs
 remain unchanged. One bounded engineering request independently observed the new
 response model, but its fixed reply was truncated at the existing 256-token limit
-and failed. It was not repeated or admitted as formal qualification. See
+and failed. That original request was not replayed or admitted as formal
+qualification; the larger engineering profile above used a new run and request. See
 `docs/CTRL011_CONTINUATION.md` for exact response and later no-forward route hashes.
 
 Observer completion now consumes an already-emitted bounded route gap even if

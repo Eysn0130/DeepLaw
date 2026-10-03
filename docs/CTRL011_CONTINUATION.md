@@ -7,6 +7,76 @@ history below does not authorize treating incomplete producers as formal evidenc
 
 ## Current continuation record
 
+The next sole writer resumed from clean `85af7d58d2f10fd39f2306d5a0ee5f0995889993`
+after the predecessor explicitly released dd2a. The exact commit's Fast PR
+`37053774604` is completed/success. PR #42 remains draft/open and the latest
+formal release remains v0.12.0. These facts do not qualify v0.13.
+
+The original fixed probe's safe native response metadata is `finish=length`,
+224 input, 248 reasoning and 8 output tokens. The engineering Host output bound
+is now 1,024 tokens, with the owner entry enforcing the same single-request bound;
+formal task budgets and acceptance models are unchanged. One new actual request
+in `successor-budget2` completed with `deepseek-flash`, `finish=stop`, an exact
+fixed-reply match, 224 input, 98 reasoning and 10 output tokens. Host/MCP exited
+0 with empty cgroups, the authority exited 0 and confirmed cleanup, and the VM
+exited 0. Observation SHA-256 is
+`310752deb3b19773b99b821666522f9fd5d2b35fcebe499a1637c98c76de5baa`;
+Provider observation SHA-256 is
+`fba74510a387d7f20c644a35d94c5b3760c14b707e51e17e4f533dc2f237d9de`.
+The initrd SHA-256 is
+`5b9f3f1e084519975cbbd55fd63585f55e6e09b00efefde405c2794c796ba404`.
+This retains the c5b55d7 wheel and separately binds newer guest module bytes:
+`mcp_exercised=false` and `formal_admission=false`. The original truncation and
+an earlier context-label binding failure are retained. The latter happened
+before authority startup, credential loading or outbound dispatch; it is not
+a failed Provider request.
+
+A temporary loader stage probe reproduced the unresolved failure without a full
+suite: resolver entry, spawn request and spawn return were observed, followed by
+`continuity_resolve_timeout` and a Bun child exit code of 143 before the Python
+fake's first statement. This narrows the failure beyond the native session
+event, but does not establish the child's OS exec/start boundary or its cause.
+Focused loader and adjacent regressions pass; that does not erase the retained
+complete-suite failure. The production 3-second deadline and argv, environment,
+session and interpreter assertions are unchanged. The installed macOS loader
+Host is 1.18.16, executable SHA-256
+`a41776bf64c75786d6baf531b840ffb873c090d7c44793ae2dd4b1896de56a1f`;
+it is distinct from the frozen Linux 1.18.16-deeplaw.3 Host.
+
+Independent observation feasibility has been checked against the actual contract,
+not an assumed ES requirement. `host-owner-guard-isolation/v1` requires six
+role-bound process/source/instance identities, credential delivery exclusions,
+private-store/retention observations and native/execution/challenge bindings.
+It does not mandate macOS EndpointSecurity. The current authority still declares
+`local_popen_pid_nonce_binding`; the Linux procfs/cn_proc producer observes only
+the guest Host/MCP and cannot observe the macOS authority. Moving the authority
+into the existing no-NIC guest has no installed owner-only credential-delivery
+or bounded outbound path that excludes the runner/observer. No key was injected
+into the guest and no network topology was widened.
+
+The bounded macOS checks found zero registered system extensions and EACCES when
+opening auditpipe and DTrace without reading any events. Current SDK/XNU headers
+state that kqueue descendant tracking is unsupported; process notifications alone
+do not supply the required complete descendants, store-read or credential-delivery
+observations. The existing ES probe is ad-hoc signed without the ES client
+entitlement and is only a zero-event capability probe. Thus sudo alone is not a
+sufficient remedy. The remaining facility is an authorized independent collector
+for the actual credential-authority OS, or an owner-controlled Linux authority
+deployment with Secret excluded from runner/observer and a bounded observed
+egress path. That collector must produce the role fields for the existing
+validator and subsequently enabled role-bound consumer; installation or mere
+permission would not itself pass the gate.
+
+The 207 directly affected probe/authority/builder regressions and 17 loader/
+adjacent regressions passed; lock, Ruff and patch checks passed. A new full suite
+and formal qualification were not dispatched while the loader cause and native
+authority prerequisite remain unresolved. All 13 Core gates, six formal Host
+slots and 15 real C6 tasks remain `not_executed` for a final candidate. Final
+packages, bundle reopen, merge/tag/signing/release and post-release installation
+remain unexecuted; `release_ready=false`.
+
+### Earlier successor record
+
 The successor follow-up resumed from clean `533682dec03dcf5a2475da9c078f954c3b8af82c`
 on 2026-10-02. Current v3/v9 qualification inputs now explicitly pin OpenCode
 `deepseek/deepseek-flash` and response model `deepseek-flash`; Codex remains

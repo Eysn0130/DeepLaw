@@ -56,7 +56,8 @@ config.write_text(
                         "apiKey": "{env:DEEPSEEK_API_KEY}",
                     },
                     "models": {
-                        "deepseek-flash": {"limit": {"context": 1_000_000, "output": 256}}
+                        # The engineering probe's budget includes model reasoning.
+                        "deepseek-flash": {"limit": {"context": 1_000_000, "output": 1024}}
                     },
                 }},
                 "permission": {"*": "deny"},
