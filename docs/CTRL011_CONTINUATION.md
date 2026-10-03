@@ -7,6 +7,35 @@ history below does not authorize treating incomplete producers as formal evidenc
 
 ## Current continuation record
 
+### 2026-10-03 complete-check result and manifest pin repair
+
+The stable engineering candidate `e368b3506cd00f0d8ae1d0cb98b4970dca0166ab`
+(tree `b52f63ebf7ebbde13d260baa1c21339d0a9f3a55`) ran one complete
+`uv run pytest`: 4,450 passed, three failed and 11 skipped in 1,261.39 seconds.
+The test inventory was exactly 4,464 nodes. JUnit SHA-256:
+`36851801824f6d5756597d4910b7530941f7a4ffb70156210542a3f74de75bab`.
+Its five Fast PR jobs in run `37104288037` passed, including Windows and the
+three macOS interpreter cells; that result binds this commit only.
+
+Two failures were caused by the implementation omitting the typed consumer's
+frozen source-hash update after reconciling the inventory. The tracked v2
+manifest contains exactly two new common cases and five qualification cases;
+no old node or classification was removed. The consumer now pins its actual
+SHA-256 `b2ec782a15e55ca7325d74a86098c5be5c5db0d4be66e242eca666badec6a095`.
+The two failed public receipt nodes and the related manifest positive/negative
+checks passed together (14 cases), without changing assertions or accepting
+arbitrary caller manifests. This targeted repair does not turn the preceding
+complete-check result into a pass on the newer candidate.
+
+The third failure is the original real OpenCode loader node: the native
+`session.created` event was observed, but the Python entry marker was absent.
+The production three-second deadline and original assertions are unchanged.
+The attempted passive collector misread `proc_listchildpids`' PID count as a
+byte count and retained no target observation; that capture is invalid and
+cannot support a root-cause or pass claim. The original test verdict is intact.
+The loader cause remains unresolved. No final qualification, package, merge,
+tag, signing, release or post-release installation follows from these checks.
+
 ### 2026-10-02 strict runner and topology declaration implementation
 
 The new sole writer consumed the predecessor's explicit release and preserved
